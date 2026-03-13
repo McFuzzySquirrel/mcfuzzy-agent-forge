@@ -1,0 +1,267 @@
+---
+name: forge-build-agent-team
+description: >
+  Analyze a Product Requirements Document (PRD) and generate a complete team of GitHub Copilot
+  custom agents and reusable skills tailored to the project. Use this skill when asked to
+  create, scaffold, or design a development team from a PRD or technical specification.
+---
+
+# Skill: Build a Custom Agent Team from a PRD
+
+You are building a team of GitHub Copilot custom agents and reusable skills from a Product Requirements Document (PRD) or technical specification. The goal is to produce a set of specialist `.md` files that can be committed to a repository so Copilot can act as each team member.
+
+---
+
+## Process
+
+### Step 1: Locate and Analyze the PRD
+
+Find the project's PRD or specification document. Look in common locations:
+
+- `docs/PRD.md`
+- `docs/spec.md`
+- `README.md` (if it contains detailed requirements)
+
+Read the **entire** document and extract the following:
+
+1. **Technology stack** — Languages, frameworks, engines, build tools, package managers.
+2. **Project structure** — File/folder layout, module boundaries, entry points.
+3. **Functional requirement groups** — Distinct feature areas (e.g., "Player Ship", "Wave System", "HUD").
+4. **Non-functional requirements** — Performance, security, accessibility, offline support.
+5. **Implementation phases** — How the work is broken into ordered stages.
+6. **Testing strategy** — Test frameworks, coverage expectations, test scenarios.
+7. **Cross-cutting concerns** — Audio, visual effects, deployment, CI/CD.
+
+### Step 2: Identify Specialist Roles
+
+Map the PRD's domains to specialist agent roles. Each agent should own a **distinct, non-overlapping area** of the project. Use the following heuristics:
+
+#### Required Agents (create for every project)
+
+| Role Pattern | When to Create | Owns |
+|---|---|---|
+| **Project Architect** | Always | Project scaffolding, build config, dependency management, folder structure |
+| **QA / Test Engineer** | Always | Test framework setup, unit/integration tests, test scenarios from PRD |
+
+#### Domain Agents (create based on tech stack)
+
+| Role Pattern | When to Create | Owns |
+|---|---|---|
+| **[Framework] Specialist** | When a major framework/engine is used | Framework initialization, core APIs, rendering/routing/etc. |
+| **Backend Engineer** | When there is a server, API, or database layer | API endpoints, data models, database, authentication |
+| **Frontend Engineer** | When there is a web/mobile UI (not framework-specific) | Pages, components, layouts, client-side routing |
+| **DevOps / Infra Engineer** | When there is deployment, CI/CD, or infrastructure | Dockerfiles, CI pipelines, cloud config, monitoring |
+| **PWA / Offline Specialist** | When offline support, Service Workers, or caching is required | Service Worker, manifest, cache strategy |
+
+#### Feature Agents (create based on functional requirement groups)
+
+| Role Pattern | When to Create | Owns |
+|---|---|---|
+| **Core Logic Engineer** | When there is substantial business/game logic | State machines, core algorithms, domain rules |
+| **Physics / Simulation Engineer** | When physics or simulation is a distinct subsystem | Physics engine integration, collision, simulation tuning |
+| **UI / HUD Developer** | When UI is a separate concern from rendering | UI components, overlays, menus, accessibility |
+| **VFX / Animation Artist** | When visual effects are a distinct subsystem | Particles, animations, transitions, visual polish |
+| **Audio Engineer** | When audio/sound is specified in the PRD | Sound loading, playback, spatial audio, music |
+| **Data / Analytics Engineer** | When telemetry, analytics, or data pipelines are required | Event tracking, dashboards, data models |
+| **Security Engineer** | When security is a major concern (auth, encryption, compliance) | Auth flows, encryption, RBAC, compliance |
+
+**Naming conventions:**
+- Agent names must be **lowercase with hyphens**: `checkout-engineer`, `notifications-specialist`.
+- Names should be **role-descriptive**, not person-names.
+- Prefer established industry role titles that are intuitive.
+
+### Step 3: Define Agent Boundaries
+
+For each agent, determine:
+
+1. **Expertise** — 4–8 bullet points of their technical specializations.
+2. **Key Reference** — Which PRD sections they must consult (cite by section number).
+3. **Responsibilities** — Numbered list of specific deliverables, grouped by component/file.
+4. **Constraints** — Rules they must follow (e.g., "do not modify production code", "strict TypeScript").
+5. **Output Standards** — Where their files go, coding conventions, API patterns.
+6. **Collaboration** — Which other agents they depend on or coordinate with.
+
+**Boundary rules:**
+- No two agents should own the same file or responsibility.
+- Every PRD functional requirement must map to exactly one agent.
+- Agents should reference PRD section numbers, not copy entire requirements.
+- If an agent's responsibilities list exceeds ~15 items, consider splitting into two agents.
+
+### Step 4: Identify Reusable Skills
+
+Skills are **process templates** that any agent can invoke for common, repeatable tasks. Analyze the PRD for patterns that will be repeated across the project:
+
+| Skill Pattern | When to Create | Example |
+|---|---|---|
+| **Scaffold [entity type]** | When multiple similar entities/components will be created | `create-data-model`, `create-api-endpoint`, `create-react-component` |
+| **Set up [subsystem]** | When a complex subsystem requires multi-step initialization | `setup-auth-provider`, `setup-database`, `setup-ci-pipeline` |
+| **Create [effect/asset]** | When a category of assets will be produced repeatedly | `create-dashboard-widget`, `create-migration`, `create-test-suite` |
+| **Implement [UI pattern]** | When UI follows a repeatable pattern | `implement-ui-screen`, `implement-form`, `implement-dashboard-widget` |
+
+**Skill naming conventions:**
+- Lowercase with hyphens: `create-data-model`, `setup-database`.
+- Use verb-noun format: `create-X`, `setup-X`, `implement-X`, `build-X`.
+
+### Step 5: Write the Agent Files
+
+Create each agent file at `.github/agents/{agent-name}.md` using this template:
+
+````markdown
+---
+name: {agent-name}
+description: >
+  {One-sentence summary of expertise and when to use this agent.
+  Reference the project name and specific technology domains.}
+---
+
+You are a **{Role Title}** responsible for {one-sentence scope description}.
+
+---
+
+## Expertise
+
+- {Technical specialization 1}
+- {Technical specialization 2}
+- {Technical specialization 3}
+- {4–8 items total}
+
+---
+
+## Key Reference
+
+Always consult [{PRD path}]({relative path to PRD}) for the authoritative project requirements. The relevant sections for your work are:
+
+- **Section {N} — {Title}**: {What it covers for this agent}
+- {List all relevant PRD sections}
+
+---
+
+## Responsibilities
+
+### {Component/Area 1} (`{file path}`)
+
+1. {Specific deliverable referencing PRD requirement IDs where applicable}
+2. {Next deliverable}
+
+### {Component/Area 2} (`{file path}`)
+
+3. {Deliverable}
+4. {Deliverable}
+
+---
+
+## Constraints
+
+- {Rule 1 — referencing PRD requirement IDs}
+- {Rule 2}
+
+---
+
+## Output Standards
+
+- {Where files go}
+- {Coding conventions}
+- {API patterns}
+
+---
+
+## Collaboration
+
+- **{other-agent-name}** — {What they provide or need from this agent}.
+- **{other-agent-name}** — {Coordination point}.
+````
+
+### Step 6: Write the Skill Files
+
+Create each skill file at `.github/skills/{skill-name}/SKILL.md` using this template:
+
+````markdown
+---
+name: {skill-name}
+description: >
+  {One-sentence summary of what this skill does and when Copilot should use it.}
+---
+
+# Skill: {Human-Readable Title}
+
+{One-sentence context about what this skill produces.}
+
+---
+
+## Process
+
+### Step 1: {First Step Title}
+
+{Instructions for the first step, including decision criteria or lookup tables.}
+
+### Step 2: {Second Step Title}
+
+{Instructions with code templates, examples, or scaffolding patterns.}
+
+{Use fenced code blocks with language tags for any code templates:}
+
+```{language}
+// Template code here
+```
+
+### Step 3: {Additional Steps}
+
+{Continue with as many steps as needed for the process.}
+
+---
+
+## Reference
+
+See [{PRD path}]({relative path to PRD}) for the full specification:
+
+- **Section {N}** — {What it covers}
+````
+
+### Step 7: Validate the Team
+
+Before finalizing, verify:
+
+- [ ] Every PRD functional requirement (Section 8+) maps to exactly one agent.
+- [ ] Every agent has a `## Collaboration` section listing agents it depends on.
+- [ ] No two agents own the same file path or responsibility.
+- [ ] Agent files use valid YAML frontmatter with `name` and `description`.
+- [ ] Skill files use valid YAML frontmatter with `name` and `description`.
+- [ ] All PRD section references are accurate (check section numbers).
+- [ ] Agent names are lowercase-hyphenated and match the filename (minus `.md`).
+- [ ] Skill directory names match the skill `name` field.
+- [ ] The team covers: foundation/scaffolding, core logic, testing, and all major feature areas.
+
+### Step 8: Present the Team
+
+Summarize the team in a table:
+
+```markdown
+## Custom Agents
+
+| Agent | Role | Primary PRD Sections | Phase |
+|-------|------|---------------------|-------|
+| `{name}` | {role} | {sections} | {implementation phase} |
+
+## Skills
+
+| Skill | Purpose | Used By |
+|-------|---------|---------|
+| `{name}` | {what it does} | {which agents use it} |
+
+## Collaboration Map
+
+{agent-a} → {agent-b}: {what flows between them}
+```
+
+---
+
+## Guidelines
+
+- **Scale to the project.** A weekend prototype may need 3–4 agents. A large application may need 8–12. Don't create agents for areas the PRD doesn't cover.
+- **Agents are specialists, not generalists.** Each agent should be the undisputed expert in their area. If you can't articulate their unique expertise in one sentence, merge them with another agent.
+- **Skills are reusable processes.** Only create a skill if the process will be invoked multiple times across the project. One-off tasks belong in an agent's responsibilities, not a separate skill.
+- **Reference, don't duplicate.** Agents should cite PRD section numbers. Don't copy entire requirement tables into agent files — they'll go stale.
+- **Keep collaboration sections honest.** Only list agents that genuinely need to coordinate. Not every agent needs to talk to every other agent.
+- **Test the mapping.** For each PRD requirement, you should be able to point to exactly one agent who owns it. If a requirement is unowned, add an agent or expand an existing one. If it's dual-owned, clarify the boundary.
+
+
