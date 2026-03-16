@@ -154,6 +154,7 @@ Always consult [{PRD path}]({relative path to PRD}) for the authoritative projec
 
 - {Rule 1 — referencing PRD requirement IDs}
 - {Rule 2}
+- When implementing features, verify that you are using current stable APIs, conventions, and best practices for the project's tech stack. If you are uncertain whether a pattern or API is current, search for the latest official documentation before proceeding.
 
 ---
 
@@ -263,5 +264,6 @@ Summarize the team in a table:
 - **Reference, don't duplicate.** Agents should cite PRD section numbers. Don't copy entire requirement tables into agent files — they'll go stale.
 - **Keep collaboration sections honest.** Only list agents that genuinely need to coordinate. Not every agent needs to talk to every other agent.
 - **Test the mapping.** For each PRD requirement, you should be able to point to exactly one agent who owns it. If a requirement is unowned, add an agent or expand an existing one. If it's dual-owned, clarify the boundary.
+- **Encourage currency verification.** Generated agents should include a constraint reminding them to verify they are using current, stable APIs and best practices for their tech stack. Agents should search for latest official documentation when uncertain rather than relying solely on training data.
 
 
