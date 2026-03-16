@@ -116,6 +116,7 @@ And for skills:
 - Agents must reference PRD sections by number, not copy full requirement tables.
 - Do not create agents for areas the PRD does not cover.
 - Keep each agent's prompt under 30,000 characters (the platform limit).
+- Generated agents must include a constraint reminding them to verify they are using current, stable APIs and best practices for their tech stack, and to search for latest official documentation when uncertain.
 
 ---
 

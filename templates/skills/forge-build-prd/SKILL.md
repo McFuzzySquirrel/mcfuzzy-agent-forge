@@ -43,6 +43,12 @@ Before drafting, ask targeted clarifying questions to fill in gaps. Group your q
 - Are there performance, security, or compliance requirements?
 - Are there dependencies on existing systems or third-party services?
 
+**Technology Currency**
+- For each major technology in the stack, verify it is a current, actively maintained version.
+- Search for the latest stable release of key frameworks and libraries before finalizing the tech stack section.
+- Flag any specified technology that has a newer major version available, has been deprecated, or has reached end-of-life.
+- Note any recent breaking changes or migration requirements in the Research Findings section.
+
 **Security and Privacy**
 - Does the system collect, store, or transmit user data?
 - Are there authentication, authorization, or encryption requirements?

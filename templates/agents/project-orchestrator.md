@@ -59,6 +59,12 @@ Before starting any implementation:
    - Determine the correct execution order within and across phases
    - Note any requirements that span multiple agents
 
+4. **Verify tech stack currency**:
+   - For each major technology in the PRD's tech stack, confirm the specified version is current and stable
+   - Search for latest stable versions of key frameworks and libraries
+   - Flag any technologies that have newer major versions, known deprecations, or security advisories
+   - Report findings to the user before proceeding with Phase 1
+
 ### 2. Execute Phase by Phase
 
 For each implementation phase in the PRD:
