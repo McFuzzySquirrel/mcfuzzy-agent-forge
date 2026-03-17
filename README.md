@@ -19,6 +19,7 @@ Transform your PRD into a specialized team of GitHub Copilot custom agents and r
 - **Project Orchestrator Agent** — Coordinates all specialist agents through PRD implementation phases, executing the full build systematically
 - **Team Builder Agent** — Analyzes PRDs and generates complete agent teams with clear ownership boundaries
 - **PRD Builder Skill** — Creates comprehensive Product Requirements Documents from ideas or research
+- **Feature PRD Builder Skill** — Creates Feature PRDs for adding new features to existing projects
 - **Agent Team Builder Skill** — Process templates for designing agent teams from specifications
 - **Bootstrap Scripts** — Bash and PowerShell scripts to deploy templates into any repository
 
@@ -185,6 +186,37 @@ This manual approach is useful when:
 - You want fine-grained control over what gets built
 - You're iterating on existing code rather than building from scratch
 
+#### 5. Add Features to an Existing Project
+
+After the initial build is complete, you can add new features without regenerating your entire agent team. This three-step workflow creates a Feature PRD, updates only the agents that need to change, and executes the feature phases:
+
+**Step 1: Create a Feature PRD**
+```
+@workspace /forge-build-feature-prd Add a real-time notification system to the project
+```
+
+The skill will analyze your existing PRD, agent team, and codebase, then interview you about the feature's scope, integration points, and impact. It produces a Feature PRD (recommended location: `docs/features/`) that includes an Agent Impact Assessment.
+
+**Step 2: Update the Agent Team**
+```
+@workspace /forge-team-builder Analyze docs/features/notifications.md and update the team
+```
+
+The team builder automatically detects that this is a Feature PRD (not a full project PRD) and switches to **Feature Increment Mode**:
+- Extends existing agents with new responsibilities (additive changes only)
+- Creates new specialist agents only if needed
+- Leaves unaffected agents completely untouched
+
+**Step 3: Execute the Feature Build**
+```
+@workspace @project-orchestrator Execute feature docs/features/notifications.md
+```
+
+The orchestrator executes the Feature PRD's F-prefixed phases (Phase F1, F2, etc.) in the context of the existing project, calling both existing and new agents as needed.
+
+> [!TIP]
+> Feature PRDs use `FT-` prefixed IDs (FT-FR-01, FT-US-01) and `F-` prefixed phases (Phase F1, F2) to avoid collision with the original PRD's IDs. This makes it easy to trace which requirements came from which document.
+
 ---
 
 ## Template Structure
@@ -198,6 +230,8 @@ mcfuzzy-agent-forge/
 │   └── skills/
 │       ├── forge-build-agent-team/
 │       │   └── SKILL.md                # Process for building agent teams
+│       ├── forge-build-feature-prd/
+│       │   └── SKILL.md                # Process for building Feature PRDs
 │       └── forge-build-prd/
 │           └── SKILL.md                # Process for building PRDs
 ├── scripts/
@@ -371,7 +405,7 @@ A: Absolutely. The generated agents are starting points — customize them for y
 A: Yes. The framework is project-agnostic. The team builder adapts to your PRD whether it's web, mobile, CLI, embedded, etc.
 
 **Q: How do I update agents when my PRD changes?**  
-A: Re-run the team builder. It will regenerate agents based on the new PRD. Review diffs before committing.
+A: For minor PRD updates, re-run the team builder — it will regenerate agents based on the new PRD. Review diffs before committing. For adding entirely new features to a completed project, use the `forge-build-feature-prd` skill to create a Feature PRD, then run the team builder in Feature Increment Mode. See [Add Features to an Existing Project](#5-add-features-to-an-existing-project).
 
 ---
 
