@@ -25,9 +25,9 @@ Transform your PRD into a specialized team of GitHub Copilot custom agents and r
 
 ### How it works
 
-1. **Create a PRD** using the `forge-build-prd` skill (or bring your own)
-2. **Generate your agent team** by running the `forge-team-builder` agent against your PRD
-3. **Bootstrap to your project** using the provided scripts to copy agents/skills to your repository
+1. **Bootstrap to your project** using the provided scripts to copy agents/skills to your repository
+2. **Create a PRD** using the `forge-build-prd` skill (or bring your own)
+3. **Generate your agent team** by running the `forge-team-builder` agent against your PRD
 4. **Execute the build** — Use the project-orchestrator agent to systematically implement your project, or work with specialist agents directly for targeted development
 
 ---
