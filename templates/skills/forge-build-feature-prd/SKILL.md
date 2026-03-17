@@ -173,8 +173,8 @@ What new components/files are needed. Include proposed file paths.
 
 ### 5.3 Technology Additions
 Any new technologies, libraries, or tools required. For each:
-- Verify it is a current, actively maintained version
-- Search for the latest stable release before specifying
+- Search for the latest stable release and verify it is a current, actively maintained version before specifying
+- Check the official documentation or package registry for the latest version rather than relying on training data
 - Flag any compatibility considerations with the existing stack
 
 ---

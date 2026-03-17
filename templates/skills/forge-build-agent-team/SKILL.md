@@ -346,7 +346,7 @@ For each change category:
 
 ### Step 5i: Write Only Changed or New Files
 
-- **For modified agents:** Present the specific additions (what's being added to Responsibilities, Collaboration, and Key Reference sections) as a clear diff or addendum. Apply the changes to the existing agent files.
+- **For modified agents:** Present the specific additions (what's being added to Responsibilities, Collaboration, and Key Reference sections) as a clear diff or addendum. Present changes for user review and confirmation before applying them to the existing agent files.
 - **For new agents:** Write complete agent files at `.github/agents/{agent-name}.md` following the standard template from Step 5.
 - **For new skills:** Write complete skill files at `.github/skills/{skill-name}/SKILL.md` following the standard template from Step 6.
 - **CRITICAL:** Do NOT regenerate or overwrite agents that aren't affected by the feature.

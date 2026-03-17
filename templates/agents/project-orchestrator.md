@@ -96,6 +96,7 @@ When executing a Feature PRD (detected by a "Feature Overview" section, F-prefix
 
 4. **Verify feature tech stack currency** (if new technologies are introduced):
    - Only verify technologies that are NEW to this feature, not the entire existing stack
+   - Search for the latest stable versions via official documentation or package registries rather than relying solely on training data
    - Report findings before proceeding
 
 5. **Build the feature execution plan**:
