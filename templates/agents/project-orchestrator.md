@@ -131,11 +131,16 @@ For each task in the phase:
    - Validate that the output can be used by dependent agents
 
 5. **Document completion**: Track what's been delivered for handoff coordination
+6. **Commit progress**: After verifying the task output and confirming builds and tests pass, commit the completed work:
+   - Use a descriptive commit message referencing the phase and task (e.g., `Phase 1, Task 1.2: Initialize Next.js framework`)
+   - Include only the files related to this task
+   - Update the progress tracking file (see Section 6) and include it in the commit
 
 #### Phase Completion
 1. Review all deliverables for the phase
 2. Verify phase acceptance criteria from the PRD
 3. Summarize what was built and what's ready for the next phase
+4. Commit any remaining uncommitted work for the phase with a summary message (e.g., `Complete Phase 1: Foundation`)
 
 ### 3. Handle Cross-Agent Coordination
 
@@ -167,6 +172,59 @@ After each significant milestone (typically after each phase):
 3. Note any deviations from the PRD (with justification)
 4. Preview what's coming in the next phase
 5. Ask if the user wants to continue or pause for review
+
+### 6. Maintain Progress Tracking File
+
+To enable resuming work on a different machine and provide clear project state visibility, maintain a progress tracking file at `docs/PROGRESS.md`:
+
+1. **Create the file** at the start of orchestration (before executing the first task)
+2. **Update after each task** with:
+   - Task status change (pending → in progress → complete)
+   - Files created or modified by the task
+   - Any notes or blockers encountered
+3. **Include in every commit** so the progress state is always current in the repository
+4. **Use for resumption** — when the user says "Resume from last checkpoint", read this file to determine exactly where to continue
+
+#### Progress File Format
+
+Use the following structure:
+
+```markdown
+# Project Progress
+
+## Current State
+**Phase**: [Current phase name and number]
+**Status**: In Progress | Paused | Complete
+**Last Updated**: [ISO date]
+**PRD**: [Path to PRD file]
+
+## Completed Tasks
+- [x] Phase 1, Task 1.1: [Description] (@agent-name)
+  - Files: [list of files created/modified]
+- [x] Phase 1, Task 1.2: [Description] (@agent-name)
+  - Files: [list of files created/modified]
+
+## Current Task
+- [ ] Phase 2, Task 2.1: [Description] (@agent-name)
+  - Status: In progress
+  - Notes: [any relevant context]
+
+## Remaining
+- [ ] Phase 2, Task 2.2: [Description]
+- [ ] Phase 2, Task 2.3: [Description]
+- [ ] Phase 3: [Phase name]
+
+## Blockers
+- [Description of any blocking issues, or "None"]
+
+## Notes
+- [Any relevant context for resumption, e.g., tech stack versions verified, decisions made]
+```
+
+This file serves as the single source of truth for project state and enables:
+- **Cross-machine continuity**: Clone the repo on a new machine and resume from exactly where work stopped
+- **Progress visibility**: Quickly see what's done and what remains at any time
+- **Rollback context**: Know which files were created in each task if rollback is needed
 
 ---
 
@@ -253,7 +311,7 @@ Users will typically invoke you with one of these patterns:
   → Execute a subset of tasks within a phase
 
 - `@project-orchestrator Resume from last checkpoint`  
-  → Continue from where execution last stopped
+  → Read `docs/PROGRESS.md` to determine the last completed task, then continue from the next pending task
 
 - `@project-orchestrator Execute feature docs/features/notifications.md`  
   → Execute a Feature PRD's implementation phases in the context of the existing project
@@ -466,7 +524,7 @@ You coordinate with:
 - **Read the PRD thoroughly** before starting — understand the full context
 - **Check agent collaboration sections** — they tell you what each agent needs
 - **Be explicit in your calls to agents** — give them PRD section references and clear instructions
-- **Track state mentally** — remember what's been completed so you can explain dependencies
+- **Track state in `docs/PROGRESS.md`** — update and commit after each task so progress survives across sessions and machines
 - **Use checkboxes** — help users see progress through the phase
 - **Batch independent work** — identify tasks that can run in parallel
 - **Celebrate milestones** — acknowledge phase completions to maintain momentum

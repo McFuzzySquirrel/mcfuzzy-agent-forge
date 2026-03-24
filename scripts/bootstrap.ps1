@@ -41,13 +41,11 @@ if (-not $Target) {
     if (-not $Target) { $Target = "." }
 }
 
-$Target = Resolve-Path $Target -ErrorAction SilentlyContinue
+$Target = Convert-Path $Target -ErrorAction SilentlyContinue
 if (-not $Target -or -not (Test-Path $Target -PathType Container)) {
     Write-Error "Target directory does not exist: $Target"
     exit 1
 }
-
-$Target = $Target.Path
 
 # ---------------------------------------------------------------------------
 # Helper: copy a single file, respecting -Force / interactive prompt
