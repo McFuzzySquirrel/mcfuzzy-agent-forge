@@ -10,6 +10,16 @@ Transform your PRD into a specialized team of GitHub Copilot custom agents and r
 
 ---
 
+## Recent Updates
+
+### March 2026
+- **Progress Tracking & Incremental Commits** — The project orchestrator now maintains a `docs/PROGRESS.md` file tracking completed tasks, commits work incrementally after each successful build/test, and supports resuming from checkpoints
+- **Feature PRD Strategy** — New `forge-build-feature-prd` skill for adding features to existing projects, with automatic agent team extension and incremental development support
+- **Agent Freshness** — Built-in verification that agents use current stable APIs, frameworks, and best practices. PRD builder verifies tech stack currency, orchestrator validates before Phase 1
+- **Bootstrap Script Improvements** — Fixed PowerShell `.Path` property error for better cross-platform compatibility
+
+---
+
 ## Overview
 
 **McFuzzy Agent Forge** is a template repository and bootstrapping toolkit that creates custom GitHub Copilot agent teams tailored to your project. Instead of working with a single general-purpose AI assistant, you get a coordinated team of specialists — each focused on a specific domain, framework, or feature area.
@@ -144,6 +154,8 @@ The orchestrator will:
 - Identify the correct sequence for calling specialist agents
 - Execute tasks phase by phase, respecting all dependencies
 - Verify deliverables before proceeding to dependent work
+- Maintain a progress tracking file (`docs/PROGRESS.md`) with task status
+- Commit work incrementally after each successful build/test
 - Provide progress updates after each phase
 - Handle coordination between agents automatically
 
@@ -151,7 +163,11 @@ The orchestrator will:
 ```
 @workspace @project-orchestrator Execute Phase 1
 @workspace @project-orchestrator Continue from Phase 2
+@workspace @project-orchestrator Resume from last checkpoint
 ```
+
+> [!TIP]
+> The orchestrator creates `docs/PROGRESS.md` to track completed work. Use "Resume from last checkpoint" to continue where you left off, even on a different machine or in a new session.
 
 **Example orchestration flow:**
 ```
@@ -319,6 +335,7 @@ For a Node.js CLI tool, the team might be smaller:
 ### For PRD Creation
 
 - Be specific about your tech stack and architecture decisions
+- **Specify current versions** — The PRD builder verifies tech stack currency and flags outdated choices
 - Include non-functional requirements (performance, security, accessibility)
 - Define clear implementation phases
 - Document cross-cutting concerns (logging, monitoring, deployment)
@@ -330,6 +347,7 @@ For a Node.js CLI tool, the team might be smaller:
 - **Map all requirements** — Every PRD requirement should map to exactly one agent
 - **Scale appropriately** — Small projects need 3-4 agents; large projects may need 8-12
 - **Don't over-skill** — Only create skills for processes that repeat multiple times
+- **Use current APIs** — Generated agents include constraints to verify they use current stable APIs and best practices
 
 ### For Collaboration
 
@@ -406,6 +424,12 @@ A: Yes. The framework is project-agnostic. The team builder adapts to your PRD w
 
 **Q: How do I update agents when my PRD changes?**  
 A: For minor PRD updates, re-run the team builder — it will regenerate agents based on the new PRD. Review diffs before committing. For adding entirely new features to a completed project, use the `forge-build-feature-prd` skill to create a Feature PRD, then run the team builder in Feature Increment Mode. See [Add Features to an Existing Project](#5-add-features-to-an-existing-project).
+
+**Q: Can I resume work on a different machine?**  
+A: Yes. The orchestrator maintains `docs/PROGRESS.md` tracking all completed tasks. Commit and push your changes, then use `@project-orchestrator Resume from last checkpoint` on any machine with the repository cloned.
+
+**Q: How does the framework ensure agents use current information?**  
+A: The PRD builder verifies tech stack currency during PRD creation. The orchestrator validates stack versions before Phase 1. All generated agents include constraints to verify they use current stable APIs and best practices for their tech stack.
 
 ---
 
