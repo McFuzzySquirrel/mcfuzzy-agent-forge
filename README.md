@@ -13,6 +13,7 @@ Transform your PRD into a specialized team of GitHub Copilot custom agents and r
 ## Recent Updates
 
 ### March 2026
+- **Agent/Skill Separation & Progress Reporting** ([ADR-001](docs/adr/001-agent-skill-separation-and-progress-reporting.md)) — Slimmed the forge-team-builder agent to delegate detailed procedures to the skill, and added Process and Workflow guidance to the agent template so generated specialists follow consistent verification, commit, and progress reporting practices
 - **Progress Tracking & Incremental Commits** — The project orchestrator now maintains a `docs/PROGRESS.md` file tracking completed tasks, commits work incrementally after each successful build/test, and supports resuming from checkpoints
 - **Feature PRD Strategy** — New `forge-build-feature-prd` skill for adding features to existing projects, with automatic agent team extension and incremental development support
 - **Agent Freshness** — Built-in verification that agents use current stable APIs, frameworks, and best practices. PRD builder verifies tech stack currency, orchestrator validates before Phase 1
