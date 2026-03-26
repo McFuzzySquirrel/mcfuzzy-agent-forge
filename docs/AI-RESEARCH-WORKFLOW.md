@@ -5,30 +5,30 @@ date:   2026-03-26 05:55:00 +0200
 categories: personal workflow
 ---
 
-# The AI-Assisted Research Habit: From Questions to Informed Decisions
-
 > *How pairing AI for research with AI for implementation creates a workflow where every decision is informed, documented, and traceable.*
+
+Better decisions, faster builds: I use AI to research first and code with context, then document every key choice in ADRs so future changes are traceable, faster, and smarter.
+
+<!--more-->
 
 
 ## The Evolution of a Habit
 
-Every developer has their own way of researching before making changes. Some dive into documentation. Some experiment in branches. Some just start coding and see what breaks. But there's always this nagging feeling: *Am I missing something? Is there a better way I don't know about?*
+Everyone has their own way of researching before making decisions, and this is no different when it comes to building solutions with code. Some dive into documentation. Some experiment in branches. Some just start coding and see what breaks. But there's always this nagging feeling: *Am I missing something? Is there a better way I don't know about?*
 
-That uncertainty led me to develop a habit that's transformed how I approach any significant technical decision: **AI-assisted research paired with AI-assisted implementation, all tied together through Architecture Decision Records (ADRs).**
+I have these all the time, sometimes while I am busy, more often just after or before. That uncertainty led me to develop a habit that had transformed how I approach any significant technical or design decision: **AI-assisted research paired with AI-assisted implementation, all tied together through Architecture Decision Records (ADRs).**
 
-This isn't about a specific tool or project. It's about a *process* that works regardless of what you're building or what AI tools you're using. The pattern is what matters.
-
----
+Now this is not about a specific tool or project. It is about a *process* that works for me regardless of what I am building or what AI tools I am using, and maybe something you the reader could benefit from (hence this post). The pattern is what matters.
 
 ## The Two-Phase Dance: Research, Then Build
 
-Here's the workflow that emerged from months of iteration:
+So I have been doing this for a while, and everytime I change it a little bit (I even do it on the train). So here is the workflow that has emerged from months of iteration:
 
 ### Phase 1: Research with AI Assistance
 
-When a question arises — "Should we use this library?" "How do we handle this edge case?" "What's the best approach for this problem?" — instead of jumping to Stack Overflow or diving into code, I start a research conversation with an AI assistant.
+When a question arises: *"Should I or we use this library?", "How do I or we handle this edge case?", "What's the best approach for this problem?"* instead of jumping to various forums or diving into code, I start a research conversation with an AI assistant.
 
-But this isn't just asking "what should I do?" It's a structured exploration:
+**But** this isn't just asking "what should I do?" It is a structured exploration:
 
 **1. Frame the Question Clearly**
    - What exactly am I trying to solve?
@@ -46,21 +46,21 @@ But this isn't just asking "what should I do?" It's a structured exploration:
    - "What breaks if X changes?"
    - "What are we assuming that might not be true?"
 
-The AI doesn't just answer questions — it helps you *ask better questions*. It surfaces considerations you didn't know to look for.
+This way the AI doesn't just answer questions, it helps me *ask better questions*. It surfaces considerations I may not have looked for with my eternal optimism.
 
 **The Output**: Not a decision, but a **research document**. A structured analysis that includes:
 - The question and context
 - Current state analysis
-- Options explored with pros/cons
+- Options explored with pros and cons
 - Risk assessment
 - Recommended approach with rationale
 - Implementation considerations
 
-This document becomes a snapshot of understanding. Future-you (or your teammates) can see not just *what* was decided, but *why*, based on what information.
+This is the document that becomes a snapshot of understanding. Future-me (or your teammates and collaborators) can see not just *what* was decided, but *why*, based on what information.
 
 ### Phase 2: Implementation with AI Coding Sessions
 
-Now comes the powerful part. With the research document as a foundation, I engage a coding AI assistant — but not blindly.
+Now comes the powerful part. With the research document as a foundation, I engage a coding AI assistant, **but not blindly**.
 
 **The Coding Session Workflow:**
 
@@ -71,6 +71,7 @@ Now comes the powerful part. With the research document as a foundation, I engag
 
 **2. Let AI Do Its Research**
    - The AI assistant explores the codebase
+   - It looks outside for inspiration
    - It identifies what files need changes
    - It spots dependencies and impacts
    - It considers edge cases based on the research
@@ -82,27 +83,27 @@ Now comes the powerful part. With the research document as a foundation, I engag
    - Explains the reasoning
 
 **4. Iterate and Refine**
-   - Review each proposed change
-   - Question assumptions
-   - Adjust approaches
-   - Add missing considerations
+   - I, my team and even the agent review each proposed change
+   - We question assumptions
+   - We adjust approaches
+   - We add missing considerations
 
 **5. Implement with Understanding**
    - Changes are made with full context
-   - No mysterious "why did we do it this way?" moments
+   - No mysterious *"why did we do it this way?"* moments
    - Every decision traceable back to research
 
 **The Magic**: The AI coding assistant has access to:
 - Your research findings
-- Its own exploration of the codebase
+- Its own exploration of the codebase and outside insights
 - Understanding of how changes interconnect
 - Awareness of testing implications
 
-It's not just writing code — it's presenting a *holistic solution* that you can understand, review, and approve with confidence.
+It's not just writing code, it is presenting a *holistic solution* that you I understand, review, and approve with confidence.
 
 ### Phase 3: Codify in Architecture Decision Records
 
-Here's where everything comes together. Once research is done and implementation is approved, the decision gets immortalized in an ADR.
+Now it is all coming together. Once research is done and implementation is approved, the decision gets immortalized in an ADR (I really love these).
 
 **The ADR captures:**
 - What was decided
@@ -117,23 +118,23 @@ Here's where everything comes together. Once research is done and implementation
 - Other ADRs it affects or is affected by
 - External references that informed the decision
 
-This creates a **knowledge graph** of your project's evolution. Not scattered across Slack threads, not lost in closed PRs, not hidden in code comments — but structured, searchable, and connected.
+This creates a **knowledge graph** of my project's evolution. No more am I digging around in message  threads, or finding they are lost in closed PRs, or hidden in code comments. This is knowledge that is structured, searchable, and connected.
 
----
+
 
 ## Why This Changes Everything
 
 ### 1. **Decisions Are Informed, Not Impulsive**
 
-You're not coding based on "I think this is right." You're implementing based on researched, analyzed, documented understanding.
+*This is a big one for me personally*, something I struggle with daily. Now though, I am not doing things based on "I think this is right." I am implementing based on researched, analyzed, documented understanding.
 
 ### 2. **Context Persists Beyond Memory**
 
-Six months later, when someone asks "why did we choose this approach?", you don't rely on memory. You point to the ADR, which points to the research, which shows the full reasoning.
+Six months later, when someone asks "why did I choose this approach?", I don't rely on memory. **I point to the ADR, which points to the research, which shows the full reasoning**.
 
 ### 3. **Onboarding Becomes Learning**
 
-New team members don't just see code — they see the *thinking* behind it. ADRs become a roadmap of how the project evolved and why.
+New collaborators ot team members don't just see code, they see the *thinking* behind it. ADRs become a roadmap of how the project evolved and why.
 
 ### 4. **Course Corrections Are Data-Driven**
 
@@ -141,15 +142,14 @@ When an ADR decision needs revisiting, you start with the original research. Wha
 
 ### 5. **AI Assists, Humans Decide**
 
-The AI tools help you explore, understand, and implement — but you're always in control. You review, you edit, you approve. The AI amplifies your capability; it doesn't replace your judgment.
+The AI tools help me explore, understand, and implement, but I am always in control. I review, I edit, I approve. The AI amplifies my capability; it doesn't replace my judgment.
 
----
 
 ## The Pattern, Agnostic to Tools
 
-This workflow works regardless of your stack:
+This workflow works regardless of my stack:
 
-- **Research AI**: Could be ChatGPT, Claude, GitHub Copilot Chat, or any conversational AI that helps you explore and analyze.
+- **Research AI**: Could be ChatGPT, Claude, GitHub Copilot Chat, or any conversational AI that helps me explore and analyze.
 
 - **Coding AI**: Could be GitHub Copilot, Cursor, Cody, or any AI coding assistant that understands codebases and can propose changes.
 
@@ -171,7 +171,6 @@ Create/update ADR (link everything together)
 Knowledge graph grows
 ```
 
----
 
 ## Real-World Example: Adding a New Feature
 
@@ -185,8 +184,10 @@ Let's make this concrete with a generic example:
 - "We need to add caching. What are the common approaches?"
 - "We're using [your stack]. What works best here?"
 - "What about cache invalidation strategies?"
+- "Whats new out there we should be looking at?"
 - "What are the performance implications?"
 - "What breaks if cache goes down?"
+- "Consider the implications, and risk and document them"
 
 *Output*: `docs/research/caching-strategy.md`
 - Explores Redis, Memcached, in-memory options
@@ -273,9 +274,8 @@ Implement Redis as application-level cache with:
 - [Redis Official Docs](https://redis.io/docs/)
 ```
 
-Now everything is connected. The ADR links to the research. Future PRs reference the ADR. Knowledge accumulates instead of scattering.
+**Now everything is connected**. The ADR links to the research. Future PRs reference the ADR. Knowledge accumulates instead of scattering.
 
----
 
 ## The Habit's Impact
 
@@ -283,11 +283,11 @@ After adopting this workflow, several things changed:
 
 ### Confidence in Decisions
 
-Every significant change starts from a position of knowledge, not guesswork. The research phase ensures you've considered what you need to consider.
+Every significant change starts from a position of knowledge, not guesswork. The research phase ensures I have considered what I need to consider.
 
 ### Implementation Speed
 
-Paradoxically, adding a research step *speeds up* implementation. Why? Because you're not coding, then discovering issues, then refactoring, then discovering more issues. You understand the landscape before you start building.
+Irconically, adding a research step *speeds up* implementation. Why? Because I am not spenfing time in code, then discovering issues, then refactoring, then discovering more issues. I understand the landscape before I start building (with my agent, lets not pretend I don't use one).
 
 ### Code Review Quality
 
@@ -296,7 +296,7 @@ When you open a PR with "Implements caching per ADR-025," reviewers can:
 2. Check the research to see alternatives considered
 3. Review the code with full context
 
-Reviews become about execution, not re-litigating the approach.
+Reviews become about execution, not going through the the approach from scratch.
 
 ### Team Alignment
 
@@ -309,13 +309,12 @@ When you inevitably need to change something, you start with:
 - The research that informed the decision
 - Understanding of what constraints have changed
 
-You're not reverse-engineering old code — you're revisiting documented decisions with new information.
+You wont be reverse-engineering old code, you are revisiting documented decisions with new information.
 
----
 
 ## Starting Your Own Habit
 
-You don't need special tools to adopt this workflow. Here's how to start:
+You don't need special tools to adopt this workflow. Here's how I start (you will start finding this in all my repos, even the old ones I am revising, reverse impulsing them I suppose):
 
 ### 1. Create Structure
 
@@ -336,36 +335,37 @@ Keep it simple:
 
 ### 3. Pick an ADR Template
 
-Michael Nygard's format works great:
+Michael Nygard's format works great ([check it out here](https://cognitect.com/blog/2011/11/15/documenting-architecture-decisions)):
 - Title (numbered: ADR-001, ADR-002, etc.)
 - Status (Proposed, Accepted, Superseded)
 - Context
 - Decision
 - Consequences
 
+
 ### 4. Establish the Flow
 
 For any significant decision:
-1. Research → document
-2. Code (referencing research) → review
-3. ADR (linking research + code) → commit
+1. Research -> document
+2. Code (referencing research) -> review
+3. ADR (linking research + code) -> commit
 
 ### 5. Link Everything
 
-Research docs reference relevant ADRs.
-ADRs reference research docs and PRs.
-Code comments reference ADRs for "why."
-PRs reference ADRs in descriptions.
+- Research docs reference relevant ADRs.
+- ADRs reference research docs and PRs.
+- Code comments reference ADRs for "why."
+- PRs reference ADRs in descriptions.
 
----
 
-## The Meta-Lesson
+## The Lesson I learned
 
-This habit isn't really about AI, research, or ADRs. It's about something more fundamental:
+This is something fundemantal, this habit isn't really about AI (although it is used), research, or ADRs. It is:
 
 **Making the implicit explicit.**
 
-Developers carry so much in their heads: why we chose this library, what we considered and rejected, what could break if we change X. This workflow externalizes that knowledge, making it visible, reviewable, and persistent.
+We carry so much in our heads: why we chose this library, this design, what we considered and rejected, what could break if we change X. 
+- This workflow externalizes that knowledge, making it visible, reviewable, and persistent.
 
 AI tools supercharge this by:
 - Helping surface what you might not think to research
@@ -373,13 +373,12 @@ AI tools supercharge this by:
 - Proposing holistic solutions across multiple files
 - Maintaining consistency across changes
 
-But the core principle works even without AI: research before you build, document decisions, connect the dots.
+But the core principle works even without AI: **research before you build, document decisions, connect the dots**.
 
----
 
 ## Your Turn
 
-This workflow evolved from frustration with "I think this is right" coding and the sinking feeling of revisiting old code with no idea why it's that way.
+This workflow evolved from frustration with "I think this is right" and the sinking feeling of revisiting old code and solutions with no idea why it's that way.
 
 You don't need to adopt everything at once. Start small:
 - Next time you face a decision, write a quick research doc
@@ -390,6 +389,5 @@ Over time, you'll build something more valuable than code: a **knowledge graph o
 
 The tools will evolve. The pattern won't.
 
----
 
-**Start simple. Research deliberately. Document decisions. Connect the dots. Watch your confidence in your codebase grow.**
+**Start simple. Research deliberately. Document decisions. Connect the dots. Watch your confidence in your solutions grow.**
