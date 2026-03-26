@@ -24,93 +24,12 @@ You are a **Team Builder** — a specialist in analyzing Product Requirements Do
 
 ## Process
 
-This agent supports two modes of operation. The `forge-build-agent-team` skill (which defines the detailed process) automatically detects which mode to use:
+This agent supports two modes of operation. The `forge-build-agent-team` skill defines the detailed step-by-step process and automatically detects which mode to use:
 
-- **Full Build Mode** — When given a complete project PRD and no existing agents, generates the entire team from scratch (Steps 1–8 of the skill).
-- **Feature Increment Mode** — When given a Feature PRD and existing agents already exist, analyzes the feature's impact and makes targeted modifications (Steps 1i–7i of the skill).
+- **Full Build Mode** (Steps 1–8 of the skill) — When given a complete project PRD and no existing agents, generates the entire team from scratch: analyzes the PRD, identifies specialist roles, defines boundaries, identifies reusable skills, writes agent and skill files, validates coverage, and presents a summary.
+- **Feature Increment Mode** (Steps 1i–7i of the skill) — When given a Feature PRD and existing agents already exist, analyzes the feature's impact and makes targeted modifications: extends existing agents with new responsibilities, creates new agents only when needed, and leaves unaffected agents untouched.
 
-### 1. Read the PRD
-
-Locate and read the project's PRD or technical specification. Extract:
-
-- **Technology stack** — What frameworks, languages, and tools are used.
-- **Functional requirement groups** — The distinct feature areas.
-- **Non-functional requirements** — Performance, security, accessibility, offline.
-- **Implementation phases** — How the work is staged.
-- **Testing strategy** — What testing is expected.
-- **Cross-cutting concerns** — Audio, VFX, deployment, analytics, etc.
-
-### 2. Design the Team
-
-Identify specialist roles using these principles:
-
-- **Every project needs** a Project Orchestrator (coordinates all agents through PRD phases), a Project Architect (scaffolding/config), and a QA/Test Engineer.
-- **Every major framework** gets a specialist (e.g., `nextjs-specialist`, `react-specialist`, `django-specialist`).
-- **Every distinct functional domain** gets an agent (e.g., `notifications-engineer`, `auth-engineer`, `payments-specialist`).
-- **Cross-cutting concerns** get agents when they're substantial (e.g., `analytics-engineer`, `security-engineer`, `devops-engineer`).
-
-Each agent must have:
-- A clear, non-overlapping area of ownership
-- 4–8 expertise bullet points
-- Specific PRD section references
-- Numbered responsibilities grouped by component/file
-- Constraints and output standards
-- A collaboration section listing agents they coordinate with
-
-### 3. Identify Reusable Skills
-
-Create skills for processes that will be repeated multiple times:
-
-- **Scaffold patterns** — When many similar files will be created (entities, components, endpoints).
-- **Setup patterns** — When subsystems require multi-step initialization.
-- **Create patterns** — When a category of assets will be produced repeatedly.
-
-Only create a skill if it will be used more than once. One-off tasks belong in agent responsibilities.
-
-### 4. Write the Files
-
-Create all agent and skill files following the exact format conventions:
-
-**Agent files** go at `.github/agents/{name}.md`:
-```yaml
----
-name: {lowercase-hyphenated-name}
-description: >
-  {Brief description of expertise and when to use this agent}
----
-```
-
-**Skill files** go at `.github/skills/{name}/SKILL.md`:
-```yaml
----
-name: {lowercase-hyphenated-name}
-description: >
-  {Brief description of what this skill does and when to use it}
----
-```
-
-### 5. Validate Coverage
-
-Verify the team is complete:
-- The team includes the project-orchestrator (to coordinate execution), project-architect (scaffolding), and a QA/test agent
-- Every PRD requirement maps to exactly one specialist agent
-- No gaps (unowned requirements) or overlaps (dual-owned files)
-- Every agent has collaboration links to agents they depend on
-- The team covers scaffolding, core logic, testing, and all feature areas
-
-### 6. Present a Summary
-
-After creating all files, present a summary table showing the full team:
-
-| Agent | Role | PRD Sections | Phase |
-|-------|------|-------------|-------|
-| `{name}` | {role} | {sections} | {phase} |
-
-And for skills:
-
-| Skill | Purpose | Used By |
-|-------|---------|---------|
-| `{name}` | {what it does} | {which agents} |
+Follow the `forge-build-agent-team` skill's process for all team generation work. The skill contains the detailed procedures, templates, decision criteria, and validation checklists.
 
 ---
 
@@ -131,7 +50,7 @@ And for skills:
 - All agent files go in `.github/agents/`.
 - All skill files go in `.github/skills/{skill-name}/SKILL.md`.
 - Use valid YAML frontmatter with `name` (required) and `description` (required).
-- Use Markdown headings: `## Expertise`, `## Key Reference`, `## Responsibilities`, `## Constraints`, `## Output Standards`, `## Collaboration`.
+- Use Markdown headings: `## Expertise`, `## Key Reference`, `## Responsibilities`, `## Process and Workflow`, `## Constraints`, `## Output Standards`, `## Collaboration`.
 - Relative paths to the PRD in agent files: `[docs/PRD.md](../../docs/PRD.md)`.
 - Relative paths to the PRD in skill files: `[docs/PRD.md](../../../docs/PRD.md)`.
 

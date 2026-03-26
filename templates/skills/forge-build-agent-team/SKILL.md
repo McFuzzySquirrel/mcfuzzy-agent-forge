@@ -166,11 +166,32 @@ Always consult [{PRD path}]({relative path to PRD}) for the authoritative projec
 
 ---
 
+## Process and Workflow
+
+When executing your responsibilities:
+
+1. **Understand the task** — Read the referenced PRD sections and any dependencies from other agents
+2. **Implement the deliverable** — Create or modify files according to your responsibilities
+3. **Verify your changes**:
+   - Run relevant linters for the files you modified
+   - Run builds to ensure nothing is broken
+   - Run tests related to your changes
+4. **Commit your work** — After verification passes:
+   - Use descriptive commit messages referencing the task or requirement
+   - Include only files related to this specific deliverable
+   - Follow the project's commit conventions (if specified in the PRD)
+5. **Report completion** — Summarize what was delivered, which files were modified, and verification results
+
+---
+
 ## Constraints
 
 - {Rule 1 — referencing PRD requirement IDs}
 - {Rule 2}
 - When implementing features, verify that you are using current stable APIs, conventions, and best practices for the project's tech stack. If you are uncertain whether a pattern or API is current, search for the latest official documentation before proceeding.
+- After completing a deliverable and verifying it works (builds, tests pass), commit your changes with a clear, descriptive message
+- When working as part of orchestrated project execution, follow the orchestrator's instructions for progress tracking and coordination
+- Report the status of verification steps (linting, building, testing) when communicating completion to other agents or users
 
 ---
 
@@ -184,8 +205,9 @@ Always consult [{PRD path}]({relative path to PRD}) for the authoritative projec
 
 ## Collaboration
 
-- **{other-agent-name}** — {What they provide or need from this agent}.
-- **{other-agent-name}** — {Coordination point}.
+- **project-orchestrator** — Coordinates your work as part of the overall project execution, provides task context, and tracks progress across all agents
+- **{other-agent-name}** — {What they provide or need from this agent}
+- **{other-agent-name}** — {Coordination point}
 ````
 
 ### Step 6: Write the Skill Files
@@ -281,6 +303,7 @@ Summarize the team in a table:
 - **Keep collaboration sections honest.** Only list agents that genuinely need to coordinate. Not every agent needs to talk to every other agent.
 - **Test the mapping.** For each PRD requirement, you should be able to point to exactly one agent who owns it. If a requirement is unowned, add an agent or expand an existing one. If it's dual-owned, clarify the boundary.
 - **Encourage currency verification.** Generated agents should include a constraint reminding them to verify they are using current, stable APIs and best practices for their tech stack. Agents should search for latest official documentation when uncertain rather than relying solely on training data.
+- **Include process guidance.** All agents should include the standard Process and Workflow section to ensure consistent practices for verification, commits, and progress reporting. This aligns specialist agents with the orchestrator's progress tracking capabilities.
 - **Scale changes to feature scope.** When operating in Feature Increment Mode, only create or modify what the feature requires. A small feature might only extend one existing agent. A large feature might add 2–3 new agents and extend several existing ones. Match the changes to the feature's actual scope.
 
 ---
@@ -346,7 +369,7 @@ For each change category:
 
 ### Step 5i: Write Only Changed or New Files
 
-- **For modified agents:** Present the specific additions (what's being added to Responsibilities, Collaboration, and Key Reference sections) as a clear diff or addendum. Present changes for user review and confirmation before applying them to the existing agent files.
+- **For modified agents:** Present the specific additions (what's being added to Responsibilities, Collaboration, and Key Reference sections) as a clear diff or addendum. If the agent was created before the Process and Workflow section was added to the template, add this section as well to bring it up to current standards. Present changes for user review and confirmation before applying them to the existing agent files.
 - **For new agents:** Write complete agent files at `.github/agents/{agent-name}.md` following the standard template from Step 5.
 - **For new skills:** Write complete skill files at `.github/skills/{skill-name}/SKILL.md` following the standard template from Step 6.
 - **CRITICAL:** Do NOT regenerate or overwrite agents that aren't affected by the feature.
