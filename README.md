@@ -51,6 +51,7 @@ Transform your PRD into a specialized team of GitHub Copilot custom agents and r
 - Bash (Linux/macOS) or PowerShell 5.1+ (Windows)
 - A target repository where you want to deploy the agents
 - GitHub Copilot (to use the generated agents)
+- [Ollama](https://ollama.com/) (optional — for local model BYOK support)
 
 ### Quick Start
 
@@ -233,6 +234,87 @@ The orchestrator executes the Feature PRD's F-prefixed phases (Phase F1, F2, etc
 
 > [!TIP]
 > Feature PRDs use `FT-` prefixed IDs (FT-FR-01, FT-US-01) and `F-` prefixed phases (Phase F1, F2) to avoid collision with the original PRD's IDs. This makes it easy to trace which requirements came from which document.
+
+---
+
+## Running with Local Models (BYOK)
+
+GitHub Copilot CLI supports [Bring Your Own Key (BYOK)](https://docs.github.com/en/copilot/how-tos/copilot-cli/customize-copilot/use-byok-models), letting you point it at a local Ollama instance. Since Copilot CLI picks up `.github/agents/` and `.github/skills/` from your repo, your entire Agent Forge team can run against a local model — fully offline if needed.
+
+### Setup
+
+1. Install and start [Ollama](https://ollama.com/) with a model that supports **tool calling** and **streaming** (required by Copilot CLI):
+
+```bash
+ollama pull gemma4:e4b    # 9.6GB, 128K context — works well on 32GB RAM
+```
+
+2. Set the BYOK environment variables:
+
+```bash
+export COPILOT_PROVIDER_BASE_URL=http://localhost:11434
+export COPILOT_MODEL=gemma4:e4b
+```
+
+3. Start Copilot CLI:
+
+```bash
+copilot
+```
+
+Your bootstrapped agents (`@project-orchestrator`, `@forge-team-builder`, and all generated specialists) will now use the local model.
+
+> [!TIP]
+> For fully air-gapped environments, also set `export COPILOT_OFFLINE=true` to prevent any calls to GitHub's servers.
+
+### Recommended Local Models
+
+| Model | Size | Context | Best for |
+|-------|------|---------|----------|
+| `gemma4:e4b` | 9.6GB | 128K | General-purpose — good balance of quality and resource usage |
+| `gemma4:26b` | 18GB | 256K | Higher quality reasoning (MoE, 3.8B active params) — needs 32GB+ RAM |
+| `qwen3:7b` | ~5GB | 128K | Lightweight alternative for constrained hardware |
+
+> [!NOTE]
+> Models must support tool calling (function calling) and streaming. Verify with your model's documentation before use.
+
+---
+
+## Persistent Project Memory with EJS
+
+The [Engineering Journey System (EJS)](https://github.com/McFuzzySquirrel/Engineering-Journey-System) adds persistent project memory across sessions. Without it, agents start fresh every conversation — no awareness of past decisions, rejected approaches, or architectural context.
+
+When bootstrapped alongside Agent Forge, EJS gives your agents:
+
+- **Decision history** — Past ADRs and rationale are queryable from a local SQLite database (`.ejs.db`)
+- **Session continuity** — Journey files record what happened each session, so agents can pick up where you left off
+- **Accumulated context** — Learnings, patterns, and failures build up over time and get injected into agent prompts
+
+### Bootstrap Order
+
+For a new project, bootstrap in this order:
+
+1. **EJS** — Sets up `ejs-docs/`, `.ejs.db`, journey templates, and the EJS recording contract in `copilot-instructions.md`
+2. **Agent Forge** — Bootstrap scripts add `.github/agents/` and `.github/skills/`
+3. **BYOK config** (optional) — Environment variables pointing Copilot CLI at your local Ollama instance
+
+The forge-team-builder then generates specialist agents that automatically inherit EJS context from the repo-level Copilot instructions. Each session builds on the last.
+
+### How It Works
+
+Add the EJS recording contract to your project's `.github/copilot-instructions.md` so all agents — including generated specialists — record their work:
+
+```markdown
+## EJS Recording Contract
+
+- Record interactions, decisions, and sub-agent work to the session journey file
+- Query `.ejs.db` before reading raw markdown files for past context
+- Attribute every entry by agent name
+- Capture incrementally — do not wait until session end
+```
+
+> [!TIP]
+> With EJS + Agent Forge + BYOK, you get a fully local, context-aware agent team that remembers past decisions — no cloud dependency required.
 
 ---
 
@@ -428,6 +510,12 @@ A: For minor PRD updates, re-run the team builder — it will regenerate agents 
 
 **Q: Can I resume work on a different machine?**  
 A: Yes. The orchestrator maintains `docs/PROGRESS.md` tracking all completed tasks. Commit and push your changes, then use `@project-orchestrator Resume from last checkpoint` on any machine with the repository cloned.
+
+**Q: Can I run this with a local model instead of GitHub-hosted models?**  
+A: Yes. Copilot CLI supports [BYOK (Bring Your Own Key)](https://docs.github.com/en/copilot/how-tos/copilot-cli/customize-copilot/use-byok-models) with any OpenAI-compatible endpoint, including Ollama. See [Running with Local Models](#running-with-local-models-byok).
+
+**Q: What is EJS and do I need it?**  
+A: The [Engineering Journey System](https://github.com/McFuzzySquirrel/Engineering-Journey-System) adds persistent memory across sessions. It's optional but recommended — without it, agents have no awareness of past decisions. See [Persistent Project Memory with EJS](#persistent-project-memory-with-ejs).
 
 **Q: How does the framework ensure agents use current information?**  
 A: The PRD builder verifies tech stack currency during PRD creation. The orchestrator validates stack versions before Phase 1. All generated agents include constraints to verify they use current stable APIs and best practices for their tech stack.
