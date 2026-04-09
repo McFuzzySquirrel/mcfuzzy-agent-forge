@@ -12,6 +12,10 @@ Transform your PRD into a specialized team of GitHub Copilot custom agents and r
 
 ## Recent Updates
 
+### April 2026
+- **PRD Decomposition into Features** ([ADR-002](docs/adr/002-prd-decomposition-into-features.md)) — New `forge-decompose-prd` skill breaks monolithic PRDs into a Product Vision document and individual Feature documents. Features can be prioritized, reordered, and built independently. The team builder, orchestrator, and feature PRD skill all support this decomposed workflow alongside the existing monolithic approach
+- **Greenfield Feature PRDs** — The `forge-build-feature-prd` skill now supports creating feature documents during initial project decomposition (not just post-project additions), with auto-detection of greenfield vs. post-project mode
+
 ### March 2026
 - **Agent/Skill Separation & Progress Reporting** ([ADR-001](docs/adr/001-agent-skill-separation-and-progress-reporting.md)) — Slimmed the forge-team-builder agent to delegate detailed procedures to the skill, and added Process and Workflow guidance to the agent template so generated specialists follow consistent verification, commit, and progress reporting practices
 - **Progress Tracking & Incremental Commits** — The project orchestrator now maintains a `docs/PROGRESS.md` file tracking completed tasks, commits work incrementally after each successful build/test, and supports resuming from checkpoints
@@ -27,19 +31,32 @@ Transform your PRD into a specialized team of GitHub Copilot custom agents and r
 
 ### What's included
 
-- **Project Orchestrator Agent** — Coordinates all specialist agents through PRD implementation phases, executing the full build systematically
-- **Team Builder Agent** — Analyzes PRDs and generates complete agent teams with clear ownership boundaries
+- **Project Orchestrator Agent** — Coordinates all specialist agents through PRD implementation phases or feature-based builds, executing systematically with dependency ordering
+- **Team Builder Agent** — Analyzes PRDs (monolithic or decomposed) and generates complete agent teams with clear ownership boundaries
 - **PRD Builder Skill** — Creates comprehensive Product Requirements Documents from ideas or research
-- **Feature PRD Builder Skill** — Creates Feature PRDs for adding new features to existing projects
-- **Agent Team Builder Skill** — Process templates for designing agent teams from specifications
+- **PRD Decomposition Skill** — Breaks a monolithic PRD into a Product Vision and independent Feature documents for better traceability and incremental delivery
+- **Feature PRD Builder Skill** — Creates Feature PRDs for adding new features (post-project or during initial decomposition)
+- **Agent Team Builder Skill** — Process templates for designing agent teams from specifications (supports single PRD, vision + features, or feature increments)
 - **Bootstrap Scripts** — Bash and PowerShell scripts to deploy templates into any repository
 
 ### How it works
 
+There are two approaches — choose the one that fits your project:
+
+**Approach A: Monolithic PRD** (default — best for small-to-medium projects)
+
 1. **Bootstrap to your project** using the provided scripts to copy agents/skills to your repository
 2. **Create a PRD** using the `forge-build-prd` skill (or bring your own)
 3. **Generate your agent team** by running the `forge-team-builder` agent against your PRD
-4. **Execute the build** — Use the project-orchestrator agent to systematically implement your project, or work with specialist agents directly for targeted development
+4. **Execute the build** — Use the project-orchestrator agent to systematically implement your project
+
+**Approach B: Decomposed Features** (best for larger projects or incremental delivery)
+
+1. **Bootstrap to your project** using the provided scripts
+2. **Create a PRD** using the `forge-build-prd` skill
+3. **Decompose into features** using the `forge-decompose-prd` skill to produce a Product Vision and Feature documents
+4. **Generate your agent team** — The team builder reads the vision + all features and generates agents holistically
+5. **Execute feature by feature** — The orchestrator builds features in dependency order, pausing between each for review
 
 ---
 
@@ -235,6 +252,45 @@ The orchestrator executes the Feature PRD's F-prefixed phases (Phase F1, F2, etc
 > [!TIP]
 > Feature PRDs use `FT-` prefixed IDs (FT-FR-01, FT-US-01) and `F-` prefixed phases (Phase F1, F2) to avoid collision with the original PRD's IDs. This makes it easy to trace which requirements came from which document.
 
+#### 6. Decompose a PRD into Features
+
+For larger projects, you can break a monolithic PRD into independent features. This gives you better traceability, the ability to prioritize and reorder work, and independent delivery of each feature.
+
+**Step 1: Decompose the PRD**
+```
+@workspace /forge-decompose-prd Break docs/PRD.md into a product vision and features
+```
+
+The skill will analyze the PRD, identify natural feature boundaries, and produce:
+- A **Product Vision** (`docs/product-vision.md`) — architecture, tech stack, NFRs, security, accessibility
+- Individual **Feature documents** (`docs/features/*.md`) — each with user stories, requirements, tasks, and acceptance criteria
+
+**Step 2: Generate the Agent Team**
+```
+@workspace /forge-team-builder Analyze the product vision and features
+```
+
+The team builder detects **Vision + Features Mode**, reads the product vision for cross-cutting concerns, aggregates requirements across all features, and generates agents that span multiple features where appropriate.
+
+**Step 3: Execute Feature by Feature**
+```
+@workspace @project-orchestrator Execute all features
+```
+
+The orchestrator reads the feature dependency graph, validates execution order, and builds features one at a time — pausing between each for your review.
+
+```
+@workspace @project-orchestrator Execute next feature
+```
+
+Or execute a specific feature:
+```
+@workspace @project-orchestrator Execute feature docs/features/authentication.md
+```
+
+> [!TIP]
+> The decomposed approach works alongside the monolithic PRD — the original PRD is preserved unchanged. You can start with a monolithic PRD and decompose later when the project grows.
+
 ---
 
 ## Running with Local Models (BYOK)
@@ -324,15 +380,17 @@ Add the EJS recording contract to your project's `.github/copilot-instructions.m
 mcfuzzy-agent-forge/
 ├── templates/
 │   ├── agents/
-│   │   ├── project-orchestrator.md     # Coordinates agents through PRD phases
+│   │   ├── project-orchestrator.md     # Coordinates agents through PRD phases or features
 │   │   └── forge-team-builder.md       # PRD → agent team generator
 │   └── skills/
 │       ├── forge-build-agent-team/
 │       │   └── SKILL.md                # Process for building agent teams
 │       ├── forge-build-feature-prd/
 │       │   └── SKILL.md                # Process for building Feature PRDs
-│       └── forge-build-prd/
-│           └── SKILL.md                # Process for building PRDs
+│       ├── forge-build-prd/
+│       │   └── SKILL.md                # Process for building PRDs
+│       └── forge-decompose-prd/
+│           └── SKILL.md                # Process for decomposing PRDs into features
 ├── scripts/
 │   ├── bootstrap.sh                    # Bash bootstrap script
 │   └── bootstrap.ps1                   # PowerShell bootstrap script
@@ -507,6 +565,9 @@ A: Yes. The framework is project-agnostic. The team builder adapts to your PRD w
 
 **Q: How do I update agents when my PRD changes?**  
 A: For minor PRD updates, re-run the team builder — it will regenerate agents based on the new PRD. Review diffs before committing. For adding entirely new features to a completed project, use the `forge-build-feature-prd` skill to create a Feature PRD, then run the team builder in Feature Increment Mode. See [Add Features to an Existing Project](#5-add-features-to-an-existing-project).
+
+**Q: When should I decompose my PRD into features?**  
+A: Decomposition is recommended when your PRD has 15+ functional requirements, 3+ implementation phases, or when you want to prioritize and deliver features independently. For small projects (under 10 requirements), the monolithic PRD is simpler and sufficient. See [Decompose a PRD into Features](#6-decompose-a-prd-into-features).
 
 **Q: Can I resume work on a different machine?**  
 A: Yes. The orchestrator maintains `docs/PROGRESS.md` tracking all completed tasks. Commit and push your changes, then use `@project-orchestrator Resume from last checkpoint` on any machine with the repository cloned.
