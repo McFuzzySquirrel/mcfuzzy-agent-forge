@@ -293,24 +293,158 @@ You're reading this document because someone decided the *process* was as valuab
 
 
 
+## Chapter 10: The Identity Crisis — Who Does What?
+
+After the initial framework was working and the research-driven approach had proven itself, something uncomfortable became obvious: **the forge-team-builder agent and the forge-build-agent-team skill were saying the same things**.
+
+The agent file was around 144 lines. The skill file was detailed and comprehensive. And between them, Steps 1 through 6 of the team-building process were duplicated, almost word for word. It was the kind of problem that doesn't hurt you immediately, but slowly poisons everything. Change the process in the skill? Better remember to change the agent too. Forget? Now they disagree, and the behavior depends on which one the AI happens to read more carefully.
+
+This wasn't just a maintenance nuisance. It was an identity crisis. **What is an agent, and what is a skill?**
+
+The research that followed (captured in ADR-001) led to a clean answer:
+
+- **Agents are identity.** They define *who*: the role, the expertise, the constraints, the collaboration relationships. An agent is a person on your team. It answers: "Who am I, and how do I work with others?"
+- **Skills are process.** They define *how*: the step-by-step procedures, the templates, the validation criteria. A skill is the playbook that person follows. It answers: "What exactly do I do, and in what order?"
+
+With that clarity, the forge-team-builder agent was slimmed from 144 lines to about 64. All the duplicated procedural steps were removed. What remained was pure identity: who this agent is, what it's an expert in, and where it sends people. It became a **smart router**, not a procedure manual. Need a PRD? Go to `forge-build-prd`. Need to decompose a monolithic PRD? Go to `forge-decompose-prd`. Need to add a feature? Go to `forge-build-feature-prd`. Need a team generated? The `forge-build-agent-team` skill has the process, I'll follow it.
+
+But ADR-001 surfaced something else, something deeper. While examining the agent template (the template used to *generate* new specialist agents), a gap appeared: **generated agents had zero guidance on how to commit work, verify changes, or report progress**. The orchestrator had recently learned to track progress and make incremental commits, but the specialists it coordinated? They were still winging it. The orchestra was conducting, but the musicians didn't know they were supposed to follow the conductor.
+
+The fix was elegant: a new "Process and Workflow" section was added to the agent template. Every specialist agent generated from that point forward would follow a five-step workflow: *understand the task → implement → verify → commit → report*. Three new constraints were added requiring agents to commit after verification, follow orchestrator instructions, and report status. And for existing agents that had already been generated? The Feature Increment Mode was updated to retroactively add the Process section when it modified older agents, bringing them up to current standards.
+
+A 55% reduction in agent file size. Zero loss of capability. And every future specialist agent, regardless of project, would now follow the same professional practices.
+
+### The Takeaway for Builders
+
+> **When two components say the same thing, one of them shouldn't exist.** Duplication in AI agent systems is worse than in code, because AI will synthesize conflicting instructions unpredictably. Find the natural boundary (identity vs. process, who vs. how) and enforce it ruthlessly. Then ask: what did the separation reveal that the duplication was hiding?
+
+
+
+## Chapter 11: The Session Problem — When Progress Disappears
+
+There's a specific kind of pain that anyone who's worked with AI coding agents knows: you're three hours into a build, the orchestrator is halfway through Phase 2, and then... the session ends. Maybe the connection drops. Maybe you close your laptop. Maybe you switch to a different machine. When you come back, it's all gone. The AI has no memory of what was completed, what was in progress, or what comes next.
+
+The orchestrator originally tracked progress "mentally", meaning it didn't. Everything existed only in the context window. Close the window, lose the work.
+
+Two changes fixed this, and together they transformed the orchestrator from an ephemeral coordinator into a **persistent project manager**.
+
+**First: incremental commits.** Before this change, if the orchestrator delegated three tasks to specialist agents, those agents might produce working code, but it all sat uncommitted in the working directory. If the session ended after the second task, there was no clean checkpoint to return to. The fix was straightforward: after each task, once builds and tests pass, commit with a descriptive message referencing the phase and task. At the end of each phase, commit any remaining work. The commit messages became the version control history: `Phase 1, Task 1.2: Initialize Next.js framework`. Small commits, each representing a verified unit of work.
+
+**Second: the progress tracking file.** This was the bigger innovation. The orchestrator now creates a `docs/PROGRESS.md` file at the start of orchestration and updates it after every single task. It records the current phase, completed tasks (with which agent handled them and which files were modified), the current in-progress task, remaining work, and any blockers. Critically, this file is included in every commit. It survives across sessions, across machines, across time.
+
+The result? A new command that actually works: **"Resume from last checkpoint."** The orchestrator reads `PROGRESS.md`, understands exactly where things left off, and picks up from the next incomplete task. Clone the repo on a different machine, run the orchestrator, and it knows what's done and what's next. It's the difference between a project manager who keeps everything in their head and one who maintains a project board that anyone can walk up to and understand.
+
+### The Takeaway for Builders
+
+> **AI agents are ephemeral by nature. Your job is to make their work persistent.** Any system that coordinates work over time needs checkpoints that survive outside the AI's context window. Version control is your most powerful tool here: frequent, meaningful commits make every unit of work recoverable. And a structured progress file turns "where were we?" from a guess into a lookup.
+
+
+
+## Chapter 12: The Scale Problem — When One Document Isn't Enough
+
+The PRD-first approach had been the foundation from day one. And for most projects, a single document worked beautifully. But then came the larger projects, the ones with fifteen-plus requirements spread across five phases, touching half a dozen distinct feature domains.
+
+The monolithic PRD started showing cracks:
+
+- **Agents struggled with the sheer size.** A 300-line PRD meant agents were processing enormous context to find the three requirements relevant to their current task. Important details got lost in the noise.
+- **Everything was artificially serialized.** Phases cut horizontally across all features: "Set up everything in Phase 1, build everything in Phase 2." But authentication and notifications had nothing to do with each other. Why couldn't they be built independently?
+- **You couldn't ship incrementally.** The monolithic PRD assumed you'd build everything, in order, as one unit. But real teams ship features, not phases. You want to deploy authentication, get feedback, then build notifications. The structure didn't support that.
+- **Traceability was scattered.** Which user stories related to which requirements? Which requirements mapped to which tasks? In a monolithic PRD, those threads wove through multiple sections with no explicit connections.
+
+The existing Feature PRD system (designed for post-V1 additions) had already solved some of these problems for *new* features. But it assumed the initial build was complete. It couldn't help during the *first* build.
+
+The research document (leading to ADR-002) explored the fundamental question: **what if feature-level decomposition was available from day one, not just after the project ships?**
+
+The answer was a new skill: `forge-decompose-prd`. It takes a monolithic PRD and breaks it into two types of documents:
+
+1. **Product Vision**: everything that's cross-cutting. The project overview, goals, personas, tech stack, architecture decisions, security requirements, accessibility standards, NFRs. The things every feature needs to know about but no single feature owns.
+
+2. **Feature Documents**: self-contained units of work. Each feature gets its own document with its own user stories, functional requirements, tasks, testing strategy, and acceptance criteria. Each requirement gets a prefixed ID (`AUTH-FR-01`, `PAY-FR-02`) that's unique across the entire project. Each feature declares its dependencies on other features. And each feature includes a traceability table mapping back to the original PRD, so you can always see where things came from.
+
+The decomposition process itself follows seven steps: analyze the PRD, identify natural feature groupings (using heuristics like persona+workflow, UI screens, subsystems), present a decomposition plan for human approval, write the Product Vision, write each Feature document, validate everything (traceability, completeness, no circular dependencies, unique IDs), and present the result.
+
+But creating new documents wasn't enough. The entire downstream pipeline needed to understand them.
+
+The **Feature PRD Builder** gained a greenfield mode. It auto-detects whether it's looking at a project that's already been built (post-project mode, the original behavior) or one that's still being planned (greenfield mode, where a Product Vision exists but no specialist agents do yet). In greenfield mode, it drops the sections about existing system state and agent impact assessment, because there's no existing system to assess.
+
+The **Team Builder** gained a Vision + Features Mode. Instead of reading one monolithic PRD, it reads the Product Vision plus all Feature documents, aggregates every requirement across every feature, and then applies the same team design heuristics. The result is a team that understands the entire project holistically, with each agent's definition referencing the specific Product Vision and Feature documents relevant to its role.
+
+The **Orchestrator** gained feature-based execution. It reads dependency declarations from feature documents, validates the dependency graph is acyclic, and determines a safe execution order. New commands appeared: `Execute all features`, `Execute feature docs/features/auth.md`, `Execute features in order`, `Execute next feature`. The progress tracking file extended to show feature-level status alongside phase-level status.
+
+The most important design decision was making decomposition **optional and additive**. The monolithic approach remains the default. It works perfectly for small-to-medium projects. Decomposition is there when you need it, a tool you reach for when the project outgrows a single document. And if you start monolithic and realize halfway through planning that you need decomposition? Run `forge-decompose-prd` on your existing PRD. Nothing is lost, everything is transformed.
+
+```
+Monolithic:   Idea → PRD → Agent Team → Orchestrated Build
+
+Decomposed:   Idea → PRD → Decompose → Product Vision + Feature Docs
+                                              ↓
+                                    Agent Team (Vision + Features Mode)
+                                              ↓
+                                    Feature-by-Feature Execution
+```
+
+### The Takeaway for Builders
+
+> **Design for the simple case first, then create a path to the complex case.** A monolithic PRD is perfectly fine for most projects. Feature decomposition matters when it matters. The key is making the transition smooth: same formats, compatible IDs, additive process. If your user has to throw away work to scale up, your architecture failed them.
+
+
+
+## Chapter 13: The Methodology — Making the Implicit Explicit
+
+Somewhere along the way, a pattern had been repeating without being named. Every significant change to Agent Forge followed the same three-phase rhythm:
+
+**Phase 1: Research with AI assistance.** Frame the question clearly. Explore the landscape of approaches, trade-offs, and risks. Challenge assumptions. Let the AI surface considerations you hadn't thought of. Output: a research document.
+
+**Phase 2: Implement with the research as context.** Share the research document with the AI, let it explore the codebase, identify the specific change points, and propose surgical modifications. Review, iterate, implement. The AI isn't guessing; it's executing a plan with full understanding of *why*.
+
+**Phase 3: Codify in an Architecture Decision Record.** Capture the decision, the rationale, the alternatives that were considered and rejected, and the consequences. Link to the research document and the implementation. Create a node in the project's knowledge graph.
+
+This wasn't invented all at once. It *emerged* from doing the work. The freshness strategy followed it. The agent/skill separation followed it. The PRD decomposition followed it. Each time, the same three phases produced results that were proportionate, well-reasoned, and easy for others to understand.
+
+The realization that this methodology was itself worth documenting led to the AI Research Workflow document, a guide not to the framework, but to the *process of evolving* the framework.
+
+There's a recursive beauty here that's worth noting. Agent Forge uses AI to build teams of AI agents. The methodology uses AI to research how to improve Agent Forge, which makes the AI agents it produces better at their work. The tools improve the tools. The process improves the process. And at every layer, the forcing function is the same: **write it down**. Research documents force clarity before complexity. ADRs force rationale alongside decisions. The act of writing is the act of thinking.
+
+### The Takeaway for Builders
+
+> **Name your process.** If you find yourself doing the same thing repeatedly and it works, stop and write it down. Not just so others can follow it, so *you* can follow it deliberately instead of accidentally. The difference between an ad-hoc approach and a methodology is one document.
+
+
+
 ## Epilogue: What We Actually Built
 
 Let's zoom out and see the whole picture.
 
-**McFuzzy Agent Forge** is a template repository that takes an idea and turns it into a coordinated team of AI specialists:
+**McFuzzy Agent Forge** is a template repository that takes an idea and turns it into a coordinated team of AI specialists. Two paths, one framework:
+
+**Path A — Monolithic (best for small-to-medium projects):**
 
 ```
  ┌─────────────┐     ┌──────────────┐     ┌──────────────────┐     ┌─────────────────┐
  │  Your Idea   │ ──→ │  PRD Builder  │ ──→ │   Team Builder    │ ──→ │   Orchestrator   │
- │              │     │  (Interview)  │     │ (Specialist Team) │     │  (Coordination)  │
+ │              │     │  (Interview)  │     │  (Full Build)     │     │  (Phase-based)   │
  └─────────────┘     └──────────────┘     └──────────────────┘     └─────────────────┘
                             │                      │                        │
                       Comprehensive PRD      Agent Files +           Phased Execution
-                      (Single Source          Skill Files             with Validation
-                       of Truth)             (Clear Ownership)       and Handoffs
+                      (Single Source          Skill Files             with Validation,
+                       of Truth)             (Clear Ownership)       Commits & Progress
 ```
 
-And when V1 is done:
+**Path B — Decomposed (best for larger projects):**
+
+```
+ ┌─────────────┐     ┌──────────────┐     ┌───────────────┐     ┌──────────────────┐     ┌─────────────────┐
+ │  Your Idea   │ ──→ │  PRD Builder  │ ──→ │  Decomposer    │ ──→ │   Team Builder    │ ──→ │   Orchestrator   │
+ │              │     │  (Interview)  │     │ (PRD → Vision  │     │ (Vision+Features) │     │ (Feature-based)  │
+ └─────────────┘     └──────────────┘     │  + Features)   │     └──────────────────┘     └─────────────────┘
+                                           └───────────────┘            │                        │
+                                                  │                Agent Files +           Feature-by-Feature
+                                           Product Vision +        Skill Files             Execution with
+                                           Feature Docs            (Holistic Team)         Dependency Ordering
+                                           (Self-contained)
+```
+
+**And when any project needs new features (post-build):**
 
 ```
  ┌─────────────────┐     ┌────────────────────┐     ┌───────────────┐     ┌─────────────────┐
@@ -328,10 +462,13 @@ The components:
 | Component | What It Does | Why It Exists |
 |-----------|-------------|---------------|
 | `forge-build-prd` skill | Creates PRDs through AI-guided interviews | A team needs a single source of truth |
-| `forge-build-feature-prd` skill | Creates feature PRDs aware of existing projects | V1 isn't the end — iteration needs structure too |
-| `forge-build-agent-team` skill | Transforms PRDs into agent team definitions | Manual agent creation doesn't scale or validate |
-| `forge-team-builder` agent | Executes the team-building process | An agent follows the skill's process to design teams |
-| `project-orchestrator` agent | Coordinates agents through implementation phases | Specialists without coordination produce chaos |
+| `forge-decompose-prd` skill | Breaks monolithic PRDs into Product Vision + Feature docs | Large projects need independent, shippable units |
+| `forge-build-feature-prd` skill | Creates feature PRDs (greenfield or post-project) | Iteration needs structure, whether it's day one or day 100 |
+| `forge-build-agent-team` skill | Transforms PRDs into agent team definitions (3 modes) | Manual agent creation doesn't scale or validate |
+| `forge-team-builder` agent | Routes users and delegates to the right skill | Smart coordination beats duplicated procedures |
+| `project-orchestrator` agent | Coordinates agents with commits, progress tracking, and feature-based execution | Specialists without coordination produce chaos |
+| Architecture Decision Records | Capture decisions with rationale and alternatives | "Why" matters as much as "what" |
+| Research documents | Analyze problems before implementing solutions | Surgical fixes beat sledgehammer fixes |
 | Bootstrap scripts | Deploy templates to any repository | The framework should be easy to adopt |
 
 Each component was built in response to a real need, validated through real use, and refined through documented research. Nothing was added "just in case." Everything earns its place.
@@ -346,7 +483,7 @@ If you take nothing else from this story, take these:
 
 2. **Mirror human processes.** If real teams work with PRDs, specialists, and project managers, your AI teams should too.
 
-3. **Single source of truth, always.** Every agent, every decision, every validation should trace back to one authoritative document.
+3. **Single source of truth, always.** Every agent, every decision, every validation should trace back to one authoritative document, or a clearly linked set of them.
 
 4. **Research before implementation.** Write down what exists, what's missing, what could go wrong, and what specifically changes. Then build.
 
@@ -356,7 +493,11 @@ If you take nothing else from this story, take these:
 
 7. **Design for iteration.** V1 is never the end. Build your foundations so that V2 is an extension, not a replacement.
 
-8. **Document the why, not just the what.** Code tells you what was built. Research documents tell you *why* — and that's what lets other people build their own versions.
+8. **Document the why, not just the what.** Code tells you what was built. Research documents and ADRs tell you *why* — and that's what lets other people build their own versions.
+
+9. **Make work persistent.** AI sessions are ephemeral; your project shouldn't be. Incremental commits and progress tracking turn fleeting work into a permanent, resumable record.
+
+10. **Name your process.** If something works repeatedly, write it down. The difference between an ad-hoc approach and a methodology is one document.
 
 And thats the story, **and here is the repo**: https://github.com/McFuzzySquirrel/mcfuzzy-agent-forge
 
