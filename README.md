@@ -4,7 +4,7 @@
 ![Bash](https://img.shields.io/badge/Bash-4EAA25?logo=gnubash&logoColor=fff)
 ![PowerShell](https://img.shields.io/badge/PowerShell-5391FE?logo=powershell&logoColor=fff)
 
-> Bootstrap a custom GitHub Copilot agent team from your PRD — in minutes.
+> Bootstrap a custom GitHub Copilot agent team from your PRD — in minutes. Works in VS Code and Copilot CLI.
 
 **McFuzzy Agent Forge** turns your requirements document into a coordinated team of GitHub Copilot specialist agents. Each agent owns a specific domain, understands its dependencies, and works in sequence so nothing gets missed.
 
@@ -38,7 +38,7 @@ Both approaches use the same core toolkit:
 
 ### Prerequisites
 
-- GitHub Copilot active in VS Code
+- GitHub Copilot active in **VS Code** or [**Copilot CLI**](https://docs.github.com/en/copilot/copilot-cli) (terminal)
 - Git + Bash (Linux/macOS) or PowerShell 5.1+ (Windows)
 - [Ollama](https://ollama.com/) (optional — for [local model support](docs/running-with-local-models.md))
 
@@ -71,14 +71,17 @@ git add .github/
 git commit -m "chore: bootstrap Agent Forge templates"
 ```
 
-Open the project in VS Code — Copilot will auto-detect the agents immediately.
+Open the project in VS Code or navigate to it in your terminal with Copilot CLI — Copilot will auto-detect the agents immediately in both environments.
 
 ### 4. Build your PRD
 
-In Copilot Chat:
+In Copilot Chat (VS Code) or Copilot CLI (terminal):
 ```
 @workspace /forge-build-prd Create a PRD for [your idea]
 ```
+
+> [!NOTE]
+> The prompts in this guide use `@workspace` syntax (VS Code). In Copilot CLI, the same agents and skills are available — just use the agent or skill name directly (e.g., `/forge-build-prd Create a PRD for [your idea]`).
 
 The skill interviews you for requirements and saves a complete PRD to `docs/PRD.md`.
 
@@ -246,6 +249,9 @@ It prompts before overwriting. Use `--force` only if you want to replace everyth
 
 **Does this work for non-web projects?**
 Yes — CLI tools, mobile apps, embedded systems, data pipelines. The team builder adapts to whatever stack your PRD describes.
+
+**Does this work in Copilot CLI (terminal)?**
+Yes — and it works very well. Copilot CLI picks up `.github/agents/` and `.github/skills/` from your repo automatically. The full Agent Forge workflow (PRD building, team generation, orchestrated execution) runs in both VS Code and Copilot CLI. See [Running with Local Models](docs/running-with-local-models.md) for BYOK setup in the CLI.
 
 **When should I decompose my PRD into features?**
 When your PRD has 15+ functional requirements or 3+ phases, or when you want to prioritize and ship features independently.

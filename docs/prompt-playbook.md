@@ -6,7 +6,7 @@ A step-by-step command and prompt reference for anyone bootstrapping a new proje
 
 ## Prerequisites
 
-- GitHub Copilot active in VS Code
+- GitHub Copilot active in **VS Code** or [**Copilot CLI**](https://docs.github.com/en/copilot/copilot-cli) (terminal)
 - This repository cloned locally
 - A target project directory created and initialized as a git repo
 
@@ -45,7 +45,9 @@ git add .github/
 git commit -m "chore: bootstrap Agent Forge agent and skill templates"
 ```
 
-> Open your new project in VS Code before running the prompts below. All prompts must run in that project's Copilot Chat workspace context.
+> Open your new project in **VS Code** or navigate to it in the terminal with **Copilot CLI** before running the prompts below. Both environments auto-detect agents and skills from `.github/agents/` and `.github/skills/`.
+>
+> The prompts below use `@workspace` syntax (VS Code). In Copilot CLI, the same agents and skills are available — just use the agent or skill name directly (e.g., `/forge-build-prd ...` instead of `@workspace /forge-build-prd ...`).
 
 ---
 
@@ -254,7 +256,8 @@ Stop after F1 and report status.
 
 ## Tips
 
-- **Always open your target project in VS Code** before running prompts — `@workspace` resolves to the currently open workspace.
+- **Open your target project first** — in VS Code, `@workspace` resolves to the open workspace. In Copilot CLI, agents resolve from the current working directory's repo.
+- **Both VS Code and Copilot CLI work** — the full Agent Forge workflow (PRD building, team generation, orchestrated execution) runs in both environments. Copilot CLI is especially handy for quick iterations and fully local setups with [BYOK](running-with-local-models.md).
 - **Review before executing** — always run the execution plan prompt (Step 5a) before asking the orchestrator to build anything.
 - **One phase at a time** — resist asking the orchestrator to "build everything". Phases are checkpoints; review each one.
 - **Commit after each phase** — the orchestrator will prompt you, but make a habit of it. `git add . && git commit -m "feat: complete Phase N"`.
