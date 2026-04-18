@@ -257,7 +257,7 @@ Stop after F1 and report status.
 ## Tips
 
 - **Open your target project first** — in VS Code, `@workspace` resolves to the open workspace. In Copilot CLI, agents resolve from the current working directory's repo.
-- **Both VS Code and Copilot CLI work** — the full Agent Forge workflow (PRD building, team generation, orchestrated execution) runs in both environments. Copilot CLI is especially handy for quick iterations and fully local setups with [BYOK](docs/running-with-local-models.md).
+- **Both VS Code and Copilot CLI work** — the full Agent Forge workflow (PRD building, team generation, orchestrated execution) runs in both environments. Copilot CLI is especially handy for quick iterations and fully local setups with [BYOK](running-with-local-models.md).
 - **Review before executing** — always run the execution plan prompt (Step 5a) before asking the orchestrator to build anything.
 - **One phase at a time** — resist asking the orchestrator to "build everything". Phases are checkpoints; review each one.
 - **Commit after each phase** — the orchestrator will prompt you, but make a habit of it. `git add . && git commit -m "feat: complete Phase N"`.
