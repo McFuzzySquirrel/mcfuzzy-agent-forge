@@ -150,6 +150,52 @@ git commit -m "feat: generate specialist agent team from PRD"
 
 ---
 
+## Step 4.5 — Assign Models per Agent (Optional but Recommended)
+
+By default every agent uses your globally-selected model. Use the `forge-assign-models`
+skill to discover what models you actually have access to (cloud subscription + local
+Ollama) and assign each agent an appropriately sized model so lightweight agents don't
+default to the most expensive one.
+
+### 4.5a. Discover available models
+
+```
+@workspace /forge-assign-models Discover what models are available in my environment
+(local Ollama plus my Copilot subscription) and cache the inventory at
+docs/research/model-inventory.json. Do not change any agent files.
+```
+
+### 4.5b. Recommend a per-agent assignment
+
+```
+@workspace /forge-assign-models Read the cached inventory and the agent team in
+.github/agents/, classify each agent's workload, and produce docs/MODEL-PLAN.md with a
+proposed primary + fallback model per agent. Do not modify the agent files yet.
+```
+
+### 4.5c. Apply the recommended models
+
+After reviewing `docs/MODEL-PLAN.md`:
+
+```
+@workspace /forge-assign-models Apply the recommended models from docs/MODEL-PLAN.md by
+adding model: and modelFallback: to each agent's YAML frontmatter. Show me a diff
+summary first and ask for confirmation before writing. Optionally generate
+.github/agents/_model-launch.{sh,ps1} wrappers for Copilot CLI use.
+```
+
+### 4.5d. Re-tune after team changes
+
+After `forge-build-agent-team` runs in Feature Increment Mode:
+
+```
+@workspace /forge-assign-models Re-tune the model assignment for the changes introduced
+by the latest feature. Only re-evaluate agents whose role changed; leave the rest alone.
+Update docs/MODEL-PLAN.md.
+```
+
+---
+
 ## Step 5 — Plan and Execute the Build
 
 ### 5a. Generate an execution plan (inspect before committing to action)
@@ -246,6 +292,10 @@ Stop after F1 and report status.
 | Generate agent team (PRD) | `@workspace /forge-build-agent-team Analyze docs/PRD.md...` |
 | Generate agent team (features) | `@workspace /forge-build-agent-team Analyze docs/product-vision.md...` |
 | Validate agent team | `@workspace /forge-build-agent-team Validate the agent team...` |
+| Discover available models | `@workspace /forge-assign-models Discover what models are available...` |
+| Recommend per-agent models | `@workspace /forge-assign-models Recommend a per-agent model and write docs/MODEL-PLAN.md...` |
+| Apply per-agent models | `@workspace /forge-assign-models Apply the recommended models...` |
+| Re-tune models after a feature | `@workspace /forge-assign-models Re-tune the model assignment...` |
 | Generate execution plan | `@workspace @project-orchestrator Analyze docs/PRD.md and produce an execution plan only...` |
 | Execute Phase N | `@workspace @project-orchestrator Execute Phase N only...` |
 | Resume from checkpoint | `@workspace @project-orchestrator Read docs/PROGRESS.md and resume...` |

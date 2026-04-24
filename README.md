@@ -29,6 +29,7 @@ Both approaches use the same core toolkit:
 | `forge-decompose-prd` skill | Splits a monolithic PRD into a Product Vision + Feature documents |
 | `forge-build-feature-prd` skill | Creates a Feature PRD to add a new feature to an existing project |
 | `forge-team-builder` agent | Reads a PRD or feature set and generates the full specialist agent team |
+| `forge-assign-models` skill | Discovers available models (cloud + local Ollama) and recommends/applies a per-agent model so lightweight agents do not default to the most expensive model |
 | `project-orchestrator` agent | Coordinates agents through implementation phases, phase by phase |
 | Bootstrap scripts | Copy all templates into any target repository with one command |
 
@@ -172,6 +173,40 @@ See the full guide — recommended models, GPU setup, reliability benchmarking, 
 
 ---
 
+## Model Assignment per Agent
+
+By default every agent runs against whatever model the user has globally selected (the
+VS Code model picker, or `COPILOT_MODEL` for Copilot CLI). That means a lightweight
+docs-writer and a heavy architect both consume the same — usually most-expensive — model.
+
+The optional `forge-assign-models` skill fixes that. It:
+
+1. **Discovers** which models you actually have access to — local Ollama (via the
+   `/api/tags` endpoint) plus the models exposed by your Copilot subscription or BYOK
+   provider.
+2. **Classifies** each generated agent's workload (reasoning depth, context size,
+   tool-use, latency sensitivity, safety) on a small explicit rubric.
+3. **Recommends** a primary + fallback model per agent and writes a reviewable
+   `docs/MODEL-PLAN.md`.
+4. **Applies** the recommendation (only on explicit confirmation) by adding `model:` and
+   `modelFallback:` to each agent's YAML frontmatter.
+5. **Re-tunes** after team changes — only re-evaluates agents whose role changed.
+
+```
+@workspace /forge-assign-models Discover what models are available.
+@workspace /forge-assign-models Recommend a per-agent model and write docs/MODEL-PLAN.md.
+@workspace /forge-assign-models Apply the recommended models to the agent files.
+```
+
+> [!NOTE]
+> The `model:` frontmatter field is honored by VS Code custom agents. Copilot CLI BYOK
+> currently uses a single global model (`COPILOT_MODEL`) per session, so on the CLI the
+> assignments are advisory — Apply mode can optionally emit small launch wrappers under
+> `.github/agents/_model-launch.{sh,ps1}` that set the right `COPILOT_MODEL` before
+> invoking `copilot`.
+
+---
+
 ## Persistent Memory with EJS
 
 The [Engineering Journey System (EJS)](https://github.com/McFuzzySquirrel/Engineering-Journey-System) adds session memory to your agent team. Without it, agents start fresh every conversation with no awareness of past decisions. With it, they query a local SQLite database of past ADRs, learnings, and architectural choices.
@@ -202,7 +237,8 @@ mcfuzzy-agent-forge/
 │       ├── forge-build-agent-team/SKILL.md   # Process for building agent teams
 │       ├── forge-build-feature-prd/SKILL.md  # Process for building Feature PRDs
 │       ├── forge-build-prd/SKILL.md          # Process for building PRDs
-│       └── forge-decompose-prd/SKILL.md      # Process for decomposing PRDs into features
+│       ├── forge-decompose-prd/SKILL.md      # Process for decomposing PRDs into features
+│       └── forge-assign-models/SKILL.md      # Process for per-agent model selection (cloud + local Ollama)
 ├── scripts/
 │   ├── bootstrap.sh                    # Bash bootstrap script
 │   └── bootstrap.ps1                   # PowerShell bootstrap script

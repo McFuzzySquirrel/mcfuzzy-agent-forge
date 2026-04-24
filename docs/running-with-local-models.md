@@ -2,6 +2,11 @@
 
 GitHub Copilot CLI supports [Bring Your Own Key (BYOK)](https://docs.github.com/en/copilot/how-tos/copilot-cli/customize-copilot/use-byok-models), letting you point it at a local Ollama instance. Since Copilot CLI picks up `.github/agents/` and `.github/skills/` from your repo, your entire Agent Forge team can run against a local model.
 
+> [!TIP]
+> After your team is generated, run the `forge-assign-models` skill to pick an appropriate
+> model **per agent** — including local Ollama models — instead of running every agent
+> against the same default. See [Model Assignment per Agent](../README.md#model-assignment-per-agent).
+
 ## Setup
 
 1. Install and start [Ollama](https://ollama.com/) and pull a current model tag that supports tool calling and streaming:

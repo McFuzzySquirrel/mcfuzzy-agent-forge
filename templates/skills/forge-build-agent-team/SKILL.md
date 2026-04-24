@@ -301,6 +301,25 @@ Summarize the team in a table:
 
 ---
 
+### Step 9: Recommend the Model Assignment Skill
+
+After the team is generated and validated, **recommend** (do not auto-run) the
+`forge-assign-models` skill so the user can match each agent to an appropriately sized
+model from their own inventory (cloud subscription + local Ollama) rather than letting
+every agent default to the strongest, most expensive model.
+
+Suggest one of these prompts to the user:
+
+- `/forge-assign-models Discover what models are available and cache the inventory.`
+- `/forge-assign-models Recommend a per-agent model and write docs/MODEL-PLAN.md.`
+- `/forge-assign-models Apply the recommended models to the agent files.`
+
+Keep this as a recommendation only — model assignment is a separate concern from team
+generation and must be opt-in. After Feature Increment Mode runs, suggest running the
+skill in **Re-tune** mode so only changed agents are reassessed.
+
+---
+
 ## Guidelines
 
 - **Scale to the project.** A weekend prototype may need 3–4 agents. A large application may need 8–12. Don't create agents for areas the PRD doesn't cover.
