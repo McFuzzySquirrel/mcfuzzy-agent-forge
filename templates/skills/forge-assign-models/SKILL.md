@@ -207,6 +207,11 @@ Mapping rules:
 
 1. **Honor tool-calling capability.** If the agent's tool-calling axis is 3, primary and
    fallback must both support tool calling. Discard inventory entries that don't.
+   Entries under `copilot_subscription` are treated as tool-calling-capable by default
+   (every model in the maintained catalog supports it); the explicit capability gate in
+   Step 1a only filters local Ollama models, where tool-calling support varies. If a
+   user-confirmed cloud entry is known not to support tool calling, mark it
+   `tool_calling: false` in the inventory and it will be filtered here too.
 2. **Honor context window need.** If the agent's context axis is 3, prefer models with
    the largest declared `context_length` in the inventory.
 3. **Local-first override.** If the user passed "local" / "BYOK" / "offline" in their
