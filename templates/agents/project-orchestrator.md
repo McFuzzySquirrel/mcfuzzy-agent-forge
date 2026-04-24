@@ -229,6 +229,11 @@ To enable resuming work on a different machine and provide clear project state v
    - Task status change (pending → in progress → complete)
    - Files created or modified by the task
    - Any notes or blockers encountered
+   - The model assigned to the agent that ran the task — read the `model:` field from
+     the agent's YAML frontmatter (in `.github/agents/{agent}.md`); if no `model:` is
+     set, record `model: default` to indicate the user's globally-selected model was
+     used. This makes per-agent cost/perf retros possible and surfaces drift if a CLI
+     user has overridden `COPILOT_MODEL` for the session.
 3. **Include in every commit** so the progress state is always current in the repository
 4. **Use for resumption** — when the user says "Resume from last checkpoint", read this file to determine exactly where to continue
 
@@ -246,13 +251,13 @@ Use the following structure:
 **PRD**: [Path to PRD file]
 
 ## Completed Tasks
-- [x] Phase 1, Task 1.1: [Description] (@agent-name)
+- [x] Phase 1, Task 1.1: [Description] (@agent-name) [model: gpt-5 | default]
   - Files: [list of files created/modified]
-- [x] Phase 1, Task 1.2: [Description] (@agent-name)
+- [x] Phase 1, Task 1.2: [Description] (@agent-name) [model: claude-haiku-4.x | default]
   - Files: [list of files created/modified]
 
 ## Current Task
-- [ ] Phase 2, Task 2.1: [Description] (@agent-name)
+- [ ] Phase 2, Task 2.1: [Description] (@agent-name) [model: claude-sonnet-4.x | default]
   - Status: In progress
   - Notes: [any relevant context]
 
