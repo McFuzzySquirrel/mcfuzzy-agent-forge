@@ -51,6 +51,20 @@ git commit -m "chore: bootstrap Agent Forge agent and skill templates"
 
 ---
 
+## Fast Path — One-Prompt Bootstrap (Optional)
+
+If you just want to go from a one-liner idea to a reviewed PRD and a generated agent team without copy-pasting between skills, use the `forge-bootstrap-project` meta-skill. It chains `forge-build-prd` → **pause for PRD review** → `forge-build-agent-team` → **pause for team review** → optionally `forge-assign-models`. The review pauses are preserved — each one emits a verification checklist before the next step runs.
+
+```
+@workspace /forge-bootstrap-project I want to build [describe your idea in one sentence].
+```
+
+At each pause, reply `approved` to continue, `revise: <notes>` to iterate on the current artifact, or `stop` to end the flow. At Pause 2, reply `approved and assign models` to also run `forge-assign-models` in Recommend mode.
+
+If you prefer to drive each step yourself, skip this section and follow Steps 2–4.5 below.
+
+---
+
 ## Step 2 — Build the PRD
 
 ### 2a. Generate the PRD

@@ -25,6 +25,7 @@ Both approaches use the same core toolkit:
 
 | What | Role |
 |---|---|
+| `forge-bootstrap-project` skill | One-shot meta-skill that chains `forge-build-prd` → review → `forge-build-agent-team` → review → optional `forge-assign-models`, preserving the review pauses |
 | `forge-build-prd` skill | Interviews you and creates a comprehensive PRD |
 | `forge-decompose-prd` skill | Splits a monolithic PRD into a Product Vision + Feature documents |
 | `forge-build-feature-prd` skill | Creates a Feature PRD to add a new feature to an existing project |
@@ -238,6 +239,7 @@ mcfuzzy-agent-forge/
 │       ├── forge-build-agent-team/SKILL.md   # Process for building agent teams
 │       ├── forge-build-feature-prd/SKILL.md  # Process for building Feature PRDs
 │       ├── forge-build-prd/SKILL.md          # Process for building PRDs
+│       ├── forge-bootstrap-project/SKILL.md  # Meta-skill: idea → PRD → review → team → review → optional model assignment
 │       ├── forge-decompose-prd/SKILL.md      # Process for decomposing PRDs into features
 │       ├── forge-assign-models/SKILL.md      # Process for per-agent model selection (cloud + local Ollama)
 │       └── forge-build-agent-framework-solution/SKILL.md  # Scaffold a Microsoft Agent Framework solution from a PRD
