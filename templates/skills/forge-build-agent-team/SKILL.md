@@ -93,6 +93,46 @@ Map the PRD's domains to specialist agent roles. Each agent should own a **disti
 - Names should be **role-descriptive**, not person-names.
 - Prefer established industry role titles that are intuitive.
 
+#### Worked Example: PRD that names an agent framework
+
+When the PRD names a specific **agent / orchestration framework** (LangGraph, CrewAI,
+AutoGen, LlamaIndex Agents, Semantic Kernel, etc.), treat it the same way you would a
+game engine or web framework: create a dedicated `[Framework] Specialist` agent that
+owns framework-specific code, and pair it with one or two reusable skills for the
+patterns that will repeat across the project.
+
+**PRD excerpt:**
+
+> Section 3 — Technical Architecture. The system is built on **LangGraph** as the
+> orchestration framework. Each capability is implemented as a LangGraph node with a
+> typed state schema. The graph compiles to a single executable. Tool calls go through
+> a shared tool registry. Persistence uses LangGraph's checkpointer with a SQLite
+> backend.
+>
+> Section 4 — Functional Requirements. FR-7: Add a "research" node that fans out to
+> three sub-agents. FR-8: Add a "summarize" node. FR-9: Add a "human-in-the-loop"
+> approval node.
+
+**Resulting team (framework slice only — other agents still apply):**
+
+| Agent | Owns |
+|---|---|
+| `langgraph-specialist` | Graph wiring, state schema, node registration, checkpointer config, tool registry, compile/run entry point |
+| `research-node-engineer` | FR-7 — the research node and its sub-agent fan-out |
+| `workflow-engineer` | FR-8, FR-9 — summarize node, human-in-the-loop node, and any future business-logic nodes |
+
+The `langgraph-specialist` owns the **framework surface** (how nodes are wired,
+state shape, persistence). The node-level engineers own **what each node does**. This
+keeps "framework upgrade" work and "feature work" in separate hands.
+
+**Reusable skill this implies:** `create-langgraph-node` — scaffolds a new node file,
+registers it on the graph, adds its slice to the state schema, and wires its tools.
+Any node-level engineer can invoke it.
+
+Substitute `langgraph-specialist` → `crewai-specialist`, `autogen-specialist`,
+`semantic-kernel-specialist`, etc., depending on which framework the PRD names. The
+shape of the team is the same.
+
 ### Step 3: Define Agent Boundaries
 
 For each agent, determine:
