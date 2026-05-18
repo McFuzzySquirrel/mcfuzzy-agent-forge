@@ -18,8 +18,8 @@ Choose the approach that fits your project:
 
 | | Approach | Best for |
 |---|---|---|
-| **A** | **Monolithic PRD** → agent team → build | Small-to-medium projects |
-| **B** | **PRD** → decompose into features → agent team → build feature by feature | Larger projects or incremental delivery |
+| **A** | **Monolithic PRD** → *(if Agent Framework: scaffold solution)* → agent team → build | Small-to-medium projects |
+| **B** | **PRD** → decompose into features → *(if Agent Framework: scaffold solution)* → agent team → build feature by feature | Larger projects or incremental delivery |
 
 Both approaches use the same core toolkit:
 
@@ -29,8 +29,8 @@ Both approaches use the same core toolkit:
 | `forge-build-prd` skill | Interviews you and creates a comprehensive PRD |
 | `forge-decompose-prd` skill | Splits a monolithic PRD into a Product Vision + Feature documents |
 | `forge-build-feature-prd` skill | Creates a Feature PRD to add a new feature to an existing project |
+| `forge-build-agent-framework-solution` skill | Scaffolds a runnable [Microsoft Agent Framework](https://learn.microsoft.com/en-us/agent-framework/) solution (.NET or Python) when the PRD selects Agent Framework as the tech — run this **before** generating the agent team |
 | `forge-team-builder` agent | Reads a PRD or feature set and generates the full specialist agent team |
-| `forge-build-agent-framework-solution` skill | Scaffolds a runnable [Microsoft Agent Framework](https://learn.microsoft.com/en-us/agent-framework/) solution (.NET or Python) when the PRD selects Agent Framework as the tech |
 | `forge-assign-models` skill | Discovers available models (cloud + local Ollama) and recommends/applies a per-agent model so lightweight agents do not default to the most expensive model |
 | `project-orchestrator` agent | Coordinates agents through implementation phases, phase by phase |
 | Bootstrap scripts | Copy all templates into any target repository with one command |
@@ -88,7 +88,20 @@ In Copilot Chat (VS Code) or Copilot CLI (terminal):
 
 The skill interviews you for requirements and saves a complete PRD to `docs/PRD.md`.
 
-### 5. Generate your agent team
+> [!IMPORTANT]
+> If your PRD selects **Microsoft Agent Framework**, run `/forge-build-agent-framework-solution` **after** PRD creation and **before** team generation.
+
+### 5. (Agent Framework only) Scaffold the solution first
+
+If your PRD selected Microsoft Agent Framework, run:
+
+```
+@workspace /forge-build-agent-framework-solution Analyze docs/PRD.md and scaffold the solution
+```
+
+If your PRD did **not** select Microsoft Agent Framework, skip this step.
+
+### 6. Generate your agent team
 
 ```
 @workspace /forge-team-builder Analyze docs/PRD.md and generate the agent team
@@ -96,7 +109,7 @@ The skill interviews you for requirements and saves a complete PRD to `docs/PRD.
 
 Agent files appear in `.github/agents/`. Each specialist owns a clear domain with no overlaps.
 
-### 6. Execute the build
+### 7. Execute the build
 
 ```
 @workspace @project-orchestrator Analyze docs/PRD.md and produce an execution plan
@@ -321,4 +334,3 @@ Re-run `@workspace /forge-team-builder` for minor changes. For new features on a
 ---
 
 **Made with ❤️ by [McFuzzySquirrel](https://github.com/McFuzzySquirrel)**
-
