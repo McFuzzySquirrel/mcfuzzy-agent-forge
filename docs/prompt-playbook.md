@@ -196,6 +196,54 @@ Update docs/MODEL-PLAN.md.
 
 ---
 
+## Step 4.6 — Scaffold the Solution (when the PRD selects Microsoft Agent Framework)
+
+If your PRD's Technology Stack picks **[Microsoft Agent Framework](https://learn.microsoft.com/en-us/agent-framework/)**,
+run the `forge-build-agent-framework-solution` skill **before** asking the orchestrator to
+execute Phase 1. It scaffolds the .NET or Python project (folder layout, packages, host,
+sample agent, tools, workflow, tests, README) so the specialist agents have a real
+codebase to build on.
+
+### 4.6a. Plan the scaffold (no files written)
+
+```
+@workspace /forge-build-agent-framework-solution Read docs/PRD.md, confirm Microsoft Agent
+Framework is the chosen stack, and present an extracted plan: language stack (.NET or
+Python), agents, tools, orchestration topology, hosting surface, and required env vars.
+Do not write any files yet.
+```
+
+### 4.6b. Generate the scaffold
+
+After approving the plan:
+
+```
+@workspace /forge-build-agent-framework-solution Scaffold the solution as planned. Use
+ecosystem tooling (dotnet new / uv init) and verify the project restores, builds, and
+runs an empty test suite. Report the folder tree, packages used, and the exact commands
+to run it.
+```
+
+### 4.6c. Add scaffolding for a new feature
+
+When `forge-build-feature-prd` produces a Feature PRD that needs new agents, tools, or
+workflow nodes on top of an existing Agent Framework solution:
+
+```
+@workspace /forge-build-agent-framework-solution Read docs/features/feature-XX-[name].md
+and extend the existing Agent Framework solution in place. Add only what the Feature PRD
+requires (new agent factory, new tool, new workflow edge) and leave unrelated code alone.
+```
+
+Then commit:
+
+```bash
+git add .
+git commit -m "feat: scaffold Microsoft Agent Framework solution"
+```
+
+---
+
 ## Step 5 — Plan and Execute the Build
 
 ### 5a. Generate an execution plan (inspect before committing to action)
@@ -296,6 +344,9 @@ Stop after F1 and report status.
 | Recommend per-agent models | `@workspace /forge-assign-models Recommend a per-agent model and write docs/MODEL-PLAN.md...` |
 | Apply per-agent models | `@workspace /forge-assign-models Apply the recommended models...` |
 | Re-tune models after a feature | `@workspace /forge-assign-models Re-tune the model assignment...` |
+| Scaffold Agent Framework solution (plan) | `@workspace /forge-build-agent-framework-solution Read docs/PRD.md... present a plan, do not write files` |
+| Scaffold Agent Framework solution (apply) | `@workspace /forge-build-agent-framework-solution Scaffold the solution as planned...` |
+| Extend Agent Framework solution for a feature | `@workspace /forge-build-agent-framework-solution Read docs/features/feature-XX... extend the existing solution` |
 | Generate execution plan | `@workspace @project-orchestrator Analyze docs/PRD.md and produce an execution plan only...` |
 | Execute Phase N | `@workspace @project-orchestrator Execute Phase N only...` |
 | Resume from checkpoint | `@workspace @project-orchestrator Read docs/PROGRESS.md and resume...` |

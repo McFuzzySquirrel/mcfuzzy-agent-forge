@@ -29,6 +29,7 @@ Both approaches use the same core toolkit:
 | `forge-decompose-prd` skill | Splits a monolithic PRD into a Product Vision + Feature documents |
 | `forge-build-feature-prd` skill | Creates a Feature PRD to add a new feature to an existing project |
 | `forge-team-builder` agent | Reads a PRD or feature set and generates the full specialist agent team |
+| `forge-build-agent-framework-solution` skill | Scaffolds a runnable [Microsoft Agent Framework](https://learn.microsoft.com/en-us/agent-framework/) solution (.NET or Python) when the PRD selects Agent Framework as the tech |
 | `forge-assign-models` skill | Discovers available models (cloud + local Ollama) and recommends/applies a per-agent model so lightweight agents do not default to the most expensive model |
 | `project-orchestrator` agent | Coordinates agents through implementation phases, phase by phase |
 | Bootstrap scripts | Copy all templates into any target repository with one command |
@@ -238,7 +239,8 @@ mcfuzzy-agent-forge/
 │       ├── forge-build-feature-prd/SKILL.md  # Process for building Feature PRDs
 │       ├── forge-build-prd/SKILL.md          # Process for building PRDs
 │       ├── forge-decompose-prd/SKILL.md      # Process for decomposing PRDs into features
-│       └── forge-assign-models/SKILL.md      # Process for per-agent model selection (cloud + local Ollama)
+│       ├── forge-assign-models/SKILL.md      # Process for per-agent model selection (cloud + local Ollama)
+│       └── forge-build-agent-framework-solution/SKILL.md  # Scaffold a Microsoft Agent Framework solution from a PRD
 ├── scripts/
 │   ├── bootstrap.sh                    # Bash bootstrap script
 │   └── bootstrap.ps1                   # PowerShell bootstrap script
