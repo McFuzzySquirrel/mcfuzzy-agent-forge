@@ -465,6 +465,9 @@ The components:
 | `forge-decompose-prd` skill | Breaks monolithic PRDs into Product Vision + Feature docs | Large projects need independent, shippable units |
 | `forge-build-feature-prd` skill | Creates feature PRDs (greenfield or post-project) | Iteration needs structure, whether it's day one or day 100 |
 | `forge-build-agent-team` skill | Transforms PRDs into agent team definitions (3 modes) | Manual agent creation doesn't scale or validate |
+| `forge-bootstrap-project` skill | Meta-skill that chains PRD → review → team → review → optional model assignment from a one-liner idea | Removes copy-paste between steps without removing the human review gates |
+| `forge-assign-models` skill | Discovers available models (cloud + local Ollama) and recommends/applies a per-agent model assignment | Lightweight agents shouldn't default to the most expensive model |
+| `forge-build-agent-framework-solution` skill | Scaffolds a runnable Microsoft Agent Framework solution (.NET or Python) when the PRD selects it | Specialist agents need a real codebase to build on, not an empty repo |
 | `forge-team-builder` agent | Routes users and delegates to the right skill | Smart coordination beats duplicated procedures |
 | `project-orchestrator` agent | Coordinates agents with commits, progress tracking, and feature-based execution | Specialists without coordination produce chaos |
 | Architecture Decision Records | Capture decisions with rationale and alternatives | "Why" matters as much as "what" |
