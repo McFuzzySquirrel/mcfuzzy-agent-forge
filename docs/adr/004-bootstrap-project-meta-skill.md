@@ -60,7 +60,7 @@ The meta-skill is **pure orchestration**:
 - It does **not** re-implement any of their logic and does **not** produce
   artifacts of its own beyond what the underlying skills already produce.
 - It does **not** introduce a new state file, manifest, or progress tracker;
-  the on-disk artifacts (`docs/PRD.md`, `.github/agents/*.md`,
+  the on-disk artifacts (`docs/PRD.md`, `.agents/agents/*.md`,
   `docs/MODEL-PLAN.md`) are the state.
 
 ### 2. Mandatory Review Pauses
@@ -94,7 +94,7 @@ Before invoking any underlying skill, the meta-skill inspects repo state:
 
 - An existing `docs/PRD.md` triggers a "keep / replace / extend" prompt
   rather than a silent overwrite.
-- Existing agents in `.github/agents/` (beyond the forge templates) cause
+- Existing agents in `.agents/agents/` (beyond the forge templates) cause
   the meta-skill to warn that `forge-build-agent-team` will run in
   **Feature Increment Mode** rather than Full Build.
 - An existing `docs/product-vision.md` + `docs/features/*.md` layout causes

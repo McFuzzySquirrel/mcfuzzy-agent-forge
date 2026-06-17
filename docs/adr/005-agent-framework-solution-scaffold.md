@@ -146,7 +146,7 @@ agent team can be generated without a code scaffold. Running this skill before
 The skill's documentation and completion report explicitly calls out the two agent
 constructs:
 
-- **Copilot specialist agents** (`.github/agents/*.md`) — custom agents that implement
+- **Copilot specialist agents** (`.agents/agents/*.md`) — custom agents that implement
   features in the repository, produced by `forge-build-agent-team`.
 - **Runtime Agent Framework agents** (`src/<Project>.Agents/`) — AI agents the *product*
   ships, hosted on Azure or locally, produced by this skill.

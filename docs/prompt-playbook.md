@@ -6,7 +6,7 @@ A step-by-step command and prompt reference for anyone bootstrapping a new proje
 
 ## Prerequisites
 
-- GitHub Copilot active in **VS Code** or [**Copilot CLI**](https://docs.github.com/en/copilot/copilot-cli) (terminal)
+- An agent harness — **GitHub Copilot** in VS Code or [Copilot CLI](https://docs.github.com/en/copilot/copilot-cli), **Claude Code**, or any runtime that detects agents and skills from a repo directory
 - This repository cloned locally
 - A target project directory created and initialized as a git repo
 
@@ -37,17 +37,17 @@ Run the bootstrap script from the Agent Forge repo, pointing it at your new proj
 ./scripts/bootstrap.sh ~/Projects/my-new-project --force
 ```
 
-After bootstrapping, commit the templates so Copilot can see them:
+After bootstrapping, commit the templates so your harness can detect them:
 
 ```bash
 cd ~/Projects/my-new-project
-git add .github/
+git add .agents/
 git commit -m "chore: bootstrap Agent Forge agent and skill templates"
 ```
 
-> Open your new project in **VS Code** or navigate to it in the terminal with **Copilot CLI** before running the prompts below. Both environments auto-detect agents and skills from `.github/agents/` and `.github/skills/`.
+> Open your target project before running the prompts below — your agent harness auto-detects agents and skills from `.agents/agents/` and `.agents/skills/` (or `.github/` / `.claude/` if bootstrapped with the matching `--harness` flag).
 >
-> The prompts below use `@workspace` syntax (VS Code). In Copilot CLI, the same agents and skills are available — just use the agent or skill name directly (e.g., `/forge-build-prd ...` instead of `@workspace /forge-build-prd ...`).
+> The prompts below use `@workspace` syntax. If your harness uses different syntax for invoking agents and skills, adapt accordingly (e.g., `/forge-build-prd ...` directly in Copilot CLI).
 
 ---
 
@@ -135,14 +135,14 @@ Report any gaps or issues.
 **From a monolithic PRD:**
 ```
 @workspace /forge-build-agent-team Analyze docs/PRD.md and generate a complete specialist agent team.
-Create agent files in .github/agents/ and skill files in .github/skills/.
+Create agent files in .agents/agents/ and skill files in .agents/skills/.
 Ensure every PRD requirement has a clearly assigned primary owner agent.
 ```
 
 **From a decomposed Product Vision + Features:**
 ```
 @workspace /forge-build-agent-team Analyze docs/product-vision.md and all feature documents in docs/features/.
-Generate a complete specialist agent team in .github/agents/ and skills in .github/skills/ 
+Generate a complete specialist agent team in .agents/agents/ and skills in .agents/skills/ 
 that covers all features holistically without overlap or gaps.
 ```
 
@@ -158,7 +158,7 @@ Produce a responsibility matrix as a markdown table and save it to docs/agent-re
 After generating agents, commit them:
 
 ```bash
-git add .github/agents/ .github/skills/ docs/
+git add .agents/agents/ .agents/skills/ docs/
 git commit -m "feat: generate specialist agent team from PRD"
 ```
 
@@ -167,7 +167,7 @@ git commit -m "feat: generate specialist agent team from PRD"
 ## Step 4.5 — Assign Models per Agent (Optional but Recommended)
 
 By default every agent uses your globally-selected model. Use the `forge-assign-models`
-skill to discover what models you actually have access to (cloud subscription + local
+skill to discover what models you actually have access to (harness subscription + local
 Ollama) and assign each agent an appropriately sized model so lightweight agents don't
 default to the most expensive one.
 
@@ -175,7 +175,7 @@ default to the most expensive one.
 
 ```
 @workspace /forge-assign-models Discover what models are available in my environment
-(local Ollama plus my Copilot subscription) and cache the inventory at
+(local Ollama plus my harness subscription) and cache the inventory at
 docs/research/model-inventory.json. Do not change any agent files.
 ```
 
@@ -183,7 +183,7 @@ docs/research/model-inventory.json. Do not change any agent files.
 
 ```
 @workspace /forge-assign-models Read the cached inventory and the agent team in
-.github/agents/, classify each agent's workload, and produce docs/MODEL-PLAN.md with a
+.agents/agents/, classify each agent's workload, and produce docs/MODEL-PLAN.md with a
 proposed primary + fallback model per agent. Do not modify the agent files yet.
 ```
 
@@ -194,8 +194,7 @@ After reviewing `docs/MODEL-PLAN.md`:
 ```
 @workspace /forge-assign-models Apply the recommended models from docs/MODEL-PLAN.md by
 adding model: and modelFallback: to each agent's YAML frontmatter. Show me a diff
-summary first and ask for confirmation before writing. Optionally generate
-.github/agents/_model-launch.{sh,ps1} wrappers for Copilot CLI use.
+summary first and ask for confirmation before writing.
 ```
 
 ### 4.5d. Re-tune after team changes
@@ -327,7 +326,7 @@ existing agents are affected and whether any new agents are needed.
 
 ```
 @workspace /forge-build-agent-team A new Feature PRD has been added at docs/features/feature-XX-[name].md.
-Review the Agent Impact Assessment and update the agent team in .github/agents/ accordingly.
+Review the Agent Impact Assessment and update the agent team in .agents/agents/ accordingly.
 Only modify or create agents that are directly affected by this feature.
 ```
 
@@ -341,12 +340,37 @@ Stop after F1 and report status.
 
 ---
 
+## Step 7 — Optimize Existing Skills
+
+After building a project, audit the generated skills against agentskills.io best practices:
+
+### 7a. Audit skills
+
+```
+@workspace /forge-optimize-skills Audit all skills in .agents/skills/ against best practices.
+Score each skill and produce docs/SKILL-AUDIT.md. Do not modify any files yet.
+```
+
+### 7b. Apply approved improvements
+
+After reviewing `docs/SKILL-AUDIT.md`:
+
+```
+@workspace /forge-optimize-skills Apply the approved changes from docs/SKILL-AUDIT.md.
+Only modify skills I've approved in the audit report.
+```
+
+---
+
 ## Quick Reference — All Prompts at a Glance
 
 | Step | Command / Prompt |
 |------|-----------------|
-| Bootstrap (Bash) | `./scripts/bootstrap.sh ~/Projects/my-project` |
+| Bootstrap (Bash, default) | `./scripts/bootstrap.sh ~/Projects/my-project` |
+| Bootstrap (Bash, GitHub) | `./scripts/bootstrap.sh ~/Projects/my-project --harness github` |
+| Bootstrap (Bash, Claude) | `./scripts/bootstrap.sh ~/Projects/my-project --harness claude` |
 | Bootstrap (PowerShell) | `.\scripts\bootstrap.ps1 -Target C:\Projects\my-project` |
+| Bootstrap (PowerShell, harness) | `.\scripts\bootstrap.ps1 -Target C:\Projects\my-project -Harness github` |
 | Build PRD from seed docs | `@workspace /forge-build-prd Build a complete PRD using docs/...` |
 | Build PRD from idea | `@workspace /forge-build-prd I want to build [idea]...` |
 | PRD quality pass | `@workspace /forge-build-prd Review docs/PRD.md for gaps...` |
@@ -366,15 +390,17 @@ Stop after F1 and report status.
 | Resume from checkpoint | `@workspace @project-orchestrator Read docs/PROGRESS.md and resume...` |
 | New feature PRD | `@workspace /forge-build-feature-prd I want to add [feature]...` |
 | Execute feature phase | `@workspace @project-orchestrator Read docs/features/feature-XX.md, execute Phase F1 only...` |
+| Audit skills | `@workspace /forge-optimize-skills Audit all skills in .agents/skills/ against best practices...` |
+| Apply skill improvements | `@workspace /forge-optimize-skills Apply the approved changes from docs/SKILL-AUDIT.md` |
 
 ---
 
 ## Tips
 
-- **Open your target project first** — in VS Code, `@workspace` resolves to the open workspace. In Copilot CLI, agents resolve from the current working directory's repo.
-- **Both VS Code and Copilot CLI work** — the full Agent Forge workflow (PRD building, team generation, orchestrated execution) runs in both environments. Copilot CLI is especially handy for quick iterations and fully local setups with [BYOK](running-with-local-models.md).
+- **Open your target project first** — agents and skills resolve from the current workspace or repo directory.
 - **Review before executing** — always run the execution plan prompt (Step 5a) before asking the orchestrator to build anything.
 - **One phase at a time** — resist asking the orchestrator to "build everything". Phases are checkpoints; review each one.
 - **Commit after each phase** — the orchestrator will prompt you, but make a habit of it. `git add . && git commit -m "feat: complete Phase N"`.
 - **The PRD is the source of truth** — if something looks wrong, fix the PRD first, then re-run the affected steps.
 - **Re-bootstrap safely** — run `bootstrap.sh --force` any time you want to pull in updated Agent Forge templates without losing your generated agents.
+- **Optimize generated skills** — after the initial build, run `@workspace /forge-optimize-skills` to audit your skills against best practices. The audit surfaces specific improvements you can apply immediately.

@@ -68,7 +68,7 @@ These acknowledge the scenario exists but offer only a manual/regeneration appro
 
 **What we need to think about:**
 - The original PRD's completed phases tell us what's done
-- The existing agent files in `.github/agents/` tell us what capabilities exist
+- The existing agent files in `.agents/agents/` tell us what capabilities exist
 - The codebase itself tells us what's actually been implemented
 - The feature PRD needs to reference and build upon this existing context, not start fresh
 
@@ -291,12 +291,12 @@ Before analyzing the PRD, determine which mode to operate in:
 
 **Full Build Mode** (current behavior, unchanged):
 - The PRD is a complete project PRD (has Overview, Technical Architecture, full Implementation Phases)
-- No existing agent files in `.github/agents/` beyond the forge templates
+- No existing agent files in `.agents/agents/` beyond the forge templates
 - Proceed with the existing Step 1–8 process unchanged
 
 **Feature Increment Mode** (new behavior):
 - The document is a Feature PRD (has "Feature Overview", "Existing System State", "Agent Impact Assessment")
-- Existing agent files already exist in `.github/agents/`
+- Existing agent files already exist in `.agents/agents/`
 - Switch to the incremental analysis process (Steps 1i–8i below)
 ```
 
@@ -305,7 +305,7 @@ Before analyzing the PRD, determine which mode to operate in:
 ```
 Step 1i: Analyze the Feature PRD AND Existing Team
   - Read the Feature PRD (focus on Sections 5–8: Technical Approach, Requirements, Agent Impact)
-  - Read ALL existing agent files in .github/agents/
+  - Read ALL existing agent files in .agents/agents/
   - Read the original PRD to understand the full project context
   - Build a map of existing agent domains and boundaries
 
@@ -420,7 +420,7 @@ When executing a feature PRD (detected by "Feature Overview" section or explicit
    - The established architecture and tech stack
    - Constraints and conventions already in place
 
-3. **Review all agent files** in `.github/agents/`:
+3. **Review all agent files** in `.agents/agents/`:
    - Identify which agents have been modified for this feature (new responsibilities)
    - Identify which agents are newly created for this feature
    - Understand which agents are unchanged and don't need to be called
@@ -525,7 +525,7 @@ Additions:
 
 **Files:** `scripts/bootstrap.sh`, `scripts/bootstrap.ps1`
 
-Add the new `forge-build-feature-prd` skill directory to the copy list. This should be a minimal change — the scripts already copy from `templates/skills/` to `.github/skills/`.
+Add the new `forge-build-feature-prd` skill directory to the copy list. This should be a minimal change — the scripts already copy from `templates/skills/` to `.agents/skills/`.
 
 ### Change 6: Update README
 
