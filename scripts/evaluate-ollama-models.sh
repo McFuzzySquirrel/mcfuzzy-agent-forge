@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# evaluate-ollama-models.sh — Evaluate local Ollama models for Copilot CLI readiness.
+# evaluate-ollama-models.sh - Evaluate local Ollama models for Copilot CLI readiness.
 #
 # Focuses on practical prerequisites for skills/agents:
 # 1) Basic chat completion succeeds

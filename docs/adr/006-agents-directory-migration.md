@@ -7,11 +7,11 @@
 
 ## Context
 
-The McFuzzy Agent Forge was originally designed solely for GitHub Copilot. Agent and skill templates were bootstrapped into `.github/agents/` and `.github/skills/` — directories that GitHub Copilot auto-detects. All template files, documentation, and the bootstrap scripts referenced these GitHub-specific paths.
+The McFuzzy Agent Forge was originally designed solely for GitHub Copilot. Agent and skill templates were bootstrapped into `.github/agents/` and `.github/skills/` - directories that GitHub Copilot auto-detects. All template files, documentation, and the bootstrap scripts referenced these GitHub-specific paths.
 
 Two developments prompted a migration:
 
-1. **The Agent Skills specification** (agentskills.io) defines a harness-agnostic format for skills (directory with `SKILL.md`, `references/`, `scripts/`, `assets/` subdirectories). The spec does not mandate `.github/` as the root — skills and agents should live under a neutral directory to work with any agent runtime.
+1. **The Agent Skills specification** (agentskills.io) defines a harness-agnostic format for skills (directory with `SKILL.md`, `references/`, `scripts/`, `assets/` subdirectories). The spec does not mandate `.github/` as the root - skills and agents should live under a neutral directory to work with any agent runtime.
 
 2. **Other agent harnesses** (Claude Code, Copilot CLI, future runtimes) use different detection directories (`.claude/`, `.github/`, etc.). Coupling the forge to `.github/` prevents users from targeting these harnesses without manual path rewriting.
 
@@ -75,7 +75,7 @@ All references to these wrappers are purged from `forge-assign-models/SKILL.md`,
 ### Neutral
 
 - **Existing bootstrapped projects are unaffected.** They continue using `.github/` until re-bootstrapped. The `--harness github` flag ensures backward compatibility for users who prefer to stay on `.github/`.
-- **Forge's own `.github/` directory is removed** except for any GitHub-specific configuration (CI workflows, issue templates) which live under `.github/` for GitHub platform reasons — these are unrelated to agent/skill paths.
+- **Forge's own `.github/` directory is removed** except for any GitHub-specific configuration (CI workflows, issue templates) which live under `.github/` for GitHub platform reasons - these are unrelated to agent/skill paths.
 
 ---
 

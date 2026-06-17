@@ -104,7 +104,7 @@ This isn't just documentation, this is the contract that makes multi-agent coord
 
 
 
-## Chapter 4: The Orchestrator — Conducting the Symphony
+## Chapter 4: The Orchestrator - Conducting the Symphony
 
 This is cricital: Individual agents can do individual tasks. But who decides *what* to build *when*? Who makes sure the database schema exists before the API engineer tries to query it? Who verifies that Phase 1 is actually complete before Phase 2 begins?
 
@@ -242,7 +242,7 @@ It served three practical purposes:
 
 
 
-## Chapter 8: The Meta-Lesson — Building Tools That Build Tools
+## Chapter 8: The Meta-Lesson - Building Tools That Build Tools
 
 Here's the most interesting thing about Agent Forge: **it's a framework that uses AI to create AI teams that build software**. That recursion isn't accidental, it's the whole point.
 
@@ -261,7 +261,7 @@ The sweet spot, as discovered through building Agent Forge, is:
 
 
 
-## Chapter 9: Your Turn — A Framework for Building Frameworks
+## Chapter 9: Your Turn - A Framework for Building Frameworks
 
 This story isn't just about Agent Forge. It's about a *process* for building any framework that coordinates AI agents, or, really, any complex system where multiple components need to work together.
 
@@ -293,7 +293,7 @@ You're reading this document because someone decided the *process* was as valuab
 
 
 
-## Chapter 10: The Identity Crisis — Who Does What?
+## Chapter 10: The Identity Crisis - Who Does What?
 
 After the initial framework was working and the research-driven approach had proven itself, something uncomfortable became obvious: **the forge-team-builder agent and the forge-build-agent-team skill were saying the same things**.
 
@@ -320,7 +320,7 @@ A 55% reduction in agent file size. Zero loss of capability. And every future sp
 
 
 
-## Chapter 11: The Session Problem — When Progress Disappears
+## Chapter 11: The Session Problem - When Progress Disappears
 
 There's a specific kind of pain that anyone who's worked with AI coding agents knows: you're three hours into a build, the orchestrator is halfway through Phase 2, and then... the session ends. Maybe the connection drops. Maybe you close your laptop. Maybe you switch to a different machine. When you come back, it's all gone. The AI has no memory of what was completed, what was in progress, or what comes next.
 
@@ -340,7 +340,7 @@ The result? A new command that actually works: **"Resume from last checkpoint."*
 
 
 
-## Chapter 12: The Scale Problem — When One Document Isn't Enough
+## Chapter 12: The Scale Problem - When One Document Isn't Enough
 
 The PRD-first approach had been the foundation from day one. And for most projects, a single document worked beautifully. But then came the larger projects, the ones with fifteen-plus requirements spread across five phases, touching half a dozen distinct feature domains.
 
@@ -389,7 +389,7 @@ Decomposed:   Idea → PRD → Decompose → Product Vision + Feature Docs
 
 
 
-## Chapter 13: The Methodology — Making the Implicit Explicit
+## Chapter 13: The Methodology - Making the Implicit Explicit
 
 Somewhere along the way, a pattern had been repeating without being named. Every significant change to Agent Forge followed the same three-phase rhythm:
 
@@ -417,7 +417,7 @@ Let's zoom out and see the whole picture.
 
 **McFuzzy Agent Forge** is a template repository that takes an idea and turns it into a coordinated team of AI specialists. Two paths, one framework:
 
-**Path A — Monolithic (best for small-to-medium projects):**
+**Path A - Monolithic (best for small-to-medium projects):**
 
 ```
  ┌─────────────┐     ┌──────────────┐     ┌──────────────────┐     ┌─────────────────┐
@@ -430,7 +430,7 @@ Let's zoom out and see the whole picture.
                        of Truth)             (Clear Ownership)       Commits & Progress
 ```
 
-**Path B — Decomposed (best for larger projects):**
+**Path B - Decomposed (best for larger projects):**
 
 ```
  ┌─────────────┐     ┌──────────────┐     ┌───────────────┐     ┌──────────────────┐     ┌─────────────────┐
@@ -496,7 +496,7 @@ If you take nothing else from this story, take these:
 
 7. **Design for iteration.** V1 is never the end. Build your foundations so that V2 is an extension, not a replacement.
 
-8. **Document the why, not just the what.** Code tells you what was built. Research documents and ADRs tell you *why* — and that's what lets other people build their own versions.
+8. **Document the why, not just the what.** Code tells you what was built. Research documents and ADRs tell you *why* - and that's what lets other people build their own versions.
 
 9. **Make work persistent.** AI sessions are ephemeral; your project shouldn't be. Incremental commits and progress tracking turn fleeting work into a permanent, resumable record.
 

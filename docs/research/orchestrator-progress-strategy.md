@@ -45,9 +45,9 @@ The orchestrator currently tracks state "mentally" (in conversation context):
 
 | Section | Reference | Approach |
 |---------|-----------|----------|
-| Monitor Progress (Section 4) | Line 155 | "Track completed vs remaining work" — but only in conversation |
-| Tips | Line 469 | "Track state mentally" — explicitly ephemeral |
-| Commands | Line 255 | "Resume from last checkpoint" — but no checkpoint mechanism exists |
+| Monitor Progress (Section 4) | Line 155 | "Track completed vs remaining work" - but only in conversation |
+| Tips | Line 469 | "Track state mentally" - explicitly ephemeral |
+| Commands | Line 255 | "Resume from last checkpoint" - but no checkpoint mechanism exists |
 
 **Impact**: The "Resume from last checkpoint" command (line 255) cannot actually work because there is no persistent record of what was completed. Switching machines or starting a new session loses all context.
 
@@ -60,7 +60,7 @@ The orchestrator currently tracks state "mentally" (in conversation context):
 | `Convert-Path` behaves differently than `Resolve-Path` | Low | Low | `Convert-Path` is a standard cmdlet since PS 1.0, returns a string, and handles the same path resolution. Verified it accepts the same inputs. |
 | Orchestrator commit instructions conflict with user workflow | Low | Medium | Instructions say to commit after builds/tests pass, giving users control. Progress file is optional context, not blocking. |
 | Progress file becomes stale or inaccurate | Medium | Low | File is updated as part of each commit, not separately. The orchestrator is instructed to always update it before committing. |
-| Breaking existing orchestrator behavior | Low | Low | All changes are additive — new steps added to existing process, new section added. No existing behavior is modified. |
+| Breaking existing orchestrator behavior | Low | Low | All changes are additive - new steps added to existing process, new section added. No existing behavior is modified. |
 
 ---
 

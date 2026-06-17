@@ -108,17 +108,17 @@ Specialist Agent:
 
 When executing your responsibilities:
 
-1. **Understand the task** — Read the referenced PRD sections and any dependencies from other agents
-2. **Implement the deliverable** — Create or modify files according to your responsibilities
+1. **Understand the task** - Read the referenced PRD sections and any dependencies from other agents
+2. **Implement the deliverable** - Create or modify files according to your responsibilities
 3. **Verify your changes**:
    - Run relevant linters for the files you modified
    - Run builds to ensure nothing is broken
    - Run tests related to your changes
-4. **Commit your work** — After verification passes:
+4. **Commit your work** - After verification passes:
    - Use descriptive commit messages referencing the task or requirement
    - Include only files related to this specific deliverable
    - Follow the project's commit conventions (if specified in the PRD)
-5. **Report completion** — Summarize what was delivered, which files were modified, and verification results
+5. **Report completion** - Summarize what was delivered, which files were modified, and verification results
 
 ---
 ```
@@ -152,9 +152,9 @@ When executing your responsibilities:
 ```markdown
 ## Collaboration
 
-- **project-orchestrator** — Coordinates your work as part of the overall project execution, provides task context, and tracks progress across all agents
-- **{other-agent-name}** — {What they provide or need from this agent}
-- **{other-agent-name}** — {Coordination point}
+- **project-orchestrator** - Coordinates your work as part of the overall project execution, provides task context, and tracks progress across all agents
+- **{other-agent-name}** - {What they provide or need from this agent}
+- **{other-agent-name}** - {Coordination point}
 ```
 
 **Rationale**: Makes the orchestrator relationship explicit for all agents, clarifying the coordination pattern.

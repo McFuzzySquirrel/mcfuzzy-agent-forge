@@ -6,7 +6,7 @@ Complete process for building an agent team from a Product Vision document and a
 
 Load this file when: the source document is a Product Vision (`docs/product-vision.md`) with feature documents in `docs/features/`, and no existing agent files exist in `.agents/agents/` beyond forge templates.
 
-## Vision + Features Mode — Building from Decomposed Documents
+## Vision + Features Mode - Building from Decomposed Documents
 
 When Step 0 detects a Product Vision with Feature documents, use the following process instead of Steps 1–8. The goal is to build a complete agent team from a product vision document and its associated feature documents, considering requirements across all features holistically.
 
@@ -14,32 +14,32 @@ When Step 0 detects a Product Vision with Feature documents, use the following p
 
 Find the product vision document (typically `docs/product-vision.md`) and read it to extract:
 
-1. **Technology stack** — Languages, frameworks, engines, build tools, package managers (Section 6.1).
-2. **Project structure** — File/folder layout, module boundaries, entry points (Section 6.2).
-3. **Non-functional requirements** — Performance, security, accessibility, offline support (Sections 7–9).
-4. **Cross-cutting concerns** — System states, analytics, dependencies, risks (Sections 10–12).
-5. **Feature list** — The summary of all features and their dependency graph (Section 14).
+1. **Technology stack** - Languages, frameworks, engines, build tools, package managers (Section 6.1).
+2. **Project structure** - File/folder layout, module boundaries, entry points (Section 6.2).
+3. **Non-functional requirements** - Performance, security, accessibility, offline support (Sections 7–9).
+4. **Cross-cutting concerns** - System states, analytics, dependencies, risks (Sections 10–12).
+5. **Feature list** - The summary of all features and their dependency graph (Section 14).
 
 ### Step 2v: Read All Feature Documents
 
 Read every feature document listed in the product vision's Features section (typically in `docs/features/`). For each feature, extract:
 
-1. **Feature name and ID prefix** — From the Feature Overview section.
-2. **User stories** — All user stories with their IDs.
-3. **Functional requirements** — All requirements with their IDs and priorities.
-4. **Implementation tasks** — Phases and tasks for this feature.
-5. **Dependencies** — Which other features this feature depends on.
-6. **Testing strategy** — How this feature will be tested.
+1. **Feature name and ID prefix** - From the Feature Overview section.
+2. **User stories** - All user stories with their IDs.
+3. **Functional requirements** - All requirements with their IDs and priorities.
+4. **Implementation tasks** - Phases and tasks for this feature.
+5. **Dependencies** - Which other features this feature depends on.
+6. **Testing strategy** - How this feature will be tested.
 
-Build a **unified requirements view** — a consolidated list of all functional requirements across all features, noting which feature each requirement belongs to.
+Build a **unified requirements view** - a consolidated list of all functional requirements across all features, noting which feature each requirement belongs to.
 
 ### Step 3v: Identify Specialist Roles
 
 Using the unified requirements view, map domains to specialist agent roles. Apply the same heuristics as Step 2 (in Full Build Mode):
 
-- **Required agents** — Project Architect, QA/Test Engineer (always created).
-- **Domain agents** — Based on the tech stack from the product vision.
-- **Feature agents** — Based on functional requirement groups across all features.
+- **Required agents** - Project Architect, QA/Test Engineer (always created).
+- **Domain agents** - Based on the tech stack from the product vision.
+- **Feature agents** - Based on functional requirement groups across all features.
 
 **Key difference from Full Build Mode:** Requirements come from multiple feature documents rather than one PRD. When the same domain appears across multiple features (e.g., database requirements in Feature 1 and Feature 3), aggregate them under one agent rather than creating per-feature agents.
 
@@ -53,7 +53,7 @@ Follow the same process as Step 3 (in Full Build Mode), with these additional co
 
 ### Step 5v: Identify Reusable Skills
 
-Follow the same process as Step 4 (in Full Build Mode). Look for patterns that repeat across features — these are strong skill candidates since the pattern appears in multiple independent units of work.
+Follow the same process as Step 4 (in Full Build Mode). Look for patterns that repeat across features - these are strong skill candidates since the pattern appears in multiple independent units of work.
 
 ### Step 6v: Write the Agent and Skill Files
 
@@ -65,9 +65,9 @@ Follow the same process as Steps 5–6 (in Full Build Mode), with these adaptati
 
   Always consult the following documents for authoritative project requirements:
 
-  - [Product Vision](../../docs/product-vision.md) — Architecture, tech stack, NFRs, security, accessibility
-  - [Feature: Authentication](../../docs/features/authentication.md) — Sections 2–3 (user stories, requirements)
-  - [Feature: Dashboard](../../docs/features/dashboard.md) — Sections 2–3 (user stories, requirements)
+  - [Product Vision](../../docs/product-vision.md) - Architecture, tech stack, NFRs, security, accessibility
+  - [Feature: Authentication](../../docs/features/authentication.md) - Sections 2–3 (user stories, requirements)
+  - [Feature: Dashboard](../../docs/features/dashboard.md) - Sections 2–3 (user stories, requirements)
   ```
 
 - **Responsibilities sections** should group deliverables by feature:

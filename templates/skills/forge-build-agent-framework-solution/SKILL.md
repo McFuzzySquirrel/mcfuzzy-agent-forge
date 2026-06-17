@@ -10,11 +10,11 @@ description: >
 
 # Skill: Build a Microsoft Agent Framework Solution from a PRD
 
-You are scaffolding a runnable **Microsoft Agent Framework** solution from a PRD. The PRD has already selected Agent Framework as the chosen technology. Your job is to translate the PRD into a working project — folder layout, packages, configuration, sample agents, tools, workflow, tests, and developer docs — that `project-orchestrator` and specialist agents can build on.
+You are scaffolding a runnable **Microsoft Agent Framework** solution from a PRD. The PRD has already selected Agent Framework as the chosen technology. Your job is to translate the PRD into a working project - folder layout, packages, configuration, sample agents, tools, workflow, tests, and developer docs - that `project-orchestrator` and specialist agents can build on.
 
 > This skill does **not** decide whether Agent Framework is right. If the PRD doesn't name it, stop and ask the user.
 
-Agent Framework is Microsoft's unified, open-source SDK for AI agents with two stacks: .NET (`Microsoft.Agents.AI`, `Microsoft.Agents.AI.OpenAI`, etc.) and Python (`agent-framework`). Package names and APIs are evolving — **always verify against [the official docs](https://learn.microsoft.com/en-us/agent-framework/) before writing code.**
+Agent Framework is Microsoft's unified, open-source SDK for AI agents with two stacks: .NET (`Microsoft.Agents.AI`, `Microsoft.Agents.AI.OpenAI`, etc.) and Python (`agent-framework`). Package names and APIs are evolving - **always verify against [the official docs](https://learn.microsoft.com/en-us/agent-framework/) before writing code.**
 
 ---
 
@@ -32,14 +32,14 @@ State the mode, stack, and target paths before writing files.
 ### Step 1: Extract Solution Requirements from the PRD
 
 Read the entire PRD and extract into a plan you present to the user:
-1. **Agents** — Each AI persona, its role, inputs/outputs, tools, model tier.
-2. **Tools** — Functions, MCP servers, retrieval, code interpreter.
-3. **Workflow topology** — Single agent, sequential, concurrent, group chat, hand-off, or graph workflow.
-4. **State/memory** — Conversation history, long-term memory, vector store, checkpointing.
-5. **Model providers** — Azure OpenAI, OpenAI, AI Foundry, Ollama, or other endpoints.
-6. **Hosting surface** — Console, web API, background worker, chat UI, Teams app.
-7. **Non-functional** — Auth, logging, OpenTelemetry, rate limiting, content safety, evaluation.
-8. **Testing** — Unit, integration (with stub chat client), end-to-end smoke tests.
+1. **Agents** - Each AI persona, its role, inputs/outputs, tools, model tier.
+2. **Tools** - Functions, MCP servers, retrieval, code interpreter.
+3. **Workflow topology** - Single agent, sequential, concurrent, group chat, hand-off, or graph workflow.
+4. **State/memory** - Conversation history, long-term memory, vector store, checkpointing.
+5. **Model providers** - Azure OpenAI, OpenAI, AI Foundry, Ollama, or other endpoints.
+6. **Hosting surface** - Console, web API, background worker, chat UI, Teams app.
+7. **Non-functional** - Auth, logging, OpenTelemetry, rate limiting, content safety, evaluation.
+8. **Testing** - Unit, integration (with stub chat client), end-to-end smoke tests.
 
 Present the extracted plan and **wait for confirmation** before scaffolding.
 
@@ -55,7 +55,7 @@ Collapse the layout for very small PRDs (a single console app may only need `src
 
 Prefer ecosystem tooling over hand-written files. Run from the repo root.
 
-Load `references/package-references.md` for current package names and versions — **verify them against the latest official Agent Framework docs before adding.**
+Load `references/package-references.md` for current package names and versions - **verify them against the latest official Agent Framework docs before adding.**
 
 **Key .NET steps:**
 - Pin SDK in `global.json` (current LTS or STS).
@@ -103,7 +103,7 @@ Produce: tool unit tests (no LLM), agent unit tests (stub chat client), workflow
 
 ### Step 9: Verify the Scaffold Builds and Runs
 
-- .NET: `dotnet restore && dotnet build && dotnet test` — clean build, no warnings.
+- .NET: `dotnet restore && dotnet build && dotnet test` - clean build, no warnings.
 - Python: `uv sync && ruff check && mypy src && pytest`.
 
 Guard integration tests behind an env var if credentials are missing.
@@ -121,7 +121,7 @@ Summarize: mode/stack/topology, folder tree, packages/versions, required env var
 - **Don't introduce a second agent framework.** Agent Framework supersedes Semantic Kernel and AutoGen. Use only Agent Framework packages unless the PRD explicitly requires another runtime.
 - **Don't scaffold what the PRD doesn't ask for.** No speculative CI, infra, or evaluation tooling.
 - **Verify compiler availability.** Before running `dotnet new` or `uv init`, check the tool is installed. If missing, tell the user what to install.
-- **Domain agents fill in the work.** Your scaffold is a skeleton — specialist agents from `forge-build-agent-team` implement the features phase by phase. Keep it minimal.
+- **Domain agents fill in the work.** Your scaffold is a skeleton - specialist agents from `forge-build-agent-team` implement the features phase by phase. Keep it minimal.
 
 ---
 
@@ -138,7 +138,7 @@ Summarize: mode/stack/topology, folder tree, packages/versions, required env var
 
 - Project name: derived from PRD's product name in PascalCase (.NET) or snake_case (Python).
 - File/folder names follow the layouts in `references/dotnet-layout.md` / `references/python-layout.md`.
-- All public types/methods carry doc comments — they double as tool descriptions.
+- All public types/methods carry doc comments - they double as tool descriptions.
 - Prompt content lives in version-controlled `prompts/` files, not string literals.
 - Configuration is strongly typed (Options pattern / `pydantic-settings`).
 
@@ -146,7 +146,7 @@ Summarize: mode/stack/topology, folder tree, packages/versions, required env var
 
 ## Collaboration
 
-- **forge-build-prd / forge-build-feature-prd** — Produce the PRD this skill consumes.
-- **forge-build-agent-team** — Run after scaffolding to generate the specialist agent team.
-- **forge-assign-models** — Run after team generation for per-agent model assignment.
-- **project-orchestrator** — Drives implementation phases against the scaffold.
+- **forge-build-prd / forge-build-feature-prd** - Produce the PRD this skill consumes.
+- **forge-build-agent-team** - Run after scaffolding to generate the specialist agent team.
+- **forge-assign-models** - Run after team generation for per-agent model assignment.
+- **project-orchestrator** - Drives implementation phases against the scaffold.

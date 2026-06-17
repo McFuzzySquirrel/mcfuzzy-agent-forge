@@ -9,7 +9,7 @@ description: >
 
 # Skill: Optimize Existing Skills Against Best Practices
 
-You are auditing existing skills against the [agentskills.io best practices](https://agentskills.io/skill-creation/best-practices). Your job is to read each skill, score it against a structured rubric, produce a reviewable audit report, and — only when the user explicitly approves — apply targeted improvements.
+You are auditing existing skills against the [agentskills.io best practices](https://agentskills.io/skill-creation/best-practices). Your job is to read each skill, score it against a structured rubric, produce a reviewable audit report, and - only when the user explicitly approves - apply targeted improvements.
 
 ---
 
@@ -61,9 +61,9 @@ Write the audit report with this structure:
 | `{name}` | 2 | 1 | 3 | 1 | 2 | 2 | 1.8 |
 
 **Score interpretation:**
-- 2.5–3.0: Strong — follows best practices well
-- 1.5–2.4: Adequate — works but has improvement opportunities
-- 1.0–1.4: Needs work — significant gaps against best practices
+- 2.5–3.0: Strong - follows best practices well
+- 1.5–2.4: Adequate - works but has improvement opportunities
+- 1.0–1.4: Needs work - significant gaps against best practices
 
 ---
 
@@ -109,7 +109,7 @@ If the user approves specific changes, proceed to Step 5.
 
 For each approved change:
 
-1. **Add gotchas:** Insert a `## Gotchas` section with the suggested content. Place it after `## Process` or before `## Reference` — consistent with the forge's own skill conventions.
+1. **Add gotchas:** Insert a `## Gotchas` section with the suggested content. Place it after `## Process` or before `## Reference` - consistent with the forge's own skill conventions.
 
 2. **Move to progressive disclosure:** Create the `references/` or `assets/` directory under the skill. Extract the identified content into the new file. Replace with a load trigger in `SKILL.md` (e.g., "Load `references/schema.md` for the full output format structure.")
 
@@ -136,6 +136,6 @@ After applying changes, regenerate the audit report with updated scores. Show th
 ## Guidelines
 
 - **Audit generated skills, not forge skills.** The forge's own skills are maintained separately and follow their own optimization cycle.
-- **Score honestly.** A low score isn't a failure — it's actionable data. Every skill can improve.
-- **Be specific in suggestions.** "Add gotchas" is not helpful. "Add gotcha: 'The `users` table uses soft deletes — queries must include `WHERE deleted_at IS NULL`'" is.
-- **One pass at a time.** Apply changes, regenerate the audit, and stop. Don't loop until perfect — real-world execution feedback (per the best practices) drives the next iteration.
+- **Score honestly.** A low score isn't a failure - it's actionable data. Every skill can improve.
+- **Be specific in suggestions.** "Add gotchas" is not helpful. "Add gotcha: 'The `users` table uses soft deletes - queries must include `WHERE deleted_at IS NULL`'" is.
+- **One pass at a time.** Apply changes, regenerate the audit, and stop. Don't loop until perfect - real-world execution feedback (per the best practices) drives the next iteration.

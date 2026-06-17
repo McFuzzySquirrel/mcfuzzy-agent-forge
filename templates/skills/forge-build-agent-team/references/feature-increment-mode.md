@@ -6,17 +6,17 @@ Complete process for extending an existing agent team with minimal, targeted cha
 
 Load this file when: the source document is a Feature PRD (has "Feature Overview", "Context: Existing System State", "Agent Impact Assessment") and existing agent files already exist in `.agents/agents/`.
 
-## Feature Increment Mode — Incremental Steps
+## Feature Increment Mode - Incremental Steps
 
 When Step 0 detects a Feature PRD, use the following incremental process instead of Steps 1–8. The goal is to extend the existing agent team with minimal, targeted changes rather than regenerating the entire team.
 
 ### Step 1i: Analyze the Feature PRD and Existing Team
 
 1. **Read the Feature PRD**, focusing on:
-   - Section 5 (Technical Approach) — What changes and what's new
-   - Section 6 (Functional Requirements) — What needs to be built
-   - Section 8 (Agent Impact Assessment) — The Feature PRD's own analysis of agent impact
-   - Section 9 (Implementation Phases) — F-prefixed phases for the feature
+   - Section 5 (Technical Approach) - What changes and what's new
+   - Section 6 (Functional Requirements) - What needs to be built
+   - Section 8 (Agent Impact Assessment) - The Feature PRD's own analysis of agent impact
+   - Section 9 (Implementation Phases) - F-prefixed phases for the feature
 
 2. **Read ALL existing agent files** in `.agents/agents/`:
    - List each agent's name, role, and owned responsibilities
@@ -34,9 +34,9 @@ When Step 0 detects a Feature PRD, use the following incremental process instead
 
 Review the Feature PRD's Section 8 (Agent Impact Assessment) as a starting point, then validate:
 
-- For each "extended responsibility" — Does it actually fit within the agent's existing expertise? Would adding this responsibility keep the agent focused, or would it overload them?
-- For each "new agent required" — Is a new agent truly needed, or can an existing agent cover this work? Is the justification sound?
-- For each "no changes" agent — Confirm it genuinely isn't affected by the feature.
+- For each "extended responsibility" - Does it actually fit within the agent's existing expertise? Would adding this responsibility keep the agent focused, or would it overload them?
+- For each "new agent required" - Is a new agent truly needed, or can an existing agent cover this work? Is the justification sound?
+- For each "no changes" agent - Confirm it genuinely isn't affected by the feature.
 
 Produce a **revised assessment** if the Feature PRD's analysis needs correction.
 
@@ -45,7 +45,7 @@ Produce a **revised assessment** if the Feature PRD's analysis needs correction.
 For each change category:
 
 **A. Existing agents with extended responsibilities:**
-- Draft updated **Responsibilities** sections (additive — append new items, don't rewrite existing ones)
+- Draft updated **Responsibilities** sections (additive - append new items, don't rewrite existing ones)
 - Draft updated **Collaboration** sections if new dependencies exist between agents
 - Update **Key Reference** to include the Feature PRD path and relevant feature sections
 - DO NOT modify Expertise, Constraints, or Output Standards unless the feature introduces fundamentally new technology or patterns that require it
@@ -57,7 +57,7 @@ For each change category:
 - New agents should reference both the original PRD (for project context) and the Feature PRD (for their specific requirements)
 
 **C. Existing agents with no changes:**
-- Leave completely untouched — do not regenerate or modify their files
+- Leave completely untouched - do not regenerate or modify their files
 
 ### Step 4i: Identify New or Extended Skills
 

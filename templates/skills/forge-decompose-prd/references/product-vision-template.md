@@ -19,7 +19,7 @@ Load this when writing a product vision document.
 
 | Version | Date | Author | Changes |
 |---------|------|--------|---------|
-| 1.0 | YYYY-MM-DD | — | Initial product vision (decomposed from PRD) |
+| 1.0 | YYYY-MM-DD | - | Initial product vision (decomposed from PRD) |
 
 ---
 

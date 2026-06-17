@@ -18,7 +18,7 @@ This is the authoritative template for Product Requirements Documents. Load this
 
 | Version | Date | Author | Changes |
 |---------|------|--------|---------|
-| 1.0 | YYYY-MM-DD | — | Initial PRD |
+| 1.0 | YYYY-MM-DD | - | Initial PRD |
 
 Track document revisions so readers know what changed and when.
 

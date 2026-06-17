@@ -43,6 +43,6 @@ The canonical shape for `docs/research/model-inventory.json`:
 
 This catalog represents models commonly exposed across Copilot plans. Always have the user confirm against their current model picker.
 
-- **Reasoning / strongest tier** — e.g. `gpt-5` family, `claude-opus-4.x`, `gemini-2.5-pro`, `o`-series reasoning models
-- **Balanced tier** — e.g. `gpt-5-codex`, `claude-sonnet-4.x`, `gpt-4.1`
-- **Fast / light tier** — e.g. `claude-haiku-4.x`, `gpt-5-mini`, `gpt-4.1-mini`
+- **Reasoning / strongest tier** - e.g. `gpt-5` family, `claude-opus-4.x`, `gemini-2.5-pro`, `o`-series reasoning models
+- **Balanced tier** - e.g. `gpt-5-codex`, `claude-sonnet-4.x`, `gpt-4.1`
+- **Fast / light tier** - e.g. `claude-haiku-4.x`, `gpt-5-mini`, `gpt-4.1-mini`

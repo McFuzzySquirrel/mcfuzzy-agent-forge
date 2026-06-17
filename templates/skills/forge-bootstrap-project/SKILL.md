@@ -21,12 +21,12 @@ continue when the user explicitly approves.
 
 This skill chains:
 
-1. **`forge-build-prd`** — interview the user and produce `docs/PRD.md`.
-2. **Pause 1 — PRD review gate** (mandatory).
-3. **`forge-build-agent-team`** — generate the specialist agent team from the
+1. **`forge-build-prd`** - interview the user and produce `docs/PRD.md`.
+2. **Pause 1 - PRD review gate** (mandatory).
+3. **`forge-build-agent-team`** - generate the specialist agent team from the
    approved PRD.
-4. **Pause 2 — Agent team review gate** (mandatory).
-5. **`forge-assign-models`** — discover models and recommend a per-agent
+4. **Pause 2 - Agent team review gate** (mandatory).
+5. **`forge-assign-models`** - discover models and recommend a per-agent
    assignment (optional, opt-in at Pause 2).
 
 ---
@@ -40,7 +40,7 @@ This skill chains:
 - **Do not duplicate the underlying skills' work.** When it is time to run a
   step, invoke the corresponding skill (`forge-build-prd`,
   `forge-build-agent-team`, `forge-assign-models`) and let it own its full
-  process — including any clarifying questions it normally asks.
+  process - including any clarifying questions it normally asks.
 - **Preserve all existing outputs.** The artifacts produced (`docs/PRD.md`,
   `.agents/agents/*.md`, `.agents/skills/*/SKILL.md`, `docs/MODEL-PLAN.md`,
   etc.) must be identical to what you would get by running the underlying
@@ -77,7 +77,7 @@ Do the following before invoking any other skill:
    - Step 3 (optional): `forge-assign-models` → recommends per-agent models
 
    (These are Steps 1–3 of the bootstrap flow itself; this confirmation is
-   Step 0 — the pre-flight before any underlying skill is invoked.)
+   Step 0 - the pre-flight before any underlying skill is invoked.)
 3. **Check repo state** and flag anything that affects the flow:
    - Does `docs/PRD.md` already exist? If yes, ask whether to keep, replace,
      or extend it before running Step 1.
@@ -120,7 +120,7 @@ Post a message that clearly says you are paused. Include:
 **PRD review checklist (emit verbatim):**
 
 ```
-PRD review checklist — verify before continuing:
+PRD review checklist - verify before continuing:
 
 Scope & intent
 - [ ] The Overview matches the idea you actually want to build
@@ -163,7 +163,7 @@ to iterate, then re-present Pause 1 with the updated checklist.
 After Pause 1 is approved, invoke the `forge-build-agent-team` skill against
 the approved PRD (or against `docs/product-vision.md` + `docs/features/*.md`
 if that layout exists). Let that skill detect its own mode (Full Build,
-Vision + Features, or Feature Increment) — do not override its mode
+Vision + Features, or Feature Increment) - do not override its mode
 detection.
 
 When it finishes and agent files have been written under `.agents/agents/`
@@ -189,7 +189,7 @@ Post a paused message. Include:
 **Agent team review checklist (emit verbatim):**
 
 ```
-Agent team review checklist — verify before continuing:
+Agent team review checklist - verify before continuing:
 
 Coverage
 - [ ] Every PRD requirement (or every feature in docs/features/) maps to
@@ -233,7 +233,7 @@ updated checklist.
 Only run this step if the user explicitly opted in at Pause 2.
 
 Invoke the `forge-assign-models` skill. Default to its **Recommend** mode —
-which produces `docs/MODEL-PLAN.md` without modifying agent files — unless
+which produces `docs/MODEL-PLAN.md` without modifying agent files - unless
 the user explicitly asked for **Apply**. This preserves the underlying
 skill's own opt-in safety: nothing gets written into agent YAML without a
 second confirmation.
@@ -254,8 +254,8 @@ next step (typically: commit the changes, then invoke
 
 ## Guidelines
 
-- **Be a conductor, not a soloist.** The substantive work — interviewing the
-  user, drafting the PRD, designing the team, classifying workloads — belongs
+- **Be a conductor, not a soloist.** The substantive work - interviewing the
+  user, drafting the PRD, designing the team, classifying workloads - belongs
   to the underlying skills. Your value is sequencing, pausing, and surfacing
   the right checklist at the right moment.
 - **Never collapse a pause into a "looks fine, moving on" message.** The
@@ -278,7 +278,7 @@ next step (typically: commit the changes, then invoke
 
 ## Gotchas
 
-- **Idempotent re-entry edge case.** If `docs/PRD.md` exists but `.agents/agents/` has no specialist agents, resume from Step 2 (team building). If both exist, assume the flow completed and summarize what was produced — don't re-run.
+- **Idempotent re-entry edge case.** If `docs/PRD.md` exists but `.agents/agents/` has no specialist agents, resume from Step 2 (team building). If both exist, assume the flow completed and summarize what was produced - don't re-run.
 - **Feature Increment mode on re-entry.** If `.agents/agents/` already has specialist agents and the user says "bootstrap my project," Step 0's repo check must warn that Step 2 will run in Feature Increment Mode, not Full Build. Confirm with the user or they'll get unexpected behavior.
 - **Model assignment is opt-in only.** Never auto-run `forge-assign-models`. It requires the user's model inventory to exist and writing to agent YAML without explicit Apply confirmation is a violation of that skill's safety constraint.
-- **Don't re-implement the underlying skills.** This is the most common failure mode — duplicating the PRD interview or team design logic instead of invoking the skills. If you find yourself asking clarifying questions that `forge-build-prd` would ask, stop and invoke it instead.
+- **Don't re-implement the underlying skills.** This is the most common failure mode - duplicating the PRD interview or team design logic instead of invoking the skills. If you find yourself asking clarifying questions that `forge-build-prd` would ask, stop and invoke it instead.

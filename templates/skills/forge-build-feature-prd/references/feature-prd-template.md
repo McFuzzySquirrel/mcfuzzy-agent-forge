@@ -17,7 +17,7 @@ This is the authoritative template for Feature PRDs. Load this when drafting or 
 
 ## 2. Context: Existing System State
 
-> **Note:** This section is required in **post-project mode** (adding to an existing project). In **greenfield mode** (initial project decomposition), replace with a brief note: "Greenfield feature — no existing system. See Product Vision at [path]."
+> **Note:** This section is required in **post-project mode** (adding to an existing project). In **greenfield mode** (initial project decomposition), replace with a brief note: "Greenfield feature - no existing system. See Product Vision at [path]."
 
 **Completed PRD Phases:** List which phases from the original PRD are complete (with checkmarks).
 **Relevant Existing Components:** Which parts of the existing system this feature touches (files, modules, services).
@@ -79,9 +79,9 @@ Any new technologies, libraries, or tools required. For each:
 
 ## 8. Agent Impact Assessment
 
-> **Note:** This section is required in **post-project mode** (adding to an existing project with existing agents). In **greenfield mode** (initial project decomposition), this section is optional — if agents haven't been generated yet, note: "Greenfield feature — agents will be generated from all feature documents together."
+> **Note:** This section is required in **post-project mode** (adding to an existing project with existing agents). In **greenfield mode** (initial project decomposition), this section is optional - if agents haven't been generated yet, note: "Greenfield feature - agents will be generated from all feature documents together."
 
-### 8.1 Existing Agents — Extended Responsibilities
+### 8.1 Existing Agents - Extended Responsibilities
 
 | Agent | New Responsibilities | Modified Boundaries |
 |-------|---------------------|-------------------|
@@ -93,7 +93,7 @@ Any new technologies, libraries, or tools required. For each:
 |-------|------|--------------------------------------|
 | `new-agent` | What they specialize in | Justification for why this can't be handled by an existing agent |
 
-### 8.3 Existing Agents — No Changes
+### 8.3 Existing Agents - No Changes
 
 | Agent | Reason |
 |-------|--------|

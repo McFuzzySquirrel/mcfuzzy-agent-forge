@@ -22,16 +22,16 @@ The framework currently relies on a **static PRD as the single source of truth**
 | `forge-build-agent-team/SKILL.md` (line 132) | "Always consult [{PRD path}] for the **authoritative project requirements**." | Tells agents to reference PRD, not external sources |
 | `forge-build-prd/SKILL.md` (line 11) | "produce a comprehensive PRD that can serve as the **authoritative reference**" | Positions the PRD as the definitive source |
 | `project-orchestrator.md` (line 27) | "Always consult the project's PRD for..." | Routes all decisions through PRD |
-| `forge-build-agent-team/SKILL.md` (line 263) | "Don't copy entire requirement tables into agent files — **they'll go stale**." | Acknowledges staleness risk, but solution is reference-based |
+| `forge-build-agent-team/SKILL.md` (line 263) | "Don't copy entire requirement tables into agent files - **they'll go stale**." | Acknowledges staleness risk, but solution is reference-based |
 
 ### What Does NOT Exist
 
 The framework currently has **no mechanism** for agents to:
 
-1. **Search for latest documentation** — No instruction to look up current framework docs, API references, or migration guides
-2. **Verify dependency versions** — No instruction to check if specified versions are current or have known vulnerabilities
-3. **Research current best practices** — No instruction to verify that patterns in the PRD reflect current framework conventions
-4. **Check for breaking changes** — No instruction to verify compatibility between specified stack components
+1. **Search for latest documentation** - No instruction to look up current framework docs, API references, or migration guides
+2. **Verify dependency versions** - No instruction to check if specified versions are current or have known vulnerabilities
+3. **Research current best practices** - No instruction to verify that patterns in the PRD reflect current framework conventions
+4. **Check for breaking changes** - No instruction to verify compatibility between specified stack components
 
 ---
 
@@ -68,10 +68,10 @@ GitHub Copilot agents (powered by LLMs) have these relevant behaviors:
 
 ### What Already Mitigates This
 
-1. **PRD creation step** — The PRD builder skill asks users about their tech stack, so users can specify current versions
-2. **Human review** — Users review the PRD before agent generation, and can catch outdated choices
-3. **LLM knowledge** — The underlying LLM has broad (if sometimes dated) knowledge of frameworks
-4. **Copilot coding agent tools** — When agents execute code, GitHub Copilot has access to `web_fetch`, package registries, and can verify versions at implementation time
+1. **PRD creation step** - The PRD builder skill asks users about their tech stack, so users can specify current versions
+2. **Human review** - Users review the PRD before agent generation, and can catch outdated choices
+3. **LLM knowledge** - The underlying LLM has broad (if sometimes dated) knowledge of frameworks
+4. **Copilot coding agent tools** - When agents execute code, GitHub Copilot has access to `web_fetch`, package registries, and can verify versions at implementation time
 
 ---
 
@@ -80,9 +80,9 @@ GitHub Copilot agents (powered by LLMs) have these relevant behaviors:
 **Yes, we should add explicit "verify latest" instructions, but strategically placed and proportionate.**
 
 Adding a blanket "always search for latest everything" would be:
-- ❌ Too noisy — agents would spend excessive time searching before every action
-- ❌ Potentially harmful — could cause agents to second-guess the PRD's deliberate tech choices
-- ❌ Impractical — not every tool or library needs version verification
+- ❌ Too noisy - agents would spend excessive time searching before every action
+- ❌ Potentially harmful - could cause agents to second-guess the PRD's deliberate tech choices
+- ❌ Impractical - not every tool or library needs version verification
 
 Instead, we should add **targeted freshness checks at key decision points** where outdated information has the highest impact.
 
@@ -120,7 +120,7 @@ Instead, we should add **targeted freshness checks at key decision points** wher
 - When implementing features, verify that you are using current stable APIs, conventions, and best practices for the project's tech stack. If you are uncertain whether a pattern or API is current, search for the latest official documentation before proceeding.
 ```
 
-**Rationale:** This is lightweight — it doesn't force agents to search for everything, but creates a habit of verification when uncertainty exists. It's a single line added to each agent's constraints, so the overhead is minimal.
+**Rationale:** This is lightweight - it doesn't force agents to search for everything, but creates a habit of verification when uncertainty exists. It's a single line added to each agent's constraints, so the overhead is minimal.
 
 ---
 
@@ -162,11 +162,11 @@ Instead, we should add **targeted freshness checks at key decision points** wher
 
 | Change | File | Effort | Impact |
 |--------|------|--------|--------|
-| Verify tech stack in PRD | `forge-build-prd/SKILL.md` | Small | High — catches issues at source |
-| Agent template constraint | `forge-build-agent-team/SKILL.md` | Small | High — every agent gets the instruction |
-| Orchestrator verify step | `project-orchestrator.md` | Small | Medium — runtime check before implementation |
-| Team builder guideline | `forge-team-builder.md` + skill | Small | Medium — ensures consistency |
+| Verify tech stack in PRD | `forge-build-prd/SKILL.md` | Small | High - catches issues at source |
+| Agent template constraint | `forge-build-agent-team/SKILL.md` | Small | High - every agent gets the instruction |
+| Orchestrator verify step | `project-orchestrator.md` | Small | Medium - runtime check before implementation |
+| Team builder guideline | `forge-team-builder.md` + skill | Small | Medium - ensures consistency |
 
 **Total scope:** ~4 small additions across 4 files. No structural changes. No breaking changes. Fully backward compatible.
 
-**Key principle:** We're not adding "always search for everything" — we're adding targeted verification at the moments where outdated information would cause the most damage: tech stack selection (PRD), team generation (agent template), and implementation start (orchestrator).
+**Key principle:** We're not adding "always search for everything" - we're adding targeted verification at the moments where outdated information would cause the most damage: tech stack selection (PRD), team generation (agent template), and implementation start (orchestrator).

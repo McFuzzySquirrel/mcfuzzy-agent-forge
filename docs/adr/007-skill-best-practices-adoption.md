@@ -12,7 +12,7 @@ The [agentskills.io best practices guide](https://agentskills.io/skill-creation/
 The McFuzzy Agent Forge both (a) contains its own skills (`forge-build-prd`, `forge-decompose-prd`, etc.) that users invoke directly, and (b) generates skills for user projects via `forge-build-agent-team`. Neither the forge's own skills nor the generation engine consistently followed these best practices:
 
 - **Forge skills** were verbose, with large template blocks inline in `SKILL.md` (e.g., the 220-line PRD output format template in `forge-build-prd`). No skills had `## Gotchas` sections. No skills used progressive disclosure (`references/` directories).
-- **Generated skills** from `forge-build-agent-team` used a template that lacked gotchas, validation loops, and progressive disclosure patterns. Agent templates included generic "Process and Workflow" steps identical across every agent — wasting context tokens on instructions the agent already knows.
+- **Generated skills** from `forge-build-agent-team` used a template that lacked gotchas, validation loops, and progressive disclosure patterns. Agent templates included generic "Process and Workflow" steps identical across every agent - wasting context tokens on instructions the agent already knows.
 
 Meanwhile, the `.agents/` directory migration (ADR-006) made the forge harness-agnostic. This opened the door to adopt the agentskills.io spec's directory conventions (`references/`, `scripts/`, `assets/`) as the standard for skill organization.
 
@@ -26,10 +26,10 @@ Each forge skill that had large inline templates (>50 lines of reference materia
 
 | Skill | Content moved to `references/` |
 |---|---|
-| `forge-build-prd` | `references/prd-template.md` — 220-line PRD output format |
+| `forge-build-prd` | `references/prd-template.md` - 220-line PRD output format |
 | `forge-decompose-prd` | `references/product-vision-template.md`, `references/feature-document-template.md` |
 | `forge-build-feature-prd` | `references/feature-prd-template.md` |
-| `forge-assign-models` | `references/model-inventory-schema.md` — JSON schema + Copilot tier catalog |
+| `forge-assign-models` | `references/model-inventory-schema.md` - JSON schema + Copilot tier catalog |
 | `forge-build-agent-framework-solution` | `references/dotnet-layout.md`, `references/python-layout.md`, `references/package-references.md` |
 | `forge-build-agent-team` | `references/vision-features-mode.md`, `references/feature-increment-mode.md` |
 
@@ -43,7 +43,7 @@ Every forge skill now has a `## Gotchas` section capturing environment-specific 
 - `forge-decompose-prd`: "FT- prefix collision with post-project Feature PRDs."
 - `forge-assign-models`: "`ollama show` may fail on some quantized models."
 - `forge-build-agent-team`: "Agent `name:` must match filename exactly."
-- `forge-build-agent-framework-solution`: "Agent Framework APIs are evolving — verify against official docs."
+- `forge-build-agent-framework-solution`: "Agent Framework APIs are evolving - verify against official docs."
 
 ### 3. Add Validation Loops
 
@@ -59,7 +59,7 @@ Sections that explained fundamentals the agent already knows (what a PDF is, wha
 - `## Gotchas` section (populated with project-specific edge cases from the PRD)
 - `## Validation` section with concrete checks
 - Progressive disclosure guidance: when to create `references/`, `scripts/`, and `assets/`
-- Trimmed generic "Process and Workflow" steps — replaced with project-specific workflow
+- Trimmed generic "Process and Workflow" steps - replaced with project-specific workflow
 - Calibration guidance: match specificity to fragility
 
 ### 6. New `forge-optimize-skills` Skill
@@ -75,20 +75,20 @@ A new meta-skill audits existing skills in `.agents/skills/` against the best pr
 - **Leaner skills.** Forge skills are 30–50% shorter in `SKILL.md` body content. Large reference material loads only when needed.
 - **Fewer agent mistakes.** `## Gotchas` sections prevent common failure modes before they happen.
 - **Self-verifying skills.** `## Validation` sections give agents concrete checks rather than vague "verify it works" instructions.
-- **Better generated skills.** Skills produced by `forge-build-agent-team` now follow best practices out of the box — gotchas, validation, progressive disclosure.
+- **Better generated skills.** Skills produced by `forge-build-agent-team` now follow best practices out of the box - gotchas, validation, progressive disclosure.
 - **Auditable quality.** `forge-optimize-skills` provides a structured, repeatable way to measure and improve skill quality.
 - **Spec-aligned.** Skill directory structure (with `references/`, `scripts/`, `assets/`) matches the agentskills.io specification.
 
 ### Negative
 
 - **More files in templates.** Each forge skill now has 1–3 additional files in `references/`. Total template file count increased by ~10 files.
-- **Generation complexity.** `forge-build-agent-team` must now populate gotchas and validation sections during skill generation — this requires deeper PRD analysis.
+- **Generation complexity.** `forge-build-agent-team` must now populate gotchas and validation sections during skill generation - this requires deeper PRD analysis.
 - **Learning curve.** Users unfamiliar with progressive disclosure may not immediately understand why content was split across files.
 
 ### Neutral
 
 - **Existing generated skills are unaffected.** They continue to work. `forge-optimize-skills` can improve them when the user is ready.
-- **Bootstrap scripts unchanged.** The template copy mechanism (`glob`-based) handles subdirectories automatically — no script changes were needed for `references/` support.
+- **Bootstrap scripts unchanged.** The template copy mechanism (`glob`-based) handles subdirectories automatically - no script changes were needed for `references/` support.
 
 ---
 
