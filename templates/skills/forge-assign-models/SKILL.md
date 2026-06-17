@@ -13,7 +13,7 @@ description: >
 You are assigning a per-agent LLM model to each agent in `.agents/agents/`. The goal is to
 match each agent's actual workload (reasoning depth, context size, tool-use, latency
 sensitivity, safety) to a model from the **inventory the user actually has access to** —
-including local Ollama models — instead of defaulting every agent to the strongest (and
+including local Ollama models - instead of defaulting every agent to the strongest (and
 most expensive) cloud model.
 
 This skill is **opt-in and post-hoc**. The `model:` field is optional; absence means "use
@@ -58,8 +58,8 @@ Build a single inventory of models the user can invoke. Never invent models.
 #### 1a. Local Ollama
 
 Default to `http://localhost:11434` (honor `OLLAMA_HOST` if set).
-1. `GET /api/tags` — capture `name`, `size`, `modified_at`.
-2. `ollama show <name>` or `POST /api/show` — capture `parameter_size`, `context_length`, `quantization_level`, tool/function calling support.
+1. `GET /api/tags` - capture `name`, `size`, `modified_at`.
+2. `ollama show <name>` or `POST /api/show` - capture `parameter_size`, `context_length`, `quantization_level`, tool/function calling support.
 3. **Filter out models without tool calling.** Mark them as `excluded: "no tool calling"`.
 4. Cross-reference `docs/research/model-evals/` if present; attach `eval_score` and `eval_notes`. Do not re-benchmark.
 
@@ -71,7 +71,7 @@ If `COPILOT_PROVIDER_BASE_URL` is set: `GET {base_url}/v1/models`. Capture `id` 
 
 #### 1c. Copilot Subscription
 
-Copilot subscription models are **not enumerable from a skill**. Present the tier catalog from `references/model-inventory-schema.md` and ask the user to confirm which models their plan shows. Treat as a hint, not truth — the user must verify against their current model picker.
+Copilot subscription models are **not enumerable from a skill**. Present the tier catalog from `references/model-inventory-schema.md` and ask the user to confirm which models their plan shows. Treat as a hint, not truth - the user must verify against their current model picker.
 
 #### 1d. Persist the Inventory
 
@@ -85,7 +85,7 @@ If in **Discover** mode, stop here and present a human-readable summary.
 
 For each `.agents/agents/*.md` (excluding forge meta-templates):
 1. Parse YAML frontmatter (`name`, `description`, `model`, `modelFallback`).
-2. Read skills referenced in `## Collaboration` / `## Skills` sections — they often reveal the real workload.
+2. Read skills referenced in `## Collaboration` / `## Skills` sections - they often reveal the real workload.
 
 Score each agent on this rubric (1 = low, 2 = medium, 3 = high):
 
@@ -99,9 +99,9 @@ Score each agent on this rubric (1 = low, 2 = medium, 3 = high):
 | **Determinism / safety** | Security, auth, migrations, payments | Cosmetic changes, drafts |
 
 Map scores to tiers:
-- **Tier S (Strong)** — Reasoning depth = 3 OR determinism/safety = 3 OR (context = 3 AND reasoning ≥ 2)
-- **Tier M (Balanced)** — Most domain/feature engineers (reasoning 2, code-gen 2–3, context 2, tool-use 3)
-- **Tier L (Light)** — Reasoning ≤ 2, code-gen ≤ 2, context = 1
+- **Tier S (Strong)** - Reasoning depth = 3 OR determinism/safety = 3 OR (context = 3 AND reasoning ≥ 2)
+- **Tier M (Balanced)** - Most domain/feature engineers (reasoning 2, code-gen 2–3, context 2, tool-use 3)
+- **Tier L (Light)** - Reasoning ≤ 2, code-gen ≤ 2, context = 1
 
 Always record per-axis scores so the recommendation is auditable.
 
@@ -132,7 +132,7 @@ Write with this structure:
 **Status:** {Proposed | Applied on YYYY-MM-DD}
 
 > Per-agent model assignment is honored by VS Code custom agents via the `model:` field.
-> In Copilot CLI, assignments are advisory — the model is process-wide via `COPILOT_MODEL`.
+> In Copilot CLI, assignments are advisory - the model is process-wide via `COPILOT_MODEL`.
 
 ## Inventory Used
 
@@ -215,6 +215,6 @@ For each `.agents/agents/*.md`:
 
 ## Reference
 
-- [docs/running-with-local-models.md](../../../docs/running-with-local-models.md) — Ollama setup and model recommendations.
-- [docs/research/model-evals/summary.md](../../../docs/research/model-evals/summary.md) — Tool-calling reliability scores for local models.
-- [forge-build-agent-team SKILL.md](../forge-build-agent-team/SKILL.md) — The team-build process this skill runs after.
+- [docs/running-with-local-models.md](../../../docs/running-with-local-models.md) - Ollama setup and model recommendations.
+- [docs/research/model-evals/summary.md](../../../docs/research/model-evals/summary.md) - Tool-calling reliability scores for local models.
+- [forge-build-agent-team SKILL.md](../forge-build-agent-team/SKILL.md) - The team-build process this skill runs after.

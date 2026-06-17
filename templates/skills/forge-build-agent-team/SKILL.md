@@ -27,13 +27,13 @@ You are building a team of custom agents and reusable skills from a PRD, Product
 
 Find the PRD at `docs/PRD.md`, `docs/spec.md`, or `README.md`. Read the entire document and extract:
 
-1. **Technology stack** — languages, frameworks, engines, build tools.
-2. **Project structure** — file layout, module boundaries, entry points.
-3. **Functional requirement groups** — distinct feature areas.
-4. **Non-functional requirements** — performance, security, accessibility.
-5. **Implementation phases** — ordered stages of work.
-6. **Testing strategy** — frameworks, coverage expectations, test scenarios.
-7. **Cross-cutting concerns** — deployment, CI/CD, observability.
+1. **Technology stack** - languages, frameworks, engines, build tools.
+2. **Project structure** - file layout, module boundaries, entry points.
+3. **Functional requirement groups** - distinct feature areas.
+4. **Non-functional requirements** - performance, security, accessibility.
+5. **Implementation phases** - ordered stages of work.
+6. **Testing strategy** - frameworks, coverage expectations, test scenarios.
+7. **Cross-cutting concerns** - deployment, CI/CD, observability.
 
 ### Step 2: Identify Specialist Roles
 
@@ -53,7 +53,7 @@ Map PRD domains to specialist agents. Each agent owns a distinct, non-overlappin
 
 For each agent: Expertise (4–8 bullets), Key Reference (cited PRD sections), Responsibilities (grouped by component/file, referencing PRD requirement IDs), Constraints, Output Standards, Collaboration.
 
-**Boundary rules:** No two agents own the same file/responsibility. Every PRD requirement maps to exactly one agent. Reference PRD section numbers — don't copy requirement tables. If responsibilities exceed ~15 items, consider splitting.
+**Boundary rules:** No two agents own the same file/responsibility. Every PRD requirement maps to exactly one agent. Reference PRD section numbers - don't copy requirement tables. If responsibilities exceed ~15 items, consider splitting.
 
 ### Step 4: Identify Reusable Skills
 
@@ -90,7 +90,7 @@ You are a **{Role Title}** responsible for {one-sentence scope description}.
 
 ## Expertise
 
-- {Technical specialization — 4–8 bullets}
+- {Technical specialization - 4–8 bullets}
 - {Focus on what the agent wouldn't know without this file}
 
 ---
@@ -99,7 +99,7 @@ You are a **{Role Title}** responsible for {one-sentence scope description}.
 
 Always consult [{PRD path}]({relative path}) for authoritative project requirements:
 
-- **Section {N} — {Title}**: {What it covers for this agent}
+- **Section {N} - {Title}**: {What it covers for this agent}
 
 ---
 
@@ -114,7 +114,7 @@ Always consult [{PRD path}]({relative path}) for authoritative project requireme
 
 ## Workflow
 
-{Describe the project-specific workflow for this agent — what to do, in what order, and how to validate. Replace generic "understand/implement/verify/commit/report" steps with concrete guidance.}
+{Describe the project-specific workflow for this agent - what to do, in what order, and how to validate. Replace generic "understand/implement/verify/commit/report" steps with concrete guidance.}
 
 {For destructive or batch operations, use plan-validate-execute:
 1. Create an intermediate plan
@@ -145,7 +145,7 @@ If validation fails, fix and re-run before committing.
 ## Constraints
 
 - {Rule referencing PRD requirement IDs}
-- Verify current stable APIs for {tech stack} before implementing — search official docs when uncertain
+- Verify current stable APIs for {tech stack} before implementing - search official docs when uncertain
 - Commit with descriptive messages referencing the task/requirement
 - Follow orchestrator instructions for progress tracking when working in orchestrated execution
 
@@ -161,8 +161,8 @@ If validation fails, fix and re-run before committing.
 
 ## Collaboration
 
-- **project-orchestrator** — Coordinates your work, provides task context, tracks progress
-- **{other-agent}** — {What they provide or need from this agent}
+- **project-orchestrator** - Coordinates your work, provides task context, tracks progress
+- **{other-agent}** - {What they provide or need from this agent}
 ````
 
 ### Step 6: Write the Skill Files
@@ -187,7 +187,7 @@ description: >
 
 ### Step 1: {First Step Title}
 
-{Instructions — be prescriptive for fragile operations (exact commands, fixed sequences).
+{Instructions - be prescriptive for fragile operations (exact commands, fixed sequences).
 Be flexible for tasks where multiple approaches are valid.}
 
 ### Step 2: {Second Step Title}
@@ -227,7 +227,7 @@ After completing the task:
 ## Reference
 
 See [{PRD path}]({relative path}) for the full specification:
-- **Section {N}** — {What it covers}
+- **Section {N}** - {What it covers}
 
 For detailed reference material: load `references/{file}.md` when {trigger condition}.
 For output templates: load `assets/{template}.md` when generating {specific output type}.
@@ -237,7 +237,7 @@ For output templates: load `assets/{template}.md` when generating {specific outp
 - If the skill needs detailed schemas, API docs, or error codes → create `references/` and add load triggers
 - If the skill has reusable template/output formats → create `assets/` and reference them
 - If the skill has deterministic, repeatable logic → create `scripts/` and invoke from SKILL.md
-- Keep `SKILL.md` under 500 lines / 5000 tokens — move everything else to subdirectories
+- Keep `SKILL.md` under 500 lines / 5000 tokens - move everything else to subdirectories
 
 ### Step 7: Validate the Team
 

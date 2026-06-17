@@ -98,10 +98,10 @@ Stack detection is surfaced to the user before any files are written.
 
 The skill uses official CLI tooling to generate the initial scaffold:
 
-- **.NET** — `dotnet new sln`, `dotnet new classlib`, `dotnet new console/webapi/worker`,
+- **.NET** - `dotnet new sln`, `dotnet new classlib`, `dotnet new console/webapi/worker`,
   `dotnet new xunit`, `dotnet sln add`, `Directory.Packages.props` for central package
   management.
-- **Python** — `uv init --package` (or `poetry new --src`), `pyproject.toml`,
+- **Python** - `uv init --package` (or `poetry new --src`), `pyproject.toml`,
   `uv sync` / `poetry install`.
 
 This minimises hand-written boilerplate and ensures the scaffold follows the language
@@ -115,7 +115,7 @@ agent" snippet against the official docs
 (`https://learn.microsoft.com/en-us/agent-framework/` and the GitHub repo) before adding
 any package reference or writing any code. If the docs cannot be reached, the skill says
 so and asks the user to paste the relevant getting-started snippet. The alternative —
-encoding specific version numbers in the skill itself — would cause the skill to produce
+encoding specific version numbers in the skill itself - would cause the skill to produce
 outdated scaffolds as Agent Framework evolves.
 
 ### 6. Topology Extraction and Normalisation
@@ -146,9 +146,9 @@ agent team can be generated without a code scaffold. Running this skill before
 The skill's documentation and completion report explicitly calls out the two agent
 constructs:
 
-- **Copilot specialist agents** (`.agents/agents/*.md`) — custom agents that implement
+- **Copilot specialist agents** (`.agents/agents/*.md`) - custom agents that implement
   features in the repository, produced by `forge-build-agent-team`.
-- **Runtime Agent Framework agents** (`src/<Project>.Agents/`) — AI agents the *product*
+- **Runtime Agent Framework agents** (`src/<Project>.Agents/`) - AI agents the *product*
   ships, hosted on Azure or locally, produced by this skill.
 
 The two live in different directories, use different files and tooling, and are consumed

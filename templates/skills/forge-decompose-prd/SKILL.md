@@ -10,7 +10,7 @@ description: >
 
 You are a product requirements analyst specializing in **decomposition and modularization**. Your job is to split a monolithic PRD into a Product Vision document (cross-cutting concerns) and individual Feature documents (self-contained units of work), each with user stories, requirements, acceptance criteria, and implementation tasks.
 
-The original PRD is preserved — this skill produces new documents alongside it.
+The original PRD is preserved - this skill produces new documents alongside it.
 
 ---
 
@@ -23,9 +23,9 @@ The original PRD is preserved — this skill produces new documents alongside it
 - You want clearer traceability between user stories, requirements, and tasks
 
 **Don't use when:**
-- The PRD is small (under 10 requirements, 1–2 phases) — stay monolithic
-- You need to add one new feature to an existing project — use `forge-build-feature-prd`
-- No PRD exists yet — use `forge-build-prd` first
+- The PRD is small (under 10 requirements, 1–2 phases) - stay monolithic
+- You need to add one new feature to an existing project - use `forge-build-feature-prd`
+- No PRD exists yet - use `forge-build-prd` first
 
 ---
 
@@ -41,7 +41,7 @@ Find the PRD at `docs/PRD.md` (or `docs/spec.md`). Read the entire document and 
 **Feature-specific content** (groupable):
 - Sections 4.2 (User Stories), 8 (Functional Requirements), 12 (UI/Interaction), 14 (Phases), 15 (Testing), 17 (Acceptance Criteria)
 
-**Feature boundaries** — natural groupings based on shared personas, components, subsystems, UI flows, or phases.
+**Feature boundaries** - natural groupings based on shared personas, components, subsystems, UI flows, or phases.
 
 ### Step 2: Identify Features
 
@@ -70,7 +70,7 @@ Before writing any documents, present and get user approval:
 ```markdown
 ## Proposed Decomposition
 
-**Product Vision** — Cross-cutting concerns extracted from the PRD
+**Product Vision** - Cross-cutting concerns extracted from the PRD
 
 **Features identified:**
 
@@ -108,7 +108,7 @@ Run this checklist before finalizing:
 - [ ] No cross-cutting content is duplicated in feature documents
 - [ ] Feature dependencies form a valid DAG (no circular dependencies)
 - [ ] The union of all feature requirements equals the original PRD (nothing lost)
-- [ ] Feature ID prefixes are unique — no collisions with each other or `FT-`
+- [ ] Feature ID prefixes are unique - no collisions with each other or `FT-`
 - [ ] Each feature is independently implementable given declared dependencies
 
 If any checkbox fails, fix the issue before proceeding.
@@ -131,7 +131,7 @@ Summarize with a table of features, their files, counts, dependencies, and sugge
 
 ## Guidelines
 
-- **Preserve the original PRD.** New documents live alongside it — never modify or replace.
+- **Preserve the original PRD.** New documents live alongside it - never modify or replace.
 - **Don't duplicate cross-cutting concerns.** NFRs, security, accessibility, architecture, and tech stack live in the product vision only. Feature documents reference it.
 - **Keep features independent.** Merge features that are too tightly coupled to separate.
 - **Declare dependencies explicitly.** The orchestrator uses these declarations to determine execution order.

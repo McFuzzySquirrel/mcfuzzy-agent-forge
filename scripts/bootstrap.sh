@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# bootstrap.sh — Deploy mcfuzzy-agent-forge templates into a target repository.
+# bootstrap.sh - Deploy mcfuzzy-agent-forge templates into a target repository.
 #
 # Usage:
 #   ./scripts/bootstrap.sh [TARGET_DIR] [--harness HARSH] [--force]

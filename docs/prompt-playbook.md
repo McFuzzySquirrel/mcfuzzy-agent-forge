@@ -6,7 +6,7 @@ A step-by-step command and prompt reference for anyone bootstrapping a new proje
 
 ## Prerequisites
 
-- An agent harness — **GitHub Copilot** in VS Code or [Copilot CLI](https://docs.github.com/en/copilot/copilot-cli), **Claude Code**, or any runtime that detects agents and skills from a repo directory
+- An agent harness - **GitHub Copilot** in VS Code or [Copilot CLI](https://docs.github.com/en/copilot/copilot-cli), **Claude Code**, or any runtime that detects agents and skills from a repo directory
 - This repository cloned locally
 - A target project directory created and initialized as a git repo
 
@@ -18,7 +18,7 @@ git init
 
 ---
 
-## Step 1 — Bootstrap Agent Forge into Your Project
+## Step 1 - Bootstrap Agent Forge into Your Project
 
 Run the bootstrap script from the Agent Forge repo, pointing it at your new project:
 
@@ -45,15 +45,15 @@ git add .agents/
 git commit -m "chore: bootstrap Agent Forge agent and skill templates"
 ```
 
-> Open your target project before running the prompts below — your agent harness auto-detects agents and skills from `.agents/agents/` and `.agents/skills/` (or `.github/` / `.claude/` if bootstrapped with the matching `--harness` flag).
+> Open your target project before running the prompts below - your agent harness auto-detects agents and skills from `.agents/agents/` and `.agents/skills/` (or `.github/` / `.claude/` if bootstrapped with the matching `--harness` flag).
 >
 > The prompts below use `@workspace` syntax. If your harness uses different syntax for invoking agents and skills, adapt accordingly (e.g., `/forge-build-prd ...` directly in Copilot CLI).
 
 ---
 
-## Fast Path — One-Prompt Bootstrap (Optional)
+## Fast Path - One-Prompt Bootstrap (Optional)
 
-If you just want to go from a one-liner idea to a reviewed PRD and a generated agent team without copy-pasting between skills, use the `forge-bootstrap-project` meta-skill. It chains `forge-build-prd` → **pause for PRD review** → `forge-build-agent-team` → **pause for team review** → optionally `forge-assign-models`. The review pauses are preserved — each one emits a verification checklist before the next step runs.
+If you just want to go from a one-liner idea to a reviewed PRD and a generated agent team without copy-pasting between skills, use the `forge-bootstrap-project` meta-skill. It chains `forge-build-prd` → **pause for PRD review** → `forge-build-agent-team` → **pause for team review** → optionally `forge-assign-models`. The review pauses are preserved - each one emits a verification checklist before the next step runs.
 
 ```
 @workspace /forge-bootstrap-project I want to build [describe your idea in one sentence].
@@ -65,7 +65,7 @@ If you prefer to drive each step yourself, skip this section and follow Steps 2�
 
 ---
 
-## Step 2 — Build the PRD
+## Step 2 - Build the PRD
 
 ### 2a. Generate the PRD
 
@@ -103,7 +103,7 @@ Flag anything missing and fill in the gaps.
 
 ---
 
-## Step 3 — (Optional) Decompose into Features
+## Step 3 - (Optional) Decompose into Features
 
 For larger projects, break the PRD into a Product Vision + individual Feature documents before building the team. Skip this step for small-to-medium projects.
 
@@ -128,7 +128,7 @@ Report any gaps or issues.
 
 ---
 
-## Step 4 — Generate the Agent Team
+## Step 4 - Generate the Agent Team
 
 ### 4a. Build the team
 
@@ -164,7 +164,7 @@ git commit -m "feat: generate specialist agent team from PRD"
 
 ---
 
-## Step 4.5 — Assign Models per Agent (Optional but Recommended)
+## Step 4.5 - Assign Models per Agent (Optional but Recommended)
 
 By default every agent uses your globally-selected model. Use the `forge-assign-models`
 skill to discover what models you actually have access to (harness subscription + local
@@ -209,7 +209,7 @@ Update docs/MODEL-PLAN.md.
 
 ---
 
-## Step 4.6 — Scaffold the Solution (when the PRD selects Microsoft Agent Framework)
+## Step 4.6 - Scaffold the Solution (when the PRD selects Microsoft Agent Framework)
 
 If your PRD's Technology Stack picks **[Microsoft Agent Framework](https://learn.microsoft.com/en-us/agent-framework/)**,
 run the `forge-build-agent-framework-solution` skill **before** asking the orchestrator to
@@ -257,7 +257,7 @@ git commit -m "feat: scaffold Microsoft Agent Framework solution"
 
 ---
 
-## Step 5 — Plan and Execute the Build
+## Step 5 - Plan and Execute the Build
 
 ### 5a. Generate an execution plan (inspect before committing to action)
 
@@ -309,7 +309,7 @@ Resume from where we left off. What is the next uncompleted task?
 
 ---
 
-## Step 6 — Add a Feature to an Existing Project
+## Step 6 - Add a Feature to an Existing Project
 
 After the initial build is complete, use this workflow to add new features:
 
@@ -340,7 +340,7 @@ Stop after F1 and report status.
 
 ---
 
-## Step 7 — Optimize Existing Skills
+## Step 7 - Optimize Existing Skills
 
 After building a project, audit the generated skills against agentskills.io best practices:
 
@@ -362,7 +362,7 @@ Only modify skills I've approved in the audit report.
 
 ---
 
-## Quick Reference — All Prompts at a Glance
+## Quick Reference - All Prompts at a Glance
 
 | Step | Command / Prompt |
 |------|-----------------|
@@ -397,10 +397,10 @@ Only modify skills I've approved in the audit report.
 
 ## Tips
 
-- **Open your target project first** — agents and skills resolve from the current workspace or repo directory.
-- **Review before executing** — always run the execution plan prompt (Step 5a) before asking the orchestrator to build anything.
-- **One phase at a time** — resist asking the orchestrator to "build everything". Phases are checkpoints; review each one.
-- **Commit after each phase** — the orchestrator will prompt you, but make a habit of it. `git add . && git commit -m "feat: complete Phase N"`.
-- **The PRD is the source of truth** — if something looks wrong, fix the PRD first, then re-run the affected steps.
-- **Re-bootstrap safely** — run `bootstrap.sh --force` any time you want to pull in updated Agent Forge templates without losing your generated agents.
-- **Optimize generated skills** — after the initial build, run `@workspace /forge-optimize-skills` to audit your skills against best practices. The audit surfaces specific improvements you can apply immediately.
+- **Open your target project first** - agents and skills resolve from the current workspace or repo directory.
+- **Review before executing** - always run the execution plan prompt (Step 5a) before asking the orchestrator to build anything.
+- **One phase at a time** - resist asking the orchestrator to "build everything". Phases are checkpoints; review each one.
+- **Commit after each phase** - the orchestrator will prompt you, but make a habit of it. `git add . && git commit -m "feat: complete Phase N"`.
+- **The PRD is the source of truth** - if something looks wrong, fix the PRD first, then re-run the affected steps.
+- **Re-bootstrap safely** - run `bootstrap.sh --force` any time you want to pull in updated Agent Forge templates without losing your generated agents.
+- **Optimize generated skills** - after the initial build, run `@workspace /forge-optimize-skills` to audit your skills against best practices. The audit surfaces specific improvements you can apply immediately.

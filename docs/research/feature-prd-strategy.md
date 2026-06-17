@@ -1,4 +1,4 @@
-# Research: Feature PRD Strategy — Handling New Features After Initial PRD Completion
+# Research: Feature PRD Strategy - Handling New Features After Initial PRD Completion
 
 **Date:** 2026-03-17
 **Status:** Implemented
@@ -38,16 +38,16 @@ And the FAQ (line 374):
 > *Q: How do I update agents when my PRD changes?*
 > *A: Re-run the team builder. It will regenerate agents based on the new PRD. Review diffs before committing.*
 
-These acknowledge the scenario exists but offer only a manual/regeneration approach — no structured process for incremental feature development.
+These acknowledge the scenario exists but offer only a manual/regeneration approach - no structured process for incremental feature development.
 
 ### What Does NOT Exist
 
-1. **Feature PRD template** — No document format for capturing a new feature in the context of an existing, completed project
-2. **Existing-state awareness** — No mechanism for the PRD builder or team builder to analyze what's already built (completed PRD phases, existing agents, existing codebase)
-3. **Agent reuse analysis** — No process for evaluating which existing agents can handle the new work vs. which new agents are needed
-4. **Incremental team modification** — No way to extend an existing agent team without regenerating the entire set
-5. **Feature-to-original-PRD traceability** — No versioning or linking between an original PRD and subsequent feature PRDs
-6. **Impact analysis** — No process for understanding how a new feature affects existing components, agents, and boundaries
+1. **Feature PRD template** - No document format for capturing a new feature in the context of an existing, completed project
+2. **Existing-state awareness** - No mechanism for the PRD builder or team builder to analyze what's already built (completed PRD phases, existing agents, existing codebase)
+3. **Agent reuse analysis** - No process for evaluating which existing agents can handle the new work vs. which new agents are needed
+4. **Incremental team modification** - No way to extend an existing agent team without regenerating the entire set
+5. **Feature-to-original-PRD traceability** - No versioning or linking between an original PRD and subsequent feature PRDs
+6. **Impact analysis** - No process for understanding how a new feature affects existing components, agents, and boundaries
 
 ---
 
@@ -55,7 +55,7 @@ These acknowledge the scenario exists but offer only a manual/regeneration appro
 
 ### 1. Preserving Existing Agent Customizations
 
-**Problem:** After the initial build, users will have customized their generated agents — tweaked responsibilities, refined constraints, adjusted collaboration sections. A naive "regenerate the team" approach would overwrite these customizations.
+**Problem:** After the initial build, users will have customized their generated agents - tweaked responsibilities, refined constraints, adjusted collaboration sections. A naive "regenerate the team" approach would overwrite these customizations.
 
 **What we need to think about:**
 - Existing agents may have been manually refined beyond what was originally generated
@@ -106,7 +106,7 @@ These acknowledge the scenario exists but offer only a manual/regeneration appro
 
 **What we need to think about:**
 - The new feature PRD skill should be a separate skill, not a modification to the existing `forge-build-prd` skill
-- The team builder enhancement should be additive — the existing "generate from scratch" path must still work
+- The team builder enhancement should be additive - the existing "generate from scratch" path must still work
 - The orchestrator changes should detect whether it's working from a feature PRD vs. original PRD automatically
 
 ---
@@ -117,9 +117,9 @@ These acknowledge the scenario exists but offer only a manual/regeneration appro
 
 We introduce **three new capabilities** alongside the existing ones:
 
-1. **`forge-build-feature-prd` skill** — A new skill (not a replacement for `forge-build-prd`) that creates feature PRDs aware of the existing project context
-2. **Incremental team analysis in `forge-build-agent-team`** — An additional step in the existing team builder skill that can analyze existing agents and recommend additions/modifications rather than regenerating everything
-3. **Feature execution mode in `project-orchestrator`** — An additional command/mode for the orchestrator to execute feature PRDs in the context of an existing, completed project
+1. **`forge-build-feature-prd` skill** - A new skill (not a replacement for `forge-build-prd`) that creates feature PRDs aware of the existing project context
+2. **Incremental team analysis in `forge-build-agent-team`** - An additional step in the existing team builder skill that can analyze existing agents and recommend additions/modifications rather than regenerating everything
+3. **Feature execution mode in `project-orchestrator`** - An additional command/mode for the orchestrator to execute feature PRDs in the context of an existing, completed project
 
 ### Why Three Separate Changes (Not One Big One)
 
@@ -144,7 +144,7 @@ This mirrors the existing flow (idea → PRD → team → build) but with awaren
 **Purpose:** Create a feature PRD that builds upon an existing completed project.
 
 **Why a separate skill (not modifying `forge-build-prd`):**
-- The existing PRD builder is for greenfield projects — its process flow, questions, and output format are designed for building from nothing
+- The existing PRD builder is for greenfield projects - its process flow, questions, and output format are designed for building from nothing
 - A feature PRD has fundamentally different needs: it must analyze what exists, understand constraints imposed by prior decisions, and scope new work within an established architecture
 - Keeping them separate means neither skill becomes overloaded with conditional logic
 - Users can still use `forge-build-prd` for new projects without any changes
@@ -173,7 +173,7 @@ Step 3: Ask Targeted Clarifying Questions
   - Prioritization: Is this a Must/Should/Could?
 
 Step 4: Draft the Feature PRD
-  (Using a Feature PRD-specific format — see Output Format below)
+  (Using a Feature PRD-specific format - see Output Format below)
 
 Step 5: Review and Iterate
   - Present draft, gather feedback, refine
@@ -227,7 +227,7 @@ Any new technologies, libraries, or tools required (with currency verification)
 | FT-NF-01 | ... | Must/Should/Could |
 
 ## 8. Agent Impact Assessment
-### 8.1 Existing Agents — Extended Responsibilities
+### 8.1 Existing Agents - Extended Responsibilities
 | Agent | New Responsibilities | Modified Boundaries |
 |-------|---------------------|-------------------|
 | `existing-agent` | What they now also need to do | How their boundary changes |
@@ -237,7 +237,7 @@ Any new technologies, libraries, or tools required (with currency verification)
 |-------|------|--------------------------------------|
 | `new-agent` | ... | ... |
 
-### 8.3 Existing Agents — No Changes
+### 8.3 Existing Agents - No Changes
 | Agent | Reason |
 |-------|--------|
 | `unaffected-agent` | Not involved in this feature |
@@ -266,7 +266,7 @@ Numbered list of conditions for this feature to be considered complete
 **Key design decisions:**
 - **Prefixed IDs** (FT-US-01, FT-FR-01, FT-NF-01, Phase F1) prevent collision with original PRD requirement IDs
 - **Section 2 (Existing System State)** forces the PRD to acknowledge what's already built
-- **Section 8 (Agent Impact Assessment)** is unique to feature PRDs — it explicitly analyzes which existing agents are affected and whether new agents are needed, giving the team builder a head start
+- **Section 8 (Agent Impact Assessment)** is unique to feature PRDs - it explicitly analyzes which existing agents are affected and whether new agents are needed, giving the team builder a head start
 - **Section 11 (Rollback Considerations)** addresses the risk of modifying existing components
 
 ---
@@ -277,7 +277,7 @@ Numbered list of conditions for this feature to be considered complete
 
 **Why modify the existing skill (not create a new one):**
 - The core logic of "analyze PRD → identify roles → write agent files → validate" is the same
-- The change is additive — a new initial step that detects the scenario, not a rewrite of existing steps
+- The change is additive - a new initial step that detects the scenario, not a rewrite of existing steps
 - Skills should be reusable processes; team building is one process with two modes
 
 **Proposed Changes:**
@@ -285,7 +285,7 @@ Numbered list of conditions for this feature to be considered complete
 Add a new **Step 0** before the existing Step 1, and modify subsequent steps to support incremental mode:
 
 ```markdown
-### Step 0: Detect Mode — Full Build vs. Feature Increment
+### Step 0: Detect Mode - Full Build vs. Feature Increment
 
 Before analyzing the PRD, determine which mode to operate in:
 
@@ -374,10 +374,10 @@ Step 7i: Present the Changes
 ```
 
 **Key design decisions:**
-- **Auto-detection** — The skill automatically determines whether it's in "full build" or "feature increment" mode based on document structure and existing agents. No user action needed.
-- **Diff-based modifications** — For existing agents, it presents what changes rather than regenerating the full file, making it easy to review and approve
-- **Unchanged agents listed** — Explicitly listing untouched agents gives confidence that existing work is preserved
-- **Backward compatible** — The existing Steps 1–8 remain completely unchanged; the incremental steps are an alternative path
+- **Auto-detection** - The skill automatically determines whether it's in "full build" or "feature increment" mode based on document structure and existing agents. No user action needed.
+- **Diff-based modifications** - For existing agents, it presents what changes rather than regenerating the full file, making it easy to review and approve
+- **Unchanged agents listed** - Explicitly listing untouched agents gives confidence that existing work is preserved
+- **Backward compatible** - The existing Steps 1–8 remain completely unchanged; the incremental steps are an alternative path
 
 ---
 
@@ -386,7 +386,7 @@ Step 7i: Present the Changes
 **Purpose:** Add a command mode for the orchestrator to execute feature PRD phases in the context of an existing, completed project.
 
 **Why modify the existing agent (not create a new one):**
-- The orchestrator is already the single point of coordination — adding a second orchestrator would create confusion
+- The orchestrator is already the single point of coordination - adding a second orchestrator would create confusion
 - Feature execution uses the same patterns (sequential tasks, multi-agent deliverables, etc.)
 - The change is a new command and a modified Phase 1 analysis, not a rewrite
 
@@ -441,18 +441,18 @@ Add feature-specific orchestration guidance:
 ```markdown
 ### Feature Orchestration Guidelines
 
-- **Never re-execute original PRD phases** — Reference existing work, don't rebuild it
-- **Regression awareness** — When a task modifies existing code, note which existing tests should be re-run
-- **Feature phase naming** — Use F-prefixed phases (Phase F1, F2) to distinguish from original phases
-- **Mixed agent calls** — A feature may require calling both existing agents (for modifications) and new agents (for new components)
-- **Rollback tracking** — Keep a list of modified existing files so the feature could be reverted if needed
+- **Never re-execute original PRD phases** - Reference existing work, don't rebuild it
+- **Regression awareness** - When a task modifies existing code, note which existing tests should be re-run
+- **Feature phase naming** - Use F-prefixed phases (Phase F1, F2) to distinguish from original phases
+- **Mixed agent calls** - A feature may require calling both existing agents (for modifications) and new agents (for new components)
+- **Rollback tracking** - Keep a list of modified existing files so the feature could be reverted if needed
 ```
 
 **Key design decisions:**
-- **Explicit command** (`Execute feature X`) — The user clearly indicates they're working on a feature, not re-running the original build
-- **Original PRD awareness** — The orchestrator reads both PRDs to understand the full context
-- **Regression consciousness** — When modifying existing code, the orchestrator proactively considers testing impact
-- **Backward compatible** — All existing commands (`Execute the full build`, `Execute Phase 1`, etc.) work exactly as before
+- **Explicit command** (`Execute feature X`) - The user clearly indicates they're working on a feature, not re-running the original build
+- **Original PRD awareness** - The orchestrator reads both PRDs to understand the full context
+- **Regression consciousness** - When modifying existing code, the orchestrator proactively considers testing impact
+- **Backward compatible** - All existing commands (`Execute the full build`, `Execute Phase 1`, etc.) work exactly as before
 
 ---
 
@@ -462,22 +462,22 @@ Add feature-specific orchestration guidance:
 
 | Change | Type | File(s) | Effort | Impact | Breaking? |
 |--------|------|---------|--------|--------|-----------|
-| Create `forge-build-feature-prd` skill | New file | `templates/skills/forge-build-feature-prd/SKILL.md` | Medium | High — enables the core workflow | No |
-| Add incremental mode to team builder skill | Modify existing | `templates/skills/forge-build-agent-team/SKILL.md` | Medium | High — enables agent reuse | No |
-| Update `forge-team-builder` agent | Modify existing | `templates/agents/forge-team-builder.md` | Small | Medium — agent awareness of incremental mode | No |
-| Add feature execution mode to orchestrator | Modify existing | `templates/agents/project-orchestrator.md` | Medium | High — enables feature execution | No |
-| Update bootstrap scripts | Modify existing | `scripts/bootstrap.sh`, `scripts/bootstrap.ps1` | Small | Low — include new skill in bootstrap | No |
-| Update README | Modify existing | `README.md` | Small | Medium — document the new workflow | No |
+| Create `forge-build-feature-prd` skill | New file | `templates/skills/forge-build-feature-prd/SKILL.md` | Medium | High - enables the core workflow | No |
+| Add incremental mode to team builder skill | Modify existing | `templates/skills/forge-build-agent-team/SKILL.md` | Medium | High - enables agent reuse | No |
+| Update `forge-team-builder` agent | Modify existing | `templates/agents/forge-team-builder.md` | Small | Medium - agent awareness of incremental mode | No |
+| Add feature execution mode to orchestrator | Modify existing | `templates/agents/project-orchestrator.md` | Medium | High - enables feature execution | No |
+| Update bootstrap scripts | Modify existing | `scripts/bootstrap.sh`, `scripts/bootstrap.ps1` | Small | Low - include new skill in bootstrap | No |
+| Update README | Modify existing | `README.md` | Small | Medium - document the new workflow | No |
 
 **Total scope:** 1 new file + 5 modified files. No structural changes. Fully backward compatible.
 
 ### Recommended Implementation Order
 
-1. **First:** Create `forge-build-feature-prd` skill — This is the entry point for the new workflow and can be used independently even before other changes
-2. **Second:** Add incremental mode to `forge-build-agent-team` skill — This enables the team builder to work with feature PRDs
-3. **Third:** Update `forge-team-builder` agent — Align the agent with the skill's new incremental mode
-4. **Fourth:** Add feature execution mode to `project-orchestrator` — Complete the end-to-end feature workflow
-5. **Fifth:** Update bootstrap scripts and README — Documentation and deployment support
+1. **First:** Create `forge-build-feature-prd` skill - This is the entry point for the new workflow and can be used independently even before other changes
+2. **Second:** Add incremental mode to `forge-build-agent-team` skill - This enables the team builder to work with feature PRDs
+3. **Third:** Update `forge-team-builder` agent - Align the agent with the skill's new incremental mode
+4. **Fourth:** Add feature execution mode to `project-orchestrator` - Complete the end-to-end feature workflow
+5. **Fifth:** Update bootstrap scripts and README - Documentation and deployment support
 
 ### Change 1: Create `forge-build-feature-prd` Skill
 
@@ -525,7 +525,7 @@ Additions:
 
 **Files:** `scripts/bootstrap.sh`, `scripts/bootstrap.ps1`
 
-Add the new `forge-build-feature-prd` skill directory to the copy list. This should be a minimal change — the scripts already copy from `templates/skills/` to `.agents/skills/`.
+Add the new `forge-build-feature-prd` skill directory to the copy list. This should be a minimal change - the scripts already copy from `templates/skills/` to `.agents/skills/`.
 
 ### Change 6: Update README
 
@@ -557,7 +557,7 @@ Add a new section under "Working with the Agents" that describes the feature dev
 
 **Question:** Should the original PRD be updated after a feature is implemented?
 
-**Recommendation:** No — the original PRD should remain as the record of the initial project scope. Feature PRDs are additive documents. If someone wants to understand the full current state of the project, they reference the original PRD plus all "Implemented" feature PRDs. This avoids the risk of corrupting the original PRD through repeated edits.
+**Recommendation:** No - the original PRD should remain as the record of the initial project scope. Feature PRDs are additive documents. If someone wants to understand the full current state of the project, they reference the original PRD plus all "Implemented" feature PRDs. This avoids the risk of corrupting the original PRD through repeated edits.
 
 ### Agent Deprecation
 
@@ -585,7 +585,7 @@ Add a new section under "Working with the Agents" that describes the feature dev
 |------|-----------|--------|------------|
 | Feature PRD misses impact on existing agents | Medium | High | Agent Impact Assessment section forces explicit analysis; team builder validates coverage |
 | Incremental team builder introduces boundary overlap | Low | High | Validation step specifically checks for overlaps with existing agents |
-| Users skip feature PRD and just modify agents directly | Medium | Low | This is valid — the feature PRD process is a recommendation, not a requirement |
+| Users skip feature PRD and just modify agents directly | Medium | Low | This is valid - the feature PRD process is a recommendation, not a requirement |
 | Feature PRD diverges from actual implemented state | Medium | Medium | Recommend checking off completed phases; orchestrator tracks progress |
 | Too many feature PRDs make project state hard to understand | Low | Medium | Recommend a `docs/features/` directory with clear naming; original PRD remains canonical |
 | Breaking changes to existing agents during incremental update | Low | High | Diff-based approach shows exactly what changes; unchanged agents are left untouched |
@@ -599,13 +599,13 @@ Add a new section under "Working with the Agents" that describes the feature dev
 | Capture feature requirements in context | New `forge-build-feature-prd` skill with context-aware PRD format | Medium |
 | Reuse existing agents, add only what's needed | Incremental mode in `forge-build-agent-team` skill with auto-detection | Medium |
 | Execute features without re-running original phases | Feature execution mode in `project-orchestrator` with feature-aware analysis | Medium |
-| Keep existing workflow intact | All changes are additive; existing paths unchanged | — |
+| Keep existing workflow intact | All changes are additive; existing paths unchanged | - |
 | Document and deploy | README update + bootstrap script update | Small |
 
 **Key principles:**
 
-1. **Additive, not destructive** — Feature PRDs add to the project, they don't replace or regenerate existing work
-2. **Context-aware** — Every step in the feature workflow analyzes what already exists before proposing changes
-3. **Backward compatible** — Users who don't need feature PRDs see zero changes to their existing workflow
-4. **Diff-based modifications** — Changes to existing agents are presented as diffs, not full regenerations
-5. **Explicit over implicit** — Feature PRDs force you to think about impact, agent boundaries, and regression before writing code
+1. **Additive, not destructive** - Feature PRDs add to the project, they don't replace or regenerate existing work
+2. **Context-aware** - Every step in the feature workflow analyzes what already exists before proposing changes
+3. **Backward compatible** - Users who don't need feature PRDs see zero changes to their existing workflow
+4. **Diff-based modifications** - Changes to existing agents are presented as diffs, not full regenerations
+5. **Explicit over implicit** - Feature PRDs force you to think about impact, agent boundaries, and regression before writing code

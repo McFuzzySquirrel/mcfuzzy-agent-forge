@@ -1,4 +1,4 @@
-# Research: PRD Decomposition Strategy — Breaking Monolithic PRDs into Features
+# Research: PRD Decomposition Strategy - Breaking Monolithic PRDs into Features
 
 **Date:** 2026-04-09
 **Status:** Research Complete
@@ -27,11 +27,11 @@ The framework operates on a **single-PRD, single-team-generation model** for ini
 
 ### Gap Analysis
 
-1. **No decomposition path** — Users with a monolithic PRD cannot break it into features without manually splitting the document.
-2. **Feature PRDs assume completion** — The `forge-build-feature-prd` skill requires a completed project context, making it unsuitable for initial feature decomposition.
-3. **No product vision concept** — Cross-cutting concerns (architecture, tech stack, NFRs, security, accessibility) have no standalone home outside the monolithic PRD.
-4. **No feature dependency tracking** — Features reference the original PRD but not each other.
-5. **Single-document assumption** — Both `forge-build-agent-team` and `project-orchestrator` assume a single authoritative PRD document.
+1. **No decomposition path** - Users with a monolithic PRD cannot break it into features without manually splitting the document.
+2. **Feature PRDs assume completion** - The `forge-build-feature-prd` skill requires a completed project context, making it unsuitable for initial feature decomposition.
+3. **No product vision concept** - Cross-cutting concerns (architecture, tech stack, NFRs, security, accessibility) have no standalone home outside the monolithic PRD.
+4. **No feature dependency tracking** - Features reference the original PRD but not each other.
+5. **Single-document assumption** - Both `forge-build-agent-team` and `project-orchestrator` assume a single authoritative PRD document.
 
 ---
 
@@ -49,7 +49,7 @@ The framework operates on a **single-PRD, single-team-generation model** for ini
 
 ## Implementation Plan
 
-### Approach: Hybrid — Keep Monolithic, Add Decomposition
+### Approach: Hybrid - Keep Monolithic, Add Decomposition
 
 The most pragmatic approach is to keep the monolithic PRD as an option for simple projects while adding first-class support for feature decomposition as an alternative path. This leverages the feature infrastructure that's already ~70% built.
 
@@ -75,8 +75,8 @@ Key design decisions:
 **File:** `templates/skills/forge-build-feature-prd/SKILL.md`
 
 Changes:
-- Make "Context: Existing System State" (Section 2) conditional — required for post-project features, optional for greenfield features during initial decomposition
-- Make "Agent Impact Assessment" (Section 8) conditional — required for post-project features, optional for greenfield features
+- Make "Context: Existing System State" (Section 2) conditional - required for post-project features, optional for greenfield features during initial decomposition
+- Make "Agent Impact Assessment" (Section 8) conditional - required for post-project features, optional for greenfield features
 - Add a mode detection similar to `forge-build-agent-team`'s Step 0: detect whether this is a greenfield feature (no existing agents) or a post-project feature (existing agents present)
 - For greenfield features, simplify the output format: drop the existing-system-awareness sections, keep the core feature structure (overview, user stories, requirements, phases, testing, acceptance criteria)
 
@@ -85,7 +85,7 @@ Changes:
 **File:** `templates/skills/forge-build-agent-team/SKILL.md`
 
 Changes:
-- Add a third mode to Step 0: **Vision + Features Mode** — detected when a product vision document exists alongside feature documents in `docs/features/`
+- Add a third mode to Step 0: **Vision + Features Mode** - detected when a product vision document exists alongside feature documents in `docs/features/`
 - Add Steps 1v–8v for Vision + Features Mode:
   - Step 1v: Read the product vision for architecture, tech stack, and cross-cutting concerns
   - Step 2v: Read all feature documents and aggregate requirements
@@ -98,7 +98,7 @@ Changes:
 **File:** `templates/agents/project-orchestrator.md`
 
 Changes:
-- Add a new Section 1c: "Analyze Product Vision and Feature Documents" — for when the project uses decomposed features instead of a monolithic PRD
+- Add a new Section 1c: "Analyze Product Vision and Feature Documents" - for when the project uses decomposed features instead of a monolithic PRD
 - Add feature dependency ordering: read dependency declarations from each feature doc and build a dependency graph to determine execution order
 - Add new commands: `Execute all features`, `Execute feature docs/features/auth.md`, `Execute features in order`
 - Extend the `docs/PROGRESS.md` format to track feature-level progress in addition to phase-level
@@ -124,12 +124,12 @@ Changes:
 
 ## Benefits
 
-1. **Backward compatible** — Existing monolithic PRD workflow is completely unchanged
-2. **Leverages existing infrastructure** — Feature PRD format, agent increment mode, and feature execution mode are already built
-3. **User choice** — Teams can choose the approach that fits their project size and complexity
-4. **Incremental adoption** — Users can start with a monolithic PRD and decompose later using `forge-decompose-prd`
-5. **Better traceability** — Feature-level user stories → requirements → tasks form clear chains
-6. **Natural incremental delivery** — Features can be prioritized, reordered, and shipped independently
+1. **Backward compatible** - Existing monolithic PRD workflow is completely unchanged
+2. **Leverages existing infrastructure** - Feature PRD format, agent increment mode, and feature execution mode are already built
+3. **User choice** - Teams can choose the approach that fits their project size and complexity
+4. **Incremental adoption** - Users can start with a monolithic PRD and decompose later using `forge-decompose-prd`
+5. **Better traceability** - Feature-level user stories → requirements → tasks form clear chains
+6. **Natural incremental delivery** - Features can be prioritized, reordered, and shipped independently
 
 ---
 
@@ -138,10 +138,10 @@ Changes:
 | Item | Action | Risk |
 |------|--------|------|
 | `forge-build-prd` | No changes (backward compatible) | None |
-| `forge-decompose-prd` | New skill | Low — additive only |
-| `forge-build-feature-prd` | Extend for greenfield features | Low — conditional logic, no behavior change for existing use |
-| `forge-build-agent-team` | Add Vision + Features Mode | Low — new mode alongside existing modes |
-| `project-orchestrator` | Add feature dependency ordering | Low — extends existing feature execution |
-| `forge-team-builder` | Add decomposition routing | Low — documentation update |
-| `README.md` | Add decomposition workflow | Low — documentation |
+| `forge-decompose-prd` | New skill | Low - additive only |
+| `forge-build-feature-prd` | Extend for greenfield features | Low - conditional logic, no behavior change for existing use |
+| `forge-build-agent-team` | Add Vision + Features Mode | Low - new mode alongside existing modes |
+| `project-orchestrator` | Add feature dependency ordering | Low - extends existing feature execution |
+| `forge-team-builder` | Add decomposition routing | Low - documentation update |
+| `README.md` | Add decomposition workflow | Low - documentation |
 | Bootstrap scripts | No changes (auto-discover) | None |

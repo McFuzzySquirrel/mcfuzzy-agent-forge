@@ -10,11 +10,11 @@
 The standard Agent Forge "new project" flow is a fixed sequence of deterministic
 skills:
 
-1. `forge-build-prd` — interview the user, produce `docs/PRD.md`.
+1. `forge-build-prd` - interview the user, produce `docs/PRD.md`.
 2. *(Human reviews the PRD.)*
-3. `forge-build-agent-team` — generate the specialist agent team from the PRD.
+3. `forge-build-agent-team` - generate the specialist agent team from the PRD.
 4. *(Human reviews the team.)*
-5. *(Optional)* `forge-assign-models` — recommend a per-agent model assignment.
+5. *(Optional)* `forge-assign-models` - recommend a per-agent model assignment.
 
 Each step is well-defined and well-tested in isolation, but stitching them
 together is currently a manual copy-paste exercise. The user has to:
@@ -32,8 +32,8 @@ This creates two problems:
    they did not know they existed.
 
 2. **Inconsistent review quality.** The pauses between steps are the highest-
-   leverage moments in the flow — fixing a wrong PRD before the team is
-   generated is orders of magnitude cheaper than fixing it afterwards — but
+   leverage moments in the flow - fixing a wrong PRD before the team is
+   generated is orders of magnitude cheaper than fixing it afterwards - but
    users often skip or rush them because no checklist is presented at the
    handoff.
 
@@ -101,7 +101,7 @@ Before invoking any underlying skill, the meta-skill inspects repo state:
   it to warn that `forge-build-agent-team` will run in
   **Vision + Features Mode**.
 
-Mode detection itself is **not** overridden — `forge-build-agent-team` owns
+Mode detection itself is **not** overridden - `forge-build-agent-team` owns
 that decision. The meta-skill only surfaces the consequence so the user is
 not surprised.
 
@@ -137,10 +137,10 @@ not surprised.
 
 ### Neutral
 
-- **No bootstrap script changes** — `scripts/bootstrap.sh` and
+- **No bootstrap script changes** - `scripts/bootstrap.sh` and
   `scripts/bootstrap.ps1` already iterate `templates/skills/*/`, so the
   new skill is auto-deployed.
-- **No new file formats** — the meta-skill writes nothing of its own; all
+- **No new file formats** - the meta-skill writes nothing of its own; all
   artifacts continue to come from the underlying skills.
 
 ---
@@ -151,7 +151,7 @@ not surprised.
 - Skill: [forge-build-prd](../../templates/skills/forge-build-prd/SKILL.md)
 - Skill: [forge-build-agent-team](../../templates/skills/forge-build-agent-team/SKILL.md)
 - Skill: [forge-assign-models](../../templates/skills/forge-assign-models/SKILL.md)
-- Docs: [Prompt Playbook — Fast Path](../prompt-playbook.md)
+- Docs: [Prompt Playbook - Fast Path](../prompt-playbook.md)
 - ADR: [ADR-001 Agent/Skill Separation](001-agent-skill-separation-and-progress-reporting.md)
 - ADR: [ADR-002 PRD Decomposition into Features](002-prd-decomposition-into-features.md)
 - ADR: [ADR-003 Per-Agent Model Assignment](003-per-agent-model-assignment.md)

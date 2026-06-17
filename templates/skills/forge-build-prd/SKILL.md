@@ -67,7 +67,7 @@ Wait for the user to respond. Ask follow-up questions if answers reveal new unkn
 
 Produce a structured PRD using the template in `references/prd-template.md`. Load that file now and follow its structure. Use information gathered in Steps 1–2. Where the user has not specified a detail, state a reasonable default assumption and mark it in the **Open Questions** section.
 
-> Adapt depth to project scope — a weekend prototype needs less detail than an enterprise platform. Keep all section headings for consistency.
+> Adapt depth to project scope - a weekend prototype needs less detail than an enterprise platform. Keep all section headings for consistency.
 
 ### Step 4: Review and Iterate
 
@@ -101,7 +101,7 @@ If any checkbox is unchecked, fix the gap before presenting to the user.
 - **Never fabricate version numbers.** Search for the latest stable release of every technology. If you cannot verify, note "version unverified" and flag it in Open Questions.
 - **MoSCoW is the default priority scheme.** Don't invent a new one unless the user asks.
 - **Existing project docs are authoritative.** If the repo has a prior PRD, architecture docs, or research notes, review them first. Build on them rather than contradicting or duplicating existing decisions.
-- **The template uses 21 numbered sections.** Adapt depth per section but keep all headings — downstream tools (`forge-build-agent-team`, `project-orchestrator`) reference specific section numbers.
+- **The template uses 21 numbered sections.** Adapt depth per section but keep all headings - downstream tools (`forge-build-agent-team`, `project-orchestrator`) reference specific section numbers.
 
 ---
 

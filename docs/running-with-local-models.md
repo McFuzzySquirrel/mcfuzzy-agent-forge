@@ -4,7 +4,7 @@ GitHub Copilot CLI supports [Bring Your Own Key (BYOK)](https://docs.github.com/
 
 > [!TIP]
 > After your team is generated, run the `forge-assign-models` skill to pick an appropriate
-> model **per agent** — including local Ollama models — instead of running every agent
+> model **per agent** - including local Ollama models - instead of running every agent
 > against the same default. See [Model Assignment per Agent](../README.md#model-assignment-per-agent).
 
 ## Setup
