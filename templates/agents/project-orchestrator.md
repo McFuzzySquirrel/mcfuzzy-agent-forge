@@ -33,7 +33,7 @@ Always consult the project's PRD (typically `docs/PRD.md` or `docs/spec.md`) for
 
 - **Implementation Phases** — The ordered stages of development
 - **Task Dependencies** — Which tasks must complete before others can start
-- **Agent Responsibilities** — Which agent owns which deliverables (from agent files in `.github/agents/`)
+- **Agent Responsibilities** — Which agent owns which deliverables (from agent files in `.agents/agents/`)
 - **Acceptance Criteria** — How to verify each phase is complete
 
 For feature-based builds, consult the Product Vision (typically `docs/product-vision.md`) and Feature documents (in `docs/features/`) for:
@@ -49,7 +49,7 @@ For feature builds, also consult the Feature PRD (typically in `docs/features/`)
 - **Agent Impact Assessment** — Which existing agents have new responsibilities and which agents are new
 - **Impact on Existing Architecture** — What existing components change and how
 
-Review all agent files in `.github/agents/` to understand what each specialist can do and what they need from others.
+Review all agent files in `.agents/agents/` to understand what each specialist can do and what they need from others.
 
 ---
 
@@ -66,7 +66,7 @@ Before starting any implementation:
    - Implementation phases and their order
    - Dependencies between components
 
-2. **Review all agent files** in `.github/agents/` to understand:
+2. **Review all agent files** in `.agents/agents/` to understand:
    - What each agent is responsible for
    - What each agent needs from other agents (collaboration sections)
    - Which agents operate in which phases
@@ -99,7 +99,7 @@ When executing a Feature PRD (detected by a "Feature Overview" section, F-prefix
    - The established architecture and tech stack
    - Constraints and conventions already in place
 
-3. **Review all agent files** in `.github/agents/`:
+3. **Review all agent files** in `.agents/agents/`:
    - Identify which agents have been modified for this feature (extended responsibilities)
    - Identify which agents are newly created for this feature
    - Understand which agents are unchanged and don't need to be called
@@ -130,7 +130,7 @@ When building a project from decomposed features (detected by a `docs/product-vi
    - Each feature's implementation phases and tasks
    - Dependencies between features
 
-3. **Review all agent files** in `.github/agents/` to understand:
+3. **Review all agent files** in `.agents/agents/` to understand:
    - What each agent is responsible for (agents may own requirements from multiple features)
    - What each agent needs from other agents
    - Which agents operate in which features
@@ -230,7 +230,7 @@ To enable resuming work on a different machine and provide clear project state v
    - Files created or modified by the task
    - Any notes or blockers encountered
    - The model assigned to the agent that ran the task — read the `model:` field from
-     the agent's YAML frontmatter (in `.github/agents/{agent}.md`); if no `model:` is
+     the agent's YAML frontmatter (in `.agents/agents/{agent}.md`); if no `model:` is
      set, record `model: default` to indicate the user's globally-selected model was
      used. This makes per-agent cost/perf retros possible and surfaces drift if a CLI
      user has overridden `COPILOT_MODEL` for the session.

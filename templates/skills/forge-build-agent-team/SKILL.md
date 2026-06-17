@@ -2,172 +2,79 @@
 name: forge-build-agent-team
 description: >
   Analyze a Product Requirements Document (PRD), Product Vision with Feature documents, or
-  Feature PRD and generate a complete team of GitHub Copilot custom agents and reusable skills
+  Feature PRD and generate a complete team of custom agents and reusable skills
   tailored to the project. Use this skill when asked to create, scaffold, or design a development
   team from requirements documents.
 ---
 
 # Skill: Build a Custom Agent Team from a PRD
 
-You are building a team of GitHub Copilot custom agents and reusable skills from a Product Requirements Document (PRD), a Product Vision with Feature documents, or a technical specification. The goal is to produce a set of specialist `.md` files that can be committed to a repository so Copilot can act as each team member.
+You are building a team of custom agents and reusable skills from a PRD, Product Vision with Feature documents, or a Feature PRD. The goal is to produce specialist `.md` files committed to a repository so the agent harness can act as each team member.
 
 ---
 
 ## Process
 
-### Step 0: Detect Mode — Full Build vs. Vision + Features vs. Feature Increment
+### Step 0: Detect Mode
 
-Before analyzing the document, determine which mode to operate in:
-
-**Full Build Mode** (existing behavior, unchanged):
-- The document is a complete project PRD (has "Overview", "Technical Architecture", full "Implementation Phases")
-- No existing agent files in `.github/agents/` beyond the forge templates (project-orchestrator, forge-team-builder)
-- Proceed with the existing **Step 1–8** process below
-
-**Vision + Features Mode** (new):
-- A Product Vision document exists (`docs/product-vision.md`) with feature documents in `docs/features/`
-- The product vision has a "Features" section listing individual feature documents
-- No existing agent files in `.github/agents/` beyond the forge templates
-- Proceed with the **Vision + Features process (Steps 1v–8v)** at the end of this document, before the Feature Increment Mode section
-
-**Feature Increment Mode** (existing behavior, unchanged):
-- The document is a Feature PRD (has "Feature Overview", "Context: Existing System State", "Agent Impact Assessment")
-- Existing agent files already exist in `.github/agents/`
-- Switch to the **incremental analysis process (Steps 1i–7i)** at the end of this document
-
----
+| Mode | Signals | Action |
+|------|---------|--------|
+| **Full Build** | Complete PRD with Overview, Technical Architecture, Implementation Phases. No specialist agents in `.agents/agents/` beyond forge templates. | Continue with Steps 1–8 below. |
+| **Vision + Features** | `docs/product-vision.md` exists with feature documents in `docs/features/`. No specialist agents beyond forge templates. | Load `references/vision-features-mode.md` and follow its process. |
+| **Feature Increment** | Document is a Feature PRD (has "Feature Overview", "Agent Impact Assessment"). Existing agents in `.agents/agents/`. | Load `references/feature-increment-mode.md` and follow its process. |
 
 ### Step 1: Locate and Analyze the PRD
 
-Find the project's PRD or specification document. Look in common locations:
+Find the PRD at `docs/PRD.md`, `docs/spec.md`, or `README.md`. Read the entire document and extract:
 
-- `docs/PRD.md`
-- `docs/spec.md`
-- `README.md` (if it contains detailed requirements)
-
-Read the **entire** document and extract the following:
-
-1. **Technology stack** — Languages, frameworks, engines, build tools, package managers.
-2. **Project structure** — File/folder layout, module boundaries, entry points.
-3. **Functional requirement groups** — Distinct feature areas (e.g., "Player Ship", "Wave System", "HUD").
-4. **Non-functional requirements** — Performance, security, accessibility, offline support.
-5. **Implementation phases** — How the work is broken into ordered stages.
-6. **Testing strategy** — Test frameworks, coverage expectations, test scenarios.
-7. **Cross-cutting concerns** — Audio, visual effects, deployment, CI/CD.
+1. **Technology stack** — languages, frameworks, engines, build tools.
+2. **Project structure** — file layout, module boundaries, entry points.
+3. **Functional requirement groups** — distinct feature areas.
+4. **Non-functional requirements** — performance, security, accessibility.
+5. **Implementation phases** — ordered stages of work.
+6. **Testing strategy** — frameworks, coverage expectations, test scenarios.
+7. **Cross-cutting concerns** — deployment, CI/CD, observability.
 
 ### Step 2: Identify Specialist Roles
 
-Map the PRD's domains to specialist agent roles. Each agent should own a **distinct, non-overlapping area** of the project. Use the following heuristics:
+Map PRD domains to specialist agents. Each agent owns a distinct, non-overlapping area.
 
-#### Required Agents (create for every project)
+**Required agents (always):** Project Architect (scaffolding, build config, dependencies, folder structure), QA / Test Engineer (test framework, unit/integration tests).
 
-| Role Pattern | When to Create | Owns |
-|---|---|---|
-| **Project Architect** | Always | Project scaffolding, build config, dependency management, folder structure |
-| **QA / Test Engineer** | Always | Test framework setup, unit/integration tests, test scenarios from PRD |
+**Domain agents** (based on tech stack): Framework Specialist, Backend Engineer, Frontend Engineer, DevOps/Infra Engineer, PWA/Offline Specialist.
 
-#### Domain Agents (create based on tech stack)
+**Feature agents** (based on requirement groups): Core Logic Engineer, UI/HUD Developer, VFX/Animation, Audio Engineer, Data/Analytics Engineer, Security Engineer.
 
-| Role Pattern | When to Create | Owns |
-|---|---|---|
-| **[Framework] Specialist** | When a major framework/engine is used | Framework initialization, core APIs, rendering/routing/etc. |
-| **Backend Engineer** | When there is a server, API, or database layer | API endpoints, data models, database, authentication |
-| **Frontend Engineer** | When there is a web/mobile UI (not framework-specific) | Pages, components, layouts, client-side routing |
-| **DevOps / Infra Engineer** | When there is deployment, CI/CD, or infrastructure | Dockerfiles, CI pipelines, cloud config, monitoring |
-| **PWA / Offline Specialist** | When offline support, Service Workers, or caching is required | Service Worker, manifest, cache strategy |
+**When the PRD names an agent framework** (LangGraph, CrewAI, AutoGen, Semantic Kernel, etc.): create a dedicated `[framework]-specialist` that owns the framework surface (wiring, state schema, tool registry) and pair it with node-level engineers that own individual nodes. This keeps framework upgrades and feature work separate.
 
-#### Feature Agents (create based on functional requirement groups)
-
-| Role Pattern | When to Create | Owns |
-|---|---|---|
-| **Core Logic Engineer** | When there is substantial business/game logic | State machines, core algorithms, domain rules |
-| **Physics / Simulation Engineer** | When physics or simulation is a distinct subsystem | Physics engine integration, collision, simulation tuning |
-| **UI / HUD Developer** | When UI is a separate concern from rendering | UI components, overlays, menus, accessibility |
-| **VFX / Animation Artist** | When visual effects are a distinct subsystem | Particles, animations, transitions, visual polish |
-| **Audio Engineer** | When audio/sound is specified in the PRD | Sound loading, playback, spatial audio, music |
-| **Data / Analytics Engineer** | When telemetry, analytics, or data pipelines are required | Event tracking, dashboards, data models |
-| **Security Engineer** | When security is a major concern (auth, encryption, compliance) | Auth flows, encryption, RBAC, compliance |
-
-**Naming conventions:**
-- Agent names must be **lowercase with hyphens**: `checkout-engineer`, `notifications-specialist`.
-- Names should be **role-descriptive**, not person-names.
-- Prefer established industry role titles that are intuitive.
-
-#### Worked Example: PRD that names an agent framework
-
-When the PRD names a specific **agent / orchestration framework** (LangGraph, CrewAI,
-AutoGen, LlamaIndex Agents, Semantic Kernel, etc.), treat it the same way you would a
-game engine or web framework: create a dedicated `[Framework] Specialist` agent that
-owns framework-specific code, and pair it with one or two reusable skills for the
-patterns that will repeat across the project.
-
-**PRD excerpt:**
-
-> Section 3 — Technical Architecture. The system is built on **LangGraph** as the
-> orchestration framework. Each capability is implemented as a LangGraph node with a
-> typed state schema. The graph compiles to a single executable. Tool calls go through
-> a shared tool registry. Persistence uses LangGraph's checkpointer with a SQLite
-> backend.
->
-> Section 4 — Functional Requirements. FR-7: Add a "research" node that fans out to
-> three sub-agents. FR-8: Add a "summarize" node. FR-9: Add a "human-in-the-loop"
-> approval node.
-
-**Resulting team (framework slice only — other agents still apply):**
-
-| Agent | Owns |
-|---|---|
-| `langgraph-specialist` | Graph wiring, state schema, node registration, checkpointer config, tool registry, compile/run entry point |
-| `research-node-engineer` | FR-7 — the research node and its sub-agent fan-out |
-| `workflow-engineer` | FR-8, FR-9 — summarize node, human-in-the-loop node, and any future business-logic nodes |
-
-The `langgraph-specialist` owns the **framework surface** (how nodes are wired,
-state shape, persistence). The node-level engineers own **what each node does**. This
-keeps "framework upgrade" work and "feature work" in separate hands.
-
-**Reusable skill this implies:** `create-langgraph-node` — scaffolds a new node file,
-registers it on the graph, adds its slice to the state schema, and wires its tools.
-Any node-level engineer can invoke it.
-
-Substitute `langgraph-specialist` → `crewai-specialist`, `autogen-specialist`,
-`semantic-kernel-specialist`, etc., depending on which framework the PRD names. The
-shape of the team is the same.
+**Naming:** lowercase-hyphenated, role-descriptive. `checkout-engineer`, `notifications-specialist`.
 
 ### Step 3: Define Agent Boundaries
 
-For each agent, determine:
+For each agent: Expertise (4–8 bullets), Key Reference (cited PRD sections), Responsibilities (grouped by component/file, referencing PRD requirement IDs), Constraints, Output Standards, Collaboration.
 
-1. **Expertise** — 4–8 bullet points of their technical specializations.
-2. **Key Reference** — Which PRD sections they must consult (cite by section number).
-3. **Responsibilities** — Numbered list of specific deliverables, grouped by component/file.
-4. **Constraints** — Rules they must follow (e.g., "do not modify production code", "strict TypeScript").
-5. **Output Standards** — Where their files go, coding conventions, API patterns.
-6. **Collaboration** — Which other agents they depend on or coordinate with.
-
-**Boundary rules:**
-- No two agents should own the same file or responsibility.
-- Every PRD functional requirement must map to exactly one agent.
-- Agents should reference PRD section numbers, not copy entire requirements.
-- If an agent's responsibilities list exceeds ~15 items, consider splitting into two agents.
+**Boundary rules:** No two agents own the same file/responsibility. Every PRD requirement maps to exactly one agent. Reference PRD section numbers — don't copy requirement tables. If responsibilities exceed ~15 items, consider splitting.
 
 ### Step 4: Identify Reusable Skills
 
-Skills are **process templates** that any agent can invoke for common, repeatable tasks. Analyze the PRD for patterns that will be repeated across the project:
+Skills are reusable process templates. Create a skill only when a pattern repeats across the project. One-off tasks belong in agent responsibilities.
 
-| Skill Pattern | When to Create | Example |
-|---|---|---|
-| **Scaffold [entity type]** | When multiple similar entities/components will be created | `create-data-model`, `create-api-endpoint`, `create-react-component` |
-| **Set up [subsystem]** | When a complex subsystem requires multi-step initialization | `setup-auth-provider`, `setup-database`, `setup-ci-pipeline` |
-| **Create [effect/asset]** | When a category of assets will be produced repeatedly | `create-dashboard-widget`, `create-migration`, `create-test-suite` |
-| **Implement [UI pattern]** | When UI follows a repeatable pattern | `implement-ui-screen`, `implement-form`, `implement-dashboard-widget` |
+**When to create a skill (not an agent responsibility):**
+- A pattern repeats across multiple components or features
+- The process is complex enough that agents benefit from explicit step-by-step guidance
+- The task has non-obvious edge cases or project-specific conventions the agent wouldn't know
 
-**Skill naming conventions:**
-- Lowercase with hyphens: `create-data-model`, `setup-database`.
-- Use verb-noun format: `create-X`, `setup-X`, `implement-X`, `build-X`.
+**When to put it in `scripts/` instead:** If the logic is deterministic and doesn't need agent judgment (format conversion, validation, scaffolding), write a script and bundle it in the skill's `scripts/` directory. Agents invoke the script rather than reinventing the logic each run.
+
+**Skill scoping:** Don't create overly narrow skills (one per entity type) or overly broad ones (one catch-all). A skill for "create a data model + run migration + update API schema" is a coherent unit. A skill that also covers database administration is too broad.
+
+**Naming:** lowercase-hyphenated, verb-noun: `create-data-model`, `setup-database`.
+
+**Progressive disclosure:** If a skill's template code exceeds ~50 lines, put it in `assets/` and reference it from `SKILL.md`. If a skill has detailed reference material (schemas, API docs, error codes), put it in `references/` with explicit load triggers ("Load `references/api-errors.md` if the API returns a non-200 status").
 
 ### Step 5: Write the Agent Files
 
-Create each agent file at `.github/agents/{agent-name}.md` using this template:
+Create each agent file at `.agents/agents/{agent-name}.md`:
 
 ````markdown
 ---
@@ -183,62 +90,64 @@ You are a **{Role Title}** responsible for {one-sentence scope description}.
 
 ## Expertise
 
-- {Technical specialization 1}
-- {Technical specialization 2}
-- {Technical specialization 3}
-- {4–8 items total}
+- {Technical specialization — 4–8 bullets}
+- {Focus on what the agent wouldn't know without this file}
 
 ---
 
 ## Key Reference
 
-Always consult [{PRD path}]({relative path to PRD}) for the authoritative project requirements. The relevant sections for your work are:
+Always consult [{PRD path}]({relative path}) for authoritative project requirements:
 
 - **Section {N} — {Title}**: {What it covers for this agent}
-- {List all relevant PRD sections}
 
 ---
 
 ## Responsibilities
 
-### {Component/Area 1} (`{file path}`)
+### {Component/Area} (`{file path}`)
 
-1. {Specific deliverable referencing PRD requirement IDs where applicable}
+1. {Specific deliverable referencing PRD requirement IDs}
 2. {Next deliverable}
-
-### {Component/Area 2} (`{file path}`)
-
-3. {Deliverable}
-4. {Deliverable}
 
 ---
 
-## Process and Workflow
+## Workflow
 
-When executing your responsibilities:
+{Describe the project-specific workflow for this agent — what to do, in what order, and how to validate. Replace generic "understand/implement/verify/commit/report" steps with concrete guidance.}
 
-1. **Understand the task** — Read the referenced PRD sections and any dependencies from other agents
-2. **Implement the deliverable** — Create or modify files according to your responsibilities
-3. **Verify your changes**:
-   - Run relevant linters for the files you modified
-   - Run builds to ensure nothing is broken
-   - Run tests related to your changes
-4. **Commit your work** — After verification passes:
-   - Use descriptive commit messages referencing the task or requirement
-   - Include only files related to this specific deliverable
-   - Follow the project's commit conventions (if specified in the PRD)
-5. **Report completion** — Summarize what was delivered, which files were modified, and verification results
+{For destructive or batch operations, use plan-validate-execute:
+1. Create an intermediate plan
+2. Validate the plan against a source of truth
+3. Execute only after validation passes}
+
+---
+
+## Validation
+
+After completing a deliverable:
+- [ ] Run {project-specific linter/validator}
+- [ ] Run {build command}
+- [ ] Run {test command} for affected tests
+- [ ] Check that {project-specific quality gate}
+
+If validation fails, fix and re-run before committing.
+
+---
+
+## Gotchas
+
+- {Project-specific gotcha the agent would get wrong without being told}
+- {API inconsistency, naming mismatch, environment quirk}
 
 ---
 
 ## Constraints
 
-- {Rule 1 — referencing PRD requirement IDs}
-- {Rule 2}
-- When implementing features, verify that you are using current stable APIs, conventions, and best practices for the project's tech stack. If you are uncertain whether a pattern or API is current, search for the latest official documentation before proceeding.
-- After completing a deliverable and verifying it works (builds, tests pass), commit your changes with a clear, descriptive message
-- When working as part of orchestrated project execution, follow the orchestrator's instructions for progress tracking and coordination
-- Report the status of verification steps (linting, building, testing) when communicating completion to other agents or users
+- {Rule referencing PRD requirement IDs}
+- Verify current stable APIs for {tech stack} before implementing — search official docs when uncertain
+- Commit with descriptive messages referencing the task/requirement
+- Follow orchestrator instructions for progress tracking when working in orchestrated execution
 
 ---
 
@@ -252,25 +161,25 @@ When executing your responsibilities:
 
 ## Collaboration
 
-- **project-orchestrator** — Coordinates your work as part of the overall project execution, provides task context, and tracks progress across all agents
-- **{other-agent-name}** — {What they provide or need from this agent}
-- **{other-agent-name}** — {Coordination point}
+- **project-orchestrator** — Coordinates your work, provides task context, tracks progress
+- **{other-agent}** — {What they provide or need from this agent}
 ````
 
 ### Step 6: Write the Skill Files
 
-Create each skill file at `.github/skills/{skill-name}/SKILL.md` using this template:
+Create each skill file at `.agents/skills/{skill-name}/SKILL.md`:
 
 ````markdown
 ---
 name: {skill-name}
 description: >
-  {One-sentence summary of what this skill does and when Copilot should use it.}
+  {One-sentence summary of what this skill does and when to use it.
+  Include specific keywords to help the agent recognize relevant tasks.}
 ---
 
 # Skill: {Human-Readable Title}
 
-{One-sentence context about what this skill produces.}
+{One-sentence context about what this skill produces. Trim what the agent already knows.}
 
 ---
 
@@ -278,320 +187,108 @@ description: >
 
 ### Step 1: {First Step Title}
 
-{Instructions for the first step, including decision criteria or lookup tables.}
+{Instructions — be prescriptive for fragile operations (exact commands, fixed sequences).
+Be flexible for tasks where multiple approaches are valid.}
 
 ### Step 2: {Second Step Title}
 
-{Instructions with code templates, examples, or scaffolding patterns.}
-
-{Use fenced code blocks with language tags for any code templates:}
-
-```{language}
-// Template code here
-```
+{Include code templates, examples, or scaffolding patterns.}
 
 ### Step 3: {Additional Steps}
 
-{Continue with as many steps as needed for the process.}
+{As many steps as needed.}
+
+---
+
+## Output Format
+
+{Template for the expected output. Keep short templates inline; move longer ones to `assets/`.
+For templates only needed in certain cases, store in `assets/` and reference with a load trigger.}
+
+---
+
+## Validation
+
+After completing the task:
+- [ ] Run {validator/check}
+- [ ] Verify {specific quality gate}
+- [ ] If validation fails: review error, fix issues, re-validate
+
+---
+
+## Gotchas
+
+- {Environment-specific fact that defies reasonable assumptions}
+- {Correction to a mistake agents make without being told}
+- {When an agent makes a mistake that needs correction, add it here}
 
 ---
 
 ## Reference
 
-See [{PRD path}]({relative path to PRD}) for the full specification:
-
+See [{PRD path}]({relative path}) for the full specification:
 - **Section {N}** — {What it covers}
+
+For detailed reference material: load `references/{file}.md` when {trigger condition}.
+For output templates: load `assets/{template}.md` when generating {specific output type}.
 ````
+
+**Progressive disclosure for generated skills:**
+- If the skill needs detailed schemas, API docs, or error codes → create `references/` and add load triggers
+- If the skill has reusable template/output formats → create `assets/` and reference them
+- If the skill has deterministic, repeatable logic → create `scripts/` and invoke from SKILL.md
+- Keep `SKILL.md` under 500 lines / 5000 tokens — move everything else to subdirectories
 
 ### Step 7: Validate the Team
 
-Before finalizing, verify:
+Before finalizing:
 
-- [ ] Every PRD functional requirement (Section 8+) maps to exactly one agent.
-- [ ] Every agent has a `## Collaboration` section listing agents it depends on.
-- [ ] No two agents own the same file path or responsibility.
-- [ ] Agent files use valid YAML frontmatter with `name` and `description`.
-- [ ] Skill files use valid YAML frontmatter with `name` and `description`.
-- [ ] All PRD section references are accurate (check section numbers).
-- [ ] Agent names are lowercase-hyphenated and match the filename (minus `.md`).
-- [ ] Skill directory names match the skill `name` field.
-- [ ] The team covers: foundation/scaffolding, core logic, testing, and all major feature areas.
+- [ ] Every PRD functional requirement maps to exactly one agent
+- [ ] Every agent has `## Collaboration` listing agents it depends on
+- [ ] No two agents own the same file or responsibility
+- [ ] Agent files use valid YAML frontmatter with `name` and `description`; `name:` matches filename
+- [ ] Skill directory names match the skill `name` field; valid YAML frontmatter
+- [ ] All PRD section references are accurate
+- [ ] Agent names are lowercase-hyphenated
+- [ ] Team covers: foundation/scaffolding, core logic, testing, and all major feature areas
+- [ ] Every agent has a `## Gotchas` section populated with project-specific edge cases
+- [ ] Every skill has a `## Validation` section with concrete checks
+- [ ] Generated skills use progressive disclosure for content exceeding ~50 lines of templates
 
 ### Step 8: Present the Team
 
-Summarize the team in a table:
+Summarize with tables: Custom Agents (name/role/sections/phase), Skills (name/purpose/used by), Collaboration Map.
 
-```markdown
-## Custom Agents
+### Step 9: Recommend Model Assignment
 
-| Agent | Role | Primary PRD Sections | Phase |
-|-------|------|---------------------|-------|
-| `{name}` | {role} | {sections} | {implementation phase} |
-
-## Skills
-
-| Skill | Purpose | Used By |
-|-------|---------|---------|
-| `{name}` | {what it does} | {which agents use it} |
-
-## Collaboration Map
-
-{agent-a} → {agent-b}: {what flows between them}
-```
-
----
-
-### Step 9: Recommend the Model Assignment Skill
-
-After the team is generated and validated, **recommend** (do not auto-run) the
-`forge-assign-models` skill so the user can match each agent to an appropriately sized
-model from their own inventory (cloud subscription + local Ollama) rather than letting
-every agent default to the strongest, most expensive model.
-
-Suggest one of these prompts to the user:
-
+Recommend (don't auto-run) `forge-assign-models` so the user can match each agent to an appropriately sized model. Suggest:
 - `/forge-assign-models Discover what models are available and cache the inventory.`
 - `/forge-assign-models Recommend a per-agent model and write docs/MODEL-PLAN.md.`
 - `/forge-assign-models Apply the recommended models to the agent files.`
 
-Keep this as a recommendation only — model assignment is a separate concern from team
-generation and must be opt-in. After Feature Increment Mode runs, suggest running the
-skill in **Re-tune** mode so only changed agents are reassessed.
+After Feature Increment Mode runs, suggest Re-tune mode for targeted refresh.
+
+---
+
+## Gotchas
+
+- **Agent `name:` must match the filename exactly.** `my-agent.md` → `name: my-agent`. A mismatch silently breaks agent detection.
+- **Never generate agents for areas the PRD doesn't cover.** If in doubt, ask the user rather than speculating.
+- **Code block templates must escape nested fenced blocks.** If a generated skill's output template contains markdown code blocks, use ` ``` `` ` syntax or indent differently to avoid breaking the parent template.
+- **Feature Increment Mode must never regenerate untouched agents.** It's the most common source of regressions. Always diff before writing.
+- **Progressive disclosure requires explicit load triggers.** Don't just say "see references/ for details." Say: "Load `references/api-errors.md` if the API returns a non-200 status code." The agent needs to know WHEN to load.
 
 ---
 
 ## Guidelines
 
-- **Scale to the project.** A weekend prototype may need 3–4 agents. A large application may need 8–12. Don't create agents for areas the PRD doesn't cover.
-- **Agents are specialists, not generalists.** Each agent should be the undisputed expert in their area. If you can't articulate their unique expertise in one sentence, merge them with another agent.
-- **Skills are reusable processes.** Only create a skill if the process will be invoked multiple times across the project. One-off tasks belong in an agent's responsibilities, not a separate skill.
-- **Reference, don't duplicate.** Agents should cite PRD section numbers. Don't copy entire requirement tables into agent files — they'll go stale.
-- **Keep collaboration sections honest.** Only list agents that genuinely need to coordinate. Not every agent needs to talk to every other agent.
-- **Test the mapping.** For each PRD requirement, you should be able to point to exactly one agent who owns it. If a requirement is unowned, add an agent or expand an existing one. If it's dual-owned, clarify the boundary.
-- **Encourage currency verification.** Generated agents should include a constraint reminding them to verify they are using current, stable APIs and best practices for their tech stack. Agents should search for latest official documentation when uncertain rather than relying solely on training data.
-- **Include process guidance.** All agents should include the standard Process and Workflow section to ensure consistent practices for verification, commits, and progress reporting. This aligns specialist agents with the orchestrator's progress tracking capabilities.
-- **Scale changes to feature scope.** When operating in Feature Increment Mode, only create or modify what the feature requires. A small feature might only extend one existing agent. A large feature might add 2–3 new agents and extend several existing ones. Match the changes to the feature's actual scope.
-- **Aggregate across features in Vision + Features Mode.** When building from decomposed documents, always aggregate requirements across all features before identifying agent roles. Don't create per-feature agents — create per-domain agents that own requirements from multiple features.
-
----
-
-## Vision + Features Mode — Building from Decomposed Documents
-
-When Step 0 detects a Product Vision with Feature documents, use the following process instead of Steps 1–8. The goal is to build a complete agent team from a product vision document and its associated feature documents, considering requirements across all features holistically.
-
-### Step 1v: Locate and Analyze the Product Vision
-
-Find the product vision document (typically `docs/product-vision.md`) and read it to extract:
-
-1. **Technology stack** — Languages, frameworks, engines, build tools, package managers (Section 6.1).
-2. **Project structure** — File/folder layout, module boundaries, entry points (Section 6.2).
-3. **Non-functional requirements** — Performance, security, accessibility, offline support (Sections 7–9).
-4. **Cross-cutting concerns** — System states, analytics, dependencies, risks (Sections 10–12).
-5. **Feature list** — The summary of all features and their dependency graph (Section 14).
-
-### Step 2v: Read All Feature Documents
-
-Read every feature document listed in the product vision's Features section (typically in `docs/features/`). For each feature, extract:
-
-1. **Feature name and ID prefix** — From the Feature Overview section.
-2. **User stories** — All user stories with their IDs.
-3. **Functional requirements** — All requirements with their IDs and priorities.
-4. **Implementation tasks** — Phases and tasks for this feature.
-5. **Dependencies** — Which other features this feature depends on.
-6. **Testing strategy** — How this feature will be tested.
-
-Build a **unified requirements view** — a consolidated list of all functional requirements across all features, noting which feature each requirement belongs to.
-
-### Step 3v: Identify Specialist Roles
-
-Using the unified requirements view, map domains to specialist agent roles. Apply the same heuristics as Step 2 (in Full Build Mode):
-
-- **Required agents** — Project Architect, QA/Test Engineer (always created).
-- **Domain agents** — Based on the tech stack from the product vision.
-- **Feature agents** — Based on functional requirement groups across all features.
-
-**Key difference from Full Build Mode:** Requirements come from multiple feature documents rather than one PRD. When the same domain appears across multiple features (e.g., database requirements in Feature 1 and Feature 3), aggregate them under one agent rather than creating per-feature agents.
-
-### Step 4v: Define Agent Boundaries
-
-Follow the same process as Step 3 (in Full Build Mode), with these additional considerations:
-
-- Map each feature requirement to exactly one agent. The mapping should note which feature document the requirement came from.
-- When an agent owns requirements from multiple features, list all feature document references in their Key Reference section.
-- Foundation feature tasks (project setup, scaffolding) typically map to the Project Architect agent.
-
-### Step 5v: Identify Reusable Skills
-
-Follow the same process as Step 4 (in Full Build Mode). Look for patterns that repeat across features — these are strong skill candidates since the pattern appears in multiple independent units of work.
-
-### Step 6v: Write the Agent and Skill Files
-
-Follow the same process as Steps 5–6 (in Full Build Mode), with these adaptations:
-
-- **Key Reference sections** should list both the product vision and the specific feature documents relevant to each agent:
-  ```markdown
-  ## Key Reference
-
-  Always consult the following documents for authoritative project requirements:
-
-  - [Product Vision](../../docs/product-vision.md) — Architecture, tech stack, NFRs, security, accessibility
-  - [Feature: Authentication](../../docs/features/authentication.md) — Sections 2–3 (user stories, requirements)
-  - [Feature: Dashboard](../../docs/features/dashboard.md) — Sections 2–3 (user stories, requirements)
-  ```
-
-- **Responsibilities sections** should group deliverables by feature:
-  ```markdown
-  ## Responsibilities
-
-  ### Authentication Feature (`AUTH-FR-*`)
-  1. Implement login flow (AUTH-FR-01)
-  2. Implement session management (AUTH-FR-02)
-
-  ### Dashboard Feature (`DASH-FR-*`)
-  3. Build data API endpoints (DASH-FR-03)
-  ```
-
-### Step 7v: Validate the Team
-
-Follow the same validation checklist as Step 7 (in Full Build Mode), plus:
-
-- [ ] Every feature document's functional requirements map to exactly one agent.
-- [ ] Agents that own requirements from multiple features reference all relevant feature documents.
-- [ ] The product vision is referenced for cross-cutting concerns (NFRs, security, accessibility).
-- [ ] No feature document is left unrepresented in the agent team.
-
-### Step 8v: Present the Team
-
-Follow the same presentation format as Step 8 (in Full Build Mode), with an additional Feature Coverage table:
-
-```markdown
-## Feature Coverage
-
-| Feature | Feature Doc | Agents Involved | Requirements |
-|---------|-------------|----------------|-------------|
-| Authentication | `docs/features/authentication.md` | auth-engineer, qa-tester | AUTH-FR-01 – AUTH-FR-04 |
-| Dashboard | `docs/features/dashboard.md` | frontend-engineer, api-engineer, qa-tester | DASH-FR-01 – DASH-FR-06 |
-
-## Feature Dependency Order
-
-1. Foundation (no dependencies)
-2. Authentication (depends on Foundation)
-3. Dashboard, Search (depend on Authentication, can be parallel)
-4. Notifications (depends on Dashboard)
-```
-
----
-
-## Feature Increment Mode — Incremental Steps
-
-When Step 0 detects a Feature PRD, use the following incremental process instead of Steps 1–8. The goal is to extend the existing agent team with minimal, targeted changes rather than regenerating the entire team.
-
-### Step 1i: Analyze the Feature PRD and Existing Team
-
-1. **Read the Feature PRD**, focusing on:
-   - Section 5 (Technical Approach) — What changes and what's new
-   - Section 6 (Functional Requirements) — What needs to be built
-   - Section 8 (Agent Impact Assessment) — The Feature PRD's own analysis of agent impact
-   - Section 9 (Implementation Phases) — F-prefixed phases for the feature
-
-2. **Read ALL existing agent files** in `.github/agents/`:
-   - List each agent's name, role, and owned responsibilities
-   - Note each agent's collaboration dependencies
-   - Identify the boundaries between agents
-
-3. **Read the original PRD** to understand:
-   - The full project context and architecture
-   - Established conventions and constraints
-   - What was already built in completed phases
-
-4. **Build a map** of existing agent domains and their boundaries.
-
-### Step 2i: Evaluate Agent Impact Assessment
-
-Review the Feature PRD's Section 8 (Agent Impact Assessment) as a starting point, then validate:
-
-- For each "extended responsibility" — Does it actually fit within the agent's existing expertise? Would adding this responsibility keep the agent focused, or would it overload them?
-- For each "new agent required" — Is a new agent truly needed, or can an existing agent cover this work? Is the justification sound?
-- For each "no changes" agent — Confirm it genuinely isn't affected by the feature.
-
-Produce a **revised assessment** if the Feature PRD's analysis needs correction.
-
-### Step 3i: Plan Team Modifications
-
-For each change category:
-
-**A. Existing agents with extended responsibilities:**
-- Draft updated **Responsibilities** sections (additive — append new items, don't rewrite existing ones)
-- Draft updated **Collaboration** sections if new dependencies exist between agents
-- Update **Key Reference** to include the Feature PRD path and relevant feature sections
-- DO NOT modify Expertise, Constraints, or Output Standards unless the feature introduces fundamentally new technology or patterns that require it
-
-**B. New agents required:**
-- Follow the existing Steps 2–5 process for designing and writing new agent files
-- Ensure new agents have Collaboration links to existing agents they depend on
-- Ensure no boundary overlaps with existing agents
-- New agents should reference both the original PRD (for project context) and the Feature PRD (for their specific requirements)
-
-**C. Existing agents with no changes:**
-- Leave completely untouched — do not regenerate or modify their files
-
-### Step 4i: Identify New or Extended Skills
-
-- Are there new repeatable patterns introduced by this feature?
-- Can existing skills be reused for the feature's tasks?
-- Only create new skills if the pattern will be invoked multiple times within or beyond this feature
-
-### Step 5i: Write Only Changed or New Files
-
-- **For modified agents:** Present the specific additions (what's being added to Responsibilities, Collaboration, and Key Reference sections) as a clear diff or addendum. If the agent was created before the Process and Workflow section was added to the template, add this section as well to bring it up to current standards. Present changes for user review and confirmation before applying them to the existing agent files.
-- **For new agents:** Write complete agent files at `.github/agents/{agent-name}.md` following the standard template from Step 5.
-- **For new skills:** Write complete skill files at `.github/skills/{skill-name}/SKILL.md` following the standard template from Step 6.
-- **CRITICAL:** Do NOT regenerate or overwrite agents that aren't affected by the feature.
-
-### Step 6i: Validate Incrementally
-
-Before finalizing, verify:
-
-- [ ] Every Feature PRD functional requirement (FT-FR-*) maps to exactly one agent (new or existing).
-- [ ] No new boundary overlaps have been introduced between agents.
-- [ ] Collaboration sections are updated for all affected agents (both directions).
-- [ ] Existing unaffected agents remain completely unchanged.
-- [ ] New agents follow all naming and format conventions (lowercase-hyphenated, valid YAML frontmatter).
-- [ ] New agents include the currency verification constraint.
-- [ ] Feature PRD section references use the correct path and section numbers.
-
-### Step 7i: Present the Changes
-
-Summarize the team modifications in tables:
-
-```markdown
-## Modified Agents
-
-| Agent | Changes | Feature PRD Sections |
-|-------|---------|---------------------|
-| `existing-agent` | Added responsibilities for X, updated collaboration | FT-FR-01, FT-FR-03 |
-
-## New Agents
-
-| Agent | Role | Feature PRD Sections | Phase |
-|-------|------|---------------------|-------|
-| `new-agent` | Description of role | FT-FR-02, FT-FR-04 | F1 |
-
-## Unchanged Agents
-
-| Agent | Reason |
-|-------|--------|
-| `unaffected-agent` | Not involved in this feature |
-
-## New Skills
-
-| Skill | Purpose | Used By |
-|-------|---------|---------|
-| `new-skill` | What it does | Which agents |
-
-## Reused Existing Skills
-
-| Skill | Used For in This Feature |
-|-------|--------------------------|
-| `existing-skill` | How it applies to the feature work |
-```
+- **Scale to the project.** 3–4 agents for a weekend prototype, 8–12 for a large application.
+- **Agents are specialists.** If you can't articulate unique expertise in one sentence, merge.
+- **Skills are reusable processes.** Only create if the pattern repeats. One-off tasks → agent responsibilities.
+- **Reference, don't duplicate.** Cite PRD section numbers; don't copy requirement tables.
+- **Test the mapping.** Every PRD requirement → exactly one owner agent.
+- **Add what the agent lacks, omit what it knows.** If the agent would handle a task correctly without the instruction, cut it.
+- **Favor procedures over declarations.** Teach *how to approach* a class of problems, not *what to produce* for a specific instance.
+- **Calibrate control per section.** Be prescriptive for fragile operations (exact commands, fixed sequences). Give freedom for flexible tasks where multiple approaches work.
+- **Encourage currency verification.** Agents should search latest docs when uncertain.
+- **If an agent makes a mistake you have to correct, add the correction to its gotchas.**

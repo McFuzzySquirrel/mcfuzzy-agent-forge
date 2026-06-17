@@ -36,7 +36,7 @@ Instead, the process started with a deliberate step back, and one I believe is t
 
 2. **How do real development teams organize?** They start with **requirements**. Someone figures out *what* to build (the product manager, the PRD). Someone decides *who* builds *what* (the tech lead, the team structure). And someone coordinates the work (the project manager, the execution plan). That's three distinct phases: requirements -> team -> execution.
 
-3. **What already exists that we can build on?** Most systems like GitHub Copilot, Claude, etc. already supports custom agents, I use GitHub Copilot (markdown files in `.github/agents/`) and skills (reusable process files in `.github/skills/`). The infrastructure was there. What was missing was the *system* for creating and coordinating them.
+3. **What already exists that we can build on?** Most systems like GitHub Copilot, Claude, etc. already supports custom agents (markdown files in `.agents/agents/`) and skills (reusable process files in `.agents/skills/`). The infrastructure was there. What was missing was the *system* for creating and coordinating them.
 
 These three questions became the blueprint. Not a technical specification: a *way of thinking* about the problem.
 

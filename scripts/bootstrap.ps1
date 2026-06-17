@@ -5,25 +5,32 @@
 
 .DESCRIPTION
     Copies agent and skill template files from this repository into a target
-    repository's .github/ directory so GitHub Copilot can use them.
+    repository so agent harnesses can use them.
 
     What it copies:
-      templates/agents/*.md          -> TARGET/.github/agents/
-      templates/skills/*/SKILL.md    -> TARGET/.github/skills/{name}/SKILL.md
+      templates/agents/*.md          -> TARGET/<root>/agents/
+      templates/skills/*/SKILL.md    -> TARGET/<root>/skills/{name}/SKILL.md
+
+    Adapts internal path references when a non-default harness is selected.
 
 .PARAMETER Target
     Path to the target repository root. Prompted if not supplied.
+
+.PARAMETER Harness
+    Target harness: agents (default), github, claude.
 
 .PARAMETER Force
     Overwrite existing files without prompting.
 
 .EXAMPLE
     .\scripts\bootstrap.ps1 -Target C:\Projects\my-app
-    .\scripts\bootstrap.ps1 -Target ../my-app -Force
+    .\scripts\bootstrap.ps1 -Target ..\my-app -Harness github -Force
 #>
 [CmdletBinding()]
 param (
     [string]$Target = "",
+    [ValidateSet("agents", "github", "claude")]
+    [string]$Harness = "agents",
     [switch]$Force
 )
 
@@ -32,6 +39,13 @@ $ErrorActionPreference = "Stop"
 
 $ScriptDir   = Split-Path -Parent $MyInvocation.MyCommand.Path
 $TemplatesDir = Join-Path $ScriptDir "..\templates" | Resolve-Path
+
+# Map harness to root directory
+$RootDir = switch ($Harness) {
+    "agents" { ".agents" }
+    "github" { ".github" }
+    "claude" { ".claude" }
+}
 
 # ---------------------------------------------------------------------------
 # Resolve target directory
@@ -70,6 +84,14 @@ function Copy-TemplateFile {
     }
 
     Copy-Item -Path $Src -Destination $Dest -Force
+
+    # For non-default harnesses, adapt internal path references
+    if ($Harness -ne "agents") {
+        $content = Get-Content -Path $Dest -Raw
+        $content = $content -replace '\.agents/', "$RootDir/"
+        Set-Content -Path $Dest -Value $content -NoNewline
+    }
+
     Write-Host "  Copied:   $Dest"
 }
 
@@ -77,27 +99,31 @@ function Copy-TemplateFile {
 # Bootstrap
 # ---------------------------------------------------------------------------
 Write-Host ""
-Write-Host "Target: $Target"
+Write-Host "Target:  $Target"
+Write-Host "Harness: $Harness ($RootDir)"
 Write-Host ""
 
-Write-Host "Agents:"
+$agentsDest = Join-Path $Target "$RootDir\agents"
+$skillsDest = Join-Path $Target "$RootDir\skills"
+
+Write-Host "Agents ($agentsDest):"
 $agentsSource = Join-Path $TemplatesDir "agents"
 if (Test-Path $agentsSource) {
     Get-ChildItem -Path $agentsSource -Filter "*.md" -File | ForEach-Object {
-        $dest = Join-Path $Target ".github\agents\$($_.Name)"
+        $dest = Join-Path $agentsDest $_.Name
         Copy-TemplateFile -Src $_.FullName -Dest $dest
     }
 }
 
 Write-Host ""
-Write-Host "Skills:"
+Write-Host "Skills ($skillsDest):"
 $skillsSource = Join-Path $TemplatesDir "skills"
 if (Test-Path $skillsSource) {
     Get-ChildItem -Path $skillsSource -Directory | ForEach-Object {
         $skillName = $_.Name
         $src = Join-Path $_.FullName "SKILL.md"
         if (Test-Path $src -PathType Leaf) {
-            $dest = Join-Path $Target ".github\skills\$skillName\SKILL.md"
+            $dest = Join-Path $skillsDest "$skillName\SKILL.md"
             Copy-TemplateFile -Src $src -Dest $dest
         }
     }
@@ -105,4 +131,4 @@ if (Test-Path $skillsSource) {
 
 Write-Host ""
 Write-Host "Bootstrap complete."
-Write-Host "Commit .github/agents/ and .github/skills/ to your repository to activate the agents."
+Write-Host "Commit $RootDir\agents\ and $RootDir\skills\ to your repository to activate the agents and skills."
