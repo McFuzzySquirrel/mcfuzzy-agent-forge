@@ -4,7 +4,7 @@ Complete process for building an agent team from a Product Vision document and a
 
 ## Load Trigger
 
-Load this file when: the source document is a Product Vision (`docs/product-vision.md`) with feature documents in `docs/features/`, and no existing agent files exist in `.agents/agents/` beyond forge templates.
+Load this file when: the source document is a Product Vision (`docs/product-vision.md`) with feature documents in `docs/features/`, and no `.agent.md` files exist in `.agents/agents/` beyond forge templates.
 
 ## Vision + Features Mode — Building from Decomposed Documents
 

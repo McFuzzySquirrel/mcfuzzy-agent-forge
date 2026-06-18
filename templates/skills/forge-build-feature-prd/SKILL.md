@@ -22,8 +22,8 @@ This skill supports two modes, auto-detected in Step 0:
 
 | Signal | Mode |
 |---|---|
-| `docs/product-vision.md` exists, no specialist agents in `.agents/agents/` | Greenfield |
-| `.agents/agents/` contains specialist agents (beyond forge templates) | Post-project |
+| `docs/product-vision.md` exists, no `.agent.md` files in `.agents/agents/` | Greenfield |
+| `.agents/agents/` contains `.agent.md` files (beyond forge templates) | Post-project |
 | User says "new project" or "initial decomposition" | Greenfield |
 | User says "add to existing project" | Post-project |
 | If ambiguous, ask the user |
@@ -31,7 +31,7 @@ This skill supports two modes, auto-detected in Step 0:
 ### Step 1a: Analyze Existing Project (Post-Project Mode)
 
 1. Read the original PRD (`docs/PRD.md`) - goals, architecture, tech stack, completed phases.
-2. Review existing agent files in `.agents/agents/` - domains, responsibilities, collaboration patterns.
+2. Review existing agent files in `.agents/agents/` (`.agent.md` files) — domains, responsibilities, collaboration patterns.
 3. Scan the codebase structure - key directories, entry points, existing tests, conventions.
 4. Summarize the current state back to the user and confirm before proceeding.
 
