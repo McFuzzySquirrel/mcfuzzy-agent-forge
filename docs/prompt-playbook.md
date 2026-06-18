@@ -135,14 +135,14 @@ Report any gaps or issues.
 **From a monolithic PRD:**
 ```
 @workspace /forge-build-agent-team Analyze docs/PRD.md and generate a complete specialist agent team.
-Create agent files in .agents/agents/ and skill files in .agents/skills/.
+Create agent files (`.agent.md`) in .agents/agents/ and skill files in .agents/skills/.
 Ensure every PRD requirement has a clearly assigned primary owner agent.
 ```
 
 **From a decomposed Product Vision + Features:**
 ```
 @workspace /forge-build-agent-team Analyze docs/product-vision.md and all feature documents in docs/features/.
-Generate a complete specialist agent team in .agents/agents/ and skills in .agents/skills/ 
+Generate a complete specialist agent team (`.agent.md` files) in .agents/agents/ and skills in .agents/skills/ 
 that covers all features holistically without overlap or gaps.
 ```
 
@@ -326,7 +326,7 @@ existing agents are affected and whether any new agents are needed.
 
 ```
 @workspace /forge-build-agent-team A new Feature PRD has been added at docs/features/feature-XX-[name].md.
-Review the Agent Impact Assessment and update the agent team in .agents/agents/ accordingly.
+Review the Agent Impact Assessment and update the agent team (`.agent.md` files) in .agents/agents/ accordingly.
 Only modify or create agents that are directly affected by this feature.
 ```
 

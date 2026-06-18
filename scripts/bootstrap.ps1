@@ -8,8 +8,9 @@
     repository so agent harnesses can use them.
 
     What it copies:
-      templates/agents/*.md          -> TARGET/<root>/agents/
-      templates/skills/*/SKILL.md    -> TARGET/<root>/skills/{name}/SKILL.md
+      templates/agents/*.md            -> TARGET/<root>/agents/*.agent.md
+      templates/skills/<skill>/*       -> TARGET/<root>/skills/<skill>/** (recursive)
+      docs/prompt-playbook.md          -> TARGET/docs/prompt-playbook.md
 
     Adapts internal path references when a non-default harness is selected.
 
@@ -39,6 +40,7 @@ $ErrorActionPreference = "Stop"
 
 $ScriptDir   = Split-Path -Parent $MyInvocation.MyCommand.Path
 $TemplatesDir = Join-Path $ScriptDir "..\templates" | Resolve-Path
+$DocsDir     = Join-Path $ScriptDir "..\docs" | Resolve-Path
 
 # Map harness to root directory
 $RootDir = switch ($Harness) {
@@ -62,13 +64,11 @@ if (-not $Target -or -not (Test-Path $Target -PathType Container)) {
 }
 
 # ---------------------------------------------------------------------------
-# Helper: copy a single file, respecting -Force / interactive prompt
+# Helpers
 # ---------------------------------------------------------------------------
-function Copy-TemplateFile {
-    param (
-        [string]$Src,
-        [string]$Dest
-    )
+
+function Copy-File {
+    param ([string]$Src, [string]$Dest)
 
     if ((Test-Path $Dest -PathType Leaf) -and -not $Force) {
         $answer = Read-Host "  Overwrite existing $(Split-Path -Leaf $Dest)? [y/N]"
@@ -85,7 +85,7 @@ function Copy-TemplateFile {
 
     Copy-Item -Path $Src -Destination $Dest -Force
 
-    # For non-default harnesses, adapt internal path references
+    # For non-default harness, adapt path references
     if ($Harness -ne "agents") {
         $content = Get-Content -Path $Dest -Raw
         $content = $content -replace '\.agents/', "$RootDir/"
@@ -93,6 +93,40 @@ function Copy-TemplateFile {
     }
 
     Write-Host "  Copied:   $Dest"
+}
+
+function Copy-SkillDirectory {
+    param ([string]$SrcDir, [string]$DestDir, [string]$SkillName)
+
+    if ((Test-Path $DestDir) -and -not $Force) {
+        $answer = Read-Host "  Overwrite existing skill directory '$SkillName'? [y/N]"
+        if ($answer -notin @('y', 'Y')) {
+            Write-Host "  Skipped:  $SkillName/"
+            return
+        }
+    }
+
+    if (Test-Path $DestDir) {
+        Remove-Item -Path $DestDir -Recurse -Force
+    }
+
+    $parent = Split-Path -Parent $DestDir
+    if (-not (Test-Path $parent)) {
+        New-Item -ItemType Directory -Path $parent -Force | Out-Null
+    }
+
+    Copy-Item -Path $SrcDir -Destination $DestDir -Recurse -Force
+
+    # Apply harness path rewrite to all .md files
+    if ($Harness -ne "agents") {
+        Get-ChildItem -Path $DestDir -Filter "*.md" -Recurse | ForEach-Object {
+            $content = Get-Content -Path $_.FullName -Raw
+            $content = $content -replace '\.agents/', "$RootDir/"
+            Set-Content -Path $_.FullName -Value $content -NoNewline
+        }
+    }
+
+    Write-Host "  Copied:   $SkillName/"
 }
 
 # ---------------------------------------------------------------------------
@@ -105,30 +139,47 @@ Write-Host ""
 
 $agentsDest = Join-Path $Target "$RootDir\agents"
 $skillsDest = Join-Path $Target "$RootDir\skills"
+$docsDest   = Join-Path $Target "docs"
 
+# --- Agents ---
 Write-Host "Agents ($agentsDest):"
 $agentsSource = Join-Path $TemplatesDir "agents"
 if (Test-Path $agentsSource) {
     Get-ChildItem -Path $agentsSource -Filter "*.md" -File | ForEach-Object {
-        $dest = Join-Path $agentsDest $_.Name
-        Copy-TemplateFile -Src $_.FullName -Dest $dest
+        $dest = Join-Path $agentsDest "$($_.BaseName).agent.md"
+        Copy-File -Src $_.FullName -Dest $dest
     }
 }
 
+# --- Skills (full directory) ---
 Write-Host ""
 Write-Host "Skills ($skillsDest):"
 $skillsSource = Join-Path $TemplatesDir "skills"
 if (Test-Path $skillsSource) {
     Get-ChildItem -Path $skillsSource -Directory | ForEach-Object {
         $skillName = $_.Name
-        $src = Join-Path $_.FullName "SKILL.md"
-        if (Test-Path $src -PathType Leaf) {
-            $dest = Join-Path $skillsDest "$skillName\SKILL.md"
-            Copy-TemplateFile -Src $src -Dest $dest
-        }
+        $destDir = Join-Path $skillsDest $skillName
+        Copy-SkillDirectory -SrcDir $_.FullName -DestDir $destDir -SkillName $skillName
+    }
+}
+
+# --- Prompt playbook ---
+Write-Host ""
+Write-Host "Docs ($docsDest):"
+$playbookSrc = Join-Path $DocsDir "prompt-playbook.md"
+if (Test-Path $playbookSrc -PathType Leaf) {
+    Copy-File -Src $playbookSrc -Dest (Join-Path $docsDest "prompt-playbook.md")
+}
+
+# --- Apply harness path rewrite to copied agent files ---
+if ($Harness -ne "agents") {
+    Get-ChildItem -Path $agentsDest -Filter "*.agent.md" | ForEach-Object {
+        $content = Get-Content -Path $_.FullName -Raw
+        $content = $content -replace '\.agents/', "$RootDir/"
+        Set-Content -Path $_.FullName -Value $content -NoNewline
     }
 }
 
 Write-Host ""
 Write-Host "Bootstrap complete."
-Write-Host "Commit $RootDir\agents\ and $RootDir\skills\ to your repository to activate the agents and skills."
+Write-Host "Commit $RootDir\agents\ (.agent.md), $RootDir\skills\, and docs\ to your repository."

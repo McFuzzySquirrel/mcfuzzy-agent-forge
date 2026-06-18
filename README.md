@@ -46,6 +46,7 @@ Both approaches use the same core toolkit:
 | `forge-assign-models` skill | Discovers available models (cloud + local Ollama) and recommends/applies a per-agent model so lightweight agents do not default to the most expensive model |
 | `forge-optimize-skills` skill | Audits existing skills against [agentskills.io best practices](https://agentskills.io/skill-creation/best-practices), produces an audit report, and can optionally apply targeted improvements |
 | `project-orchestrator` agent | Coordinates agents through implementation phases, phase by phase |
+| `forge-orchestrate-build` skill | Contains the detailed execution process used by `project-orchestrator` (analysis, phase execution, coordination, output formatting) |
 | Bootstrap scripts | Copy all templates into any target repository with one command |
 
 ---
@@ -110,7 +111,7 @@ The skill interviews you for requirements and saves a complete PRD to `docs/PRD.
 @workspace /forge-team-builder Analyze docs/PRD.md and generate the agent team
 ```
 
-Agent files appear in `.agents/agents/`. Each specialist owns a clear domain with no overlaps.
+Agent files (`.agent.md`) appear in `.agents/agents/`. Each specialist owns a clear domain with no overlaps.
 
 ### 6. Execute the build
 
@@ -288,6 +289,8 @@ mcfuzzy-agent-forge/
 │       │   └── references/                   # Model inventory schema and tier catalog
 │       ├── forge-build-agent-framework-solution/SKILL.md  # Scaffold a Microsoft Agent Framework solution from a PRD
 │       │   └── references/                   # .NET/Python layouts and package references
+│       ├── forge-orchestrate-build/SKILL.md  # Execution process used by project-orchestrator
+│       │   └── references/                   # Output format templates
 │       └── forge-optimize-skills/SKILL.md    # Audit existing skills against agentskills.io best practices
 ├── scripts/
 │   ├── bootstrap.sh                    # Bash bootstrap script
@@ -310,9 +313,8 @@ chmod +x scripts/bootstrap.sh
 
 **Agents not appearing in the harness**
 - Files must be committed (not just saved)
-- Verify paths match your harness: `.agents/agents/*.md` (default), `.github/agents/*.md` (GitHub Copilot), or `.claude/agents/*.md` (Claude Code)
-- YAML frontmatter must be valid
-- Agent `name:` must match the filename (e.g., `my-agent.md` → `name: my-agent`)
+- Verify paths match your harness: `.agents/agents/*.agent.md` (default), `.github/agents/*.agent.md` (GitHub Copilot), or `.claude/agents/*.agent.md` (Claude Code)
+- Agent files end with `.agent.md` and use valid YAML frontmatter; `name:` must match the filename (without extension)
 - Skill directory name must match the skill `name` field
 
 **Team builder creates too many or too few agents**

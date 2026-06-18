@@ -60,7 +60,7 @@ The meta-skill is **pure orchestration**:
 - It does **not** re-implement any of their logic and does **not** produce
   artifacts of its own beyond what the underlying skills already produce.
 - It does **not** introduce a new state file, manifest, or progress tracker;
-  the on-disk artifacts (`docs/PRD.md`, `.agents/agents/*.md`,
+  the on-disk artifacts (`docs/PRD.md`, `.agents/agents/*.agent.md`,
   `docs/MODEL-PLAN.md`) are the state.
 
 ### 2. Mandatory Review Pauses

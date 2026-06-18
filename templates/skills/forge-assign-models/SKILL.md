@@ -83,7 +83,7 @@ If in **Discover** mode, stop here and present a human-readable summary.
 
 ### Step 2: Read and Classify Each Agent's Workload
 
-For each `.agents/agents/*.md` (excluding forge meta-templates):
+For each file matching `.agents/agents/*.agent.md` (also fallback to `*.md` for backward compat with agents generated before the `.agent.md` convention):
 1. Parse YAML frontmatter (`name`, `description`, `model`, `modelFallback`).
 2. Read skills referenced in `## Collaboration` / `## Skills` sections - they often reveal the real workload.
 
@@ -164,7 +164,7 @@ Write with this structure:
 
 ### Step 5 (Apply mode only): Write `model:` into Agent Frontmatter
 
-For each `.agents/agents/*.md`:
+For each `.agents/agents/*.agent.md` (with fallback to `*.md` for backward compat):
 1. Parse YAML frontmatter.
 2. Add/update only `model:` and `modelFallback:`. Preserve all other keys and ordering.
 3. Do not modify the body. Do not reformat.
@@ -178,7 +178,7 @@ For each `.agents/agents/*.md`:
 ### Step 6 (Re-tune mode): Targeted Refresh After Team Changes
 
 1. Read prior `docs/MODEL-PLAN.md` and inventory.
-2. Diff `.agents/agents/*.md` against prior plan. New agents → score. Changed agents → re-score, update only if tier changes. Unchanged → leave alone.
+2. Diff `.agents/agents/*.agent.md` (or `*.md` for backward compat) against prior plan. New agents → score. Changed agents → re-score, update only if tier changes. Unchanged → leave alone.
 3. Refresh inventory only if > 7 days old or user requests.
 4. Update `docs/MODEL-PLAN.md` and affected agent files only.
 
@@ -209,7 +209,7 @@ For each `.agents/agents/*.md`:
 
 - Inventory cache → `docs/research/model-inventory.json`
 - Plan document → `docs/MODEL-PLAN.md`
-- Per-agent assignment → `model:` and `modelFallback:` in `.agents/agents/*.md` (Apply mode only)
+- Per-agent assignment → `model:` and `modelFallback:` in `.agents/agents/*.agent.md` (Apply mode only)
 
 ---
 

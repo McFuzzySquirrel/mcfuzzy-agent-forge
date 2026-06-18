@@ -17,8 +17,9 @@ Two concurrent upgrades were applied:
 
 | Upgrade | What changed |
 |---|---|
-| **`.agents/` migration** | Canonical paths moved from `.github/agents/` and `.github/skills/` to `.agents/agents/` and `.agents/skills/`. Bootstrap scripts gained `--harness` flag support for GitHub Copilot, Claude Code, and future harnesses. `_model-launch` wrappers removed. |
+| **`.agents/` migration** | Canonical paths moved from `.github/agents/` and `.github/skills/` to `.agents/agents/` and `.agents/skills/`. Bootstrap scripts gained `--harness` flag support for GitHub Copilot, Claude Code, and future harnesses. `_model-launch` wrappers removed. Agent files get `.agent.md` extension for harness detection. |
 | **Best practices adoption** | All forge skills refactored with progressive disclosure (`references/` directories), `## Gotchas` sections, `## Validation` loops, trimmed generic content, and calibrated specificity. Generation engine (`forge-build-agent-team`) updated to produce skills that follow these patterns natively. New `forge-optimize-skills` skill added. |
+| **Orchestrator extracted** | `project-orchestrator` slimmed from 710→120 lines. Detailed execution process moved to `forge-orchestrate-build` skill. |
 
 ---
 

@@ -4,7 +4,7 @@ Complete process for extending an existing agent team with minimal, targeted cha
 
 ## Load Trigger
 
-Load this file when: the source document is a Feature PRD (has "Feature Overview", "Context: Existing System State", "Agent Impact Assessment") and existing agent files already exist in `.agents/agents/`.
+Load this file when: the source document is a Feature PRD (has "Feature Overview", "Context: Existing System State", "Agent Impact Assessment") and existing `.agent.md` files already exist in `.agents/agents/`.
 
 ## Feature Increment Mode — Incremental Steps
 
@@ -68,7 +68,7 @@ For each change category:
 ### Step 5i: Write Only Changed or New Files
 
 - **For modified agents:** Present the specific additions (what's being added to Responsibilities, Collaboration, and Key Reference sections) as a clear diff or addendum. If the agent was created before the Process and Workflow section was added to the template, add this section as well to bring it up to current standards. Present changes for user review and confirmation before applying them to the existing agent files.
-- **For new agents:** Write complete agent files at `.agents/agents/{agent-name}.md` following the standard template from Step 5.
+- **For new agents:** Write complete agent files at `.agents/agents/{agent-name}.agent.md` following the standard template from Step 5.
 - **For new skills:** Write complete skill files at `.agents/skills/{skill-name}/SKILL.md` following the standard template from Step 6.
 - **CRITICAL:** Do NOT regenerate or overwrite agents that aren't affected by the feature.
 
