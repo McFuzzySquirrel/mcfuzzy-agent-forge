@@ -3,8 +3,8 @@ name: forge-auto-build
 description: >
   Full end-to-end meta-skill that chains the entire Agent Forge pipeline in a
   single continuous flow: forge-build-prd → forge-build-agent-team →
-  optionally forge-assign-models → optionally forge-build-agent-framework-solution →
-  forge-orchestrate-build (all phases, with validation and a commit after each phase).
+  optionally forge-assign-models → forge-orchestrate-build (all phases, with
+  validation and a commit after each phase).
   Use this skill when a user wants to go from a one-liner idea or an existing PRD to a
   fully built, validated, and committed project without manual hand-offs between steps.
   A single pre-flight confirmation gate is presented before the autonomous run begins.
@@ -14,7 +14,7 @@ description: >
 
 You are running the **full Agent Forge pipeline** on behalf of the user in one continuous, autonomous flow. Your job is to chain every upstream skill and agent in order, validate outputs at each stage, commit after each phase, and produce a finished project — all from a single invocation.
 
-The underlying skills (`forge-build-prd`, `forge-build-agent-team`, `forge-assign-models`, `forge-build-agent-framework-solution`, `forge-orchestrate-build`) each own their own work. You are the conductor: you invoke them in sequence, verify each handoff, commit progress, and keep the user informed without interrupting them.
+The underlying skills (`forge-build-prd`, `forge-build-agent-team`, `forge-assign-models`, `forge-orchestrate-build`) each own their own work. You are the conductor: you invoke them in sequence, verify each handoff, commit progress, and keep the user informed without interrupting them.
 
 ---
 
@@ -24,7 +24,7 @@ The underlying skills (`forge-build-prd`, `forge-build-agent-team`, `forge-assig
 |---|---|---|
 | `forge-bootstrap-project` | PRD → agent team (no build) | Mandatory gate after PRD, after team |
 | `@project-orchestrator` | Build execution only (no bootstrap) | Optional pause between each phase |
-| **`forge-auto-build`** | PRD → agent team → full build → committed result | **One** pre-flight gate, then fully autonomous |
+| **`forge-auto-build`** | PRD → agent team → (optional models) → full build → committed result | **One** pre-flight gate, then fully autonomous |
 
 Use this skill when you want the entire pipeline to run hands-free after a single approval.
 
@@ -53,19 +53,17 @@ When the user invokes this skill, perform the following before touching any file
    - Does `docs/PRD.md` already exist? If yes, note that Stage 1 (PRD generation) will be skipped and the existing PRD will be used.
    - Do `.agent.md` files already exist in `.agents/agents/` (beyond the forge templates)? If yes, note that Stage 2 (team generation) will run in **Feature Increment Mode**.
    - Does `docs/product-vision.md` with `docs/features/*.md` exist? If yes, note that Stage 2 will run in **Vision + Features Mode**.
-   - Does the PRD reference Microsoft Agent Framework as the chosen stack? If yes, note that Stage 4 (scaffold) will run.
 3. **Present the planned stages** as a numbered list:
    - Stage 1: `forge-build-prd` → produce `docs/PRD.md` *(skip if PRD already exists)*
    - Stage 2: `forge-build-agent-team` → produce agent and skill files
    - Stage 3 (optional): `forge-assign-models` → recommend or apply per-agent models *(opt-in — include if user passed `--assign-models`)*
-   - Stage 4 (optional): `forge-build-agent-framework-solution` → scaffold the solution *(runs only if PRD selects Microsoft Agent Framework)*
-   - Stage 5: `forge-orchestrate-build` — execute all phases continuously, committing after each
-4. **State the commit strategy** explicitly:
+   - Stage 4: `forge-orchestrate-build` — execute all phases continuously, committing after each
+5. **State the commit strategy** explicitly:
    - After Stage 2: `chore: bootstrap Agent Forge agent and skill templates`
    - After each build phase N: `feat: complete Phase N — <phase name>`
    - After all phases: `chore: auto-build complete — all phases delivered`
-5. **Present the pre-flight checklist** (see below).
-6. **Prompt**: *"Review the plan above. Type `GO` to start the full auto-build, `GO --assign-models` to also run model assignment, or `stop` to exit."*
+6. **Present the pre-flight checklist** (see below).
+7. **Prompt**: *"Review the plan above. Type `GO` to start the full auto-build, `GO --assign-models` to also run model assignment, or `stop` to exit."*
 
 **Do not proceed until the user types `GO` (or a clear equivalent such as `start`, `run it`, `proceed`).**
 
@@ -136,32 +134,11 @@ When it finishes:
   ```
 - Report: "Stage 3 complete — per-agent models applied. Moving to Stage 4."
 
-If `--assign-models` was not requested, skip this stage and note: "Stage 3 skipped (no --assign-models flag). You can run forge-assign-models manually at any time."
+If `--assign-models` was not requested, skip this stage and note: "Stage 3 skipped (no --assign-models flag). You can run forge-assign-models manually at any time. Moving to Stage 4."
 
 ---
 
-### Stage 4 (Optional): Run `forge-build-agent-framework-solution`
-
-Run this stage only if `docs/PRD.md` selects **Microsoft Agent Framework** as the technology stack.
-
-Invoke `forge-build-agent-framework-solution` twice:
-1. First in **plan mode** (no files written) — capture the extracted plan.
-2. Then immediately in **scaffold mode** — generate the project structure, restore dependencies, and run the empty test suite.
-
-When it finishes:
-- Verify the project restores, builds, and the empty test suite passes.
-- Commit:
-  ```
-  git add .
-  git commit -m "feat: scaffold Microsoft Agent Framework solution"
-  ```
-- Report: "Stage 4 complete — solution scaffolded and verified. Moving to Stage 5."
-
-If Microsoft Agent Framework is not the selected stack, skip this stage silently.
-
----
-
-### Stage 5: Run `forge-orchestrate-build` — All Phases
+### Stage 4: Run `forge-orchestrate-build` — All Phases
 
 Invoke the `forge-orchestrate-build` skill in **continuous mode** (execute all phases without pausing between them).
 
@@ -194,7 +171,7 @@ If any validation check fails, do **not** commit and do **not** proceed. Stop an
 
 ### Final Stage: Completion Summary
 
-After all phases in Stage 5 are complete and committed:
+After all phases in Stage 4 are complete and committed:
 
 1. Commit any remaining uncommitted work:
    ```
@@ -210,8 +187,7 @@ Stages completed:
   ✅ Stage 1: PRD produced (docs/PRD.md)
   ✅ Stage 2: Agent team generated (N agents, M skills)
   [✅ or ⏭️] Stage 3: Per-agent models [applied | skipped]
-  [✅ or ⏭️] Stage 4: Solution scaffold [committed | skipped]
-  ✅ Stage 5: All N phases built and committed
+  ✅ Stage 4: All N phases built and committed
 
 Commits made: <N>
 Files produced: <list key output files>
@@ -221,7 +197,8 @@ Next steps:
   - Review docs/PROGRESS.md for the full task history
   - Run your project's tests to verify the final state: <test command from PRD>
   - Add a new feature: @workspace /forge-build-feature-prd I want to add [feature]...
-  - Audit generated skills: @workspace /forge-optimize-skills Audit all skills...
+  - Audit generated skills (automated): cd .agents/skills/skill-review && npm install && npm run skill-review -- --provider stdout --min-score 1.5
+  - Audit generated skills (manual): @workspace /forge-optimize-skills Audit all skills...
 ```
 
 ---
@@ -234,8 +211,8 @@ If this skill is invoked in a repo that has an incomplete auto-build (detected b
 2. Determine which stage was interrupted:
    - If interrupted mid-Stage 1: re-invoke `forge-build-prd`.
    - If interrupted mid-Stage 2: re-invoke `forge-build-agent-team`.
-   - If interrupted mid-Stage 3 or 4: re-run the affected stage from the beginning.
-   - If interrupted mid-Stage 5: invoke `forge-orchestrate-build` with `resume from last checkpoint`.
+   - If interrupted mid-Stage 3: re-run the affected stage from the beginning.
+   - If interrupted mid-Stage 4: invoke `forge-orchestrate-build` with `resume from last checkpoint`.
 3. Report to the user: "Resuming auto-build from Stage N, last completed: [task description]."
 4. Do not re-run stages whose outputs are already committed and verified.
 
@@ -247,10 +224,9 @@ If this skill is invoked in a repo that has an incomplete auto-build (detected b
 |---|---|
 | Stage 1 produces incomplete PRD | Re-invoke `forge-build-prd` in gap-fill mode before continuing |
 | Stage 2 produces no agent files | Stop and report; do not proceed to build |
-| Stage 3 model assignment fails | Log the failure, skip Stage 3, continue to Stage 4/5 — report at the end |
-| Stage 4 scaffold fails to build or test | Stop and report; do not start Stage 5 on a broken scaffold |
-| Stage 5 phase fails validation | Stop after the failing phase; report error, blocked phase, and responsible agent |
-| Stage 5 commit fails | Stop immediately; report the git error |
+| Stage 3 model assignment fails | Log the failure, skip Stage 3, continue to Stage 4 — report at the end |
+| Stage 4 phase fails validation | Stop after the failing phase; report error, blocked phase, and responsible agent |
+| Stage 4 commit fails | Stop immediately; report the git error |
 | Any unexpected file conflict | Stop and ask the user whether to overwrite, merge, or abort |
 
 ---
@@ -261,5 +237,5 @@ If this skill is invoked in a repo that has an incomplete auto-build (detected b
 - **Never auto-apply models without `--assign-models`.** Stage 3 is opt-in. Writing to agent YAML frontmatter without explicit intent is a violation of `forge-assign-models`'s safety constraint.
 - **Commit after every phase, not at the end.** Batching commits defeats the purpose of phase-level checkpoints and makes debugging harder.
 - **Do not suppress validation errors.** If a phase fails its build/test validation, stopping is the correct behavior — not retrying silently or moving on with a warning.
-- **Respect agent boundaries.** When driving Stage 5, do not instruct agents to do work outside their documented expertise. Delegate cross-cutting tasks to the correct owner agents.
+- **Respect agent boundaries.** When driving Stage 4, do not instruct agents to do work outside their documented expertise. Delegate cross-cutting tasks to the correct owner agents.
 - **One invocation, one run.** This skill does not support running two independent projects simultaneously. If the workspace has multiple PRDs or project roots, ask the user to clarify which one to build before starting.

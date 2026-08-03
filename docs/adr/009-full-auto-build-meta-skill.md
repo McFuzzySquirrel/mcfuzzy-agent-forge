@@ -12,8 +12,7 @@ Agent Forge's pipeline is a fixed sequence of well-defined stages:
 1. `forge-build-prd` — produce `docs/PRD.md`
 2. `forge-build-agent-team` — generate the specialist agent team
 3. *(optional)* `forge-assign-models` — assign per-agent models
-4. *(optional)* `forge-build-agent-framework-solution` — scaffold the solution (removed in ADR-008; noted here for completeness of the pipeline description)
-5. `forge-orchestrate-build` — execute all build phases, phase by phase
+4. `forge-orchestrate-build` — execute all build phases, phase by phase
 
 ADR-004 addressed the gap between steps 1–3 by introducing `forge-bootstrap-project`, which chains PRD generation and team building with mandatory human review gates between them. The build execution (step 5) was deliberately left outside that skill because phase-by-phase review was the recommended default.
 
@@ -60,14 +59,13 @@ The user may not proceed to any stage without explicitly typing `GO` (or a clear
 | 1 | `forge-build-prd` | `docs/PRD.md` already exists |
 | 2 | `forge-build-agent-team` | — (always runs, mode auto-detected) |
 | 3 *(opt-in)* | `forge-assign-models` (Recommend → Apply) | `--assign-models` flag not provided |
-| 4 *(auto-detected)* | `forge-build-agent-framework-solution` | PRD does not select Microsoft Agent Framework |
-| 5 | `forge-orchestrate-build` (all phases) | — (always runs) |
+| 4 | `forge-orchestrate-build` (all phases) | — (always runs) |
 
 Stage invocation follows the same delegation principle as `forge-bootstrap-project`: the meta-skill calls underlying skills and lets them own their own work. It never re-implements their logic.
 
 ### 3. Per-Phase Validation and Commit Contract
 
-After each build phase completes in Stage 5, the skill enforces the following before proceeding:
+After each build phase completes in Stage 4, the skill enforces the following before proceeding:
 
 1. **Validation gate** — all files the phase was supposed to produce exist, build/lint/test commands pass, and all phase acceptance criteria from the PRD are met.
 2. **Commit** — `git add . && git commit -m "feat: complete Phase N — <phase name>"`.

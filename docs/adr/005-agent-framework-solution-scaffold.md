@@ -1,7 +1,7 @@
 # ADR-005: Agent Framework Solution Scaffold via `forge-build-agent-framework-solution`
 
 **Date:** 2026-05-18
-**Status:** Accepted
+**Status:** Superseded by [ADR-008](008-skill-forge-integration.md)
 
 ---
 
