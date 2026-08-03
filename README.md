@@ -4,7 +4,7 @@
 ![Bash](https://img.shields.io/badge/Bash-4EAA25?logo=gnubash&logoColor=fff)
 ![PowerShell](https://img.shields.io/badge/PowerShell-5391FE?logo=powershell&logoColor=fff)
 
-> Bootstrap a custom agent team from your PRD - in minutes. Works with GitHub Copilot, Claude Code, and any agent harness that reads skills from a repo.
+> Bootstrap a custom agent team from your PRD - in minutes. Works with any agent harness that reads agents and skills from a repo.
 
 **McFuzzy Agent Forge** turns your requirements document into a coordinated team of specialist agents. Each agent owns a specific domain, understands its dependencies, and works in sequence so nothing gets missed.
 
@@ -13,6 +13,11 @@
 ---
 
 ## Recent Updates
+
+**August 2026 - v3.1** - Full auto build, end-to-end pipeline in one command.
+
+- **`forge-auto-build` meta-skill.** One command takes you from a one-liner idea (or an existing PRD) all the way to a fully built, validated, and committed project. A single pre-flight gate, then fully autonomous: PRD → agent team → optional model assignment → all build phases, with validation checks and a commit after every phase.
+- **ADR-009.** Documents the design rationale for `forge-auto-build` and how it complements `forge-bootstrap-project`.
 
 **August 2026 - v3** - Skill-Forge integration, framework-agnostic skill creation.
 
@@ -44,6 +49,7 @@ Both approaches use the same core toolkit:
 
 | What | Role |
 |---|---|
+| `forge-auto-build` skill | Full end-to-end meta-skill: idea → PRD → agent team → optional model assignment → full build execution, with validation + commit after every phase. One pre-flight gate, then fully autonomous. |
 | `forge-bootstrap-project` skill | One-shot meta-skill that chains `forge-build-prd` → review → `forge-build-agent-team` → review → optional `forge-assign-models`, preserving the review pauses |
 | `forge-build-prd` skill | Interviews you and creates a comprehensive PRD |
 | `forge-decompose-prd` skill | Splits a monolithic PRD into a Product Vision + Feature documents |
@@ -64,7 +70,7 @@ Both approaches use the same core toolkit:
 
 ### Prerequisites
 
-- An agent harness - **GitHub Copilot** (VS Code or [Copilot CLI](https://docs.github.com/en/copilot/copilot-cli)), **Claude Code**, or any runtime that detects skills from a repo directory
+- An agent harness — any runtime that detects agents and skills from a repo directory (e.g. GitHub Copilot, Claude Code, or a custom harness)
 - Git + Bash (Linux/macOS) or PowerShell 5.1+ (Windows)
 - [Ollama](https://ollama.com/) (optional - for [local model support](docs/running-with-local-models.md))
 
@@ -106,7 +112,15 @@ git commit -m "chore: bootstrap Agent Forge templates"
 
 Open the project in your agent harness - agents and skills are auto-detected from `.agents/agents/` and `.agents/skills/`.
 
-### 4. Build your PRD
+### 4. (Optional) Full auto build — idea to committed code in one command
+
+```
+@workspace /forge-auto-build I want to build [your idea]
+```
+
+Review the pre-flight summary, type `GO`, and the entire pipeline runs autonomously: PRD generation, agent team creation, all build phases, validation, and a commit after each phase. See [Full Auto Build](docs/prompt-playbook.md#full-auto-build---one-command-entire-pipeline-optional) for options.
+
+### 5. Build your PRD (step-by-step alternative)
 
 ```
 @workspace /forge-build-prd Create a PRD for [your idea]
@@ -114,7 +128,7 @@ Open the project in your agent harness - agents and skills are auto-detected fro
 
 The skill interviews you for requirements and saves a complete PRD to `docs/PRD.md`.
 
-### 5. Generate your agent team
+### 6. Generate your agent team
 
 ```
 @workspace /forge-team-builder Analyze docs/PRD.md and generate the agent team
@@ -122,7 +136,7 @@ The skill interviews you for requirements and saves a complete PRD to `docs/PRD.
 
 Agent files (`.agent.md`) appear in `.agents/agents/`. Each specialist owns a clear domain with no overlaps.
 
-### 6. Execute the build
+### 7. Execute the build
 
 ```
 @workspace @project-orchestrator Analyze docs/PRD.md and produce an execution plan
@@ -251,7 +265,7 @@ As agentskills.io evolves, use `skill-review-updater` to keep the rubric up to d
 
 ## Running with Local Models (BYOK)
 
-Copilot CLI supports any OpenAI-compatible endpoint. Point it at [Ollama](https://ollama.com/) to run fully local with no cloud dependency.
+Many agent harnesses support OpenAI-compatible endpoints. Point yours at [Ollama](https://ollama.com/) to run fully local with no cloud dependency.
 
 See the full guide - recommended models, GPU setup, reliability benchmarking, and overheating prevention:
 **[docs/running-with-local-models.md](docs/running-with-local-models.md)**
@@ -282,9 +296,7 @@ The optional `forge-assign-models` skill fixes that. It:
 ```
 
 > [!NOTE]
-> The `model:` frontmatter field is honored by VS Code custom agents. In other harnesses,
-> per-agent model assignment is advisory - the active model is process-wide. Check your
-> harness documentation for details.
+> The `model:` frontmatter field is honored by harnesses that support per-agent model selection (e.g. VS Code custom agents). In other harnesses, per-agent model assignment is advisory — the active model is process-wide. Check your harness documentation for details.
 
 ---
 
@@ -292,7 +304,7 @@ The optional `forge-assign-models` skill fixes that. It:
 
 The [Engineering Journey System (EJS)](https://github.com/McFuzzySquirrel/Engineering-Journey-System) adds session memory to your agent team. Without it, agents start fresh every conversation with no awareness of past decisions. With it, they query a local SQLite database of past ADRs, learnings, and architectural choices.
 
-EJS is optional but recommended. Bootstrap it before Agent Forge for a new project, then add the EJS recording contract to `.github/copilot-instructions.md`:
+EJS is optional but recommended. Bootstrap it before Agent Forge for a new project, then add the EJS recording contract to your harness instructions file (e.g. `.github/copilot-instructions.md`, `.agents/instructions.md`, or `.claude/CLAUDE.md` depending on your harness):
 
 ```markdown
 ## EJS Recording Contract
@@ -318,6 +330,7 @@ mcfuzzy-agent-forge/
 │   │   ├── project-orchestrator.md     # Coordinates agents through PRD phases or features
 │   │   └── forge-team-builder.md       # PRD → agent team generator
 │   └── skills/
+│       ├── forge-auto-build/SKILL.md         # Meta-skill: idea → PRD → team → full build (autonomous, one gate)
 │       ├── forge-build-agent-team/SKILL.md   # Process for building agent teams
 │       │   └── references/                   # Vision+Features and Feature Increment mode docs
 │       ├── forge-build-feature-prd/SKILL.md  # Process for building Feature PRDs
@@ -376,6 +389,9 @@ Re-run bootstrap with the correct `--harness` flag. The old directory won't be c
 
 ## FAQ
 
+**Can I go from idea to built project without doing anything manually?**
+Yes — use `forge-auto-build`. One pre-flight gate, then fully autonomous: PRD → agent team → all build phases, with validation and a commit after every phase. See [Full Auto Build](docs/prompt-playbook.md#full-auto-build---one-command-entire-pipeline-optional).
+
 **Do I need to use all the templates?**
 No - use only what you need, or treat them as examples.
 
@@ -391,8 +407,8 @@ Yes - CLI tools, mobile apps, embedded systems, data pipelines. The team builder
 **Which harness should I choose?**
 Use `--harness agents` (default, `.agents/`) for maximum portability. Use `--harness github` or `--harness claude` if your primary harness requires a specific detection directory.
 
-**Does this work in Copilot CLI (terminal)?**
-Yes. Boot with `--harness github` for GitHub Copilot, or use the default `.agents/` if your Copilot distribution detects it. See [Running with Local Models](docs/running-with-local-models.md) for BYOK setup.
+**Does this work in terminal-based harnesses?**
+Yes. Use the default `.agents/` layout for maximum portability. For harness-specific detection directories, bootstrap with `--harness github` (GitHub Copilot) or `--harness claude` (Claude Code). See [Running with Local Models](docs/running-with-local-models.md) for BYOK setup.
 
 **When should I decompose my PRD into features?**
 When your PRD has 15+ functional requirements or 3+ phases, or when you want to prioritize and ship features independently.
@@ -416,7 +432,6 @@ Use `skill-creator` during team building to produce quality skills from the star
 - [agentskills.io Specification](https://agentskills.io/specification) - Agent Skills format specification
 - [agentskills.io Best Practices](https://agentskills.io/skill-creation/best-practices) - Skill design patterns and guidelines
 - [Skill-Forge](https://github.com/McFuzzySquirrel/skill-forge) - Source repository for `skill-creator`, `skill-review`, and `skill-review-updater`
-- [GitHub Copilot Custom Agents Documentation](https://docs.github.com/en/copilot/customizing-copilot/creating-custom-agents)
 
 ---
 
