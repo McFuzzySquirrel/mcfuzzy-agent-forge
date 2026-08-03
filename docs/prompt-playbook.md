@@ -65,6 +65,44 @@ If you prefer to drive each step yourself, skip this section and follow Steps 2�
 
 ---
 
+## Full Auto Build - One Command, Entire Pipeline (Optional)
+
+If you want to go from a one-liner idea all the way to a **fully built, validated, and committed project** without any manual hand-offs between steps, use the `forge-auto-build` meta-skill. It chains the entire pipeline:
+
+`forge-build-prd` → `forge-build-agent-team` → *(optional)* `forge-assign-models` → *(optional)* `forge-build-agent-framework-solution` → `forge-orchestrate-build` **(all phases, with validation + commit after each phase)**
+
+```
+@workspace /forge-auto-build I want to build [describe your idea in one sentence].
+```
+
+With per-agent model assignment:
+
+```
+@workspace /forge-auto-build I want to build [describe your idea in one sentence]. GO --assign-models
+```
+
+From an existing PRD (skips PRD generation):
+
+```
+@workspace /forge-auto-build docs/PRD.md
+```
+
+**How it works:**
+
+1. A single pre-flight gate is presented — review the plan and type `GO` to launch.
+2. After `GO`, the skill runs autonomously through all stages and phases.
+3. After every build phase completes, validation checks run (build, lint, tests) and a commit is made automatically.
+4. If any validation fails, the run stops and reports the exact error — it does not proceed past a broken phase.
+5. A final summary lists every stage completed, every commit made, and the recommended next steps.
+
+> **When to use `forge-auto-build` vs. `forge-bootstrap-project`:**
+> Use `forge-bootstrap-project` when you want human review gates after the PRD and after the agent team are generated — good for unfamiliar or complex projects.
+> Use `forge-auto-build` when you have a clear idea and want to go directly from idea to working code with a single command.
+
+> **Resuming after interruption:** If the run is interrupted, re-invoke `forge-auto-build` in the same repo. It reads `docs/PROGRESS.md` and resumes from the last completed task without re-running already-committed stages.
+
+---
+
 ## Step 2 - Build the PRD
 
 ### 2a. Generate the PRD
@@ -366,6 +404,9 @@ Only modify skills I've approved in the audit report.
 
 | Step | Command / Prompt |
 |------|-----------------|
+| **Full auto build (idea → built project)** | `@workspace /forge-auto-build I want to build [idea]` |
+| **Full auto build (with model assignment)** | `@workspace /forge-auto-build I want to build [idea]. GO --assign-models` |
+| **Full auto build from existing PRD** | `@workspace /forge-auto-build docs/PRD.md` |
 | Bootstrap (Bash, default) | `./scripts/bootstrap.sh ~/Projects/my-project` |
 | Bootstrap (Bash, GitHub) | `./scripts/bootstrap.sh ~/Projects/my-project --harness github` |
 | Bootstrap (Bash, Claude) | `./scripts/bootstrap.sh ~/Projects/my-project --harness claude` |
@@ -404,3 +445,4 @@ Only modify skills I've approved in the audit report.
 - **The PRD is the source of truth** - if something looks wrong, fix the PRD first, then re-run the affected steps.
 - **Re-bootstrap safely** - run `bootstrap.sh --force` any time you want to pull in updated Agent Forge templates without losing your generated agents.
 - **Optimize generated skills** - after the initial build, run `@workspace /forge-optimize-skills` to audit your skills against best practices. The audit surfaces specific improvements you can apply immediately.
+- **Full auto build** - use `forge-auto-build` when you have a clear idea and want a single command to take you from idea to committed, validated code. One pre-flight gate, then fully autonomous. If the run is interrupted, just re-invoke it — it resumes from `docs/PROGRESS.md`.
