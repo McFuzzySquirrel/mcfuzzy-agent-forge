@@ -72,6 +72,8 @@ Skills are reusable process templates. Create a skill only when a pattern repeat
 
 **Progressive disclosure:** If a skill's template code exceeds ~50 lines, put it in `assets/` and reference it from `SKILL.md`. If a skill has detailed reference material (schemas, API docs, error codes), put it in `references/` with explicit load triggers ("Load `references/api-errors.md` if the API returns a non-200 status").
 
+**Quality from the start:** For each new skill, use `skill-creator` to run a structured five-step creation workflow: interview → template selection → scaffold → pre-flight check → `skill-review` validation. This ensures skills score ≥2.0 across all six quality axes before they are handed to agents.
+
 ### Step 5: Write the Agent Files
 
 Create each agent file at `.agents/agents/{agent-name}.agent.md`:
@@ -169,7 +171,11 @@ If validation fails, fix and re-run before committing.
 
 ### Step 6: Write the Skill Files
 
-Create each skill file at `.agents/skills/{skill-name}/SKILL.md`:
+Create each skill file at `.agents/skills/{skill-name}/SKILL.md`.
+
+**Preferred approach: use `skill-creator`** for each new skill. It guides through a structured interview, selects the correct template (flat or modular), and validates the output with `skill-review` before the skill is finalized. This ensures every generated skill scores ≥2.0 across all six quality axes.
+
+If `skill-creator` is not available, scaffold directly using this template:
 
 ````markdown
 ---
@@ -269,6 +275,16 @@ Recommend (don't auto-run) `forge-assign-models` so the user can match each agen
 - `/forge-assign-models Apply the recommended models to the agent files.`
 
 After Feature Increment Mode runs, suggest Re-tune mode for targeted refresh.
+
+---
+
+## Collaboration
+
+- **forge-build-prd / forge-build-feature-prd** - Produce the PRD this skill consumes.
+- **skill-creator** - Use when creating project-specific skills; runs structured interview → scaffold → `skill-review` validation to ensure quality before agents use the skill.
+- **skill-review** - Audit generated skills against the six-axis quality rubric; invoke after skill-creator or run standalone to validate quality.
+- **forge-assign-models** - Run after team generation for per-agent model assignment.
+- **project-orchestrator** - Coordinates agent implementation phases.
 
 ---
 
