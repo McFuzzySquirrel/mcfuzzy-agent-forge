@@ -1,0 +1,22 @@
+{
+  "name": "mcfuzzy-skills",
+  "version": "1.0.0",
+  "type": "module",
+  "description": "Skill review - audit skills against best practices and post PR guidance",
+  "scripts": {
+    "skill-review": "tsx scripts/skill-review.ts",
+    "test": "node --import tsx --test scripts/rubric.test.ts",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "azure-devops-node-api": "^12.5.0",
+    "commander": "^12.1.0",
+    "globby": "^14.0.2",
+    "gray-matter": "^4.0.3"
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.0",
+    "tsx": "^4.19.0",
+    "typescript": "^5.7.0"
+  }
+}
