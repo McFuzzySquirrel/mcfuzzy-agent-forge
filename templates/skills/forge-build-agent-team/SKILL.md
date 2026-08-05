@@ -72,7 +72,7 @@ Skills are reusable process templates. Create a skill only when a pattern repeat
 
 **Progressive disclosure:** If a skill's template code exceeds ~50 lines, put it in `assets/` and reference it from `SKILL.md`. If a skill has detailed reference material (schemas, API docs, error codes), put it in `references/` with explicit load triggers ("Load `references/api-errors.md` if the API returns a non-200 status").
 
-**Quality from the start:** For each new skill, use `skill-creator` to run a structured five-step creation workflow: interview → template selection → scaffold → pre-flight check → `skill-review` validation. This ensures skills score ≥2.0 across all six quality axes before they are handed to agents.
+**Quality from the start (required):** For each new skill, run `skill-creator` using the structured five-step creation workflow: interview → template selection → scaffold → pre-flight check → `skill-review` validation. Do not hand generated skills to agents until `skill-review` passes with every axis ≥2.0.
 
 ### Step 5: Write the Agent Files
 
@@ -173,9 +173,11 @@ If validation fails, fix and re-run before committing.
 
 Create each skill file at `.agents/skills/{skill-name}/SKILL.md`.
 
-**Preferred approach: use `skill-creator`** for each new skill. It guides through a structured interview, selects the correct template (flat or modular), and validates the output with `skill-review` before the skill is finalized. This ensures every generated skill scores ≥2.0 across all six quality axes.
+**Required approach: use `skill-creator`** for each new skill. It guides through a structured interview, selects the correct template (flat or modular), and validates the output with `skill-review` before the skill is finalized. Every generated skill must score ≥2.0 across all six quality axes.
 
-If `skill-creator` is not available, scaffold directly using this template:
+If `skill-creator` or `skill-review` is not available in the environment, stop and report the missing dependency to the user instead of silently skipping this quality gate.
+
+Only after explicit user approval to proceed without these dependencies, scaffold directly using this template:
 
 ````markdown
 ---

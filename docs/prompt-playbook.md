@@ -65,6 +65,44 @@ If you prefer to drive each step yourself, skip this section and follow Steps 2�
 
 ---
 
+## Full Auto Build - One Command, Entire Pipeline (Optional)
+
+If you want to go from a one-liner idea all the way to a **fully built, validated, and committed project** without any manual hand-offs between steps, use the `forge-auto-build` meta-skill. It chains the entire pipeline:
+
+`forge-build-prd` → `forge-build-agent-team` → *(optional)* `forge-assign-models` → `forge-orchestrate-build` **(all phases, with validation + commit after each phase)**
+
+```
+@workspace /forge-auto-build I want to build [describe your idea in one sentence].
+```
+
+With per-agent model assignment:
+
+```
+@workspace /forge-auto-build I want to build [describe your idea in one sentence]. GO --assign-models
+```
+
+From an existing PRD (skips PRD generation):
+
+```
+@workspace /forge-auto-build docs/PRD.md
+```
+
+**How it works:**
+
+1. A single pre-flight gate is presented — review the plan and type `GO` to launch.
+2. After `GO`, the skill runs autonomously through all stages and phases.
+3. After every build phase completes, validation checks run (build, lint, tests) and a commit is made automatically.
+4. If any validation fails, the run stops and reports the exact error — it does not proceed past a broken phase.
+5. A final summary lists every stage completed, every commit made, and the recommended next steps.
+
+> **When to use `forge-auto-build` vs. `forge-bootstrap-project`:**
+> Use `forge-bootstrap-project` when you want human review gates after the PRD and after the agent team are generated — good for unfamiliar or complex projects.
+> Use `forge-auto-build` when you have a clear idea and want to go directly from idea to working code with a single command.
+
+> **Resuming after interruption:** If the run is interrupted, re-invoke `forge-auto-build` in the same repo. It reads `docs/PROGRESS.md` and resumes from the last completed task without re-running already-committed stages.
+
+---
+
 ## Step 2 - Build the PRD
 
 ### 2a. Generate the PRD
@@ -209,54 +247,6 @@ Update docs/MODEL-PLAN.md.
 
 ---
 
-## Step 4.6 - Scaffold the Solution (when the PRD selects Microsoft Agent Framework)
-
-If your PRD's Technology Stack picks **[Microsoft Agent Framework](https://learn.microsoft.com/en-us/agent-framework/)**,
-run the `forge-build-agent-framework-solution` skill **before** asking the orchestrator to
-execute Phase 1. It scaffolds the .NET or Python project (folder layout, packages, host,
-sample agent, tools, workflow, tests, README) so the specialist agents have a real
-codebase to build on.
-
-### 4.6a. Plan the scaffold (no files written)
-
-```
-@workspace /forge-build-agent-framework-solution Read docs/PRD.md, confirm Microsoft Agent
-Framework is the chosen stack, and present an extracted plan: language stack (.NET or
-Python), agents, tools, orchestration topology, hosting surface, and required env vars.
-Do not write any files yet.
-```
-
-### 4.6b. Generate the scaffold
-
-After approving the plan:
-
-```
-@workspace /forge-build-agent-framework-solution Scaffold the solution as planned. Use
-ecosystem tooling (dotnet new / uv init) and verify the project restores, builds, and
-runs an empty test suite. Report the folder tree, packages used, and the exact commands
-to run it.
-```
-
-### 4.6c. Add scaffolding for a new feature
-
-When `forge-build-feature-prd` produces a Feature PRD that needs new agents, tools, or
-workflow nodes on top of an existing Agent Framework solution:
-
-```
-@workspace /forge-build-agent-framework-solution Read docs/features/feature-XX-[name].md
-and extend the existing Agent Framework solution in place. Add only what the Feature PRD
-requires (new agent factory, new tool, new workflow edge) and leave unrelated code alone.
-```
-
-Then commit:
-
-```bash
-git add .
-git commit -m "feat: scaffold Microsoft Agent Framework solution"
-```
-
----
-
 ## Step 5 - Plan and Execute the Build
 
 ### 5a. Generate an execution plan (inspect before committing to action)
@@ -366,6 +356,9 @@ Only modify skills I've approved in the audit report.
 
 | Step | Command / Prompt |
 |------|-----------------|
+| **Full auto build (idea → built project)** | `@workspace /forge-auto-build I want to build [idea]` |
+| **Full auto build (with model assignment)** | `@workspace /forge-auto-build I want to build [idea]. GO --assign-models` |
+| **Full auto build from existing PRD** | `@workspace /forge-auto-build docs/PRD.md` |
 | Bootstrap (Bash, default) | `./scripts/bootstrap.sh ~/Projects/my-project` |
 | Bootstrap (Bash, GitHub) | `./scripts/bootstrap.sh ~/Projects/my-project --harness github` |
 | Bootstrap (Bash, Claude) | `./scripts/bootstrap.sh ~/Projects/my-project --harness claude` |
@@ -382,9 +375,6 @@ Only modify skills I've approved in the audit report.
 | Recommend per-agent models | `@workspace /forge-assign-models Recommend a per-agent model and write docs/MODEL-PLAN.md...` |
 | Apply per-agent models | `@workspace /forge-assign-models Apply the recommended models...` |
 | Re-tune models after a feature | `@workspace /forge-assign-models Re-tune the model assignment...` |
-| Scaffold Agent Framework solution (plan) | `@workspace /forge-build-agent-framework-solution Read docs/PRD.md... present a plan, do not write files` |
-| Scaffold Agent Framework solution (apply) | `@workspace /forge-build-agent-framework-solution Scaffold the solution as planned...` |
-| Extend Agent Framework solution for a feature | `@workspace /forge-build-agent-framework-solution Read docs/features/feature-XX... extend the existing solution` |
 | Generate execution plan | `@workspace @project-orchestrator Analyze docs/PRD.md and produce an execution plan only...` |
 | Execute Phase N | `@workspace @project-orchestrator Execute Phase N only...` |
 | Resume from checkpoint | `@workspace @project-orchestrator Read docs/PROGRESS.md and resume...` |
@@ -404,3 +394,4 @@ Only modify skills I've approved in the audit report.
 - **The PRD is the source of truth** - if something looks wrong, fix the PRD first, then re-run the affected steps.
 - **Re-bootstrap safely** - run `bootstrap.sh --force` any time you want to pull in updated Agent Forge templates without losing your generated agents.
 - **Optimize generated skills** - after the initial build, run `@workspace /forge-optimize-skills` to audit your skills against best practices. The audit surfaces specific improvements you can apply immediately.
+- **Full auto build** - use `forge-auto-build` when you have a clear idea and want a single command to take you from idea to committed, validated code. One pre-flight gate, then fully autonomous. If the run is interrupted, just re-invoke it — it resumes from `docs/PROGRESS.md`.
