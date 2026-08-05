@@ -3,16 +3,22 @@
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 ![Bash](https://img.shields.io/badge/Bash-4EAA25?logo=gnubash&logoColor=fff)
 ![PowerShell](https://img.shields.io/badge/PowerShell-5391FE?logo=powershell&logoColor=fff)
+![Forge Launcher](https://img.shields.io/badge/forge--launcher-interactive%20CLI-blueviolet)
 
 > Bootstrap a custom agent team from your PRD - in minutes. Works with any agent harness that reads agents and skills from a repo.
 
 **McFuzzy Agent Forge** turns your requirements document into a coordinated team of specialist agents. Each agent owns a specific domain, understands its dependencies, and works in sequence so nothing gets missed.
 
-[Getting Started](#getting-started) • [How It Works](#how-it-works) • [Usage](#usage) • [Prompt Playbook](docs/prompt-playbook.md) • [Local Models](docs/running-with-local-models.md) • [FAQ](#faq) • [Recent Updates](#recent-updates)
+[Quick Start](#quick-start-forge-launcher) • [Getting Started](#getting-started) • [How It Works](#how-it-works) • [Usage](#usage) • [Prompt Playbook](docs/prompt-playbook.md) • [Local Models](docs/running-with-local-models.md) • [FAQ](#faq) • [Recent Updates](#recent-updates)
 
 ---
 
 ## Recent Updates
+
+**August 2026 - v3.2** - Forge Launcher — interactive CLI for the full lifecycle.
+
+- **`forge-launcher`** (`scripts/forge-launcher.sh` / `forge-launcher.ps1`). One terminal command guides you from zero to auto-build: create a repo, select your harness, bootstrap Agent Forge, capture your idea in `IDEA.md`, commit, and optionally spawn the harness CLI — all without reading the docs first.
+- **ADR-010.** Documents the design rationale for `forge-launcher`, why a script-first approach was chosen, and how `IDEA.md` bridges bootstrap and `forge-auto-build`.
 
 **August 2026 - v3.1** - Full auto build, end-to-end pipeline in one command.
 
@@ -62,7 +68,41 @@ Both approaches use the same core toolkit:
 | `forge-optimize-skills` skill | Audits existing skills against [agentskills.io best practices](https://agentskills.io/skill-creation/best-practices) in a manual agent-driven workflow; delegates to `skill-review` tooling when available |
 | `project-orchestrator` agent | Coordinates agents through implementation phases, phase by phase |
 | `forge-orchestrate-build` skill | Contains the detailed execution process used by `project-orchestrator` (analysis, phase execution, coordination, output formatting) |
+| `forge-launcher` scripts | Interactive CLI: create repo → select harness → bootstrap → capture idea → commit → launch auto-build in one terminal session |
 | Bootstrap scripts | Copy all templates into any target repository with one command |
+
+---
+
+## Quick Start — Forge Launcher
+
+The fastest way to go from zero to a running auto-build. Run one command and answer the prompts — the launcher creates your repo, bootstraps Agent Forge, captures your idea, and queues up `forge-auto-build`.
+
+**Bash (Linux / macOS):**
+```bash
+git clone https://github.com/McFuzzySquirrel/mcfuzzy-agent-forge.git
+cd mcfuzzy-agent-forge
+./scripts/forge-launcher.sh
+```
+
+**PowerShell (Windows):**
+```powershell
+git clone https://github.com/McFuzzySquirrel/mcfuzzy-agent-forge.git
+cd mcfuzzy-agent-forge
+.\scripts\forge-launcher.ps1
+```
+
+The launcher walks you through eight steps:
+
+1. **Pre-flight** — checks `git`, `gh`, `opencode`, `claude`
+2. **Harness selection** — GitHub Copilot, opencode, Claude Code, or generic `.agents`
+3. **Repo creation** — `gh repo create` (GitHub) or `git init` + optional remote
+4. **Bootstrap** — runs `bootstrap.sh` / `bootstrap.ps1` into the new repo
+5. **Idea capture** — multi-line prompt saved to `IDEA.md`
+6. **Commit + push** — `chore: bootstrap agent forge`
+7. **Auto-build launch** — harness instructions or optional CLI spawn
+8. **Summary** — repo path, harness, and next steps
+
+> See [docs/forge-launcher.md](docs/forge-launcher.md) for the full reference, harness support matrix, non-interactive mode, and troubleshooting.
 
 ---
 
@@ -72,6 +112,7 @@ Both approaches use the same core toolkit:
 
 - An agent harness — any runtime that detects agents and skills from a repo directory (e.g. GitHub Copilot, Claude Code, or a custom harness)
 - Git + Bash (Linux/macOS) or PowerShell 5.1+ (Windows)
+- [gh (GitHub CLI)](https://cli.github.com/) (optional — required for GitHub harness repo creation in `forge-launcher`)
 - [Ollama](https://ollama.com/) (optional - for [local model support](docs/running-with-local-models.md))
 
 ### 1. Clone Agent Forge

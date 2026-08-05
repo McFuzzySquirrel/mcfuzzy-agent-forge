@@ -1,0 +1,297 @@
+# Forge Launcher
+
+> One command from zero to auto-build. Guides you through creating a repo, bootstrapping Agent Forge, capturing your idea, and launching the full pipeline.
+
+---
+
+## Overview
+
+`forge-launcher` is an interactive terminal script that orchestrates the complete Agent Forge onboarding flow in a single session:
+
+1. **Pre-flight** — checks that `git` and optional tools (`gh`, `opencode`, `claude`) are installed.
+2. **Harness selection** — choose GitHub Copilot, opencode, Claude Code, or generic `.agents`.
+3. **Repo creation** — creates a GitHub repository (via `gh`) or initialises a local `git init`.
+4. **Bootstrap** — runs the existing `bootstrap.sh` / `bootstrap.ps1` into the new repo.
+5. **Idea capture** — prompts for your project idea and saves it to `IDEA.md`.
+6. **Commit + push** — commits the bootstrapped forge and idea file.
+7. **Auto-build launch** — prints the `forge-auto-build` invocation or spawns the harness CLI.
+8. **Summary** — prints the repo path, harness, and next steps.
+
+---
+
+## Prerequisites
+
+| Tool | Required | Purpose |
+|------|----------|---------|
+| `git` | **Yes** | All harnesses |
+| `gh` (GitHub CLI) | For GitHub harness | Creates and clones the GitHub repo |
+| `opencode` | For opencode harness auto-launch | Spawns the opencode session |
+| `claude` | For Claude Code harness auto-launch | Spawns the Claude Code session |
+| Bash 4+ | For `forge-launcher.sh` | Linux / macOS |
+| PowerShell 5.1+ | For `forge-launcher.ps1` | Windows |
+
+---
+
+## Usage
+
+### Linux / macOS
+
+```bash
+./scripts/forge-launcher.sh
+```
+
+### Windows (PowerShell)
+
+```powershell
+.\scripts\forge-launcher.ps1
+```
+
+### Non-interactive mode (CI / automation)
+
+```bash
+export FORGE_IDEA="A task management web app with a React frontend and a Node.js API"
+export FORGE_YN_DEFAULT="y"
+./scripts/forge-launcher.sh --non-interactive
+```
+
+```powershell
+$env:FORGE_IDEA = "A task management web app with a React frontend and a Node.js API"
+$env:FORGE_YN_DEFAULT = "y"
+.\scripts\forge-launcher.ps1 -NonInteractive
+```
+
+---
+
+## Step-by-step walkthrough
+
+### Step 1 — Pre-flight check
+
+The launcher checks each required and optional tool and reports its version or a warning. If `git` is missing the script exits immediately. Missing optional tools (`gh`, `opencode`, `claude`) only disable the features that depend on them.
+
+```
+▶ Step 1 of 8: Pre-flight check
+  ✔  git 2.43.0
+  ✔  gh 2.47.0
+  ⚠  opencode not found — opencode harness auto-launch will be unavailable.
+  ✔  claude (installed)
+  ✔  bootstrap.sh found
+```
+
+### Step 2 — Select harness
+
+```
+▶ Step 2 of 8: Select agent harness
+
+  Which agent harness will this project use?
+
+    1) GitHub Copilot   (harness: github,  dir: .github/)
+    2) opencode         (harness: agents,  dir: .agents/)
+    3) Claude Code      (harness: claude,  dir: .claude/)
+    4) Generic .agents  (harness: agents,  dir: .agents/)  [default]
+
+Select [1-4] [4]:
+```
+
+Your choice determines:
+- The `--harness` flag passed to `bootstrap.sh` / `bootstrap.ps1`.
+- The directory where agent and skill templates are placed.
+- How the auto-build launch is handled (CLI spawn vs. printed instructions).
+
+### Step 3 — Create repository
+
+For the **GitHub Copilot** harness (when `gh` is available):
+
+```
+▶ Step 3 of 8: Create repository
+Repository name (no spaces): my-cool-app
+Short description (optional): My cool app description
+Visibility — public or private [private]:
+Parent directory for the new repo [/home/user/projects]:
+
+  Creating GitHub repository 'my-cool-app' (private) …
+  ✔  GitHub repo created and cloned to: /home/user/projects/my-cool-app
+```
+
+For all other harnesses (or when `gh` is not installed):
+
+```
+  Initialising local Git repository at: /home/user/projects/my-cool-app
+  ✔  Local git repository initialised: /home/user/projects/my-cool-app
+Add a Git remote for this repository now? [y/N]: y
+Remote URL (e.g. https://github.com/user/repo.git): https://github.com/user/my-cool-app.git
+  ✔  Remote 'origin' added
+```
+
+### Step 4 — Bootstrap Agent Forge
+
+Runs `bootstrap.sh` (or `bootstrap.ps1`) with `--force` into the new repository, copying all agent and skill templates into the harness directory.
+
+```
+▶ Step 4 of 8: Bootstrap Agent Forge
+  Running bootstrap.sh → /home/user/projects/my-cool-app (--harness github) …
+  ✔  Agent Forge templates bootstrapped.
+```
+
+### Step 5 — Capture your idea
+
+Enter your project idea in the terminal (press `Ctrl+D` or a blank line when done on Bash; press Enter twice on PowerShell). The text is saved to `IDEA.md` in the repo root.
+
+```
+▶ Step 5 of 8: Capture your project idea
+
+  Enter your idea (press Ctrl+D on an empty line when finished):
+  ──────────────────────────────────────────────────────────────
+  A task management web app. Users can create projects, add tasks with
+  due dates and priorities, and track completion. React frontend, Node.js
+  API, PostgreSQL database. Authentication via GitHub OAuth.
+  ^D
+  ✔  Idea saved to: /home/user/projects/my-cool-app/IDEA.md
+```
+
+### Step 6 — Commit bootstrapped forge and idea
+
+```
+▶ Step 6 of 8: Commit bootstrapped forge and idea
+  ✔  Committed: 'chore: bootstrap agent forge'
+  Pushing to remote …
+  ✔  Pushed to remote.
+```
+
+### Step 7 — Launch auto-build
+
+For harnesses with a spawnable CLI (`opencode`, `claude`):
+
+```
+▶ Step 7 of 8: Launch auto-build
+
+  The repository is bootstrapped and ready for forge-auto-build.
+
+Launch claude in the new repository now? [y/N]: y
+  Launching claude in: /home/user/projects/my-cool-app
+  ✔  claude launched. Use /forge-auto-build in the Claude Code chat to start the pipeline.
+```
+
+For GitHub Copilot (no CLI spawn available):
+
+```
+  Open the repository in GitHub Copilot Chat and run:
+
+    @workspace /forge-auto-build A task management web app...
+
+  The skill will present a pre-flight summary. Type GO to start the full pipeline.
+```
+
+### Step 8 — Summary
+
+```
+▶ Step 8 of 8: Summary
+
+════════════════════════════════════════════════════════
+  forge-launcher: Complete
+════════════════════════════════════════════════════════
+
+  Repository  : /home/user/projects/my-cool-app
+  Harness     : Claude Code (--harness claude)
+  Remote      : yes
+  Idea file   : /home/user/projects/my-cool-app/IDEA.md
+
+  Next steps:
+
+  1. Open the project in your agent harness.
+  2. Run the auto-build skill:
+
+       @workspace /forge-auto-build  (paste your idea or reference IDEA.md)
+
+  3. Review the pre-flight summary that the skill presents.
+  4. Type GO to start the fully autonomous pipeline.
+```
+
+---
+
+## Harness support matrix
+
+| Harness | Repo create | Bootstrap flag | Auto-build launch |
+|---------|------------|----------------|-------------------|
+| GitHub Copilot | `gh repo create` | `--harness github` | Printed instructions (manual) |
+| opencode | `git init` + optional remote | `--harness agents` | `opencode .` spawn (optional) |
+| Claude Code | `git init` + optional remote | `--harness claude` | `claude .` spawn (optional) |
+| Generic `.agents` | `git init` + optional remote | `--harness agents` | Printed instructions |
+
+---
+
+## Non-interactive environment variables
+
+| Variable | Used in step | Description |
+|----------|-------------|-------------|
+| `FORGE_IDEA` | 5 | Project idea text written to `IDEA.md` |
+| `FORGE_YN_DEFAULT` | 3, 7 | Default answer for yes/no prompts (`y` or `n`) |
+
+All other step inputs (repo name, description, visibility, parent directory) use their defaults in non-interactive mode. Override them by setting the variables before running:
+
+```bash
+export REPO_NAME="my-app"           # Step 3: set via prompt default or pre-set env var
+```
+
+> **Note:** In non-interactive mode `FORGE_IDEA` is required. The script exits with an error if it is not set.
+
+---
+
+## IDEA.md format
+
+The launcher creates `IDEA.md` with the following structure:
+
+```markdown
+# Project Idea
+
+<your idea text>
+
+---
+
+> Generated by forge-launcher on 2026-08-05T19:00:00Z
+> Use this file as input for: `@workspace /forge-auto-build`
+```
+
+Pass this file to `forge-auto-build` by referencing it in the chat:
+
+```
+@workspace /forge-auto-build Use IDEA.md as the project idea
+```
+
+Or paste the idea text directly — both work.
+
+---
+
+## Troubleshooting
+
+### "bootstrap.sh not found or not executable"
+
+The launcher expects to be run from within the `mcfuzzy-agent-forge` clone. Make sure you run it as `./scripts/forge-launcher.sh` from the repo root, or that the script's relative path to `bootstrap.sh` resolves correctly.
+
+### "gh not found" on GitHub harness
+
+Install the GitHub CLI: <https://cli.github.com/>. Authenticate with `gh auth login` before running the launcher.
+
+### The launcher created the repo but bootstrap failed
+
+The repository directory was created before bootstrap ran. You can re-run bootstrap manually:
+
+```bash
+./scripts/bootstrap.sh /path/to/your/repo --harness <harness>
+```
+
+Then continue from Step 5 (create `IDEA.md` manually and commit).
+
+### Claude / opencode did not launch
+
+Check that the CLI is on your `PATH` and executable. For Claude Code: <https://claude.ai/code>. For opencode: follow the opencode installation guide. After installing, re-run the auto-build step manually:
+
+```bash
+cd /path/to/your/repo && claude .
+# Then in the chat: /forge-auto-build <your idea>
+```
+
+---
+
+## Design decisions
+
+See [ADR-010: Forge Launcher](adr/010-forge-launcher.md) for the full rationale, including why a script-first (Tier 1) approach was chosen, why harness selection is step 2, and why `IDEA.md` is the hand-off artifact.
