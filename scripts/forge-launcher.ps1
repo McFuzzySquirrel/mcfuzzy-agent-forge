@@ -6,19 +6,19 @@
 
 .DESCRIPTION
     Orchestrates the following steps:
-      1. Pre-flight check      — verify required tools
-      2. Select harness        — GitHub Copilot | opencode | Claude Code | generic
-      3. Create repository     — gh repo create (GitHub) or git init (others)
-      4. Bootstrap Agent Forge — run bootstrap.ps1 into the new repo
-      5. Capture idea          — write IDEA.md
-      6. Add PRD / research    — optional: copy PRD and seed docs into docs/
-      7. Commit + push         — commit bootstrapped forge, IDEA.md, PRD, and seed docs
-      8. Launch auto-build     — harness-specific instructions or CLI spawn
+      1. Pre-flight check      -verify required tools
+      2. Select harness        -GitHub Copilot | opencode | Claude Code | generic
+      3. Create repository     -gh repo create (GitHub) or git init (others)
+      4. Bootstrap Agent Forge -run bootstrap.ps1 into the new repo
+      5. Capture idea          -write IDEA.md
+      6. Add PRD / research    -optional: copy PRD and seed docs into docs/
+      7. Commit + push         -commit bootstrapped forge, IDEA.md, PRD, and seed docs
+      8. Launch auto-build     -harness-specific instructions or CLI spawn
       9. Completion summary
 
 .PARAMETER NonInteractive
     Skip all interactive prompts (for CI/testing only).
-    Requires environment variables to be set — see docs/forge-launcher.md.
+    Requires environment variables to be set -see docs/forge-launcher.md.
 
 .EXAMPLE
     .\scripts\forge-launcher.ps1
@@ -41,7 +41,7 @@ $BootstrapPs1 = Join-Path $ScriptDir "bootstrap.ps1"
 function Write-Header {
     Write-Host ""
     Write-Host "════════════════════════════════════════════════════════" -ForegroundColor Cyan
-    Write-Host "  McFuzzy Agent Forge — Launcher" -ForegroundColor Cyan
+    Write-Host "  McFuzzy Agent Forge -Launcher" -ForegroundColor Cyan
     Write-Host "════════════════════════════════════════════════════════" -ForegroundColor Cyan
     Write-Host ""
 }
@@ -145,7 +145,7 @@ function Invoke-PreflightCheck {
         $gitVer = & git --version 2>$null
         Write-Ok "git $($gitVer -replace 'git version ','')"
     } else {
-        Write-Fail "git not found — install Git before running this launcher."
+        Write-Fail "git not found -install Git before running this launcher."
         exit 1
     }
 
@@ -155,7 +155,7 @@ function Invoke-PreflightCheck {
         Write-Ok "gh $ghVer"
         $script:GhAvailable = $true
     } else {
-        Write-Warn "gh (GitHub CLI) not found — GitHub harness repo creation will be unavailable."
+        Write-Warn "gh (GitHub CLI) not found -GitHub harness repo creation will be unavailable."
     }
 
     # copilot
@@ -163,7 +163,7 @@ function Invoke-PreflightCheck {
         Write-Ok "copilot (installed)"
         $script:CopilotAvailable = $true
     } else {
-        Write-Warn "copilot not found — GitHub Copilot CLI auto-launch will be unavailable."
+        Write-Warn "copilot not found -GitHub Copilot CLI auto-launch will be unavailable."
     }
 
     # opencode
@@ -171,7 +171,7 @@ function Invoke-PreflightCheck {
         Write-Ok "opencode (installed)"
         $script:OpencodeAvailable = $true
     } else {
-        Write-Warn "opencode not found — opencode harness auto-launch will be unavailable."
+        Write-Warn "opencode not found -opencode harness auto-launch will be unavailable."
     }
 
     # claude
@@ -179,7 +179,7 @@ function Invoke-PreflightCheck {
         Write-Ok "claude (installed)"
         $script:ClaudeAvailable = $true
     } else {
-        Write-Warn "claude not found — Claude Code harness auto-launch will be unavailable."
+        Write-Warn "claude not found -Claude Code harness auto-launch will be unavailable."
     }
 
     # bootstrap.ps1
@@ -236,7 +236,7 @@ function New-Repository {
 
     $repoDescription = Read-Prompt "Short description (optional)" ""
 
-    $repoVisibility = Read-Prompt "Visibility — public or private" "private"
+    $repoVisibility = Read-Prompt "Visibility -public or private" "private"
     $repoVisibility = $repoVisibility.ToLower()
     if ($repoVisibility -ne "public" -and $repoVisibility -ne "private") {
         $repoVisibility = "private"
@@ -271,7 +271,7 @@ function New-Repository {
         Write-Ok "Local git repository initialised: $($script:RepoDir)"
 
         if ($script:Harness -eq "github" -and -not $script:GhAvailable) {
-            Write-Warn "gh is not installed — skipped remote creation."
+            Write-Warn "gh is not installed -skipped remote creation."
             Write-Warn "Run 'gh repo create' or 'git remote add origin <url>' manually."
         } else {
             $addRemote = Read-YesNo "Add a Git remote for this repository now?" "n"
@@ -365,10 +365,10 @@ $ideaText
 }
 
 # ---------------------------------------------------------------------------
-# Step 6: Add PRD and research / seed documents (optional — recommended)
+# Step 6: Add PRD and research / seed documents (optional -recommended)
 # ---------------------------------------------------------------------------
 function Invoke-AddPrdAndResearch {
-    Write-Step "Step 6 of 9: Add PRD and research / seed documents (optional — recommended)"
+    Write-Step "Step 6 of 9: Add PRD and research / seed documents (optional -recommended)"
 
     $docsDir     = Join-Path $script:RepoDir "docs"
     $researchDir = Join-Path $docsDir "research"
@@ -393,15 +393,15 @@ function Invoke-AddPrdAndResearch {
                 Write-Ok "PRD copied from `$env:FORGE_PRD_FILE → docs/PRD.md"
                 $script:PrdAdded = $true
             } else {
-                Write-Warn "FORGE_PRD_FILE is set but file not found: $prdFile — skipping PRD."
+                Write-Warn "FORGE_PRD_FILE is set but file not found: $prdFile -skipping PRD."
             }
         }
     } else {
         Write-Host "  Do you have an existing PRD to add?" -ForegroundColor White
         Write-Host ""
-        Write-Host "    1) Yes — provide a file path to copy in as docs/PRD.md"
-        Write-Host "    2) Yes — paste the PRD content directly"
-        Write-Host "    3) No  — skip (the pipeline will generate one from docs/IDEA.md)"
+        Write-Host "    1) Yes -provide a file path to copy in as docs/PRD.md"
+        Write-Host "    2) Yes -paste the PRD content directly"
+        Write-Host "    3) No  -skip (the pipeline will generate one from docs/IDEA.md)"
         Write-Host ""
         $prdChoice = Read-Prompt "Select [1-3]" "3"
 
@@ -414,7 +414,7 @@ function Invoke-AddPrdAndResearch {
                     Write-Ok "PRD copied → docs/PRD.md"
                     $script:PrdAdded = $true
                 } else {
-                    Write-Warn "File not found: $prdSrc — skipping PRD."
+                    Write-Warn "File not found: $prdSrc -skipping PRD."
                 }
             }
             "2" {
@@ -435,11 +435,11 @@ function Invoke-AddPrdAndResearch {
                     Write-Ok "PRD saved → docs/PRD.md"
                     $script:PrdAdded = $true
                 } else {
-                    Write-Warn "No content entered — skipping PRD."
+                    Write-Warn "No content entered -skipping PRD."
                 }
             }
             default {
-                Write-Info "Skipping PRD — the pipeline will generate one from docs/IDEA.md."
+                Write-Info "Skipping PRD -the pipeline will generate one from docs/IDEA.md."
             }
         }
     }
@@ -456,7 +456,7 @@ function Invoke-AddPrdAndResearch {
                     Write-Ok "Research doc copied: $(Split-Path $f -Leaf) → docs/research/"
                     $script:ResearchAdded = $true
                 } elseif ($f) {
-                    Write-Warn "FORGE_RESEARCH_FILES: file not found: $f — skipping."
+                    Write-Warn "FORGE_RESEARCH_FILES: file not found: $f -skipping."
                 }
             }
         }
@@ -478,7 +478,7 @@ function Invoke-AddPrdAndResearch {
                     Write-Ok "Research doc copied: $(Split-Path $resPath -Leaf) → docs/research/"
                     $script:ResearchAdded = $true
                 } else {
-                    Write-Warn "File not found: $resPath — skipping."
+                    Write-Warn "File not found: $resPath -skipping."
                 }
             }
         } else {
@@ -507,7 +507,7 @@ function Invoke-CommitBootstrap {
         }
         Write-Ok "Pushed to remote."
     } else {
-        Write-Warn "No remote configured — skipping push. Add a remote and run 'git push -u origin HEAD' manually."
+        Write-Warn "No remote configured -skipping push. Add a remote and run 'git push -u origin HEAD' manually."
     }
 }
 

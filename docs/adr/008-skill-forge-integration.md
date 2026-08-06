@@ -23,11 +23,11 @@ Three skills from [skill-forge](https://github.com/McFuzzySquirrel/skill-forge) 
 
 #### `skill-creator`
 A five-step guided creation workflow:
-1. **Interview** (using `references/interview-questions.md`) — structured Q&A gathering name, purpose, trigger phrase, complexity, gotchas, validation needs, calibration guidance
-2. **Template Selection** — flat (≤3 steps) vs. modular (≥4 steps, branching, or reference material)
-3. **Scaffold** — generates skill files against the six quality axes using `references/quality-axes.md`
-4. **Pre-flight Check** (using `references/preflight-checklist.md`) — self-validation against a blocker list before formal audit
-5. **Validation** — runs `skill-review` and loops until all axes score ≥2.0
+1. **Interview** (using `references/interview-questions.md`) -structured Q&A gathering name, purpose, trigger phrase, complexity, gotchas, validation needs, calibration guidance
+2. **Template Selection** -flat (≤3 steps) vs. modular (≥4 steps, branching, or reference material)
+3. **Scaffold** -generates skill files against the six quality axes using `references/quality-axes.md`
+4. **Pre-flight Check** (using `references/preflight-checklist.md`) -self-validation against a blocker list before formal audit
+5. **Validation** -runs `skill-review` and loops until all axes score ≥2.0
 
 Reference files: `flat-template.md`, `modular-template.md`, `interview-questions.md`, `quality-axes.md`, `preflight-checklist.md`.
 
@@ -86,13 +86,13 @@ The Microsoft Agent Framework scaffolding skill is removed entirely. Rationale:
 ### Positive
 
 - **Quality from the start.** Every project-specific skill built with `skill-creator` passes a pre-flight check and `skill-review` validation before agents use it. This eliminates the most common source of low-scoring generated skills.
-- **Automated quality gates.** `skill-review`'s CI/CD tooling enables teams to enforce minimum scores on every PR that touches a `SKILL.md` file — no manual audit required.
+- **Automated quality gates.** `skill-review`'s CI/CD tooling enables teams to enforce minimum scores on every PR that touches a `SKILL.md` file -no manual audit required.
 - **Rubric maintenance.** `skill-review-updater` gives a repeatable, evidence-backed process for keeping the rubric aligned with agentskills.io guidance as it evolves.
-- **Framework-agnostic forge.** Removing the Agent Framework skill makes clear that the forge works with any stack — not just Microsoft's. Users are guided to create project-specific scaffolding skills instead.
+- **Framework-agnostic forge.** Removing the Agent Framework skill makes clear that the forge works with any stack -not just Microsoft's. Users are guided to create project-specific scaffolding skills instead.
 
 ### Negative
 
-- **Node.js dependency.** `skill-review` requires Node.js 18+ and `npm install` before the CLI scripts run. This is an opt-in — the skill itself and manual audit via `forge-optimize-skills` work without it. The `SKILL.md` makes the prerequisite explicit.
+- **Node.js dependency.** `skill-review` requires Node.js 18+ and `npm install` before the CLI scripts run. This is an opt-in -the skill itself and manual audit via `forge-optimize-skills` work without it. The `SKILL.md` makes the prerequisite explicit.
 - **Removed Agent Framework skill.** Existing users who relied on `forge-build-agent-framework-solution` will need to create a project-specific skill using `skill-creator`. Their existing scaffolds are unaffected.
 
 ### Neutral

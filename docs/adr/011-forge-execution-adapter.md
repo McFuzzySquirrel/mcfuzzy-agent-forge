@@ -1,4 +1,4 @@
-# ADR-011: Forge Execution Adapter — Contract-Driven Bridge from Agent Forge to External Runners
+# ADR-011: Forge Execution Adapter -Contract-Driven Bridge from Agent Forge to External Runners
 
 **Date:** 2026-08-06
 **Status:** Accepted
@@ -58,10 +58,10 @@ The adapter is **not** responsible for:
 
 The embedded tooling is organized around four layers:
 
-1. **Discovery layer** — detect repo root, harness root, agents, skills, PRD, progress path
-2. **Compiler layer** — convert the PRD and generated team into `docs/EXECUTION-MANIFEST.json`
-3. **Runner adapter layer** — provide a stable handoff surface for external runners through the neutral manifest
-4. **Execution services** — synchronize checkpoints into `docs/PROGRESS.md` and append `docs/EXECUTION-AUDIT.jsonl`
+1. **Discovery layer** -detect repo root, harness root, agents, skills, PRD, progress path
+2. **Compiler layer** -convert the PRD and generated team into `docs/EXECUTION-MANIFEST.json`
+3. **Runner adapter layer** -provide a stable handoff surface for external runners through the neutral manifest
+4. **Execution services** -synchronize checkpoints into `docs/PROGRESS.md` and append `docs/EXECUTION-AUDIT.jsonl`
 
 ### 3. MVP constraints
 
@@ -77,8 +77,8 @@ The first version is intentionally narrow:
 
 The adapter writes two new files in addition to the existing `docs/PROGRESS.md`:
 
-- `docs/EXECUTION-MANIFEST.json` — structured contract for external runners
-- `docs/EXECUTION-AUDIT.jsonl` — append-only audit events for manifest/checkpoint changes
+- `docs/EXECUTION-MANIFEST.json` -structured contract for external runners
+- `docs/EXECUTION-AUDIT.jsonl` -append-only audit events for manifest/checkpoint changes
 
 These files are adapter-specific artifacts. They do not replace PRD or progress files; they bridge them to an execution backend.
 

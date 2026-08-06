@@ -58,9 +58,9 @@ Both approaches use the same core toolkit:
 
 ---
 
-## Quick Start — Forge Launcher
+## Quick Start -Forge Launcher
 
-The fastest way to go from zero to a running auto-build. Run one command and answer the prompts — the launcher creates your repo, bootstraps Agent Forge, captures your idea, and queues up `forge-auto-build`.
+The fastest way to go from zero to a running auto-build. Run one command and answer the prompts -the launcher creates your repo, bootstraps Agent Forge, captures your idea, and queues up `forge-auto-build`.
 
 **Bash (Linux / macOS):**
 ```bash
@@ -78,14 +78,14 @@ cd mcfuzzy-agent-forge
 
 The launcher walks you through eight steps:
 
-1. **Pre-flight** — checks `git`, `gh`, `copilot`, `opencode`, and `claude`
-2. **Harness selection** — GitHub Copilot, opencode, Claude Code, or generic `.agents`
-3. **Repo creation** — `gh repo create` (GitHub) or `git init` + optional remote
-4. **Bootstrap** — runs `bootstrap.sh` / `bootstrap.ps1` into the new repo
-5. **Idea capture** — multi-line prompt saved to `docs/IDEA.md` (mirrored to `IDEA.md`)
-6. **PRD / research seed docs** — optional but recommended for better results
-7. **Auto-build launch** — opens Copilot CLI, opencode, or Claude Code in a separate terminal when available
-8. **Summary** — repo path, harness, and next steps
+1. **Pre-flight** -checks `git`, `gh`, `copilot`, `opencode`, and `claude`
+2. **Harness selection** -GitHub Copilot, opencode, Claude Code, or generic `.agents`
+3. **Repo creation** -`gh repo create` (GitHub) or `git init` + optional remote
+4. **Bootstrap** -runs `bootstrap.sh` / `bootstrap.ps1` into the new repo
+5. **Idea capture** -multi-line prompt saved to `docs/IDEA.md` (mirrored to `IDEA.md`)
+6. **PRD / research seed docs** -optional but recommended for better results
+7. **Auto-build launch** -opens Copilot CLI, opencode, or Claude Code in a separate terminal when available
+8. **Summary** -repo path, harness, and next steps
 
 > See [docs/forge-launcher.md](docs/forge-launcher.md) for the full reference, harness support matrix, non-interactive mode, and troubleshooting.
 
@@ -107,9 +107,9 @@ This is especially helpful for multi-phase builds, user-facing products, or anyt
 
 ### Prerequisites
 
-- An agent harness — any runtime that detects agents and skills from a repo directory (e.g. GitHub Copilot, Claude Code, or a custom harness)
+- An agent harness -any runtime that detects agents and skills from a repo directory (e.g. GitHub Copilot, Claude Code, or a custom harness)
 - Git + Bash (Linux/macOS) or PowerShell 5.1+ (Windows)
-- [gh (GitHub CLI)](https://cli.github.com/) (optional — required for GitHub harness repo creation in `forge-launcher`)
+- [gh (GitHub CLI)](https://cli.github.com/) (optional -required for GitHub harness repo creation in `forge-launcher`)
 - [Ollama](https://ollama.com/) (optional - for [local model support](docs/running-with-local-models.md))
 
 ### 1. Clone Agent Forge
@@ -150,7 +150,7 @@ git commit -m "chore: bootstrap Agent Forge templates"
 
 Open the project in your agent harness - agents and skills are auto-detected from `.agents/agents/` and `.agents/skills/`.
 
-### 4. (Optional) Full auto build — idea to committed code in one command
+### 4. (Optional) Full auto build -idea to committed code in one command
 
 ```
 @workspace /forge-auto-build I want to build [your idea]
@@ -358,7 +358,7 @@ The optional `forge-assign-models` skill fixes that. It:
 ```
 
 > [!NOTE]
-> The `model:` frontmatter field is honored by harnesses that support per-agent model selection (e.g. VS Code custom agents). In other harnesses, per-agent model assignment is advisory — the active model is process-wide. Check your harness documentation for details.
+> The `model:` frontmatter field is honored by harnesses that support per-agent model selection (e.g. VS Code custom agents). In other harnesses, per-agent model assignment is advisory -the active model is process-wide. Check your harness documentation for details.
 
 ---
 
@@ -452,7 +452,7 @@ Re-run bootstrap with the correct `--harness` flag. The old directory won't be c
 ## FAQ
 
 **Can I go from idea to built project without doing anything manually?**
-Yes — use `forge-auto-build`. One pre-flight gate, then fully autonomous: PRD → agent team → all build phases, with validation and a commit after every phase. See [Full Auto Build](docs/prompt-playbook.md#full-auto-build---one-command-entire-pipeline-optional).
+Yes -use `forge-auto-build`. One pre-flight gate, then fully autonomous: PRD → agent team → all build phases, with validation and a commit after every phase. See [Full Auto Build](docs/prompt-playbook.md#full-auto-build---one-command-entire-pipeline-optional).
 
 **Do I need to use all the templates?**
 No - use only what you need, or treat them as examples.

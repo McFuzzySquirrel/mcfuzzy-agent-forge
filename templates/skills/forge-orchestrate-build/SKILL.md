@@ -19,29 +19,29 @@ You are driving a multi-agent project build. Your job is to coordinate specialis
 ### 1. Analyze the PRD and Agent Team
 
 Before starting:
-1. Read the complete PRD — goals, scope, tech stack, all requirements, phases, dependencies.
-2. Review all agent files in `.agents/agents/` — expertise, collaboration sections, which agents operate in which phases.
+1. Read the complete PRD -goals, scope, tech stack, all requirements, phases, dependencies.
+2. Review all agent files in `.agents/agents/` -expertise, collaboration sections, which agents operate in which phases.
 3. Build the execution plan: map each requirement to an owner agent, identify dependencies, determine ordering within and across phases.
-4. Verify tech stack currency — search for latest stable versions of every major technology. Flag deprecated or end-of-life dependencies. Report findings before proceeding with Phase 1.
+4. Verify tech stack currency -search for latest stable versions of every major technology. Flag deprecated or end-of-life dependencies. Report findings before proceeding with Phase 1.
 
 ### 1b. Analyze Feature PRD (Feature Mode)
 
 When the document is a Feature PRD (F-prefixed phases, "Feature Overview" section):
-1. Read the Feature PRD — scope, impact, new components, phases, Agent Impact Assessment.
-2. Read the original PRD — what's already built, established architecture.
-3. Review agent files — identify modified, new, and unchanged agents.
+1. Read the Feature PRD -scope, impact, new components, phases, Agent Impact Assessment.
+2. Read the original PRD -what's already built, established architecture.
+3. Review agent files -identify modified, new, and unchanged agents.
 4. Verify tech stack only for NEW technologies introduced by the feature.
-5. Build the feature execution plan — map FT-FR-* requirements, identify dependencies on existing work.
+5. Build the feature execution plan -map FT-FR-* requirements, identify dependencies on existing work.
 
 ### 1c. Analyze Product Vision + Feature Documents (Feature-Based Build Mode)
 
 When building from decomposed features (detected by `docs/product-vision.md` + `docs/features/`):
-1. Read the Product Vision — goals, architecture, NFRs, feature list, dependency graph (Section 14).
-2. Read ALL feature documents — scope, user stories, requirements, phases, dependencies.
-3. Review agent files — agents may own requirements from multiple features.
-4. Build the feature dependency graph — verify a valid DAG, determine execution order (dependencies first), identify parallel opportunities.
+1. Read the Product Vision -goals, architecture, NFRs, feature list, dependency graph (Section 14).
+2. Read ALL feature documents -scope, user stories, requirements, phases, dependencies.
+3. Review agent files -agents may own requirements from multiple features.
+4. Build the feature dependency graph -verify a valid DAG, determine execution order (dependencies first), identify parallel opportunities.
 5. Verify tech stack currency for the product vision.
-6. Build the execution plan — order features by dependency, order tasks by feature phases.
+6. Build the execution plan -order features by dependency, order tasks by feature phases.
 
 ### 2. Execute Phase by Phase
 
@@ -52,10 +52,10 @@ For each phase:
 **Task Execution:**
 1. Identify the owning agent from your execution plan.
 2. Check that all prerequisite tasks are complete.
-3. Call the specialist agent with clear instructions — reference PRD sections, specify what to build, mention dependent outputs, state target file paths.
-4. Verify the output — files exist at correct locations, PRD requirements followed, output usable by dependent agents.
+3. Call the specialist agent with clear instructions -reference PRD sections, specify what to build, mention dependent outputs, state target file paths.
+4. Verify the output -files exist at correct locations, PRD requirements followed, output usable by dependent agents.
 5. Document completion for handoff.
-6. Commit progress — descriptive commit message (`Phase N, Task N.M: description`), include only task-related files, update `docs/PROGRESS.md` and include in the commit.
+6. Commit progress -descriptive commit message (`Phase N, Task N.M: description`), include only task-related files, update `docs/PROGRESS.md` and include in the commit.
 
 **Phase Completion:**
 1. Review all deliverables.
@@ -122,9 +122,9 @@ Create at start of orchestration. Update after each task. Include in every commi
 ## Output Format
 
 When presenting execution progress, follow the format matching the current mode. Load `references/output-templates.md` for the full templates:
-- **Full Build Output** — phase-based with task breakdown, agent calls, and completion markers
-- **Feature Execution Output** — F-prefixed phases, notes which agents are existing vs. new
-- **Feature-Based Build Output** — feature dependency order table, per-feature progress
+- **Full Build Output** -phase-based with task breakdown, agent calls, and completion markers
+- **Feature Execution Output** -F-prefixed phases, notes which agents are existing vs. new
+- **Feature-Based Build Output** -feature dependency order table, per-feature progress
 
 Structure output clearly with sections for phase start, each task (agent, input, output, result), and phase completion summary.
 
@@ -188,8 +188,8 @@ Phase 3: Polish
 ## Gotchas
 
 - **Never re-execute completed phases.** When executing a Feature PRD, the original PRD phases are already complete. Reference existing work.
-- **Check agent collaboration sections** before calling an agent — they declare what they need from other agents.
-- **Verify output before proceeding.** Don't assume an agent's work is correct — check files exist, builds pass, tests pass.
+- **Check agent collaboration sections** before calling an agent -they declare what they need from other agents.
+- **Verify output before proceeding.** Don't assume an agent's work is correct -check files exist, builds pass, tests pass.
 - **Feature phases use F-prefixed IDs** (Phase F1, F2) to distinguish from original phases.
 - **Rollback tracking.** In feature execution, keep a running list of modified existing files so the feature could be reverted.
 - **Pause between features** in feature-based builds. Ask for approval before starting the next feature.
@@ -206,4 +206,4 @@ Before reporting a phase complete:
 - [ ] Phase acceptance criteria from the PRD are met
 - [ ] All deliverables are committed with descriptive messages
 - [ ] (Feature mode) Rollback list of modified existing files is preserved
-- [ ] (Feature-based mode) Feature dependency graph is respected — no unlocked features started
+- [ ] (Feature-based mode) Feature dependency graph is respected -no unlocked features started

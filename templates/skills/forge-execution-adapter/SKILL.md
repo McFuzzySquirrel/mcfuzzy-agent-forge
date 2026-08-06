@@ -90,9 +90,9 @@ Once the manifest exists and progress is synchronized, hand the structured contr
 
 By default the embedded tooling writes:
 
-- `docs/EXECUTION-MANIFEST.json` — compiled neutral execution contract
-- `docs/EXECUTION-AUDIT.jsonl` — append-only audit trail for checkpoint mutations
-- `docs/PROGRESS.md` — synchronized execution status in the existing forge format
+- `docs/EXECUTION-MANIFEST.json` -compiled neutral execution contract
+- `docs/EXECUTION-AUDIT.jsonl` -append-only audit trail for checkpoint mutations
+- `docs/PROGRESS.md` -synchronized execution status in the existing forge format
 
 ---
 

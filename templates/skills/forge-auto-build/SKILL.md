@@ -12,7 +12,7 @@ description: >
 
 # Skill: Full Auto Build (End-to-End Pipeline)
 
-You are running the **full Agent Forge pipeline** on behalf of the user in one continuous, autonomous flow. Your job is to chain every upstream skill and agent in order, validate outputs at each stage, commit after each phase, and produce a finished project — all from a single invocation.
+You are running the **full Agent Forge pipeline** on behalf of the user in one continuous, autonomous flow. Your job is to chain every upstream skill and agent in order, validate outputs at each stage, commit after each phase, and produce a finished project -all from a single invocation.
 
 The underlying skills (`forge-build-prd`, `forge-build-agent-team`, `forge-assign-models`, `forge-orchestrate-build`) each own their own work. You are the conductor: you invoke them in sequence, verify each handoff, commit progress, and keep the user informed without interrupting them.
 
@@ -34,7 +34,7 @@ Use this skill when you want the entire pipeline to run hands-free after a singl
 
 - **One gate, then fully autonomous.** The pre-flight confirmation (Step 0) is the only mandatory pause. Once the user types `GO`, every stage runs to completion without further interruption.
 - **Never skip a stage silently.** If a stage fails or produces an unexpected result, stop immediately, report what happened, and ask the user how to proceed. Do not guess or silently skip.
-- **Invoke, do not re-implement.** The work — interviewing the user, drafting the PRD, designing the team, scaffolding, executing phases — belongs to the underlying skills. You sequence them. Never duplicate their logic.
+- **Invoke, do not re-implement.** The work -interviewing the user, drafting the PRD, designing the team, scaffolding, executing phases -belongs to the underlying skills. You sequence them. Never duplicate their logic.
 - **Commit after every phase.** After each build phase completes and its validation passes, commit the changes with a descriptive message and update `docs/PROGRESS.md`.
 - **Validate before continuing.** After each stage, verify the expected output exists and is well-formed before moving to the next stage.
 - **Be explicit about progress.** At every message, state which stage you are in (e.g., "Stage 3 of 6: forge-build-agent-team") and what comes next.
@@ -44,7 +44,7 @@ Use this skill when you want the entire pipeline to run hands-free after a singl
 
 ## Process
 
-### Step 0: Pre-Flight Confirmation (Mandatory — the only pause)
+### Step 0: Pre-Flight Confirmation (Mandatory -the only pause)
 
 When the user invokes this skill, perform the following before touching any files:
 
@@ -62,12 +62,12 @@ When the user invokes this skill, perform the following before touching any file
 4. **Present the planned stages** as a numbered list:
    - Stage 1: `forge-build-prd` → produce `docs/PRD.md` *(skip if PRD already exists)*
    - Stage 2: `forge-build-agent-team` → produce agent and skill files
-   - Stage 3 (optional): `forge-assign-models` → recommend or apply per-agent models *(opt-in — include if user passed `--assign-models`)*
-   - Stage 4: `forge-orchestrate-build` — execute all phases continuously, committing after each
+   - Stage 3 (optional): `forge-assign-models` → recommend or apply per-agent models *(opt-in -include if user passed `--assign-models`)*
+   - Stage 4: `forge-orchestrate-build` -execute all phases continuously, committing after each
 5. **State the commit strategy** explicitly:
    - After Stage 2: `chore: bootstrap Agent Forge agent and skill templates`
-   - After each build phase N: `feat: complete Phase N — <phase name>`
-   - After all phases: `chore: auto-build complete — all phases delivered`
+   - After each build phase N: `feat: complete Phase N -<phase name>`
+   - After all phases: `chore: auto-build complete -all phases delivered`
 6. **Present the pre-flight checklist** (see below).
 7. **Prompt**: *"Review the plan above. Type `GO` to start the full auto-build, `GO --assign-models` to also run model assignment, or `stop` to exit."*
 
@@ -85,7 +85,7 @@ When the user invokes this skill, perform the following before touching any file
 **Pre-flight checklist (emit verbatim):**
 
 ```
-Pre-flight checklist — verify before typing GO:
+Pre-flight checklist -verify before typing GO:
 
 Input
 - [ ] The idea or PRD path is correct
@@ -99,7 +99,7 @@ Scope
 
 Expectations
 - [ ] You have reviewed the note on skipped stages (existing PRD, existing agents)
-- [ ] You know you can interrupt at any time with Ctrl+C or by closing the session — PROGRESS.md
+- [ ] You know you can interrupt at any time with Ctrl+C or by closing the session -PROGRESS.md
       will record the last completed task so you can resume manually
 ```
 
@@ -107,14 +107,14 @@ Expectations
 
 ### Stage 1: Run `forge-build-prd`
 
-*Skip this stage if the selected input source is an existing PRD path (for example `docs/PRD.md`) — proceed directly to Stage 2.*
+*Skip this stage if the selected input source is an existing PRD path (for example `docs/PRD.md`) -proceed directly to Stage 2.*
 
 Invoke the `forge-build-prd` skill, passing the selected idea input as-is. Let that skill drive its own clarifying-questions process. Do not answer on the user's behalf.
 
 When `forge-build-prd` finishes and `docs/PRD.md` is saved:
 - Verify the file exists and contains at minimum: Overview, Goals, Functional Requirements, Implementation Phases, and Acceptance Criteria sections.
 - If any section is missing, re-invoke `forge-build-prd` in gap-fill mode before continuing.
-- Report: "Stage 1 complete — `docs/PRD.md` produced. Moving to Stage 2."
+- Report: "Stage 1 complete -`docs/PRD.md` produced. Moving to Stage 2."
 
 ---
 
@@ -130,7 +130,7 @@ When it finishes:
   git add .agents/agents/ .agents/skills/ docs/
   git commit -m "chore: bootstrap Agent Forge agent and skill templates"
   ```
-- Report: "Stage 2 complete — agent team committed. Moving to Stage 3."
+- Report: "Stage 2 complete -agent team committed. Moving to Stage 3."
 
 ---
 
@@ -147,13 +147,13 @@ When it finishes:
   git add .agents/agents/ docs/MODEL-PLAN.md
   git commit -m "chore: apply per-agent model assignments"
   ```
-- Report: "Stage 3 complete — per-agent models applied. Moving to Stage 4."
+- Report: "Stage 3 complete -per-agent models applied. Moving to Stage 4."
 
 If `--assign-models` was not requested, skip this stage and note: "Stage 3 skipped (no --assign-models flag). You can run forge-assign-models manually at any time. Moving to Stage 4."
 
 ---
 
-### Stage 4: Run `forge-orchestrate-build` — All Phases
+### Stage 4: Run `forge-orchestrate-build` -All Phases
 
 Invoke the `forge-orchestrate-build` skill in **continuous mode** (execute all phases without pausing between them).
 
@@ -168,7 +168,7 @@ After each phase completes validation, you **must** perform the following before
 **Per-phase commit sequence:**
 ```
 git add .
-git commit -m "feat: complete Phase N — <phase name from PRD>"
+git commit -m "feat: complete Phase N -<phase name from PRD>"
 ```
 
 Verify the commit succeeded before the skill moves to the next phase. If the commit fails, stop and report the error.
@@ -191,7 +191,7 @@ After all phases in Stage 4 are complete and committed:
 1. Commit any remaining uncommitted work:
    ```
    git add .
-   git commit -m "chore: auto-build complete — all phases delivered"
+   git commit -m "chore: auto-build complete -all phases delivered"
    ```
 2. Produce a **Final Summary** report in the terminal:
 
@@ -239,7 +239,7 @@ If this skill is invoked in a repo that has an incomplete auto-build (detected b
 |---|---|
 | Stage 1 produces incomplete PRD | Re-invoke `forge-build-prd` in gap-fill mode before continuing |
 | Stage 2 produces no agent files | Stop and report; do not proceed to build |
-| Stage 3 model assignment fails | Log the failure, skip Stage 3, continue to Stage 4 — report at the end |
+| Stage 3 model assignment fails | Log the failure, skip Stage 3, continue to Stage 4 -report at the end |
 | Stage 4 phase fails validation | Stop after the failing phase; report error, blocked phase, and responsible agent |
 | Stage 4 commit fails | Stop immediately; report the git error |
 | Any unexpected file conflict | Stop and ask the user whether to overwrite, merge, or abort |
@@ -251,6 +251,6 @@ If this skill is invoked in a repo that has an incomplete auto-build (detected b
 - **Do not skip the pre-flight gate.** Even if the user says "just run everything," you must present the pre-flight checklist and require a `GO` before starting. This is the only safeguard in a fully autonomous run.
 - **Never auto-apply models without `--assign-models`.** Stage 3 is opt-in. Writing to agent YAML frontmatter without explicit intent is a violation of `forge-assign-models`'s safety constraint.
 - **Commit after every phase, not at the end.** Batching commits defeats the purpose of phase-level checkpoints and makes debugging harder.
-- **Do not suppress validation errors.** If a phase fails its build/test validation, stopping is the correct behavior — not retrying silently or moving on with a warning.
+- **Do not suppress validation errors.** If a phase fails its build/test validation, stopping is the correct behavior -not retrying silently or moving on with a warning.
 - **Respect agent boundaries.** When driving Stage 4, do not instruct agents to do work outside their documented expertise. Delegate cross-cutting tasks to the correct owner agents.
 - **One invocation, one run.** This skill does not support running two independent projects simultaneously. If the workspace has multiple PRDs or project roots, ask the user to clarify which one to build before starting.

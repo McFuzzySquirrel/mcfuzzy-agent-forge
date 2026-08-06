@@ -1,14 +1,14 @@
 #!/usr/bin/env bash
-# forge-launcher.sh — Interactive launcher that guides a user through the full
+# forge-launcher.sh -Interactive launcher that guides a user through the full
 # Agent Forge lifecycle in one session:
-#   1. Pre-flight check      — verify required tools
-#   2. Select harness        — GitHub Copilot | opencode | Claude Code | generic
-#   3. Create repository     — gh repo create (GitHub) or git init (others)
-#   4. Bootstrap Agent Forge — run bootstrap.sh into the new repo
-#   5. Capture idea          — write IDEA.md
-#   6. Add PRD / research    — optional: copy/paste PRD and seed docs into docs/
-#   7. Commit + push         — commit bootstrapped forge, IDEA.md, PRD, and seed docs
-#   8. Launch auto-build     — harness-specific instructions or CLI spawn
+#   1. Pre-flight check      -verify required tools
+#   2. Select harness        -GitHub Copilot | opencode | Claude Code | generic
+#   3. Create repository     -gh repo create (GitHub) or git init (others)
+#   4. Bootstrap Agent Forge -run bootstrap.sh into the new repo
+#   5. Capture idea          -write IDEA.md
+#   6. Add PRD / research    -optional: copy/paste PRD and seed docs into docs/
+#   7. Commit + push         -commit bootstrapped forge, IDEA.md, PRD, and seed docs
+#   8. Launch auto-build     -harness-specific instructions or CLI spawn
 #   9. Completion summary
 #
 # Usage:
@@ -16,7 +16,7 @@
 #
 # Options:
 #   --non-interactive   Skip all interactive prompts (for CI/testing only).
-#                       Requires environment variables to be set — see docs.
+#                       Requires environment variables to be set -see docs.
 
 set -euo pipefail
 
@@ -45,7 +45,7 @@ RED="$(tput_safe setaf 1)"
 print_header() {
   echo ""
   echo "${CYAN}${BOLD}════════════════════════════════════════════════════════${RESET}"
-  echo "${CYAN}${BOLD}  McFuzzy Agent Forge — Launcher${RESET}"
+  echo "${CYAN}${BOLD}  McFuzzy Agent Forge -Launcher${RESET}"
   echo "${CYAN}${BOLD}════════════════════════════════════════════════════════${RESET}"
   echo ""
 }
@@ -138,7 +138,7 @@ preflight_check() {
   if command -v git &>/dev/null; then
     ok "git $(git --version | awk '{print $3}')"
   else
-    fail "git not found — install Git before running this launcher."
+    fail "git not found -install Git before running this launcher."
     missing+=(git)
   fi
 
@@ -146,7 +146,7 @@ preflight_check() {
     ok "gh $(gh --version 2>/dev/null | head -1 | awk '{print $3}')"
     GH_AVAILABLE=true
   else
-    warn "gh (GitHub CLI) not found — GitHub harness repo creation will be unavailable."
+    warn "gh (GitHub CLI) not found -GitHub harness repo creation will be unavailable."
     GH_AVAILABLE=false
   fi
 
@@ -154,7 +154,7 @@ preflight_check() {
     ok "copilot $(copilot --version 2>/dev/null | head -1 || echo '(installed)')"
     COPILOT_AVAILABLE=true
   else
-    warn "copilot not found — GitHub Copilot CLI auto-launch will be unavailable."
+    warn "copilot not found -GitHub Copilot CLI auto-launch will be unavailable."
     COPILOT_AVAILABLE=false
   fi
 
@@ -162,7 +162,7 @@ preflight_check() {
     ok "opencode $(opencode --version 2>/dev/null | head -1 || echo '(installed)')"
     OPENCODE_AVAILABLE=true
   else
-    warn "opencode not found — opencode harness auto-launch will be unavailable."
+    warn "opencode not found -opencode harness auto-launch will be unavailable."
     OPENCODE_AVAILABLE=false
   fi
 
@@ -170,7 +170,7 @@ preflight_check() {
     ok "claude $(claude --version 2>/dev/null | head -1 || echo '(installed)')"
     CLAUDE_AVAILABLE=true
   else
-    warn "claude not found — Claude Code harness auto-launch will be unavailable."
+    warn "claude not found -Claude Code harness auto-launch will be unavailable."
     CLAUDE_AVAILABLE=false
   fi
 
@@ -232,7 +232,7 @@ create_repo() {
   prompt repo_description "Short description (optional)" ""
 
   local repo_visibility
-  prompt repo_visibility "Visibility — public or private" "private"
+  prompt repo_visibility "Visibility -public or private" "private"
   repo_visibility="${repo_visibility,,}"
   [[ "$repo_visibility" == "public" || "$repo_visibility" == "private" ]] || repo_visibility="private"
 
@@ -266,7 +266,7 @@ create_repo() {
     REMOTE_CREATED=false
 
     if [[ "$HARNESS" == "github" && "$GH_AVAILABLE" == false ]]; then
-      warn "gh is not installed — skipped remote creation."
+      warn "gh is not installed -skipped remote creation."
       warn "Run 'gh repo create' or 'git remote add origin <url>' manually."
     else
       prompt_yn "Add a Git remote for this repository now?"
@@ -352,7 +352,7 @@ capture_idea() {
 # Step 6: Add PRD and research / seed documents (optional but recommended)
 # ---------------------------------------------------------------------------
 add_prd_and_research() {
-  step "Step 6 of 9: Add PRD and research / seed documents (optional — recommended)"
+  step "Step 6 of 9: Add PRD and research / seed documents (optional -recommended)"
 
   local docs_dir="$REPO_DIR/docs"
   local research_dir="$docs_dir/research"
@@ -376,15 +376,15 @@ add_prd_and_research() {
         ok "PRD copied from \$FORGE_PRD_FILE → docs/PRD.md"
         PRD_ADDED=true
       else
-        warn "FORGE_PRD_FILE is set but file not found: $FORGE_PRD_FILE — skipping PRD."
+        warn "FORGE_PRD_FILE is set but file not found: $FORGE_PRD_FILE -skipping PRD."
       fi
     fi
   else
     echo "  Do you have an existing PRD to add?"
     echo ""
-    echo "    1) Yes — provide a file path to copy in as docs/PRD.md"
-    echo "    2) Yes — paste the PRD content directly"
-    echo "    3) No  — skip (the pipeline will generate one from docs/IDEA.md)"
+    echo "    1) Yes -provide a file path to copy in as docs/PRD.md"
+    echo "    2) Yes -paste the PRD content directly"
+    echo "    3) No  -skip (the pipeline will generate one from docs/IDEA.md)"
     echo ""
     local prd_choice
     prompt prd_choice "Select [1-3]" "3"
@@ -399,7 +399,7 @@ add_prd_and_research() {
           ok "PRD copied → docs/PRD.md"
           PRD_ADDED=true
         else
-          warn "File not found: $prd_src — skipping PRD."
+          warn "File not found: $prd_src -skipping PRD."
         fi
         ;;
       2)
@@ -418,11 +418,11 @@ add_prd_and_research() {
           ok "PRD saved → docs/PRD.md"
           PRD_ADDED=true
         else
-          warn "No content entered — skipping PRD."
+          warn "No content entered -skipping PRD."
         fi
         ;;
       *)
-        info "Skipping PRD — the pipeline will generate one from docs/IDEA.md."
+        info "Skipping PRD -the pipeline will generate one from docs/IDEA.md."
         ;;
     esac
   fi
@@ -439,7 +439,7 @@ add_prd_and_research() {
           ok "Research doc copied: $(basename "$_f") → docs/research/"
           RESEARCH_ADDED=true
         else
-          warn "FORGE_RESEARCH_FILES: file not found: $_f — skipping."
+          warn "FORGE_RESEARCH_FILES: file not found: $_f -skipping."
         fi
       done
     fi
@@ -460,7 +460,7 @@ add_prd_and_research() {
           ok "Research doc copied: $(basename "$res_path") → docs/research/"
           RESEARCH_ADDED=true
         else
-          warn "File not found: $res_path — skipping."
+          warn "File not found: $res_path -skipping."
         fi
       done
     else
@@ -484,7 +484,7 @@ commit_bootstrap() {
       git -C "$REPO_DIR" push -u origin "$(git -C "$REPO_DIR" rev-parse --abbrev-ref HEAD)"
     ok "Pushed to remote."
   else
-    warn "No remote configured — skipping push. Add a remote and run 'git push -u origin HEAD' manually."
+    warn "No remote configured -skipping push. Add a remote and run 'git push -u origin HEAD' manually."
   fi
 }
 

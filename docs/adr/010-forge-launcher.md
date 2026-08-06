@@ -1,4 +1,4 @@
-# ADR-010: Forge Launcher — Interactive CLI for the Full Agent Forge Lifecycle
+# ADR-010: Forge Launcher -Interactive CLI for the Full Agent Forge Lifecycle
 
 **Date:** 2026-08-05
 **Status:** Accepted
@@ -19,7 +19,7 @@ Three gaps motivate a launcher component:
 
 ### Gap 1: No guided repo-creation step
 
-The bootstrap scripts (`bootstrap.sh` / `bootstrap.ps1`) assume a target directory already exists and is already a Git repository. A new user must create the repo, clone/init it, and then run bootstrap manually — three separate operations with no guidance.
+The bootstrap scripts (`bootstrap.sh` / `bootstrap.ps1`) assume a target directory already exists and is already a Git repository. A new user must create the repo, clone/init it, and then run bootstrap manually -three separate operations with no guidance.
 
 ### Gap 2: No harness selection UX
 
@@ -27,7 +27,7 @@ The bootstrap scripts (`bootstrap.sh` / `bootstrap.ps1`) assume a target directo
 
 ### Gap 3: No bridge between bootstrap and auto-build
 
-After `bootstrap.sh` completes, the user must open their agent harness, navigate to the new repo, and remember the correct incantation (`@workspace /forge-auto-build …`). There is no component that hands them a ready-to-paste command or — for CLI-native harnesses like opencode or Claude Code — spawns the session automatically.
+After `bootstrap.sh` completes, the user must open their agent harness, navigate to the new repo, and remember the correct incantation (`@workspace /forge-auto-build …`). There is no component that hands them a ready-to-paste command or -for CLI-native harnesses like opencode or Claude Code -spawns the session automatically.
 
 ---
 
@@ -47,24 +47,24 @@ The launcher orchestrates exactly the same operations a user would perform manua
 
 | Step | What happens |
 |------|--------------|
-| 1 | Pre-flight — verify `git`, `gh`, `opencode`, `claude` availability |
-| 2 | Harness selection — numbered menu mapping to `--harness` flag values |
-| 3 | Repo creation — `gh repo create --clone` (GitHub) or `git init` + optional remote |
-| 4 | Bootstrap — delegates to the existing `bootstrap.sh` / `bootstrap.ps1` |
-| 5 | Idea capture — multi-line prompt, saved to `IDEA.md` |
-| 6 | Commit + push — `git add . && git commit -m "chore: bootstrap agent forge"` |
-| 7 | Auto-build launch — harness-specific instructions or optional CLI spawn |
-| 8 | Completion summary — repo path, harness, next steps |
+| 1 | Pre-flight -verify `git`, `gh`, `opencode`, `claude` availability |
+| 2 | Harness selection -numbered menu mapping to `--harness` flag values |
+| 3 | Repo creation -`gh repo create --clone` (GitHub) or `git init` + optional remote |
+| 4 | Bootstrap -delegates to the existing `bootstrap.sh` / `bootstrap.ps1` |
+| 5 | Idea capture -multi-line prompt, saved to `IDEA.md` |
+| 6 | Commit + push -`git add . && git commit -m "chore: bootstrap agent forge"` |
+| 7 | Auto-build launch -harness-specific instructions or optional CLI spawn |
+| 8 | Completion summary -repo path, harness, next steps |
 
 The launcher **never reimplements** bootstrap logic. It calls the bootstrap scripts verbatim (`--force`) so the two scripts remain the single source of truth for what gets copied and where.
 
 ### 3. Harness selection is first-class
 
-The harness choice is the second step (before repo creation) because all subsequent decisions depend on it — the bootstrap flag, the directory layout, and the auto-build launch command. This ordering ensures the user cannot reach bootstrap without having made an explicit harness choice.
+The harness choice is the second step (before repo creation) because all subsequent decisions depend on it -the bootstrap flag, the directory layout, and the auto-build launch command. This ordering ensures the user cannot reach bootstrap without having made an explicit harness choice.
 
 | Harness | Bootstrap flag | Repo creation | Auto-build launch |
 |---------|---------------|----------------|-------------------|
-| GitHub Copilot | `--harness github` | `gh repo create` | Manual — printed instructions |
+| GitHub Copilot | `--harness github` | `gh repo create` | Manual -printed instructions |
 | opencode | `--harness agents` | `git init` | Optional `opencode .` spawn |
 | Claude Code | `--harness claude` | `git init` | Optional `claude .` spawn |
 | Generic `.agents` | `--harness agents` (default) | `git init` | Printed instructions |
@@ -88,7 +88,7 @@ Both scripts accept a `--non-interactive` / `-NonInteractive` flag. In this mode
 
 ### Positive
 
-- **One command from zero to auto-build.** A user who has never used Agent Forge can run `./scripts/forge-launcher.sh`, answer a handful of prompts, and arrive at a bootstrapped repository with `forge-auto-build` queued to run — without reading any documentation first.
+- **One command from zero to auto-build.** A user who has never used Agent Forge can run `./scripts/forge-launcher.sh`, answer a handful of prompts, and arrive at a bootstrapped repository with `forge-auto-build` queued to run -without reading any documentation first.
 - **Harness choice is surfaced and explained.** The numbered menu and the directory hint next to each option eliminate the most common onboarding mistake (bootstrapping into the wrong harness directory).
 - **No regression for existing users.** The bootstrap scripts, forge skills, and agent templates are unchanged. Power users who prefer the manual flow are unaffected.
 - **No new runtime dependencies.** The scripts run anywhere Bash 4+ or PowerShell 5.1+ is available, which is already the existing prerequisite for the bootstrap scripts.
@@ -97,7 +97,7 @@ Both scripts accept a `--non-interactive` / `-NonInteractive` flag. In this mode
 ### Negative
 
 - **Interactive terminal required for Tier 1.** The launcher is a terminal script; it does not provide a graphical UI or a web interface. Users who want a richer experience must wait for a Tier 2 implementation.
-- **Thin harness coverage for auto-build launch.** The launcher can spawn `opencode .` or `claude .` for those CLI-native harnesses, but for GitHub Copilot it can only print instructions — there is no `gh copilot chat` sub-command that accepts a skill invocation today.
+- **Thin harness coverage for auto-build launch.** The launcher can spawn `opencode .` or `claude .` for those CLI-native harnesses, but for GitHub Copilot it can only print instructions -there is no `gh copilot chat` sub-command that accepts a skill invocation today.
 - **One more file pair to maintain.** If `bootstrap.sh` / `bootstrap.ps1` change their interface (flags, arguments), the launcher must be updated to match.
 
 ### Neutral

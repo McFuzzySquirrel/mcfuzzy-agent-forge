@@ -9,10 +9,10 @@
 
 Agent Forge's pipeline is a fixed sequence of well-defined stages:
 
-1. `forge-build-prd` — produce `docs/PRD.md`
-2. `forge-build-agent-team` — generate the specialist agent team
-3. *(optional)* `forge-assign-models` — assign per-agent models
-4. `forge-orchestrate-build` — execute all build phases, phase by phase
+1. `forge-build-prd` -produce `docs/PRD.md`
+2. `forge-build-agent-team` -generate the specialist agent team
+3. *(optional)* `forge-assign-models` -assign per-agent models
+4. `forge-orchestrate-build` -execute all build phases, phase by phase
 
 ADR-004 addressed the gap between steps 1–3 by introducing `forge-bootstrap-project`, which chains PRD generation and team building with mandatory human review gates between them. The build execution (step 5) was deliberately left outside that skill because phase-by-phase review was the recommended default.
 
@@ -20,7 +20,7 @@ Two gaps remain:
 
 ### Gap 1: The bootstrap-to-build hand-off is still manual
 
-After `forge-bootstrap-project` completes, the user must separately invoke `@project-orchestrator` to start the build, and must type an approval at each phase boundary. For projects with a clear, well-understood scope this overhead adds no value — it only slows down users who already know what they want to build.
+After `forge-bootstrap-project` completes, the user must separately invoke `@project-orchestrator` to start the build, and must type an approval at each phase boundary. For projects with a clear, well-understood scope this overhead adds no value -it only slows down users who already know what they want to build.
 
 ### Gap 2: No per-phase validation and commit contract
 
@@ -30,7 +30,7 @@ After `forge-bootstrap-project` completes, the user must separately invoke `@pro
 
 `forge-bootstrap-project`'s design principle is that mandatory pauses are **never** skipped. Adding build execution to it would require either:
 
-- Removing the PRD and team-review pauses (unacceptable — see ADR-004), or
+- Removing the PRD and team-review pauses (unacceptable -see ADR-004), or
 - Adding a third, fourth, and Nth pause for each build phase, which defeats the purpose of a "fast path."
 
 Extending it is therefore the wrong approach. A separate skill with a different contract is needed.
@@ -43,7 +43,7 @@ We introduce a new **`forge-auto-build` meta-skill** that chains the entire pipe
 
 ### 1. Single Gate, Then Autonomous
 
-Unlike `forge-bootstrap-project`, which pauses after every major artifact, `forge-auto-build` presents exactly **one** mandatory gate — the pre-flight confirmation — and runs autonomously after the user types `GO`. This makes the skill appropriate for users with a clear scope who want to delegate the entire pipeline.
+Unlike `forge-bootstrap-project`, which pauses after every major artifact, `forge-auto-build` presents exactly **one** mandatory gate -the pre-flight confirmation -and runs autonomously after the user types `GO`. This makes the skill appropriate for users with a clear scope who want to delegate the entire pipeline.
 
 The pre-flight gate shows:
 - A restatement of the input and any repo-state warnings (existing PRD, existing agents, detected mode).
@@ -57,9 +57,9 @@ The user may not proceed to any stage without explicitly typing `GO` (or a clear
 | Stage | Skill / Agent invoked | Skipped when |
 |---|---|---|
 | 1 | `forge-build-prd` | `docs/PRD.md` already exists |
-| 2 | `forge-build-agent-team` | — (always runs, mode auto-detected) |
+| 2 | `forge-build-agent-team` | -(always runs, mode auto-detected) |
 | 3 *(opt-in)* | `forge-assign-models` (Recommend → Apply) | `--assign-models` flag not provided |
-| 4 | `forge-orchestrate-build` (all phases) | — (always runs) |
+| 4 | `forge-orchestrate-build` (all phases) | -(always runs) |
 
 Stage invocation follows the same delegation principle as `forge-bootstrap-project`: the meta-skill calls underlying skills and lets them own their own work. It never re-implements their logic.
 
@@ -67,18 +67,18 @@ Stage invocation follows the same delegation principle as `forge-bootstrap-proje
 
 After each build phase completes in Stage 4, the skill enforces the following before proceeding:
 
-1. **Validation gate** — all files the phase was supposed to produce exist, build/lint/test commands pass, and all phase acceptance criteria from the PRD are met.
-2. **Commit** — `git add . && git commit -m "feat: complete Phase N — <phase name>"`.
+1. **Validation gate** -all files the phase was supposed to produce exist, build/lint/test commands pass, and all phase acceptance criteria from the PRD are met.
+2. **Commit** -`git add . && git commit -m "feat: complete Phase N -<phase name>"`.
 
-If the validation gate fails, the skill **stops immediately** — it does not commit, does not move to the next phase, and does not retry silently. It reports the failing check, the exact error output, and the responsible agent, then asks the user how to proceed.
+If the validation gate fails, the skill **stops immediately** -it does not commit, does not move to the next phase, and does not retry silently. It reports the failing check, the exact error output, and the responsible agent, then asks the user how to proceed.
 
-After all phases complete, a final commit captures any remaining uncommitted work: `chore: auto-build complete — all phases delivered`.
+After all phases complete, a final commit captures any remaining uncommitted work: `chore: auto-build complete -all phases delivered`.
 
 This gives every project built with `forge-auto-build` a consistent, auditable commit history that maps exactly to PRD phases.
 
 ### 4. Opt-In Model Assignment
 
-`forge-assign-models` is only invoked if the user includes `--assign-models` in their `GO` command. When invoked, the skill runs it in Recommend mode first, then Apply mode immediately after — fully autonomous because the user's opt-in at the pre-flight gate is the equivalent of the Apply confirmation. This preserves the safety contract of ADR-003 (no agent YAML mutation without explicit intent) while still enabling hands-free execution.
+`forge-assign-models` is only invoked if the user includes `--assign-models` in their `GO` command. When invoked, the skill runs it in Recommend mode first, then Apply mode immediately after -fully autonomous because the user's opt-in at the pre-flight gate is the equivalent of the Apply confirmation. This preserves the safety contract of ADR-003 (no agent YAML mutation without explicit intent) while still enabling hands-free execution.
 
 ### 5. Resumability
 
@@ -115,7 +115,7 @@ If a `forge-auto-build` run is interrupted, re-invoking the skill in the same re
 - Skill: [forge-bootstrap-project](../../templates/skills/forge-bootstrap-project/SKILL.md)
 - Skill: [forge-orchestrate-build](../../templates/skills/forge-orchestrate-build/SKILL.md)
 - Skill: [forge-assign-models](../../templates/skills/forge-assign-models/SKILL.md)
-- Docs: [Prompt Playbook — Full Auto Build](../prompt-playbook.md#full-auto-build---one-command-entire-pipeline-optional)
+- Docs: [Prompt Playbook -Full Auto Build](../prompt-playbook.md#full-auto-build---one-command-entire-pipeline-optional)
 - ADR: [ADR-001 Agent/Skill Separation and Progress Reporting](001-agent-skill-separation-and-progress-reporting.md)
 - ADR: [ADR-003 Per-Agent Model Assignment](003-per-agent-model-assignment.md)
 - ADR: [ADR-004 Bootstrap Meta-Skill via forge-bootstrap-project](004-bootstrap-project-meta-skill.md)

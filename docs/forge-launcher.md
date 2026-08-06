@@ -8,15 +8,15 @@
 
 `forge-launcher` is an interactive terminal script that orchestrates the complete Agent Forge onboarding flow in a single session:
 
-1. **Pre-flight** — checks that `git` and optional tools (`gh`, `copilot`, `opencode`, `claude`) are installed.
-2. **Harness selection** — choose GitHub Copilot, opencode, Claude Code, or generic `.agents`.
-3. **Repo creation** — creates a GitHub repository (via `gh`) or initialises a local `git init`.
-4. **Bootstrap** — runs the existing `bootstrap.sh` / `bootstrap.ps1` into the new repo.
-5. **Idea capture** — prompts for your project idea and saves it to `docs/IDEA.md`.
-6. **PRD & research** *(optional, recommended)* — add an existing PRD (`docs/PRD.md`) and/or research / seed documents (`docs/research/`).
-7. **Commit + push** — commits the bootstrapped forge, idea file, PRD, and any research docs.
-8. **Auto-build launch** — opens Copilot CLI, opencode, or Claude Code in a separate terminal when available, with clear fallback commands if not.
-9. **Summary** — prints the repo path, harness, and next steps.
+1. **Pre-flight** -checks that `git` and optional tools (`gh`, `copilot`, `opencode`, `claude`) are installed.
+2. **Harness selection** -choose GitHub Copilot, opencode, Claude Code, or generic `.agents`.
+3. **Repo creation** -creates a GitHub repository (via `gh`) or initialises a local `git init`.
+4. **Bootstrap** -runs the existing `bootstrap.sh` / `bootstrap.ps1` into the new repo.
+5. **Idea capture** -prompts for your project idea and saves it to `docs/IDEA.md`.
+6. **PRD & research** *(optional, recommended)* -add an existing PRD (`docs/PRD.md`) and/or research / seed documents (`docs/research/`).
+7. **Commit + push** -commits the bootstrapped forge, idea file, PRD, and any research docs.
+8. **Auto-build launch** -opens Copilot CLI, opencode, or Claude Code in a separate terminal when available, with clear fallback commands if not.
+9. **Summary** -prints the repo path, harness, and next steps.
 
 ---
 
@@ -69,7 +69,7 @@ $env:FORGE_YN_DEFAULT = "y"
 
 ## Step-by-step walkthrough
 
-### Step 1 — Pre-flight check
+### Step 1 -Pre-flight check
 
 The launcher checks each required and optional tool and reports its version or a warning. If `git` is missing the script exits immediately. Missing optional tools (`gh`, `opencode`, `claude`) only disable the features that depend on them.
 
@@ -77,12 +77,12 @@ The launcher checks each required and optional tool and reports its version or a
 ▶ Step 1 of 9: Pre-flight check
   ✔  git 2.43.0
   ✔  gh 2.47.0
-  ⚠  opencode not found — opencode harness auto-launch will be unavailable.
+  ⚠  opencode not found -opencode harness auto-launch will be unavailable.
   ✔  claude (installed)
   ✔  bootstrap.sh found
 ```
 
-### Step 2 — Select harness
+### Step 2 -Select harness
 
 ```
 ▶ Step 2 of 9: Select agent harness
@@ -102,7 +102,7 @@ Your choice determines:
 - The directory where agent and skill templates are placed.
 - How the auto-build launch is handled (CLI spawn vs. printed instructions).
 
-### Step 3 — Create repository
+### Step 3 -Create repository
 
 For the **GitHub Copilot** harness (when `gh` is available):
 
@@ -110,7 +110,7 @@ For the **GitHub Copilot** harness (when `gh` is available):
 ▶ Step 3 of 9: Create repository
 Repository name (no spaces): my-cool-app
 Short description (optional): My cool app description
-Visibility — public or private [private]:
+Visibility -public or private [private]:
 Parent directory for the new repo [/home/user/projects]:
 
   Creating GitHub repository 'my-cool-app' (private) …
@@ -127,7 +127,7 @@ Remote URL (e.g. https://github.com/user/repo.git): https://github.com/user/my-c
   ✔  Remote 'origin' added
 ```
 
-### Step 4 — Bootstrap Agent Forge
+### Step 4 -Bootstrap Agent Forge
 
 Runs `bootstrap.sh` (or `bootstrap.ps1`) with `--force` into the new repository, copying all agent and skill templates into the harness directory.
 
@@ -137,7 +137,7 @@ Runs `bootstrap.sh` (or `bootstrap.ps1`) with `--force` into the new repository,
   ✔  Agent Forge templates bootstrapped.
 ```
 
-### Step 5 — Capture your idea
+### Step 5 -Capture your idea
 
 Enter your project idea in the terminal (press `Ctrl+D` or a blank line when done on Bash; press Enter twice on PowerShell). The text is saved to `docs/IDEA.md` (with a compatibility copy at repo root `IDEA.md`).
 
@@ -153,12 +153,12 @@ Enter your project idea in the terminal (press `Ctrl+D` or a blank line when don
   ✔  Idea saved to: /home/user/projects/my-cool-app/docs/IDEA.md
 ```
 
-### Step 6 — Add PRD and research / seed documents *(optional — recommended)*
+### Step 6 -Add PRD and research / seed documents *(optional -recommended)*
 
 This step is optional but strongly recommended. Starting the pipeline with a well-defined PRD produces significantly better results than starting from an idea alone. Research and seed documents (design specs, market research, technical notes, etc.) give every downstream stage additional context.
 
 ```
-▶ Step 6 of 9: Add PRD and research / seed documents (optional — recommended)
+▶ Step 6 of 9: Add PRD and research / seed documents (optional -recommended)
 
   Why this step matters:
   Starting with a well-defined PRD produces a far more accurate and
@@ -168,9 +168,9 @@ This step is optional but strongly recommended. Starting the pipeline with a wel
 
   Do you have an existing PRD to add?
 
-    1) Yes — provide a file path to copy in as docs/PRD.md
-    2) Yes — paste the PRD content directly
-    3) No  — skip (the pipeline will generate one from docs/IDEA.md)
+    1) Yes -provide a file path to copy in as docs/PRD.md
+    2) Yes -paste the PRD content directly
+    3) No  -skip (the pipeline will generate one from docs/IDEA.md)
 
 Select [1-3] [3]: 1
 Path to your PRD file: /home/user/documents/my-app-prd.md
@@ -190,7 +190,7 @@ Do you have research or seed documents to add (design specs, market research, te
 
 If you skip this step, the `forge-build-prd` stage will generate a PRD interactively from `docs/IDEA.md` when `forge-auto-build` runs. For the best results, spend extra time on the PRD or spec first: you can run `/forge-build-prd` as a separate skill, then feed that PRD into the launcher or into `/forge-auto-build` as the initial spec. Adding research or seed documents in `docs/research/` also improves downstream quality.
 
-### Step 7 — Commit bootstrapped forge and idea
+### Step 7 -Commit bootstrapped forge and idea
 
 ```
 ▶ Step 7 of 9: Commit bootstrapped forge and idea
@@ -199,7 +199,7 @@ If you skip this step, the `forge-build-prd` stage will generate a PRD interacti
   ✔  Pushed to remote.
 ```
 
-### Step 8 — Launch auto-build
+### Step 8 -Launch auto-build
 
 For harnesses with a spawnable CLI (`copilot`, `opencode`, `claude`):
 
@@ -223,7 +223,7 @@ For GitHub Copilot, the launcher now tries to open the GitHub Copilot CLI in a s
   The skill will present a pre-flight summary. Type GO to start the full pipeline.
 ```
 
-### Step 9 — Summary
+### Step 9 -Summary
 
 ```
 ▶ Step 9 of 9: Summary
@@ -311,7 +311,7 @@ Or invoke without arguments and let `forge-auto-build` detect the best source fr
 
 When invoked without arguments, the skill checks in this order: `docs/PRD.md`, `docs/IDEA.md`, `IDEA.md`. If multiple inputs are available, it asks you to choose which source to use for that run.
 
-Or paste the idea text directly — all three approaches work.
+Or paste the idea text directly -all three approaches work.
 
 ---
 

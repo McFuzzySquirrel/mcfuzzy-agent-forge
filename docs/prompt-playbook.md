@@ -89,14 +89,14 @@ From an existing PRD (skips PRD generation):
 
 **How it works:**
 
-1. A single pre-flight gate is presented — review the plan and type `GO` to launch.
+1. A single pre-flight gate is presented -review the plan and type `GO` to launch.
 2. After `GO`, the skill runs autonomously through all stages and phases.
 3. After every build phase completes, validation checks run (build, lint, tests) and a commit is made automatically.
-4. If any validation fails, the run stops and reports the exact error — it does not proceed past a broken phase.
+4. If any validation fails, the run stops and reports the exact error -it does not proceed past a broken phase.
 5. A final summary lists every stage completed, every commit made, and the recommended next steps.
 
 > **When to use `forge-auto-build` vs. `forge-bootstrap-project`:**
-> Use `forge-bootstrap-project` when you want human review gates after the PRD and after the agent team are generated — good for unfamiliar or complex projects.
+> Use `forge-bootstrap-project` when you want human review gates after the PRD and after the agent team are generated -good for unfamiliar or complex projects.
 > Use `forge-auto-build` when you have a clear idea and want to go directly from idea to working code with a single command.
 
 > **Resuming after interruption:** If the run is interrupted, re-invoke `forge-auto-build` in the same repo. It reads `docs/PROGRESS.md` and resumes from the last completed task without re-running already-committed stages.
@@ -394,4 +394,4 @@ Only modify skills I've approved in the audit report.
 - **The PRD is the source of truth** - if something looks wrong, fix the PRD first, then re-run the affected steps.
 - **Re-bootstrap safely** - run `bootstrap.sh --force` any time you want to pull in updated Agent Forge templates without losing your generated agents.
 - **Optimize generated skills** - after the initial build, run `@workspace /forge-optimize-skills` to audit your skills against best practices. The audit surfaces specific improvements you can apply immediately.
-- **Full auto build** - use `forge-auto-build` when you have a clear idea and want a single command to take you from idea to committed, validated code. One pre-flight gate, then fully autonomous. If the run is interrupted, just re-invoke it — it resumes from `docs/PROGRESS.md`.
+- **Full auto build** - use `forge-auto-build` when you have a clear idea and want a single command to take you from idea to committed, validated code. One pre-flight gate, then fully autonomous. If the run is interrupted, just re-invoke it -it resumes from `docs/PROGRESS.md`.
