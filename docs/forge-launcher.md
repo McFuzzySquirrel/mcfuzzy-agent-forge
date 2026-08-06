@@ -8,14 +8,14 @@
 
 `forge-launcher` is an interactive terminal script that orchestrates the complete Agent Forge onboarding flow in a single session:
 
-1. **Pre-flight** — checks that `git` and optional tools (`gh`, `opencode`, `claude`) are installed.
+1. **Pre-flight** — checks that `git` and optional tools (`gh`, `copilot`, `opencode`, `claude`) are installed.
 2. **Harness selection** — choose GitHub Copilot, opencode, Claude Code, or generic `.agents`.
 3. **Repo creation** — creates a GitHub repository (via `gh`) or initialises a local `git init`.
 4. **Bootstrap** — runs the existing `bootstrap.sh` / `bootstrap.ps1` into the new repo.
 5. **Idea capture** — prompts for your project idea and saves it to `IDEA.md`.
 6. **PRD & research** *(optional, recommended)* — add an existing PRD (`docs/PRD.md`) and/or research / seed documents (`docs/research/`).
 7. **Commit + push** — commits the bootstrapped forge, idea file, PRD, and any research docs.
-8. **Auto-build launch** — prints the `forge-auto-build` invocation or spawns the harness CLI.
+8. **Auto-build launch** — opens Copilot CLI, opencode, or Claude Code in a separate terminal when available, with clear fallback commands if not.
 9. **Summary** — prints the repo path, harness, and next steps.
 
 ---
@@ -188,7 +188,7 @@ Do you have research or seed documents to add (design specs, market research, te
   ✔  Research doc copied: technical-notes.md → docs/research/
 ```
 
-If you skip this step, the `forge-build-prd` stage will generate a PRD interactively from `IDEA.md` when `forge-auto-build` runs.
+If you skip this step, the `forge-build-prd` stage will generate a PRD interactively from `IDEA.md` when `forge-auto-build` runs. For the best results, spend extra time on the PRD or spec first: you can run `/forge-build-prd` as a separate skill, then feed that PRD into the launcher or into `/forge-auto-build` as the initial spec. Adding research or seed documents in `docs/research/` also improves downstream quality.
 
 ### Step 7 — Commit bootstrapped forge and idea
 
@@ -201,7 +201,7 @@ If you skip this step, the `forge-build-prd` stage will generate a PRD interacti
 
 ### Step 8 — Launch auto-build
 
-For harnesses with a spawnable CLI (`opencode`, `claude`):
+For harnesses with a spawnable CLI (`copilot`, `opencode`, `claude`):
 
 ```
 ▶ Step 8 of 9: Launch auto-build
@@ -213,7 +213,7 @@ Launch claude in the new repository now? [y/N]: y
   ✔  claude launched. Use /forge-auto-build in the Claude Code chat to start the pipeline.
 ```
 
-For GitHub Copilot (no CLI spawn available):
+For GitHub Copilot, the launcher now tries to open the GitHub Copilot CLI in a separate terminal if `copilot` is installed. If that is not available, it falls back to the manual chat instructions below:
 
 ```
   Open the repository in GitHub Copilot Chat and run:
@@ -327,14 +327,21 @@ The repository directory was created before bootstrap ran. You can re-run bootst
 
 Then continue from Step 5 (create `IDEA.md` manually and commit).
 
-### Claude / opencode did not launch
+### CLI did not launch
 
-Check that the CLI is on your `PATH` and executable. For Claude Code: <https://claude.ai/code>. For opencode: follow the opencode installation guide. After installing, re-run the auto-build step manually:
+Check that the relevant CLI is on your `PATH` and executable. For GitHub Copilot CLI, install the CLI and make sure `copilot` resolves from your shell. For Claude Code: <https://claude.ai/code>. For opencode: follow the opencode installation guide.
+
+If the launcher cannot open a terminal automatically, run the fallback command manually:
 
 ```bash
+cd /path/to/your/repo && copilot
+# or
+cd /path/to/your/repo && opencode .
+# or
 cd /path/to/your/repo && claude .
-# Then in the chat: /forge-auto-build <your idea>
 ```
+
+Then in the chat or terminal, run `/forge-auto-build <your idea>`.
 
 ---
 

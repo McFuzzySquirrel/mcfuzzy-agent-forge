@@ -99,16 +99,28 @@ cd mcfuzzy-agent-forge
 
 The launcher walks you through eight steps:
 
-1. **Pre-flight** — checks `git`, `gh`, `opencode`, `claude`
+1. **Pre-flight** — checks `git`, `gh`, `copilot`, `opencode`, and `claude`
 2. **Harness selection** — GitHub Copilot, opencode, Claude Code, or generic `.agents`
 3. **Repo creation** — `gh repo create` (GitHub) or `git init` + optional remote
 4. **Bootstrap** — runs `bootstrap.sh` / `bootstrap.ps1` into the new repo
 5. **Idea capture** — multi-line prompt saved to `IDEA.md`
-6. **Commit + push** — `chore: bootstrap agent forge`
-7. **Auto-build launch** — harness instructions or optional CLI spawn
+6. **PRD / research seed docs** — optional but recommended for better results
+7. **Auto-build launch** — opens Copilot CLI, opencode, or Claude Code in a separate terminal when available
 8. **Summary** — repo path, harness, and next steps
 
 > See [docs/forge-launcher.md](docs/forge-launcher.md) for the full reference, harness support matrix, non-interactive mode, and troubleshooting.
+
+### Recommended workflow for best results
+
+For larger or more complex builds, start with a stronger spec before kicking off the full auto-build. A simple idea can work, but results improve a lot when you spend a bit more time on the PRD or product brief first.
+
+Recommended path:
+
+1. Run `/forge-build-prd` separately to draft a PRD from your idea.
+2. Optionally add supplemental research or seed docs under [docs/research](docs/research) for product context, technical notes, or design references.
+3. Use that PRD and any seed docs as the input to `/forge-auto-build` or the launcher.
+
+This is especially helpful for multi-phase builds, user-facing products, or anything where quality and correctness matter more than speed.
 
 ---
 
@@ -174,6 +186,9 @@ Review the pre-flight summary, type `GO`, and the entire pipeline runs autonomou
 ```
 
 The skill interviews you for requirements and saves a complete PRD to `docs/PRD.md`.
+
+> [!TIP]
+> Results are usually better when you spend more time on the spec first. If you have a rough idea, run `/forge-build-prd` separately, then use the resulting PRD as the input for `/forge-auto-build` or the launcher. You can also add seed documents such as research notes, screenshots, or design references to `docs/research/` for extra context.
 
 ### 6. Generate your agent team
 

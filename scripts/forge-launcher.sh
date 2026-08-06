@@ -89,6 +89,40 @@ prompt_yn() {
   REPLY_YN="${REPLY_YN:-$default}"
 }
 
+shell_quote() {
+  printf '%q' "$1"
+}
+
+launch_cli_in_terminal() {
+  local cli_name="$1"
+  local repo_dir="$2"
+  shift 2
+  local args=("$@")
+
+  local launch_script="cd $(shell_quote "$repo_dir") && $(shell_quote "$cli_name")"
+  local arg
+  for arg in "${args[@]}"; do
+    launch_script+=" $(shell_quote "$arg")"
+  done
+  launch_script+="; exec bash"
+
+  if command -v gnome-terminal &>/dev/null; then
+    gnome-terminal --working-directory="$repo_dir" -- bash -lc "$launch_script" >/dev/null 2>&1 &
+  elif command -v x-terminal-emulator &>/dev/null; then
+    x-terminal-emulator -e bash -lc "$launch_script" >/dev/null 2>&1 &
+  elif command -v konsole &>/dev/null; then
+    konsole --workdir "$repo_dir" -e bash -lc "$launch_script" >/dev/null 2>&1 &
+  elif command -v mate-terminal &>/dev/null; then
+    mate-terminal --working-directory="$repo_dir" -- bash -lc "$launch_script" >/dev/null 2>&1 &
+  else
+    warn "No supported desktop terminal emulator found. Open a terminal manually and run:"
+    echo "    cd \"$repo_dir\" && $cli_name ${args[*]:-}"
+    return 1
+  fi
+
+  return 0
+}
+
 # ---------------------------------------------------------------------------
 # Step 1: Pre-flight check
 # ---------------------------------------------------------------------------
@@ -110,6 +144,14 @@ preflight_check() {
   else
     warn "gh (GitHub CLI) not found — GitHub harness repo creation will be unavailable."
     GH_AVAILABLE=false
+  fi
+
+  if command -v copilot &>/dev/null; then
+    ok "copilot $(copilot --version 2>/dev/null | head -1 || echo '(installed)')"
+    COPILOT_AVAILABLE=true
+  else
+    warn "copilot not found — GitHub Copilot CLI auto-launch will be unavailable."
+    COPILOT_AVAILABLE=false
   fi
 
   if command -v opencode &>/dev/null; then
@@ -447,19 +489,40 @@ launch_autobuild() {
 
   case "$HARNESS" in
     github)
-      info "Open the repository in GitHub Copilot Chat and run:"
-      echo ""
-      echo "    ${BOLD}@workspace /forge-auto-build$(cat "$REPO_DIR/IDEA.md" | grep -v '^#' | grep -v '^---' | grep -v '^>' | grep -v '^$' | head -1)${RESET}"
-      echo ""
-      info "The skill will present a pre-flight summary. Type ${BOLD}GO${RESET} to start the full pipeline."
+      if [[ "$COPILOT_AVAILABLE" == true ]]; then
+        prompt_yn "Launch GitHub Copilot CLI in the new repository now?"
+        if [[ "${REPLY_YN,,}" == "y" ]]; then
+          info "Launching GitHub Copilot CLI in: $REPO_DIR"
+          if launch_cli_in_terminal "copilot" "$REPO_DIR"; then
+            ok "GitHub Copilot CLI launched in a separate terminal. Use /forge-auto-build in the chat to start the pipeline."
+          else
+            warn "GitHub Copilot CLI did not open automatically. Run:"
+            echo "    cd \"$REPO_DIR\" && copilot"
+          fi
+        else
+          info "To launch manually:"
+          echo "    cd \"$REPO_DIR\" && copilot"
+          echo "    Then: ${BOLD}/forge-auto-build <your idea>${RESET}"
+        fi
+      else
+        info "Open the repository in GitHub Copilot Chat and run:"
+        echo ""
+        echo "    ${BOLD}@workspace /forge-auto-build$(cat "$REPO_DIR/IDEA.md" | grep -v '^#' | grep -v '^---' | grep -v '^>' | grep -v '^$' | head -1)${RESET}"
+        echo ""
+        info "The skill will present a pre-flight summary. Type ${BOLD}GO${RESET} to start the full pipeline."
+      fi
       ;;
     claude)
       if [[ "$CLAUDE_AVAILABLE" == true ]]; then
         prompt_yn "Launch claude in the new repository now?"
         if [[ "${REPLY_YN,,}" == "y" ]]; then
           info "Launching claude in: $REPO_DIR"
-          (cd "$REPO_DIR" && claude .) &
-          ok "claude launched. Use /forge-auto-build in the Claude Code chat to start the pipeline."
+          if launch_cli_in_terminal "claude" "$REPO_DIR" "."; then
+            ok "claude launched in a separate terminal. Use /forge-auto-build in the Claude Code chat to start the pipeline."
+          else
+            warn "claude did not open automatically. Run:"
+            echo "    cd \"$REPO_DIR\" && claude ."
+          fi
         else
           info "To launch manually:"
           echo "    cd \"$REPO_DIR\" && claude ."
@@ -476,8 +539,12 @@ launch_autobuild() {
         prompt_yn "Launch opencode in the new repository now?"
         if [[ "${REPLY_YN,,}" == "y" ]]; then
           info "Launching opencode in: $REPO_DIR"
-          (cd "$REPO_DIR" && opencode .) &
-          ok "opencode launched. Use /forge-auto-build in the chat to start the pipeline."
+          if launch_cli_in_terminal "opencode" "$REPO_DIR" "."; then
+            ok "opencode launched in a separate terminal. Use /forge-auto-build in the chat to start the pipeline."
+          else
+            warn "opencode did not open automatically. Run:"
+            echo "    cd \"$REPO_DIR\" && opencode ."
+          fi
         else
           info "To launch manually:"
           echo "    cd \"$REPO_DIR\" && opencode ."
@@ -546,6 +613,7 @@ main() {
   REPO_DIR=""
   REMOTE_CREATED=false
   GH_AVAILABLE=false
+  COPILOT_AVAILABLE=false
   OPENCODE_AVAILABLE=false
   CLAUDE_AVAILABLE=false
   PRD_ADDED=false

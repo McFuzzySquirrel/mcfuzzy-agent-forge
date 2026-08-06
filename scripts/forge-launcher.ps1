@@ -80,6 +80,50 @@ function Read-YesNo {
     return $value
 }
 
+function Start-CliInTerminal {
+    param (
+        [string]$Executable,
+        [string[]]$Arguments = @(),
+        [string]$WorkingDirectory
+    )
+
+    if ($IsWindows) {
+        Start-Process -FilePath $Executable -ArgumentList $Arguments -WorkingDirectory $WorkingDirectory -WindowStyle Normal | Out-Null
+        return $true
+    }
+
+    $terminalCandidates = @("gnome-terminal", "x-terminal-emulator", "konsole", "mate-terminal")
+    foreach ($candidate in $terminalCandidates) {
+        $term = Get-Command $candidate -ErrorAction SilentlyContinue
+        if ($term) {
+            $quotedArgs = $Arguments | ForEach-Object { "'$(($_ -replace "'", "''"))'" }
+            $launchCommand = "cd '$(($WorkingDirectory -replace "'", "''"))' && '$($Executable -replace "'", "''")'"
+            if ($quotedArgs.Count -gt 0) { $launchCommand += " $($quotedArgs -join ' ')" }
+            $launchCommand += "; exec bash"
+
+            switch ($candidate) {
+                "gnome-terminal" { Start-Process -FilePath $candidate -ArgumentList @("--working-directory=$WorkingDirectory", "--", "bash", "-lc", $launchCommand) | Out-Null }
+                "x-terminal-emulator" { Start-Process -FilePath $candidate -ArgumentList @("-e", "bash", "-lc", $launchCommand) | Out-Null }
+                "konsole" { Start-Process -FilePath $candidate -ArgumentList @("--workdir", $WorkingDirectory, "-e", "bash", "-lc", $launchCommand) | Out-Null }
+                "mate-terminal" { Start-Process -FilePath $candidate -ArgumentList @("--working-directory=$WorkingDirectory", "--", "bash", "-lc", $launchCommand) | Out-Null }
+            }
+            return $true
+        }
+    }
+
+    $pwsh = Get-Command pwsh -ErrorAction SilentlyContinue
+    if ($pwsh) {
+        $launchScript = "Set-Location '$($WorkingDirectory -replace "'", "''")'; & '$($Executable -replace "'", "''")'"
+        if ($Arguments.Count -gt 0) { $launchScript += " " + (($Arguments | ForEach-Object { "'$(($_ -replace "'", "''"))'" }) -join ' ') }
+        Start-Process -FilePath $pwsh.Source -ArgumentList @("-NoExit", "-Command", $launchScript) -WorkingDirectory $WorkingDirectory | Out-Null
+        return $true
+    }
+
+    Write-Warn "No supported desktop terminal emulator found. Open a terminal manually and run:"
+    Write-Host "    cd `"$WorkingDirectory`"; $Executable $($Arguments -join ' ')"
+    return $false
+}
+
 # ---------------------------------------------------------------------------
 # Step 1: Pre-flight check
 # ---------------------------------------------------------------------------
@@ -87,6 +131,7 @@ function Invoke-PreflightCheck {
     Write-Step "Step 1 of 9: Pre-flight check"
 
     $script:GhAvailable        = $false
+    $script:CopilotAvailable   = $false
     $script:OpencodeAvailable  = $false
     $script:ClaudeAvailable    = $false
 
@@ -107,6 +152,14 @@ function Invoke-PreflightCheck {
         $script:GhAvailable = $true
     } else {
         Write-Warn "gh (GitHub CLI) not found — GitHub harness repo creation will be unavailable."
+    }
+
+    # copilot
+    if (Get-Command copilot -ErrorAction SilentlyContinue) {
+        Write-Ok "copilot (installed)"
+        $script:CopilotAvailable = $true
+    } else {
+        Write-Warn "copilot not found — GitHub Copilot CLI auto-launch will be unavailable."
     }
 
     # opencode
@@ -460,19 +513,40 @@ function Invoke-LaunchAutobuild {
 
     switch ($script:Harness) {
         "github" {
-            Write-Info "Open the repository in GitHub Copilot Chat and run:"
-            Write-Host ""
-            Write-Host "    @workspace /forge-auto-build <your idea>" -ForegroundColor White
-            Write-Host ""
-            Write-Info "The skill will present a pre-flight summary. Type GO to start the full pipeline."
+            if ($script:CopilotAvailable) {
+                $launch = Read-YesNo "Launch GitHub Copilot CLI in the new repository now?" "y"
+                if ($launch -eq "y" -or $launch -eq "Y") {
+                    Write-Info "Launching GitHub Copilot CLI in: $($script:RepoDir)"
+                    if (Start-CliInTerminal -Executable "copilot" -WorkingDirectory $script:RepoDir) {
+                        Write-Ok "GitHub Copilot CLI launched in a separate terminal. Use /forge-auto-build in the chat to start the pipeline."
+                    } else {
+                        Write-Warn "GitHub Copilot CLI did not open automatically. Run:"
+                        Write-Host "    cd `"$($script:RepoDir)`"; copilot"
+                    }
+                } else {
+                    Write-Info "To launch manually:"
+                    Write-Host "    cd `"$($script:RepoDir)`"; copilot"
+                    Write-Host "    Then: /forge-auto-build <your idea>"
+                }
+            } else {
+                Write-Info "Open the repository in GitHub Copilot Chat and run:"
+                Write-Host ""
+                Write-Host "    @workspace /forge-auto-build <your idea>" -ForegroundColor White
+                Write-Host ""
+                Write-Info "The skill will present a pre-flight summary. Type GO to start the full pipeline."
+            }
         }
         "claude" {
             if ($script:ClaudeAvailable) {
                 $launch = Read-YesNo "Launch claude in the new repository now?" "y"
                 if ($launch -eq "y" -or $launch -eq "Y") {
                     Write-Info "Launching claude in: $($script:RepoDir)"
-                    Start-Process "claude" -ArgumentList "." -WorkingDirectory $script:RepoDir
-                    Write-Ok "claude launched. Use /forge-auto-build in the Claude Code chat to start the pipeline."
+                    if (Start-CliInTerminal -Executable "claude" -Arguments @(".") -WorkingDirectory $script:RepoDir) {
+                        Write-Ok "claude launched in a separate terminal. Use /forge-auto-build in the Claude Code chat to start the pipeline."
+                    } else {
+                        Write-Warn "claude did not open automatically. Run:"
+                        Write-Host "    cd `"$($script:RepoDir)`"; claude ."
+                    }
                 } else {
                     Write-Info "To launch manually:"
                     Write-Host "    cd `"$($script:RepoDir)`"; claude ."
@@ -489,8 +563,12 @@ function Invoke-LaunchAutobuild {
                 $launch = Read-YesNo "Launch opencode in the new repository now?" "y"
                 if ($launch -eq "y" -or $launch -eq "Y") {
                     Write-Info "Launching opencode in: $($script:RepoDir)"
-                    Start-Process "opencode" -ArgumentList "." -WorkingDirectory $script:RepoDir
-                    Write-Ok "opencode launched. Use /forge-auto-build in the chat to start the pipeline."
+                    if (Start-CliInTerminal -Executable "opencode" -Arguments @(".") -WorkingDirectory $script:RepoDir) {
+                        Write-Ok "opencode launched in a separate terminal. Use /forge-auto-build in the chat to start the pipeline."
+                    } else {
+                        Write-Warn "opencode did not open automatically. Run:"
+                        Write-Host "    cd `"$($script:RepoDir)`"; opencode ."
+                    }
                 } else {
                     Write-Info "To launch manually:"
                     Write-Host "    cd `"$($script:RepoDir)`"; opencode ."
@@ -552,7 +630,8 @@ $script:Harness        = "agents"
 $script:HarnessLabel   = "Generic .agents"
 $script:RepoDir        = ""
 $script:RemoteCreated  = $false
-$script:GhAvailable    = $false
+$script:GhAvailable      = $false
+$script:CopilotAvailable = $false
 $script:OpencodeAvailable = $false
 $script:ClaudeAvailable   = $false
 $script:PrdAdded          = $false
