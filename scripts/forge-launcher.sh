@@ -6,9 +6,10 @@
 #   3. Create repository     — gh repo create (GitHub) or git init (others)
 #   4. Bootstrap Agent Forge — run bootstrap.sh into the new repo
 #   5. Capture idea          — write IDEA.md
-#   6. Commit + push         — commit bootstrapped forge and IDEA.md
-#   7. Launch auto-build     — harness-specific instructions or CLI spawn
-#   8. Completion summary
+#   6. Add PRD / research    — optional: copy/paste PRD and seed docs into docs/
+#   7. Commit + push         — commit bootstrapped forge, IDEA.md, PRD, and seed docs
+#   8. Launch auto-build     — harness-specific instructions or CLI spawn
+#   9. Completion summary
 #
 # Usage:
 #   ./scripts/forge-launcher.sh [--non-interactive]
@@ -92,7 +93,7 @@ prompt_yn() {
 # Step 1: Pre-flight check
 # ---------------------------------------------------------------------------
 preflight_check() {
-  step "Step 1 of 8: Pre-flight check"
+  step "Step 1 of 9: Pre-flight check"
 
   local missing=()
 
@@ -145,7 +146,7 @@ preflight_check() {
 # Step 2: Select harness
 # ---------------------------------------------------------------------------
 select_harness() {
-  step "Step 2 of 8: Select agent harness"
+  step "Step 2 of 9: Select agent harness"
 
   echo ""
   echo "  Which agent harness will this project use?"
@@ -175,7 +176,7 @@ select_harness() {
 # Step 3: Create repository
 # ---------------------------------------------------------------------------
 create_repo() {
-  step "Step 3 of 8: Create repository"
+  step "Step 3 of 9: Create repository"
 
   local repo_name
   prompt repo_name "Repository name (no spaces)" ""
@@ -240,7 +241,7 @@ create_repo() {
 # Step 4: Bootstrap Agent Forge
 # ---------------------------------------------------------------------------
 bootstrap_forge() {
-  step "Step 4 of 8: Bootstrap Agent Forge"
+  step "Step 4 of 9: Bootstrap Agent Forge"
 
   info "Running bootstrap.sh → $REPO_DIR (--harness $HARNESS) …"
   "$BOOTSTRAP_SH" "$REPO_DIR" --harness "$HARNESS" --force
@@ -251,7 +252,7 @@ bootstrap_forge() {
 # Step 5: Capture idea
 # ---------------------------------------------------------------------------
 capture_idea() {
-  step "Step 5 of 8: Capture your project idea"
+  step "Step 5 of 9: Capture your project idea"
 
   local idea_file="$REPO_DIR/IDEA.md"
 
@@ -295,10 +296,130 @@ capture_idea() {
 }
 
 # ---------------------------------------------------------------------------
-# Step 6: Commit bootstrapped forge + idea
+# Step 6: Add PRD and research / seed documents (optional but recommended)
 # ---------------------------------------------------------------------------
+add_prd_and_research() {
+  step "Step 6 of 9: Add PRD and research / seed documents (optional — recommended)"
+
+  local docs_dir="$REPO_DIR/docs"
+  local research_dir="$docs_dir/research"
+  PRD_ADDED=false
+  RESEARCH_ADDED=false
+
+  echo ""
+  echo "  ${BOLD}Why this step matters:${RESET}"
+  echo "  Starting with a well-defined PRD produces a far more accurate and"
+  echo "  complete build than starting from an idea alone.  Research / seed"
+  echo "  documents (design specs, market research, technical notes, etc.) give"
+  echo "  the pipeline additional context that improves every downstream stage."
+  echo ""
+
+  # --- PRD ---------------------------------------------------------------
+  if [[ "$NON_INTERACTIVE" == true ]]; then
+    if [[ -n "${FORGE_PRD_FILE:-}" ]]; then
+      if [[ -f "$FORGE_PRD_FILE" ]]; then
+        mkdir -p "$docs_dir"
+        cp "$FORGE_PRD_FILE" "$docs_dir/PRD.md"
+        ok "PRD copied from \$FORGE_PRD_FILE → docs/PRD.md"
+        PRD_ADDED=true
+      else
+        warn "FORGE_PRD_FILE is set but file not found: $FORGE_PRD_FILE — skipping PRD."
+      fi
+    fi
+  else
+    echo "  Do you have an existing PRD to add?"
+    echo ""
+    echo "    1) Yes — provide a file path to copy in as docs/PRD.md"
+    echo "    2) Yes — paste the PRD content directly"
+    echo "    3) No  — skip (the pipeline will generate one from IDEA.md)"
+    echo ""
+    local prd_choice
+    prompt prd_choice "Select [1-3]" "3"
+
+    case "$prd_choice" in
+      1)
+        local prd_src
+        prompt prd_src "Path to your PRD file" ""
+        if [[ -f "$prd_src" ]]; then
+          mkdir -p "$docs_dir"
+          cp "$prd_src" "$docs_dir/PRD.md"
+          ok "PRD copied → docs/PRD.md"
+          PRD_ADDED=true
+        else
+          warn "File not found: $prd_src — skipping PRD."
+        fi
+        ;;
+      2)
+        echo ""
+        echo "  Paste your PRD content below."
+        echo "  Press Ctrl+D on an empty line when finished:"
+        echo "  ──────────────────────────────────────────────────────────────"
+        local prd_text=""
+        while IFS= read -r line || [[ -n "$line" ]]; do
+          prd_text+="$line"$'\n'
+        done
+        prd_text="${prd_text%$'\n'}"
+        if [[ -n "$prd_text" ]]; then
+          mkdir -p "$docs_dir"
+          echo "$prd_text" > "$docs_dir/PRD.md"
+          ok "PRD saved → docs/PRD.md"
+          PRD_ADDED=true
+        else
+          warn "No content entered — skipping PRD."
+        fi
+        ;;
+      *)
+        info "Skipping PRD — the pipeline will generate one from IDEA.md."
+        ;;
+    esac
+  fi
+
+  # --- Research / seed documents -----------------------------------------
+  if [[ "$NON_INTERACTIVE" == true ]]; then
+    if [[ -n "${FORGE_RESEARCH_FILES:-}" ]]; then
+      mkdir -p "$research_dir"
+      IFS=',' read -ra _research_files <<< "$FORGE_RESEARCH_FILES"
+      for _f in "${_research_files[@]}"; do
+        _f="${_f// /}"  # trim spaces
+        if [[ -f "$_f" ]]; then
+          cp "$_f" "$research_dir/"
+          ok "Research doc copied: $(basename "$_f") → docs/research/"
+          RESEARCH_ADDED=true
+        else
+          warn "FORGE_RESEARCH_FILES: file not found: $_f — skipping."
+        fi
+      done
+    fi
+  else
+    echo ""
+    prompt_yn "Do you have research or seed documents to add (design specs, market research, technical notes…)?" "n"
+    if [[ "${REPLY_YN,,}" == "y" ]]; then
+      mkdir -p "$research_dir"
+      echo ""
+      echo "  Enter file paths one per line."
+      echo "  Press Ctrl+D on an empty line when done:"
+      echo "  ──────────────────────────────────────────────────────────────"
+      while IFS= read -r res_path || [[ -n "$res_path" ]]; do
+        res_path="${res_path// /}"
+        [[ -z "$res_path" ]] && continue
+        if [[ -f "$res_path" ]]; then
+          cp "$res_path" "$research_dir/"
+          ok "Research doc copied: $(basename "$res_path") → docs/research/"
+          RESEARCH_ADDED=true
+        else
+          warn "File not found: $res_path — skipping."
+        fi
+      done
+    else
+      info "Skipping research documents."
+    fi
+  fi
+}
+
+# ---------------------------------------------------------------------------
+# Step 7: Commit bootstrapped forge + idea
 commit_bootstrap() {
-  step "Step 6 of 8: Commit bootstrapped forge and idea"
+  step "Step 7 of 9: Commit bootstrapped forge and idea"
 
   git -C "$REPO_DIR" add .
   git -C "$REPO_DIR" commit -m "chore: bootstrap agent forge"
@@ -318,7 +439,7 @@ commit_bootstrap() {
 # Step 7: Launch auto-build
 # ---------------------------------------------------------------------------
 launch_autobuild() {
-  step "Step 7 of 8: Launch auto-build"
+  step "Step 8 of 9: Launch auto-build"
 
   echo ""
   echo "  The repository is bootstrapped and ready for forge-auto-build."
@@ -382,7 +503,7 @@ launch_autobuild() {
 # Step 8: Completion summary
 # ---------------------------------------------------------------------------
 completion_summary() {
-  step "Step 8 of 8: Summary"
+  step "Step 9 of 9: Summary"
 
   echo ""
   echo "${GREEN}${BOLD}════════════════════════════════════════════════════════${RESET}"
@@ -393,6 +514,8 @@ completion_summary() {
   echo "  Harness     : $HARNESS_LABEL (--harness $HARNESS)"
   echo "  Remote      : $( [[ "$REMOTE_CREATED" == true ]] && echo "yes" || echo "none configured" )"
   echo "  Idea file   : $REPO_DIR/IDEA.md"
+  echo "  PRD         : $( [[ "$PRD_ADDED" == true ]] && echo "$REPO_DIR/docs/PRD.md" || echo "none (will be generated from IDEA.md)" )"
+  echo "  Research    : $( [[ "$RESEARCH_ADDED" == true ]] && echo "$REPO_DIR/docs/research/" || echo "none" )"
   echo ""
   echo "  Next steps:"
   echo ""
@@ -425,12 +548,15 @@ main() {
   GH_AVAILABLE=false
   OPENCODE_AVAILABLE=false
   CLAUDE_AVAILABLE=false
+  PRD_ADDED=false
+  RESEARCH_ADDED=false
 
   preflight_check
   select_harness
   create_repo
   bootstrap_forge
   capture_idea
+  add_prd_and_research
   commit_bootstrap
   launch_autobuild
   completion_summary

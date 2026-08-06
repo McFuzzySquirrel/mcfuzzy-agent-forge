@@ -13,9 +13,10 @@
 3. **Repo creation** — creates a GitHub repository (via `gh`) or initialises a local `git init`.
 4. **Bootstrap** — runs the existing `bootstrap.sh` / `bootstrap.ps1` into the new repo.
 5. **Idea capture** — prompts for your project idea and saves it to `IDEA.md`.
-6. **Commit + push** — commits the bootstrapped forge and idea file.
-7. **Auto-build launch** — prints the `forge-auto-build` invocation or spawns the harness CLI.
-8. **Summary** — prints the repo path, harness, and next steps.
+6. **PRD & research** *(optional, recommended)* — add an existing PRD (`docs/PRD.md`) and/or research / seed documents (`docs/research/`).
+7. **Commit + push** — commits the bootstrapped forge, idea file, PRD, and any research docs.
+8. **Auto-build launch** — prints the `forge-auto-build` invocation or spawns the harness CLI.
+9. **Summary** — prints the repo path, harness, and next steps.
 
 ---
 
@@ -50,12 +51,16 @@
 
 ```bash
 export FORGE_IDEA="A task management web app with a React frontend and a Node.js API"
+export FORGE_PRD_FILE="/path/to/my-prd.md"          # optional
+export FORGE_RESEARCH_FILES="/path/to/research.md,/path/to/notes.md"  # optional
 export FORGE_YN_DEFAULT="y"
 ./scripts/forge-launcher.sh --non-interactive
 ```
 
 ```powershell
 $env:FORGE_IDEA = "A task management web app with a React frontend and a Node.js API"
+$env:FORGE_PRD_FILE = "C:\path\to\my-prd.md"                              # optional
+$env:FORGE_RESEARCH_FILES = "C:\path\to\research.md,C:\path\to\notes.md"  # optional
 $env:FORGE_YN_DEFAULT = "y"
 .\scripts\forge-launcher.ps1 -NonInteractive
 ```
@@ -69,7 +74,7 @@ $env:FORGE_YN_DEFAULT = "y"
 The launcher checks each required and optional tool and reports its version or a warning. If `git` is missing the script exits immediately. Missing optional tools (`gh`, `opencode`, `claude`) only disable the features that depend on them.
 
 ```
-▶ Step 1 of 8: Pre-flight check
+▶ Step 1 of 9: Pre-flight check
   ✔  git 2.43.0
   ✔  gh 2.47.0
   ⚠  opencode not found — opencode harness auto-launch will be unavailable.
@@ -80,7 +85,7 @@ The launcher checks each required and optional tool and reports its version or a
 ### Step 2 — Select harness
 
 ```
-▶ Step 2 of 8: Select agent harness
+▶ Step 2 of 9: Select agent harness
 
   Which agent harness will this project use?
 
@@ -102,7 +107,7 @@ Your choice determines:
 For the **GitHub Copilot** harness (when `gh` is available):
 
 ```
-▶ Step 3 of 8: Create repository
+▶ Step 3 of 9: Create repository
 Repository name (no spaces): my-cool-app
 Short description (optional): My cool app description
 Visibility — public or private [private]:
@@ -127,7 +132,7 @@ Remote URL (e.g. https://github.com/user/repo.git): https://github.com/user/my-c
 Runs `bootstrap.sh` (or `bootstrap.ps1`) with `--force` into the new repository, copying all agent and skill templates into the harness directory.
 
 ```
-▶ Step 4 of 8: Bootstrap Agent Forge
+▶ Step 4 of 9: Bootstrap Agent Forge
   Running bootstrap.sh → /home/user/projects/my-cool-app (--harness github) …
   ✔  Agent Forge templates bootstrapped.
 ```
@@ -137,7 +142,7 @@ Runs `bootstrap.sh` (or `bootstrap.ps1`) with `--force` into the new repository,
 Enter your project idea in the terminal (press `Ctrl+D` or a blank line when done on Bash; press Enter twice on PowerShell). The text is saved to `IDEA.md` in the repo root.
 
 ```
-▶ Step 5 of 8: Capture your project idea
+▶ Step 5 of 9: Capture your project idea
 
   Enter your idea (press Ctrl+D on an empty line when finished):
   ──────────────────────────────────────────────────────────────
@@ -148,21 +153,58 @@ Enter your project idea in the terminal (press `Ctrl+D` or a blank line when don
   ✔  Idea saved to: /home/user/projects/my-cool-app/IDEA.md
 ```
 
-### Step 6 — Commit bootstrapped forge and idea
+### Step 6 — Add PRD and research / seed documents *(optional — recommended)*
+
+This step is optional but strongly recommended. Starting the pipeline with a well-defined PRD produces significantly better results than starting from an idea alone. Research and seed documents (design specs, market research, technical notes, etc.) give every downstream stage additional context.
 
 ```
-▶ Step 6 of 8: Commit bootstrapped forge and idea
+▶ Step 6 of 9: Add PRD and research / seed documents (optional — recommended)
+
+  Why this step matters:
+  Starting with a well-defined PRD produces a far more accurate and
+  complete build than starting from an idea alone.  Research / seed
+  documents (design specs, market research, technical notes, etc.) give
+  the pipeline additional context that improves every downstream stage.
+
+  Do you have an existing PRD to add?
+
+    1) Yes — provide a file path to copy in as docs/PRD.md
+    2) Yes — paste the PRD content directly
+    3) No  — skip (the pipeline will generate one from IDEA.md)
+
+Select [1-3] [3]: 1
+Path to your PRD file: /home/user/documents/my-app-prd.md
+  ✔  PRD copied → docs/PRD.md
+
+Do you have research or seed documents to add (design specs, market research, technical notes…)? [y/N]: y
+
+  Enter file paths one per line.
+  Press Ctrl+D on an empty line when done:
+  ──────────────────────────────────────────────────────────────
+  /home/user/documents/market-research.md
+  /home/user/documents/technical-notes.md
+  ^D
+  ✔  Research doc copied: market-research.md → docs/research/
+  ✔  Research doc copied: technical-notes.md → docs/research/
+```
+
+If you skip this step, the `forge-build-prd` stage will generate a PRD interactively from `IDEA.md` when `forge-auto-build` runs.
+
+### Step 7 — Commit bootstrapped forge and idea
+
+```
+▶ Step 7 of 9: Commit bootstrapped forge and idea
   ✔  Committed: 'chore: bootstrap agent forge'
   Pushing to remote …
   ✔  Pushed to remote.
 ```
 
-### Step 7 — Launch auto-build
+### Step 8 — Launch auto-build
 
 For harnesses with a spawnable CLI (`opencode`, `claude`):
 
 ```
-▶ Step 7 of 8: Launch auto-build
+▶ Step 8 of 9: Launch auto-build
 
   The repository is bootstrapped and ready for forge-auto-build.
 
@@ -181,10 +223,10 @@ For GitHub Copilot (no CLI spawn available):
   The skill will present a pre-flight summary. Type GO to start the full pipeline.
 ```
 
-### Step 8 — Summary
+### Step 9 — Summary
 
 ```
-▶ Step 8 of 8: Summary
+▶ Step 9 of 9: Summary
 
 ════════════════════════════════════════════════════════
   forge-launcher: Complete
@@ -194,6 +236,8 @@ For GitHub Copilot (no CLI spawn available):
   Harness     : Claude Code (--harness claude)
   Remote      : yes
   Idea file   : /home/user/projects/my-cool-app/IDEA.md
+  PRD         : /home/user/projects/my-cool-app/docs/PRD.md
+  Research    : /home/user/projects/my-cool-app/docs/research/
 
   Next steps:
 
@@ -224,6 +268,8 @@ For GitHub Copilot (no CLI spawn available):
 | Variable | Used in step | Description |
 |----------|-------------|-------------|
 | `FORGE_IDEA` | 5 | Project idea text written to `IDEA.md` |
+| `FORGE_PRD_FILE` | 6 | Absolute path to an existing PRD file to copy in as `docs/PRD.md` |
+| `FORGE_RESEARCH_FILES` | 6 | Comma-separated list of absolute paths to research/seed documents copied to `docs/research/` |
 | `FORGE_YN_DEFAULT` | 3, 7 | Default answer for yes/no prompts (`y` or `n`) |
 
 All other step inputs (repo name, description, visibility, parent directory) use their defaults in non-interactive mode. Override them by setting the variables before running:
