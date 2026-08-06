@@ -15,35 +15,14 @@
 
 ## Recent Updates
 
-**August 2026 - v3.3** - Forge Execution Adapter — contract-driven bridge for external runners.
+- **August 2026 - v3.4:** Auto-build input auto-detection and launcher handoff alignment. See [docs/updates.md](docs/updates.md#august-2026---v34) and [docs/adr/013-auto-build-input-auto-detection.md](docs/adr/013-auto-build-input-auto-detection.md).
+- **August 2026 - v3.3:** Forge Execution Adapter for contract-driven external runners. See [docs/updates.md](docs/updates.md#august-2026---v33) and [docs/adr/011-forge-execution-adapter.md](docs/adr/011-forge-execution-adapter.md).
+- **August 2026 - v3.2:** Forge Launcher lifecycle CLI plus launch hardening. See [docs/updates.md](docs/updates.md#august-2026---v32), [docs/adr/010-forge-launcher.md](docs/adr/010-forge-launcher.md), and [docs/adr/012-launcher-terminal-handoff-and-prd-guidance.md](docs/adr/012-launcher-terminal-handoff-and-prd-guidance.md).
+- **August 2026 - v3.1:** Full auto-build meta-skill pipeline. See [docs/updates.md](docs/updates.md#august-2026---v31) and [docs/adr/009-full-auto-build-meta-skill.md](docs/adr/009-full-auto-build-meta-skill.md).
+- **August 2026 - v3.0:** Skill-Forge integration and framework-agnostic skill creation. See [docs/updates.md](docs/updates.md#august-2026---v30) and [docs/adr/008-skill-forge-integration.md](docs/adr/008-skill-forge-integration.md).
+- **June 2026 - v2:** Harness-agnostic migration and skill best-practice adoption. See [docs/updates.md](docs/updates.md#june-2026---v2), [docs/adr/006-agents-directory-migration.md](docs/adr/006-agents-directory-migration.md), and [docs/adr/007-skill-best-practices-adoption.md](docs/adr/007-skill-best-practices-adoption.md).
 
-- **`forge-execution-adapter`** (`templates/skills/forge-execution-adapter/`). Portable TypeScript tooling that discovers a Forge repo, normalizes harness roots, compiles `docs/EXECUTION-MANIFEST.json`, synchronizes `docs/PROGRESS.md`, and appends `docs/EXECUTION-AUDIT.jsonl` for FlowForge-style backends.
-- **ADR-011.** Documents the adapter architecture, MVP scope, and why the bridge is separate from Agent Forge authoring.
-
-**August 2026 - v3.2** - Forge Launcher — interactive CLI for the full lifecycle.
-
-- **`forge-launcher`** (`scripts/forge-launcher.sh` / `forge-launcher.ps1`). One terminal command guides you from zero to auto-build: create a repo, select your harness, bootstrap Agent Forge, capture your idea in `IDEA.md`, commit, and optionally spawn the harness CLI — all without reading the docs first.
-- **ADR-010.** Documents the design rationale for `forge-launcher`, why a script-first approach was chosen, and how `IDEA.md` bridges bootstrap and `forge-auto-build`.
-
-**August 2026 - v3.1** - Full auto build, end-to-end pipeline in one command.
-
-- **`forge-auto-build` meta-skill.** One command takes you from a one-liner idea (or an existing PRD) all the way to a fully built, validated, and committed project. A single pre-flight gate, then fully autonomous: PRD → agent team → optional model assignment → all build phases, with validation checks and a commit after every phase.
-- **ADR-009.** Documents the design rationale for `forge-auto-build` and how it complements `forge-bootstrap-project`.
-
-**August 2026 - v3** - Skill-Forge integration, framework-agnostic skill creation.
-
-- **Skill-Forge integration.** Three new skills from [skill-forge](https://github.com/McFuzzySquirrel/skill-forge): `skill-creator` (guided creation workflow), `skill-review` (automated six-axis audit with CI/CD tooling), and `skill-review-updater` (keeps the rubric current with agentskills.io).
-- **Robust skill creation phase.** `forge-build-agent-team` now invokes `skill-creator` for each project-specific skill, running a structured interview → scaffold → `skill-review` validation loop to ensure every generated skill scores ≥2.0 before agents use it.
-- **CI/CD skill quality gates.** `skill-review` ships portable TypeScript tooling with providers for GitHub Actions, GitLab CI, and Azure DevOps - post audit comments directly on PRs.
-- **Removed Microsoft Agent Framework skill.** `forge-build-agent-framework-solution` was too platform-specific. The forge is framework-agnostic; agent framework scaffolding belongs in project-specific skills created by `skill-creator`.
-
-**June 2026 - v2** - Harness-agnostic, leaner skills, built-in best practices.
-
-- **`.agents/` migration.** Forge is no longer GitHub-only. Default bootstrap targets `.agents/` - works with any harness. Use `--harness github` or `--harness claude` for specific runtimes.
-- **Progressive disclosure.** All forge skills now use `references/` directories. `SKILL.md` files are 30–68% smaller - reference content loads only when needed.
-- **Gotchas + Validation.** Every forge skill and generated skill includes `## Gotchas` (prevent common mistakes) and `## Validation` (self-check before showing work to the user).
-- **`forge-optimize-skills`.** Skill that audits generated skills against a 6-axis best-practices rubric and produces actionable improvement suggestions.
-- See **[docs/research/forge-optimization-value.md](docs/research/forge-optimization-value.md)** for the full before/after breakdown with measured efficiency gains.
+For full details and historical context, see [docs/updates.md](docs/updates.md).
 
 ---
 
@@ -103,7 +82,7 @@ The launcher walks you through eight steps:
 2. **Harness selection** — GitHub Copilot, opencode, Claude Code, or generic `.agents`
 3. **Repo creation** — `gh repo create` (GitHub) or `git init` + optional remote
 4. **Bootstrap** — runs `bootstrap.sh` / `bootstrap.ps1` into the new repo
-5. **Idea capture** — multi-line prompt saved to `IDEA.md`
+5. **Idea capture** — multi-line prompt saved to `docs/IDEA.md` (mirrored to `IDEA.md`)
 6. **PRD / research seed docs** — optional but recommended for better results
 7. **Auto-build launch** — opens Copilot CLI, opencode, or Claude Code in a separate terminal when available
 8. **Summary** — repo path, harness, and next steps
@@ -176,6 +155,14 @@ Open the project in your agent harness - agents and skills are auto-detected fro
 ```
 @workspace /forge-auto-build I want to build [your idea]
 ```
+
+Or invoke without arguments and let the skill auto-detect repo context:
+
+```
+@workspace /forge-auto-build
+```
+
+When no argument is provided, `forge-auto-build` checks for `docs/PRD.md`, then `docs/IDEA.md`, then `IDEA.md`. If more than one candidate exists, it asks you to choose the source for that run.
 
 Review the pre-flight summary, type `GO`, and the entire pipeline runs autonomously: PRD generation, agent team creation, all build phases, validation, and a commit after each phase. See [Full Auto Build](docs/prompt-playbook.md#full-auto-build---one-command-entire-pipeline-optional) for options.
 
@@ -502,6 +489,7 @@ Use `skill-creator` during team building to produce quality skills from the star
 ## Resources
 
 - [Prompt Playbook](docs/prompt-playbook.md) - Full copy-paste prompt sequence for every workflow
+- [Updates](docs/updates.md) - Detailed release notes and change history
 - [Running with Local Models](docs/running-with-local-models.md) - BYOK / Ollama setup and model recommendations
 - [Optimization Value](docs/research/forge-optimization-value.md) - Before/after breakdown of the v2 efficiency gains
 - [agentskills.io Specification](https://agentskills.io/specification) - Agent Skills format specification

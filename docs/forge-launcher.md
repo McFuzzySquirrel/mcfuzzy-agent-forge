@@ -12,7 +12,7 @@
 2. **Harness selection** — choose GitHub Copilot, opencode, Claude Code, or generic `.agents`.
 3. **Repo creation** — creates a GitHub repository (via `gh`) or initialises a local `git init`.
 4. **Bootstrap** — runs the existing `bootstrap.sh` / `bootstrap.ps1` into the new repo.
-5. **Idea capture** — prompts for your project idea and saves it to `IDEA.md`.
+5. **Idea capture** — prompts for your project idea and saves it to `docs/IDEA.md`.
 6. **PRD & research** *(optional, recommended)* — add an existing PRD (`docs/PRD.md`) and/or research / seed documents (`docs/research/`).
 7. **Commit + push** — commits the bootstrapped forge, idea file, PRD, and any research docs.
 8. **Auto-build launch** — opens Copilot CLI, opencode, or Claude Code in a separate terminal when available, with clear fallback commands if not.
@@ -139,7 +139,7 @@ Runs `bootstrap.sh` (or `bootstrap.ps1`) with `--force` into the new repository,
 
 ### Step 5 — Capture your idea
 
-Enter your project idea in the terminal (press `Ctrl+D` or a blank line when done on Bash; press Enter twice on PowerShell). The text is saved to `IDEA.md` in the repo root.
+Enter your project idea in the terminal (press `Ctrl+D` or a blank line when done on Bash; press Enter twice on PowerShell). The text is saved to `docs/IDEA.md` (with a compatibility copy at repo root `IDEA.md`).
 
 ```
 ▶ Step 5 of 9: Capture your project idea
@@ -150,7 +150,7 @@ Enter your project idea in the terminal (press `Ctrl+D` or a blank line when don
   due dates and priorities, and track completion. React frontend, Node.js
   API, PostgreSQL database. Authentication via GitHub OAuth.
   ^D
-  ✔  Idea saved to: /home/user/projects/my-cool-app/IDEA.md
+  ✔  Idea saved to: /home/user/projects/my-cool-app/docs/IDEA.md
 ```
 
 ### Step 6 — Add PRD and research / seed documents *(optional — recommended)*
@@ -170,7 +170,7 @@ This step is optional but strongly recommended. Starting the pipeline with a wel
 
     1) Yes — provide a file path to copy in as docs/PRD.md
     2) Yes — paste the PRD content directly
-    3) No  — skip (the pipeline will generate one from IDEA.md)
+    3) No  — skip (the pipeline will generate one from docs/IDEA.md)
 
 Select [1-3] [3]: 1
 Path to your PRD file: /home/user/documents/my-app-prd.md
@@ -188,7 +188,7 @@ Do you have research or seed documents to add (design specs, market research, te
   ✔  Research doc copied: technical-notes.md → docs/research/
 ```
 
-If you skip this step, the `forge-build-prd` stage will generate a PRD interactively from `IDEA.md` when `forge-auto-build` runs. For the best results, spend extra time on the PRD or spec first: you can run `/forge-build-prd` as a separate skill, then feed that PRD into the launcher or into `/forge-auto-build` as the initial spec. Adding research or seed documents in `docs/research/` also improves downstream quality.
+If you skip this step, the `forge-build-prd` stage will generate a PRD interactively from `docs/IDEA.md` when `forge-auto-build` runs. For the best results, spend extra time on the PRD or spec first: you can run `/forge-build-prd` as a separate skill, then feed that PRD into the launcher or into `/forge-auto-build` as the initial spec. Adding research or seed documents in `docs/research/` also improves downstream quality.
 
 ### Step 7 — Commit bootstrapped forge and idea
 
@@ -235,7 +235,7 @@ For GitHub Copilot, the launcher now tries to open the GitHub Copilot CLI in a s
   Repository  : /home/user/projects/my-cool-app
   Harness     : Claude Code (--harness claude)
   Remote      : yes
-  Idea file   : /home/user/projects/my-cool-app/IDEA.md
+  Idea file   : /home/user/projects/my-cool-app/docs/IDEA.md
   PRD         : /home/user/projects/my-cool-app/docs/PRD.md
   Research    : /home/user/projects/my-cool-app/docs/research/
 
@@ -244,7 +244,7 @@ For GitHub Copilot, the launcher now tries to open the GitHub Copilot CLI in a s
   1. Open the project in your agent harness.
   2. Run the auto-build skill:
 
-       @workspace /forge-auto-build  (paste your idea or reference IDEA.md)
+      @workspace /forge-auto-build Use docs/IDEA.md as the project idea
 
   3. Review the pre-flight summary that the skill presents.
   4. Type GO to start the fully autonomous pipeline.
@@ -267,7 +267,7 @@ For GitHub Copilot, the launcher now tries to open the GitHub Copilot CLI in a s
 
 | Variable | Used in step | Description |
 |----------|-------------|-------------|
-| `FORGE_IDEA` | 5 | Project idea text written to `IDEA.md` |
+| `FORGE_IDEA` | 5 | Project idea text written to `docs/IDEA.md` (and mirrored to `IDEA.md`) |
 | `FORGE_PRD_FILE` | 6 | Absolute path to an existing PRD file to copy in as `docs/PRD.md` |
 | `FORGE_RESEARCH_FILES` | 6 | Comma-separated list of absolute paths to research/seed documents copied to `docs/research/` |
 | `FORGE_YN_DEFAULT` | 3, 7 | Default answer for yes/no prompts (`y` or `n`) |
@@ -282,9 +282,9 @@ export REPO_NAME="my-app"           # Step 3: set via prompt default or pre-set 
 
 ---
 
-## IDEA.md format
+## docs/IDEA.md format
 
-The launcher creates `IDEA.md` with the following structure:
+The launcher creates `docs/IDEA.md` (and mirrors it to `IDEA.md`) with the following structure:
 
 ```markdown
 # Project Idea
@@ -294,16 +294,24 @@ The launcher creates `IDEA.md` with the following structure:
 ---
 
 > Generated by forge-launcher on 2026-08-05T19:00:00Z
-> Use this file as input for: `@workspace /forge-auto-build`
+> Use this file as input for: `@workspace /forge-auto-build Use docs/IDEA.md as the project idea`
 ```
 
 Pass this file to `forge-auto-build` by referencing it in the chat:
 
 ```
-@workspace /forge-auto-build Use IDEA.md as the project idea
+@workspace /forge-auto-build Use docs/IDEA.md as the project idea
 ```
 
-Or paste the idea text directly — both work.
+Or invoke without arguments and let `forge-auto-build` detect the best source from the repo:
+
+```
+@workspace /forge-auto-build
+```
+
+When invoked without arguments, the skill checks in this order: `docs/PRD.md`, `docs/IDEA.md`, `IDEA.md`. If multiple inputs are available, it asks you to choose which source to use for that run.
+
+Or paste the idea text directly — all three approaches work.
 
 ---
 
@@ -325,7 +333,7 @@ The repository directory was created before bootstrap ran. You can re-run bootst
 ./scripts/bootstrap.sh /path/to/your/repo --harness <harness>
 ```
 
-Then continue from Step 5 (create `IDEA.md` manually and commit).
+Then continue from Step 5 (create `docs/IDEA.md` manually and commit).
 
 ### CLI did not launch
 
