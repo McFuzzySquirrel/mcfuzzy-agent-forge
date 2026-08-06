@@ -43,8 +43,8 @@ export function parseProgress(path: string, manifest: ExecutionManifest): Progre
   const prdPath = markdown.match(/\*\*PRD\*\*: (.+)/)?.[1]?.trim() ?? manifest.prdPath;
   const lastUpdated = markdown.match(/\*\*Last Updated\*\*: (.+)/)?.[1]?.trim() ?? new Date().toISOString();
   const currentTaskId = markdown.match(/- \[ \] Phase [^,]+, Task ([^:]+):/)?.[1]?.trim();
-  const blockersBlock = markdown.match(/## Blockers\n([\s\S]*?)(?=\n## |\Z)/)?.[1] ?? "";
-  const notesBlock = markdown.match(/## Notes\n([\s\S]*?)(?=\n## |\Z)/)?.[1] ?? "";
+  const blockersBlock = markdown.match(/## Blockers\n([\s\S]*?)(?=\n## |$)/m)?.[1] ?? "";
+  const notesBlock = markdown.match(/## Notes\n([\s\S]*?)(?=\n## |$)/m)?.[1] ?? "";
 
   return {
     phase,
