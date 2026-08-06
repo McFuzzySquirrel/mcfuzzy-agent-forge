@@ -11,9 +11,10 @@
       3. Create repository     — gh repo create (GitHub) or git init (others)
       4. Bootstrap Agent Forge — run bootstrap.ps1 into the new repo
       5. Capture idea          — write IDEA.md
-      6. Commit + push         — commit bootstrapped forge and IDEA.md
-      7. Launch auto-build     — harness-specific instructions or CLI spawn
-      8. Completion summary
+      6. Add PRD / research    — optional: copy PRD and seed docs into docs/
+      7. Commit + push         — commit bootstrapped forge, IDEA.md, PRD, and seed docs
+      8. Launch auto-build     — harness-specific instructions or CLI spawn
+      9. Completion summary
 
 .PARAMETER NonInteractive
     Skip all interactive prompts (for CI/testing only).
@@ -79,13 +80,62 @@ function Read-YesNo {
     return $value
 }
 
+function Start-CliInTerminal {
+    param (
+        [string]$Executable,
+        [string[]]$Arguments = @(),
+        [string]$WorkingDirectory
+    )
+
+    if ($IsWindows) {
+        Start-Process -FilePath $Executable -ArgumentList $Arguments -WorkingDirectory $WorkingDirectory -WindowStyle Normal | Out-Null
+        return $true
+    }
+
+    $terminalCandidates = @("gnome-terminal", "x-terminal-emulator", "konsole", "mate-terminal")
+    foreach ($candidate in $terminalCandidates) {
+        $term = Get-Command $candidate -ErrorAction SilentlyContinue
+        if ($term) {
+            $quotedArgs = $Arguments | ForEach-Object { "'$(($_ -replace "'", "''"))'" }
+            $launchCommand = "cd '$(($WorkingDirectory -replace "'", "''"))' && '$($Executable -replace "'", "''")'"
+            if ($quotedArgs.Count -gt 0) { $launchCommand += " $($quotedArgs -join ' ')" }
+            $launchCommand += "; exec bash"
+
+            switch ($candidate) {
+                "gnome-terminal" { Start-Process -FilePath $candidate -ArgumentList @("--working-directory=$WorkingDirectory", "--", "bash", "-lc", $launchCommand) | Out-Null }
+                "x-terminal-emulator" { Start-Process -FilePath $candidate -ArgumentList @("-e", "bash", "-lc", $launchCommand) | Out-Null }
+                "konsole" { Start-Process -FilePath $candidate -ArgumentList @("--workdir", $WorkingDirectory, "-e", "bash", "-lc", $launchCommand) | Out-Null }
+                "mate-terminal" { Start-Process -FilePath $candidate -ArgumentList @("--working-directory=$WorkingDirectory", "--", "bash", "-lc", $launchCommand) | Out-Null }
+            }
+            return $true
+        }
+    }
+
+    $pwsh = Get-Command pwsh -ErrorAction SilentlyContinue
+    if ($pwsh) {
+        $launchScript = "Set-Location '$($WorkingDirectory -replace "'", "''")'; & '$($Executable -replace "'", "''")'"
+        if ($Arguments.Count -gt 0) { $launchScript += " " + (($Arguments | ForEach-Object { "'$(($_ -replace "'", "''"))'" }) -join ' ') }
+        Start-Process -FilePath $pwsh.Source -ArgumentList @("-NoExit", "-Command", $launchScript) -WorkingDirectory $WorkingDirectory | Out-Null
+        return $true
+    }
+
+    Write-Warn "No supported desktop terminal emulator found. Open a terminal manually and run:"
+    Write-Host "    cd `"$WorkingDirectory`"; $Executable $($Arguments -join ' ')"
+    return $false
+}
+
+function Get-AutobuildCommand {
+    return "/forge-auto-build Use docs/IDEA.md as the project idea"
+}
+
 # ---------------------------------------------------------------------------
 # Step 1: Pre-flight check
 # ---------------------------------------------------------------------------
 function Invoke-PreflightCheck {
-    Write-Step "Step 1 of 8: Pre-flight check"
+    Write-Step "Step 1 of 9: Pre-flight check"
 
     $script:GhAvailable        = $false
+    $script:CopilotAvailable   = $false
     $script:OpencodeAvailable  = $false
     $script:ClaudeAvailable    = $false
 
@@ -106,6 +156,14 @@ function Invoke-PreflightCheck {
         $script:GhAvailable = $true
     } else {
         Write-Warn "gh (GitHub CLI) not found — GitHub harness repo creation will be unavailable."
+    }
+
+    # copilot
+    if (Get-Command copilot -ErrorAction SilentlyContinue) {
+        Write-Ok "copilot (installed)"
+        $script:CopilotAvailable = $true
+    } else {
+        Write-Warn "copilot not found — GitHub Copilot CLI auto-launch will be unavailable."
     }
 
     # opencode
@@ -137,7 +195,7 @@ function Invoke-PreflightCheck {
 # Step 2: Select harness
 # ---------------------------------------------------------------------------
 function Select-Harness {
-    Write-Step "Step 2 of 8: Select agent harness"
+    Write-Step "Step 2 of 9: Select agent harness"
 
     Write-Host ""
     Write-Host "  Which agent harness will this project use?" -ForegroundColor White
@@ -168,7 +226,7 @@ function Select-Harness {
 # Step 3: Create repository
 # ---------------------------------------------------------------------------
 function New-Repository {
-    Write-Step "Step 3 of 8: Create repository"
+    Write-Step "Step 3 of 9: Create repository"
 
     $repoName = Read-Prompt "Repository name (no spaces)" ""
     if (-not $repoName) {
@@ -233,7 +291,7 @@ function New-Repository {
 # Step 4: Bootstrap Agent Forge
 # ---------------------------------------------------------------------------
 function Invoke-BootstrapForge {
-    Write-Step "Step 4 of 8: Bootstrap Agent Forge"
+    Write-Step "Step 4 of 9: Bootstrap Agent Forge"
 
     Write-Info "Running bootstrap.ps1 → $($script:RepoDir) (-Harness $($script:Harness)) …"
     & $BootstrapPs1 -Target $script:RepoDir -Harness $script:Harness -Force
@@ -244,13 +302,15 @@ function Invoke-BootstrapForge {
 # Step 5: Capture idea
 # ---------------------------------------------------------------------------
 function Invoke-CaptureIdea {
-    Write-Step "Step 5 of 8: Capture your project idea"
+    Write-Step "Step 5 of 9: Capture your project idea"
 
-    $ideaFile = Join-Path $script:RepoDir "IDEA.md"
+    $ideaFileRoot = Join-Path $script:RepoDir "IDEA.md"
+    $ideaFileDocs = Join-Path (Join-Path $script:RepoDir "docs") "IDEA.md"
 
     Write-Host ""
     Write-Host "  Describe your project idea below." -ForegroundColor White
-    Write-Host "  This will be saved to IDEA.md and used as the starting prompt"
+    Write-Host "  This will be saved to docs/IDEA.md (and mirrored to IDEA.md)"
+    Write-Host "  and used as the starting prompt"
     Write-Host "  for forge-auto-build."
     Write-Host ""
 
@@ -281,9 +341,11 @@ function Invoke-CaptureIdea {
     }
 
     if (-not $ideaText.Trim()) {
-        Write-Warn "No idea text entered. IDEA.md will be created as a placeholder."
+        Write-Warn "No idea text entered. docs/IDEA.md will be created as a placeholder."
         $ideaText = "*(Replace this with your project idea before running forge-auto-build.)*"
     }
+
+    New-Item -ItemType Directory -Path (Split-Path $ideaFileDocs -Parent) -Force | Out-Null
 
     $timestamp = (Get-Date).ToUniversalTime().ToString("yyyy-MM-ddTHH:mm:ssZ")
     $content = @"
@@ -294,17 +356,142 @@ $ideaText
 ---
 
 > Generated by forge-launcher on $timestamp
-> Use this file as input for: ``@workspace /forge-auto-build``
+> Use this file as input for: ``@workspace /forge-auto-build Use docs/IDEA.md as the project idea``
 "@
-    $content | Set-Content -Path $ideaFile -NoNewline
-    Write-Ok "Idea saved to: $ideaFile"
+    $content | Set-Content -Path $ideaFileDocs -NoNewline
+    Copy-Item -Path $ideaFileDocs -Destination $ideaFileRoot -Force
+    Write-Ok "Idea saved to: $ideaFileDocs"
+    Write-Info "Compatibility copy written to: $ideaFileRoot"
 }
 
 # ---------------------------------------------------------------------------
-# Step 6: Commit bootstrapped forge + idea
+# Step 6: Add PRD and research / seed documents (optional — recommended)
+# ---------------------------------------------------------------------------
+function Invoke-AddPrdAndResearch {
+    Write-Step "Step 6 of 9: Add PRD and research / seed documents (optional — recommended)"
+
+    $docsDir     = Join-Path $script:RepoDir "docs"
+    $researchDir = Join-Path $docsDir "research"
+    $script:PrdAdded      = $false
+    $script:ResearchAdded = $false
+
+    Write-Host ""
+    Write-Host "  Why this step matters:" -ForegroundColor White
+    Write-Host "  Starting with a well-defined PRD produces a far more accurate and"
+    Write-Host "  complete build than starting from an idea alone.  Research / seed"
+    Write-Host "  documents (design specs, market research, technical notes, etc.) give"
+    Write-Host "  the pipeline additional context that improves every downstream stage."
+    Write-Host ""
+
+    # --- PRD ---------------------------------------------------------------
+    if ($NonInteractive) {
+        $prdFile = $env:FORGE_PRD_FILE
+        if ($prdFile) {
+            if (Test-Path $prdFile -PathType Leaf) {
+                New-Item -ItemType Directory -Path $docsDir -Force | Out-Null
+                Copy-Item $prdFile (Join-Path $docsDir "PRD.md")
+                Write-Ok "PRD copied from `$env:FORGE_PRD_FILE → docs/PRD.md"
+                $script:PrdAdded = $true
+            } else {
+                Write-Warn "FORGE_PRD_FILE is set but file not found: $prdFile — skipping PRD."
+            }
+        }
+    } else {
+        Write-Host "  Do you have an existing PRD to add?" -ForegroundColor White
+        Write-Host ""
+        Write-Host "    1) Yes — provide a file path to copy in as docs/PRD.md"
+        Write-Host "    2) Yes — paste the PRD content directly"
+        Write-Host "    3) No  — skip (the pipeline will generate one from docs/IDEA.md)"
+        Write-Host ""
+        $prdChoice = Read-Prompt "Select [1-3]" "3"
+
+        switch ($prdChoice) {
+            "1" {
+                $prdSrc = Read-Prompt "Path to your PRD file" ""
+                if ($prdSrc -and (Test-Path $prdSrc -PathType Leaf)) {
+                    New-Item -ItemType Directory -Path $docsDir -Force | Out-Null
+                    Copy-Item $prdSrc (Join-Path $docsDir "PRD.md")
+                    Write-Ok "PRD copied → docs/PRD.md"
+                    $script:PrdAdded = $true
+                } else {
+                    Write-Warn "File not found: $prdSrc — skipping PRD."
+                }
+            }
+            "2" {
+                Write-Host ""
+                Write-Host "  Paste your PRD content below."
+                Write-Host "  Press Enter twice on a blank line when finished:"
+                Write-Host "  ──────────────────────────────────────────────────────────────"
+                $lines = @()
+                while ($true) {
+                    $line = Read-Host ""
+                    if ($line -eq "") { break }
+                    $lines += $line
+                }
+                $prdText = $lines -join "`n"
+                if ($prdText.Trim()) {
+                    New-Item -ItemType Directory -Path $docsDir -Force | Out-Null
+                    $prdText | Set-Content -Path (Join-Path $docsDir "PRD.md") -NoNewline
+                    Write-Ok "PRD saved → docs/PRD.md"
+                    $script:PrdAdded = $true
+                } else {
+                    Write-Warn "No content entered — skipping PRD."
+                }
+            }
+            default {
+                Write-Info "Skipping PRD — the pipeline will generate one from docs/IDEA.md."
+            }
+        }
+    }
+
+    # --- Research / seed documents -----------------------------------------
+    if ($NonInteractive) {
+        $researchFiles = $env:FORGE_RESEARCH_FILES
+        if ($researchFiles) {
+            New-Item -ItemType Directory -Path $researchDir -Force | Out-Null
+            $researchFiles -split ',' | ForEach-Object {
+                $f = $_.Trim()
+                if ($f -and (Test-Path $f -PathType Leaf)) {
+                    Copy-Item $f $researchDir
+                    Write-Ok "Research doc copied: $(Split-Path $f -Leaf) → docs/research/"
+                    $script:ResearchAdded = $true
+                } elseif ($f) {
+                    Write-Warn "FORGE_RESEARCH_FILES: file not found: $f — skipping."
+                }
+            }
+        }
+    } else {
+        Write-Host ""
+        $addResearch = Read-YesNo "Do you have research or seed documents to add (design specs, market research, technical notes…)?" "n"
+        if ($addResearch -eq "y" -or $addResearch -eq "Y") {
+            New-Item -ItemType Directory -Path $researchDir -Force | Out-Null
+            Write-Host ""
+            Write-Host "  Enter file paths one per line."
+            Write-Host "  Press Enter on a blank line when done:"
+            Write-Host "  ──────────────────────────────────────────────────────────────"
+            while ($true) {
+                $resPath = Read-Host ""
+                if (-not $resPath) { break }
+                $resPath = $resPath.Trim()
+                if (Test-Path $resPath -PathType Leaf) {
+                    Copy-Item $resPath $researchDir
+                    Write-Ok "Research doc copied: $(Split-Path $resPath -Leaf) → docs/research/"
+                    $script:ResearchAdded = $true
+                } else {
+                    Write-Warn "File not found: $resPath — skipping."
+                }
+            }
+        } else {
+            Write-Info "Skipping research documents."
+        }
+    }
+}
+
+# ---------------------------------------------------------------------------
+# Step 7: Commit bootstrapped forge + idea
 # ---------------------------------------------------------------------------
 function Invoke-CommitBootstrap {
-    Write-Step "Step 6 of 8: Commit bootstrapped forge and idea"
+    Write-Step "Step 7 of 9: Commit bootstrapped forge and idea"
 
     & git -C $script:RepoDir add "."
     & git -C $script:RepoDir commit -m "chore: bootstrap agent forge"
@@ -328,7 +515,7 @@ function Invoke-CommitBootstrap {
 # Step 7: Launch auto-build
 # ---------------------------------------------------------------------------
 function Invoke-LaunchAutobuild {
-    Write-Step "Step 7 of 8: Launch auto-build"
+    Write-Step "Step 8 of 9: Launch auto-build"
 
     Write-Host ""
     Write-Host "  The repository is bootstrapped and ready for forge-auto-build." -ForegroundColor White
@@ -336,28 +523,53 @@ function Invoke-LaunchAutobuild {
 
     switch ($script:Harness) {
         "github" {
-            Write-Info "Open the repository in GitHub Copilot Chat and run:"
-            Write-Host ""
-            Write-Host "    @workspace /forge-auto-build <your idea>" -ForegroundColor White
-            Write-Host ""
-            Write-Info "The skill will present a pre-flight summary. Type GO to start the full pipeline."
+            if ($script:CopilotAvailable) {
+                $launch = Read-YesNo "Launch GitHub Copilot CLI in the new repository now?" "y"
+                if ($launch -eq "y" -or $launch -eq "Y") {
+                    Write-Info "Launching GitHub Copilot CLI in: $($script:RepoDir)"
+                    if (Start-CliInTerminal -Executable "copilot" -WorkingDirectory $script:RepoDir) {
+                        Write-Ok "GitHub Copilot CLI launched in a separate terminal."
+                        Write-Host "    Then run: $(Get-AutobuildCommand)"
+                    } else {
+                        Write-Warn "GitHub Copilot CLI did not open automatically. Run:"
+                        Write-Host "    cd `"$($script:RepoDir)`"; copilot"
+                        Write-Host "    Then: $(Get-AutobuildCommand)"
+                    }
+                } else {
+                    Write-Info "To launch manually:"
+                    Write-Host "    cd `"$($script:RepoDir)`"; copilot"
+                    Write-Host "    Then: $(Get-AutobuildCommand)"
+                }
+            } else {
+                Write-Info "Open the repository in GitHub Copilot Chat and run:"
+                Write-Host ""
+                Write-Host "    @workspace $(Get-AutobuildCommand)" -ForegroundColor White
+                Write-Host ""
+                Write-Info "The skill will present a pre-flight summary. Type GO to start the full pipeline."
+            }
         }
         "claude" {
             if ($script:ClaudeAvailable) {
                 $launch = Read-YesNo "Launch claude in the new repository now?" "y"
                 if ($launch -eq "y" -or $launch -eq "Y") {
                     Write-Info "Launching claude in: $($script:RepoDir)"
-                    Start-Process "claude" -ArgumentList "." -WorkingDirectory $script:RepoDir
-                    Write-Ok "claude launched. Use /forge-auto-build in the Claude Code chat to start the pipeline."
+                    if (Start-CliInTerminal -Executable "claude" -Arguments @(".") -WorkingDirectory $script:RepoDir) {
+                        Write-Ok "claude launched in a separate terminal."
+                        Write-Host "    Then run: $(Get-AutobuildCommand)"
+                    } else {
+                        Write-Warn "claude did not open automatically. Run:"
+                        Write-Host "    cd `"$($script:RepoDir)`"; claude ."
+                        Write-Host "    Then: $(Get-AutobuildCommand)"
+                    }
                 } else {
                     Write-Info "To launch manually:"
                     Write-Host "    cd `"$($script:RepoDir)`"; claude ."
-                    Write-Host "    Then: /forge-auto-build <your idea>"
+                    Write-Host "    Then: $(Get-AutobuildCommand)"
                 }
             } else {
                 Write-Warn "claude CLI is not installed. Install it from https://claude.ai/code then run:"
                 Write-Host "    cd `"$($script:RepoDir)`"; claude ."
-                Write-Host "    Then: /forge-auto-build <your idea>"
+                Write-Host "    Then: $(Get-AutobuildCommand)"
             }
         }
         default {
@@ -365,17 +577,23 @@ function Invoke-LaunchAutobuild {
                 $launch = Read-YesNo "Launch opencode in the new repository now?" "y"
                 if ($launch -eq "y" -or $launch -eq "Y") {
                     Write-Info "Launching opencode in: $($script:RepoDir)"
-                    Start-Process "opencode" -ArgumentList "." -WorkingDirectory $script:RepoDir
-                    Write-Ok "opencode launched. Use /forge-auto-build in the chat to start the pipeline."
+                    if (Start-CliInTerminal -Executable "opencode" -Arguments @(".") -WorkingDirectory $script:RepoDir) {
+                        Write-Ok "opencode launched in a separate terminal."
+                        Write-Host "    Then run: $(Get-AutobuildCommand)"
+                    } else {
+                        Write-Warn "opencode did not open automatically. Run:"
+                        Write-Host "    cd `"$($script:RepoDir)`"; opencode ."
+                        Write-Host "    Then: $(Get-AutobuildCommand)"
+                    }
                 } else {
                     Write-Info "To launch manually:"
                     Write-Host "    cd `"$($script:RepoDir)`"; opencode ."
-                    Write-Host "    Then: /forge-auto-build <your idea>"
+                    Write-Host "    Then: $(Get-AutobuildCommand)"
                 }
             } else {
                 Write-Info "Open the repository in your agent harness and run:"
                 Write-Host ""
-                Write-Host "    @workspace /forge-auto-build <your idea>" -ForegroundColor White
+                Write-Host "    @workspace $(Get-AutobuildCommand)" -ForegroundColor White
                 Write-Host ""
                 Write-Info "Agent templates are in:"
                 Write-Host "    $($script:RepoDir)\.agents\agents\"
@@ -388,7 +606,7 @@ function Invoke-LaunchAutobuild {
 # Step 8: Completion summary
 # ---------------------------------------------------------------------------
 function Write-CompletionSummary {
-    Write-Step "Step 8 of 8: Summary"
+    Write-Step "Step 9 of 9: Summary"
 
     Write-Host ""
     Write-Host "════════════════════════════════════════════════════════" -ForegroundColor Green
@@ -398,14 +616,16 @@ function Write-CompletionSummary {
     Write-Host "  Repository  : $($script:RepoDir)"
     Write-Host "  Harness     : $($script:HarnessLabel) (--harness $($script:Harness))"
     Write-Host "  Remote      : $( if ($script:RemoteCreated) { 'yes' } else { 'none configured' } )"
-    Write-Host "  Idea file   : $(Join-Path $script:RepoDir 'IDEA.md')"
+    Write-Host "  Idea file   : $(Join-Path $script:RepoDir 'docs\IDEA.md')"
+    Write-Host "  PRD         : $( if ($script:PrdAdded) { Join-Path $script:RepoDir 'docs\PRD.md' } else { 'none (will be generated from docs/IDEA.md)' } )"
+    Write-Host "  Research    : $( if ($script:ResearchAdded) { Join-Path $script:RepoDir 'docs\research\' } else { 'none' } )"
     Write-Host ""
     Write-Host "  Next steps:"
     Write-Host ""
     Write-Host "  1. Open the project in your agent harness."
     Write-Host "  2. Run the auto-build skill:"
     Write-Host ""
-    Write-Host "       @workspace /forge-auto-build  (paste your idea or reference IDEA.md)" -ForegroundColor White
+    Write-Host "       @workspace $(Get-AutobuildCommand)" -ForegroundColor White
     Write-Host ""
     Write-Host "  3. Review the pre-flight summary that the skill presents."
     Write-Host "  4. Type GO to start the fully autonomous pipeline."
@@ -426,15 +646,19 @@ $script:Harness        = "agents"
 $script:HarnessLabel   = "Generic .agents"
 $script:RepoDir        = ""
 $script:RemoteCreated  = $false
-$script:GhAvailable    = $false
+$script:GhAvailable      = $false
+$script:CopilotAvailable = $false
 $script:OpencodeAvailable = $false
 $script:ClaudeAvailable   = $false
+$script:PrdAdded          = $false
+$script:ResearchAdded     = $false
 
 Invoke-PreflightCheck
 Select-Harness
 New-Repository
 Invoke-BootstrapForge
 Invoke-CaptureIdea
+Invoke-AddPrdAndResearch
 Invoke-CommitBootstrap
 Invoke-LaunchAutobuild
 Write-CompletionSummary

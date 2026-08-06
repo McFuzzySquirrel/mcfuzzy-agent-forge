@@ -1,0 +1,19 @@
+{
+  "name": "forge-execution-adapter",
+  "version": "1.0.0",
+  "type": "module",
+  "description": "Portable execution adapter tooling for Agent Forge repositories",
+  "scripts": {
+    "forge-execution-adapter": "tsx scripts/adapter.ts",
+    "test": "node --import tsx --test scripts/*.test.ts",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "gray-matter": "^4.0.3"
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.0",
+    "tsx": "^4.19.0",
+    "typescript": "^5.7.0"
+  }
+}

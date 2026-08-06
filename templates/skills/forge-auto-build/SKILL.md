@@ -48,12 +48,18 @@ Use this skill when you want the entire pipeline to run hands-free after a singl
 
 When the user invokes this skill, perform the following before touching any files:
 
-1. **Echo the input.** Restate the idea or PRD path you received in one or two sentences.
-2. **Check repo state** and flag anything that changes the flow:
+1. **Resolve the effective input source.** Determine what idea or PRD to use with the following precedence:
+   - If the user supplied an explicit argument (inline idea text or file path), use it as-is.
+   - Otherwise, check repository files in this order: `docs/PRD.md`, `docs/IDEA.md`, `IDEA.md`.
+   - If multiple candidate files exist and no explicit argument was supplied, present a short numbered choice and ask the user to pick one source for this run.
+   - If no explicit argument and no candidate files exist, ask the user for a one-line idea or PRD path.
+2. **Echo the selected input.** Restate the selected idea or PRD path in one or two sentences so the user can see what this run will use.
+   - Do not add any extra confirmation gate here; continue to the normal pre-flight summary and `GO` checkpoint.
+3. **Check repo state** and flag anything that changes the flow:
    - Does `docs/PRD.md` already exist? If yes, note that Stage 1 (PRD generation) will be skipped and the existing PRD will be used.
    - Do `.agent.md` files already exist in `.agents/agents/` (beyond the forge templates)? If yes, note that Stage 2 (team generation) will run in **Feature Increment Mode**.
    - Does `docs/product-vision.md` with `docs/features/*.md` exist? If yes, note that Stage 2 will run in **Vision + Features Mode**.
-3. **Present the planned stages** as a numbered list:
+4. **Present the planned stages** as a numbered list:
    - Stage 1: `forge-build-prd` → produce `docs/PRD.md` *(skip if PRD already exists)*
    - Stage 2: `forge-build-agent-team` → produce agent and skill files
    - Stage 3 (optional): `forge-assign-models` → recommend or apply per-agent models *(opt-in — include if user passed `--assign-models`)*
@@ -64,6 +70,15 @@ When the user invokes this skill, perform the following before touching any file
    - After all phases: `chore: auto-build complete — all phases delivered`
 6. **Present the pre-flight checklist** (see below).
 7. **Prompt**: *"Review the plan above. Type `GO` to start the full auto-build, `GO --assign-models` to also run model assignment, or `stop` to exit."*
+
+**Input-resolution behavior examples:**
+
+- User ran `forge-auto-build I want a CLI todo app`: use the explicit text input.
+- User ran `forge-auto-build docs/PRD.md`: use that explicit PRD path.
+- User ran `forge-auto-build` and only `docs/IDEA.md` exists: use `docs/IDEA.md`.
+- User ran `forge-auto-build` and only `docs/PRD.md` exists: use `docs/PRD.md` and skip Stage 1.
+- User ran `forge-auto-build` and both `docs/PRD.md` and `docs/IDEA.md` exist: ask user to choose one source for this run.
+- User ran `forge-auto-build` and no candidate files exist: ask for a one-line idea or PRD path.
 
 **Do not proceed until the user types `GO` (or a clear equivalent such as `start`, `run it`, `proceed`).**
 
@@ -92,9 +107,9 @@ Expectations
 
 ### Stage 1: Run `forge-build-prd`
 
-*Skip this stage if `docs/PRD.md` already exists — proceed directly to Stage 2.*
+*Skip this stage if the selected input source is an existing PRD path (for example `docs/PRD.md`) — proceed directly to Stage 2.*
 
-Invoke the `forge-build-prd` skill, passing the user's idea as input. Let that skill drive its own clarifying-questions process. Do not answer on the user's behalf.
+Invoke the `forge-build-prd` skill, passing the selected idea input as-is. Let that skill drive its own clarifying-questions process. Do not answer on the user's behalf.
 
 When `forge-build-prd` finishes and `docs/PRD.md` is saved:
 - Verify the file exists and contains at minimum: Overview, Goals, Functional Requirements, Implementation Phases, and Acceptance Criteria sections.
