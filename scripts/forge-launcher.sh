@@ -361,7 +361,7 @@ add_prd_and_research() {
         prd_text="${prd_text%$'\n'}"
         if [[ -n "$prd_text" ]]; then
           mkdir -p "$docs_dir"
-          echo "$prd_text" > "$docs_dir/PRD.md"
+          printf '%s\n' "$prd_text" > "$docs_dir/PRD.md"
           ok "PRD saved → docs/PRD.md"
           PRD_ADDED=true
         else
@@ -380,7 +380,7 @@ add_prd_and_research() {
       mkdir -p "$research_dir"
       IFS=',' read -ra _research_files <<< "$FORGE_RESEARCH_FILES"
       for _f in "${_research_files[@]}"; do
-        _f="${_f// /}"  # trim spaces
+        _f="$(echo "$_f" | xargs)"  # trim leading/trailing whitespace
         if [[ -f "$_f" ]]; then
           cp "$_f" "$research_dir/"
           ok "Research doc copied: $(basename "$_f") → docs/research/"
@@ -400,7 +400,7 @@ add_prd_and_research() {
       echo "  Press Ctrl+D on an empty line when done:"
       echo "  ──────────────────────────────────────────────────────────────"
       while IFS= read -r res_path || [[ -n "$res_path" ]]; do
-        res_path="${res_path// /}"
+        res_path="$(echo "$res_path" | xargs)"  # trim leading/trailing whitespace
         [[ -z "$res_path" ]] && continue
         if [[ -f "$res_path" ]]; then
           cp "$res_path" "$research_dir/"
