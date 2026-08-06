@@ -42,7 +42,7 @@ function tokenize(text: string): Set<string> {
     text
       .toLowerCase()
       .split(/[^a-z0-9]+/)
-      .filter((part) => part.length >= 3),
+      .filter((part) => part.length >= 2),
   );
 }
 
