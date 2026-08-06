@@ -1,0 +1,103 @@
+import assert from "node:assert/strict";
+import test from "node:test";
+import { mkdtempSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+
+import { compileExecutionManifest } from "./compiler.ts";
+import { discoverForgeRepo } from "./discovery.ts";
+import { appendAuditEvent, checkpointTask, parseProgress, writeProgress } from "./progress.ts";
+
+function createFixture(harness = ".agents") {
+  const root = mkdtempSync(join(tmpdir(), "forge-execution-adapter-"));
+  mkdirSync(join(root, harness, "agents"), { recursive: true });
+  mkdirSync(join(root, harness, "skills", "api-contracts", "references"), { recursive: true });
+  mkdirSync(join(root, "docs"), { recursive: true });
+
+  writeFileSync(join(root, harness, "agents", "api-engineer.agent.md"), `---
+name: api-engineer
+description: Builds API endpoints and backend integrations.
+model: gpt-5-mini
+---
+
+## Expertise
+- API endpoint design
+- Backend integration work
+
+## Collaboration
+- frontend-engineer
+`, "utf8");
+  writeFileSync(join(root, harness, "agents", "frontend-engineer.agent.md"), `---
+name: frontend-engineer
+description: Builds UI flows and client-side components.
+---
+
+## Expertise
+- UI components
+- Frontend flows
+`, "utf8");
+  writeFileSync(join(root, harness, "skills", "api-contracts", "SKILL.md"), `---
+name: api-contracts
+description: Keep API contracts aligned between backend and frontend.
+---
+
+# Skill
+`, "utf8");
+  writeFileSync(join(root, "docs", "PRD.md"), `# PRD
+
+## Validation
+\`npm test\`
+
+## Phase 1: Foundation
+- Task 1.1: Create API route at \`src/server.ts\`
+- Task 1.2: Build dashboard UI in \`src/dashboard.tsx\`
+
+## Phase 2: Hardening
+- Task 2.1: Add integration tests in \`tests/integration.test.ts\`
+`, "utf8");
+
+  return root;
+}
+
+test("discoverForgeRepo resolves canonical harness root", () => {
+  const root = createFixture();
+  const repo = discoverForgeRepo(root);
+  assert.equal(repo.harnessRoot, ".agents");
+  assert.equal(repo.agents.length, 2);
+  assert.equal(repo.skills.length, 1);
+});
+
+test("discoverForgeRepo supports non-default harness roots", () => {
+  const root = createFixture(".github");
+  const repo = discoverForgeRepo(root);
+  assert.equal(repo.harnessRoot, ".github");
+});
+
+test("compileExecutionManifest builds phases, tasks, and owners", () => {
+  const root = createFixture();
+  const repo = discoverForgeRepo(root);
+  const manifest = compileExecutionManifest(repo);
+
+  assert.equal(manifest.phases.length, 2);
+  assert.equal(manifest.validationCommands[0], "npm test");
+  assert.equal(manifest.phases[0]?.tasks[0]?.ownerAgent, "api-engineer");
+  assert.equal(manifest.phases[0]?.tasks[1]?.ownerAgent, "frontend-engineer");
+  assert.deepEqual(manifest.phases[1]?.dependencies, ["1"]);
+});
+
+test("checkpointTask updates PROGRESS.md and audit state", () => {
+  const root = createFixture();
+  const repo = discoverForgeRepo(root);
+  const manifest = compileExecutionManifest(repo);
+  const state = parseProgress(repo.progressPath, manifest);
+  const next = checkpointTask(manifest, state, "1.1", ["src/server.ts"], "Foundation task delivered");
+
+  writeProgress(repo.progressPath, manifest, next);
+  appendAuditEvent(repo.auditPath, { timestamp: new Date().toISOString(), action: "task.checkpointed", taskId: "1.1" });
+
+  const progress = readFileSync(repo.progressPath, "utf8");
+  const audit = readFileSync(repo.auditPath, "utf8");
+  assert.match(progress, /Task 1\.1/);
+  assert.match(progress, /Task 1\.2/);
+  assert.match(audit, /task\.checkpointed/);
+});

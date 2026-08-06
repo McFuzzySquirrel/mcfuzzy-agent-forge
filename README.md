@@ -15,6 +15,11 @@
 
 ## Recent Updates
 
+**August 2026 - v3.3** - Forge Execution Adapter — contract-driven bridge for external runners.
+
+- **`forge-execution-adapter`** (`templates/skills/forge-execution-adapter/`). Portable TypeScript tooling that discovers a Forge repo, normalizes harness roots, compiles `docs/EXECUTION-MANIFEST.json`, synchronizes `docs/PROGRESS.md`, and appends `docs/EXECUTION-AUDIT.jsonl` for FlowForge-style backends.
+- **ADR-011.** Documents the adapter architecture, MVP scope, and why the bridge is separate from Agent Forge authoring.
+
 **August 2026 - v3.2** - Forge Launcher — interactive CLI for the full lifecycle.
 
 - **`forge-launcher`** (`scripts/forge-launcher.sh` / `forge-launcher.ps1`). One terminal command guides you from zero to auto-build: create a repo, select your harness, bootstrap Agent Forge, capture your idea in `IDEA.md`, commit, and optionally spawn the harness CLI — all without reading the docs first.
@@ -68,6 +73,7 @@ Both approaches use the same core toolkit:
 | `forge-optimize-skills` skill | Audits existing skills against [agentskills.io best practices](https://agentskills.io/skill-creation/best-practices) in a manual agent-driven workflow; delegates to `skill-review` tooling when available |
 | `project-orchestrator` agent | Coordinates agents through implementation phases, phase by phase |
 | `forge-orchestrate-build` skill | Contains the detailed execution process used by `project-orchestrator` (analysis, phase execution, coordination, output formatting) |
+| `forge-execution-adapter` skill | Compiles a Forge repo into a contract-driven execution manifest and checkpoint bridge for external runners such as FlowForge-style backends |
 | `forge-launcher` scripts | Interactive CLI: create repo → select harness → bootstrap → capture idea → commit → launch auto-build in one terminal session |
 | Bootstrap scripts | Copy all templates into any target repository with one command |
 
@@ -190,6 +196,19 @@ Review the plan, then run one phase at a time:
 
 > [!TIP]
 > The orchestrator writes `docs/PROGRESS.md` after each phase. Use `Resume from last checkpoint` to pick up where you left off.
+
+### 8. (Optional) Compile a runner contract for an external backend
+
+If you want a FlowForge-style execution backend instead of relying only on harness prompts, compile the generated Forge repo into a neutral execution manifest:
+
+```bash
+cd .agents/skills/forge-execution-adapter
+npm install
+npm run forge-execution-adapter -- compile
+npm run forge-execution-adapter -- status
+```
+
+This writes `docs/EXECUTION-MANIFEST.json`, keeps `docs/PROGRESS.md` synchronized, and appends `docs/EXECUTION-AUDIT.jsonl` for resume/audit use cases.
 
 > [!TIP]
 > See [docs/prompt-playbook.md](docs/prompt-playbook.md) for the full copy-paste prompt sequence, including feature additions, decomposition, and resume flows.
