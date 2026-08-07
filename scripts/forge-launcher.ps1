@@ -328,7 +328,7 @@ function Invoke-CaptureIdea {
         $lines = @()
         $blankCount = 0
         while ($true) {
-            $line = Read-Host ""
+            $line = Read-Host
             if ($line -eq "") {
                 $blankCount++
                 if ($blankCount -ge 2) { break }
@@ -426,7 +426,7 @@ function Invoke-AddPrdAndResearch {
                 $lines = @()
                 $blankCount = 0
                 while ($true) {
-                    $line = Read-Host ""
+                    $line = Read-Host
                     if ($line -eq "") {
                         $blankCount++
                         if ($blankCount -ge 2) { break }
@@ -478,7 +478,7 @@ function Invoke-AddPrdAndResearch {
             Write-Host "  Press Enter on a blank line when done:"
             Write-Host "  ──────────────────────────────────────────────────────────────"
             while ($true) {
-                $resPath = Read-Host ""
+                $resPath = Read-Host
                 if (-not $resPath) { break }
                 $resPath = $resPath.Trim()
                 if (Test-Path $resPath -PathType Leaf) {
