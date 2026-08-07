@@ -337,6 +337,7 @@ function Invoke-CaptureIdea {
             }
             $lines += $line
         }
+        while ($lines.Count -gt 0 -and $lines[-1] -eq "") { $lines = $lines[0..($lines.Count - 2)] }
         $ideaText = $lines -join "`n"
     }
 
@@ -434,6 +435,7 @@ function Invoke-AddPrdAndResearch {
                     }
                     $lines += $line
                 }
+                while ($lines.Count -gt 0 -and $lines[-1] -eq "") { $lines = $lines[0..($lines.Count - 2)] }
                 $prdText = $lines -join "`n"
                 if ($prdText.Trim()) {
                     New-Item -ItemType Directory -Path $docsDir -Force | Out-Null
