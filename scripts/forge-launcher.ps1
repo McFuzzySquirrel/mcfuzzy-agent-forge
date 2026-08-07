@@ -88,7 +88,30 @@ function Start-CliInTerminal {
     )
 
     if ($IsWindows) {
-        Start-Process -FilePath $Executable -ArgumentList $Arguments -WorkingDirectory $WorkingDirectory -WindowStyle Normal | Out-Null
+        # Build a PowerShell command that cd's to the repo then runs the CLI
+        $escapedDir = $WorkingDirectory -replace "'", "''"
+        $escapedExe = $Executable -replace "'", "''"
+        $launchScript = "Set-Location '$escapedDir'; & '$escapedExe'"
+        if ($Arguments.Count -gt 0) {
+            $launchScript += " " + (($Arguments | ForEach-Object { "'$(($_ -replace "'", "''"))'" }) -join ' ')
+        }
+
+        # Prefer Windows Terminal, then pwsh (PS 7), then powershell (PS 5)
+        $wt   = Get-Command wt   -ErrorAction SilentlyContinue
+        $pwsh = Get-Command pwsh -ErrorAction SilentlyContinue
+        $ps5  = Get-Command powershell -ErrorAction SilentlyContinue
+
+        if ($wt) {
+            # wt spawns a new tab/window and runs the inner shell command
+            $psExe = if ($pwsh) { $pwsh.Source } else { $ps5.Source }
+            Start-Process -FilePath $wt.Source -ArgumentList @("new-tab", "--", $psExe, "-NoExit", "-Command", $launchScript) | Out-Null
+        } elseif ($pwsh) {
+            Start-Process -FilePath $pwsh.Source -ArgumentList @("-NoExit", "-Command", $launchScript) | Out-Null
+        } elseif ($ps5) {
+            Start-Process -FilePath $ps5.Source -ArgumentList @("-NoExit", "-Command", $launchScript) | Out-Null
+        } else {
+            return $false
+        }
         return $true
     }
 
