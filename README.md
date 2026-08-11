@@ -365,24 +365,6 @@ The optional `forge-assign-models` skill fixes that. It:
 
 ---
 
-## Persistent Memory with EJS
-
-The [Engineering Journey System (EJS)](https://github.com/McFuzzySquirrel/Engineering-Journey-System) adds session memory to your agent team. Without it, agents start fresh every conversation with no awareness of past decisions. With it, they query a local SQLite database of past ADRs, learnings, and architectural choices.
-
-EJS is optional but recommended. Bootstrap it before Agent Forge for a new project, then add the EJS recording contract to your harness instructions file (e.g. `.github/copilot-instructions.md`, `.agents/instructions.md`, or `.claude/CLAUDE.md` depending on your harness):
-
-```markdown
-## EJS Recording Contract
-- Record decisions and sub-agent work to the session journey file
-- Query `.ejs.db` before reading raw markdown for past context
-- Attribute every entry by agent name
-```
-
-> [!TIP]
-> With EJS + Agent Forge + BYOK, you get a fully local, context-aware agent team that remembers past decisions - no cloud dependency required.
-
----
-
 ## Template Structure
 
 ```
@@ -494,6 +476,8 @@ Use `skill-creator` during team building to produce quality skills from the star
 
 ## Resources
 
+- [The Story](docs/THE-STORY.md) - How Agent Forge was designed and why: the full origin story
+- [The Story, Part 2](docs/THE-STORY-PART-2.md) - The continuation: skill quality gates, forge-auto-build, forge-launcher, and dark orchestration
 - [Prompt Playbook](docs/prompt-playbook.md) - Full copy-paste prompt sequence for every workflow
 - [Updates](docs/updates.md) - Detailed release notes and change history
 - [Running with Local Models](docs/running-with-local-models.md) - BYOK / Ollama setup and model recommendations
