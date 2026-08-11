@@ -3,8 +3,8 @@ name: forge-auto-build
 description: >
   Full end-to-end meta-skill that chains the entire Agent Forge pipeline in a
   single continuous flow: forge-build-prd → forge-build-agent-team →
-  optionally forge-assign-models → forge-orchestrate-build (all phases, with
-  validation and a commit after each phase).
+  optionally forge-assign-models → one build execution path
+  (`forge-orchestrate-build` or `forge-workflow-engine`).
   Use this skill when a user wants to go from a one-liner idea or an existing PRD to a
   fully built, validated, and committed project without manual hand-offs between steps.
   A single pre-flight confirmation gate is presented before the autonomous run begins.
@@ -24,7 +24,7 @@ The underlying skills (`forge-build-prd`, `forge-build-agent-team`, `forge-assig
 |---|---|---|
 | `forge-bootstrap-project` | PRD → agent team (no build) | Mandatory gate after PRD, after team |
 | `@project-orchestrator` | Build execution only (no bootstrap) | Optional pause between each phase |
-| **`forge-auto-build`** | PRD → agent team → (optional models) → full build → committed result | **One** pre-flight gate, then fully autonomous |
+| **`forge-auto-build`** | PRD → agent team → (optional models) → choose manual or engine build path → committed result | **One** pre-flight gate, then fully autonomous |
 
 Use this skill when you want the entire pipeline to run hands-free after a single approval.
 
@@ -63,14 +63,15 @@ When the user invokes this skill, perform the following before touching any file
    - Stage 1: `forge-build-prd` → produce `docs/PRD.md` *(skip if PRD already exists)*
    - Stage 2: `forge-build-agent-team` → produce agent and skill files
    - Stage 3 (optional): `forge-assign-models` → recommend or apply per-agent models *(opt-in -include if user passed `--assign-models`)*
-   - Stage 4: `forge-orchestrate-build` -execute all phases continuously, committing after each
-   - Stage 5 (optional): `forge-workflow-engine` → compile execution manifest and re-execute through a real harness *(opt-in -include if user passed `--workflow-engine`)*
+   - Stage 4: Build execution *(choose one path)*:
+     - Default: `forge-orchestrate-build` - execute all phases continuously, committing after each phase
+     - With `--workflow-engine`: compile `docs/EXECUTION-MANIFEST.json` and execute the build through `forge-workflow-engine`
 5. **State the commit strategy** explicitly:
    - After Stage 2: `chore: bootstrap Agent Forge agent and skill templates`
    - After each build phase N: `feat: complete Phase N -<phase name>`
    - After all phases: `chore: auto-build complete -all phases delivered`
 6. **Present the pre-flight checklist** (see below).
-7. **Prompt**: *"Review the plan above. Type `GO` to start the full auto-build, `GO --assign-models` to also run model assignment, `GO --workflow-engine` to also run harness-driven execution after Stage 4, or `stop` to exit."*
+7. **Prompt**: *"Review the plan above. Type `GO` to start the full auto-build on the default prompt-driven path, `GO --assign-models` to also run model assignment, `GO --workflow-engine` to use the workflow-engine path instead of `forge-orchestrate-build`, or `stop` to exit."*
 
 **Input-resolution behavior examples:**
 
@@ -154,7 +155,11 @@ If `--assign-models` was not requested, skip this stage and note: "Stage 3 skipp
 
 ---
 
-### Stage 4: Run `forge-orchestrate-build` -All Phases
+### Stage 4: Execute the Build - Choose One Path
+
+By default, use the prompt-driven path below. If the user included `--workflow-engine` in the `GO` command, skip Path A and run Path B instead. Do **not** run both paths in the same auto-build invocation.
+
+#### Path A (default): Run `forge-orchestrate-build` - All Phases
 
 Invoke the `forge-orchestrate-build` skill in **continuous mode** (execute all phases without pausing between them).
 
@@ -185,13 +190,13 @@ If any validation check fails, do **not** commit and do **not** proceed. Stop an
 
 ---
 
-### Stage 5 (Optional): Run `forge-workflow-engine` - Harness-Driven Execution
+#### Path B (`--workflow-engine`): Run `forge-workflow-engine` - Harness-Driven Build
 
-Run this stage only if the user included `--workflow-engine` in their `GO` command.
+Run this path only if the user included `--workflow-engine` in their `GO` command.
 
-This stage compiles the completed build into a structured execution manifest and re-executes every task through a real model harness (OpenCode CLI by default), producing a fully harness-driven execution record alongside the prompt-driven build.
+This path uses the workflow engine as the build executor instead of `forge-orchestrate-build`. The manifest is the execution plan; the engine performs the actual autonomous run through the selected harness (OpenCode CLI by default). As part of this path, run the required `npm install` steps for both `forge-execution-adapter` and `forge-workflow-engine`, then compile the manifest and start the engine.
 
-**Step 5a: Compile the execution manifest**
+**Step 4a: Compile the execution manifest**
 
 ```bash
 cd .agents/skills/forge-execution-adapter
@@ -201,7 +206,7 @@ npm run forge-execution-adapter -- compile
 
 Verify that `docs/EXECUTION-MANIFEST.json` was written and contains at least one phase with tasks. If the adapter reports warnings, surface them to the user before continuing.
 
-**Step 5b: Run the workflow engine**
+**Step 4b: Run the workflow engine**
 
 ```bash
 cd .agents/skills/forge-workflow-engine
@@ -211,25 +216,25 @@ npm run workflow-engine -- run --harness opencode
 
 Monitor the engine until it reports `status: "complete"` or stops with `status: "failed"`.
 
-**Step 5c: Verify completion**
+**Step 4c: Verify completion**
 
 - [ ] `docs/WORKFLOW-STATE.json` exists and `status` is `"complete"`
 - [ ] All tasks in the manifest are `"complete"` or `"skipped"`
 - [ ] `docs/PROGRESS.md` reflects the completed state
 - [ ] `docs/EXECUTION-AUDIT.jsonl` contains a `run.complete` event
 
-If the engine reports failures, surface the failing task IDs and error messages. Do not mark Stage 5 complete until the run status is `"complete"`.
+If the engine reports failures, surface the failing task IDs and error messages. Do not mark Stage 4 complete until the run status is `"complete"`.
 
 When it finishes:
-- Report: "Stage 5 complete - harness-driven execution finished. All tasks complete."
+- Report: "Stage 4 complete - workflow-engine path finished. All tasks complete."
 
-If `--workflow-engine` was not requested, skip this stage and note: "Stage 5 skipped (no --workflow-engine flag). You can run the workflow engine manually at any time. Moving to Final Stage."
+If `--workflow-engine` was not requested, skip this path and note: "Workflow-engine path not selected. Using `forge-orchestrate-build` for Stage 4."
 
 ---
 
 ### Final Stage: Completion Summary
 
-After all phases in Stage 4 are complete and committed:
+After the selected Stage 4 build path is complete:
 
 1. Commit any remaining uncommitted work:
    ```
@@ -245,8 +250,7 @@ Stages completed:
   ✅ Stage 1: PRD produced (docs/PRD.md)
   ✅ Stage 2: Agent team generated (N agents, M skills)
   [✅ or ⏭️] Stage 3: Per-agent models [applied | skipped]
-  ✅ Stage 4: All N phases built and committed
-  [✅ or ⏭️] Stage 5: Harness-driven execution [run | skipped]
+  ✅ Stage 4: Build execution completed via [forge-orchestrate-build | forge-workflow-engine]
 
 Commits made: <N>
 Files produced: <list key output files>
@@ -258,7 +262,7 @@ Next steps:
   - Add a new feature: @workspace /forge-build-feature-prd I want to add [feature]...
   - Audit generated skills (automated): cd .agents/skills/skill-review && npm install && npm run skill-review -- --provider stdout --min-score 1.5
   - Audit generated skills (manual): @workspace /forge-optimize-skills Audit all skills...
-  - Dark orchestration: cd .agents/skills/forge-workflow-engine && npm run workflow-engine -- run --harness opencode
+  - Run the alternate build path later if desired: cd .agents/skills/forge-workflow-engine && npm run workflow-engine -- run --harness opencode
 ```
 
 ---
@@ -272,8 +276,8 @@ If this skill is invoked in a repo that has an incomplete auto-build (detected b
    - If interrupted mid-Stage 1: re-invoke `forge-build-prd`.
    - If interrupted mid-Stage 2: re-invoke `forge-build-agent-team`.
    - If interrupted mid-Stage 3: re-run the affected stage from the beginning.
-   - If interrupted mid-Stage 4: invoke `forge-orchestrate-build` with `resume from last checkpoint`.
-   - If interrupted mid-Stage 5: run `npm run workflow-engine -- run` in the `forge-workflow-engine` skill directory; the engine resumes from `docs/WORKFLOW-STATE.json`.
+   - If interrupted mid-Stage 4 on the prompt-driven path: invoke `forge-orchestrate-build` with `resume from last checkpoint`.
+   - If interrupted mid-Stage 4 on the workflow-engine path: run `npm run workflow-engine -- run` in the `forge-workflow-engine` skill directory; the engine resumes from `docs/WORKFLOW-STATE.json`.
 3. Report to the user: "Resuming auto-build from Stage N, last completed: [task description]."
 4. Do not re-run stages whose outputs are already committed and verified.
 
@@ -286,10 +290,10 @@ If this skill is invoked in a repo that has an incomplete auto-build (detected b
 | Stage 1 produces incomplete PRD | Re-invoke `forge-build-prd` in gap-fill mode before continuing |
 | Stage 2 produces no agent files | Stop and report; do not proceed to build |
 | Stage 3 model assignment fails | Log the failure, skip Stage 3, continue to Stage 4 -report at the end |
-| Stage 4 phase fails validation | Stop after the failing phase; report error, blocked phase, and responsible agent |
-| Stage 4 commit fails | Stop immediately; report the git error |
-| Stage 5 manifest compile fails | Surface adapter warnings; do not start the engine until resolved |
-| Stage 5 engine task fails | Surface the failing task ID and error; suggest `npm run workflow-engine -- replay <task-id>` |
+| Stage 4 prompt-driven phase fails validation | Stop after the failing phase; report error, blocked phase, and responsible agent |
+| Stage 4 prompt-driven commit fails | Stop immediately; report the git error |
+| Stage 4 workflow-engine manifest compile fails | Surface adapter warnings; do not start the engine until resolved |
+| Stage 4 workflow-engine task fails | Surface the failing task ID and error; suggest `npm run workflow-engine -- replay <task-id>` |
 | Any unexpected file conflict | Stop and ask the user whether to overwrite, merge, or abort |
 
 ---
@@ -299,6 +303,7 @@ If this skill is invoked in a repo that has an incomplete auto-build (detected b
 - **Do not skip the pre-flight gate.** Even if the user says "just run everything," you must present the pre-flight checklist and require a `GO` before starting. This is the only safeguard in a fully autonomous run.
 - **Never auto-apply models without `--assign-models`.** Stage 3 is opt-in. Writing to agent YAML frontmatter without explicit intent is a violation of `forge-assign-models`'s safety constraint.
 - **Commit after every phase, not at the end.** Batching commits defeats the purpose of phase-level checkpoints and makes debugging harder.
+- **Choose exactly one build path per run.** `--workflow-engine` switches Stage 4 to the engine path; without it, use `forge-orchestrate-build`. Do not run one path and then replay the whole build through the other in the same invocation.
 - **Do not suppress validation errors.** If a phase fails its build/test validation, stopping is the correct behavior -not retrying silently or moving on with a warning.
 - **Respect agent boundaries.** When driving Stage 4, do not instruct agents to do work outside their documented expertise. Delegate cross-cutting tasks to the correct owner agents.
 - **One invocation, one run.** This skill does not support running two independent projects simultaneously. If the workspace has multiple PRDs or project roots, ask the user to clarify which one to build before starting.

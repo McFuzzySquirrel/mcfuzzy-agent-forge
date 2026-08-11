@@ -135,7 +135,7 @@ You are **not** responsible for:
 - **forge-execution-adapter** - Must compile the manifest before this agent can run
 - **forge-assign-models** - Assigns `model:` frontmatter to agents so the harness uses the right model
 - **project-orchestrator** - The interactive alternative; both can be used on the same project
-- **forge-auto-build** - Can hand off to this agent as an optional Stage 5 for harness-driven execution
+- **forge-auto-build** - Can select this agent's engine path as its Stage 4 build executor when the user chooses `--workflow-engine`
 - **The user** - Receives status reports and resolves blockers that the engine flags
 
 ---

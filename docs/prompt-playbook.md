@@ -330,13 +330,13 @@ Stop after F1 and report status.
 
 ---
 
-## Step 7 - Dark Orchestration / Fully Autonomous Execution (Optional)
+## Step 7 - Dark Orchestration / Workflow-Engine Build Path (Optional)
 
-After the PRD and agent team are generated, you can execute the build through a real model harness instead of (or in addition to) the prompt-driven `project-orchestrator` flow. This is "dark orchestration" - a background process that fires actual model invocations, persists state, and requires no human input between tasks.
+After the PRD and agent team are generated, you can choose to execute the build through a real model harness instead of the prompt-driven `project-orchestrator` flow. Use one execution path per run. This is "dark orchestration" - a background process that fires actual model invocations, persists state, and requires no human input between tasks.
 
 ### 7a. Compile the execution manifest
 
-The workflow engine reads `docs/EXECUTION-MANIFEST.json`, which is produced by the `forge-execution-adapter` skill:
+The workflow engine reads `docs/EXECUTION-MANIFEST.json`, which is produced by the `forge-execution-adapter` skill. The commands below install dependencies for the adapter before compiling:
 
 ```bash
 cd .agents/skills/forge-execution-adapter
@@ -352,7 +352,7 @@ npm run forge-execution-adapter -- inspect
 
 ### 7b. Run the workflow engine
 
-Choose your execution harness:
+Choose your execution harness. The commands below install the workflow-engine dependencies and then start the engine:
 
 ```bash
 cd .agents/skills/forge-workflow-engine

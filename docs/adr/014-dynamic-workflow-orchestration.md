@@ -120,17 +120,17 @@ In MVP mode, ready tasks within a phase execute sequentially. Speculative parall
 
 Each task is retried up to `--max-retries` times (default: 2) with a configurable delay (default: 5 000 ms). A task that exhausts retries is marked `failed`. Any failed task stops the current phase and prevents downstream tasks from starting. The `replay` CLI command resets a failed task to `pending` and re-dispatches it, allowing targeted recovery without re-running the whole workflow.
 
-### 6. Integration with forge-auto-build (optional Stage 5)
+### 6. Integration with forge-auto-build (alternative Stage 4 path)
 
-`forge-auto-build` can optionally invoke this engine after Stage 4 (prompt-driven build phases). When a user wants the build executed through a real harness rather than via prompt instructions, they compile the manifest and run the engine:
+`forge-auto-build` can invoke this engine as its Stage 4 build path instead of the prompt-driven `forge-orchestrate-build` path. When a user wants the build executed through a real harness rather than via prompt instructions, they compile the manifest and run the engine:
 
 ```bash
-# Stage 5 (optional): harness-driven execution
+# Stage 4 alternative: harness-driven execution
 cd .agents/skills/forge-execution-adapter && npm install && npm run forge-execution-adapter -- compile
 cd .agents/skills/forge-workflow-engine  && npm install && npm run workflow-engine -- run --harness opencode
 ```
 
-This is additive - `forge-auto-build` Stages 1–4 are unchanged. The engine is an opt-in alternative to Stage 4's prompt-driven orchestration, not a replacement for it.
+Stages 1–3 are unchanged. For Stage 4, users choose one orchestration mode per run: prompt-driven (`forge-orchestrate-build`) or harness-driven (`forge-workflow-engine`). The engine is an alternative execution path, not a post-build replay step.
 
 ### 7. Companion agent: `workflow-orchestrator`
 

@@ -167,7 +167,7 @@ Or invoke without arguments and let the skill auto-detect repo context:
 
 When no argument is provided, `forge-auto-build` checks for `docs/PRD.md`, then `docs/IDEA.md`, then `IDEA.md`. If more than one candidate exists, it asks you to choose the source for that run.
 
-Review the pre-flight summary, type `GO`, and the entire pipeline runs autonomously: PRD generation, agent team creation, all build phases, validation, and a commit after each phase. See [Full Auto Build](docs/prompt-playbook.md#full-auto-build---one-command-entire-pipeline-optional) for options.
+Review the pre-flight summary, type `GO`, and the entire pipeline runs autonomously: PRD generation, agent team creation, all build phases, validation, and a commit after each phase. Type `GO --workflow-engine` if you want the workflow-engine to handle Stage 4 instead; that path runs the required `npm install` steps, compiles the manifest, and starts the engine for you. See [Full Auto Build](docs/prompt-playbook.md#full-auto-build---one-command-entire-pipeline-optional) for options.
 
 ### 5. Build your PRD (step-by-step alternative)
 
@@ -218,15 +218,15 @@ This writes `docs/EXECUTION-MANIFEST.json`, keeps `docs/PROGRESS.md` synchronize
 > [!TIP]
 > See [docs/prompt-playbook.md](docs/prompt-playbook.md) for the full copy-paste prompt sequence, including feature additions, decomposition, and resume flows.
 
-### 9. (Optional) Run the build autonomously with dark orchestration
+### 9. (Optional) Use the workflow-engine build path
 
-Once the execution manifest exists, hand it to `workflow-orchestrator` to drive the entire build unattended - no per-phase approvals, no per-task prompts:
+Choose this path when you want the autonomous workflow-engine route instead of the prompt-driven `project-orchestrator` route. Once the execution manifest exists, hand it to `workflow-orchestrator` to drive the build unattended - no per-phase approvals, no per-task prompts:
 
 ```
 @workspace @workflow-orchestrator Run the workflow
 ```
 
-The agent invokes `forge-workflow-engine`, which reads `docs/EXECUTION-MANIFEST.json`, builds a live task DAG, dispatches tasks through your chosen harness adapter, retries failures automatically, and keeps `docs/WORKFLOW-STATE.json` and `docs/PROGRESS.md` in sync throughout. Resume after interruption:
+The agent invokes `forge-workflow-engine`, runs any required `npm install` steps for the execution packages on first use, then reads `docs/EXECUTION-MANIFEST.json`, builds a live task DAG, dispatches tasks through your chosen harness adapter, retries failures automatically, and keeps `docs/WORKFLOW-STATE.json` and `docs/PROGRESS.md` in sync throughout. Resume after interruption:
 
 ```
 @workspace @workflow-orchestrator Resume the workflow
