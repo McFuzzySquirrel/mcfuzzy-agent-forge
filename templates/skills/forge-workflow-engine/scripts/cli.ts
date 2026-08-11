@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-import { join, resolve } from "node:path";
+import { dirname, join, resolve } from "node:path";
 import { existsSync, readFileSync } from "node:fs";
 
 import { runEngine, replayTask } from "./engine.ts";
@@ -46,7 +46,7 @@ function detectRepoRoot(start = process.cwd()): string {
   let current = resolve(start);
   for (let depth = 0; depth < 12; depth++) {
     if (existsSync(join(current, ".git"))) return current;
-    const parent = require("node:path").dirname(current);
+    const parent = dirname(current);
     if (parent === current) break;
     current = parent;
   }
