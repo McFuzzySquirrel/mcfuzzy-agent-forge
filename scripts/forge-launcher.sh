@@ -197,20 +197,24 @@ select_harness() {
   echo ""
   echo "  Which agent harness will this project use?"
   echo ""
-  echo "    1) GitHub Copilot   (harness: github,  dir: .github/)"
-  echo "    2) opencode         (harness: agents,  dir: .agents/)"
-  echo "    3) Claude Code      (harness: claude,  dir: .claude/)"
-  echo "    4) Generic .agents  (harness: agents,  dir: .agents/)  [default]"
+  echo "    1) GitHub Copilot   (harness: github,    dir: .github/)"
+  echo "    2) opencode         (harness: opencode,  dir: .opencode/)"
+  echo "    3) Claude Code      (harness: claude,    dir: .claude/)"
+  echo "    4) Generic .agents  (harness: agents,    dir: .agents/)  [default]"
   echo ""
 
   local choice
-  prompt choice "Select [1-4]" "4"
+  if [[ "$NON_INTERACTIVE" == true ]]; then
+    choice="${FORGE_HARNESS_CHOICE:-4}"
+  else
+    prompt choice "Select [1-4]" "4"
+  fi
 
   case "$choice" in
-    1) HARNESS="github";  HARNESS_LABEL="GitHub Copilot" ;;
-    2) HARNESS="agents";  HARNESS_LABEL="opencode" ;;
-    3) HARNESS="claude";  HARNESS_LABEL="Claude Code" ;;
-    4) HARNESS="agents";  HARNESS_LABEL="Generic .agents" ;;
+    1) HARNESS="github";    HARNESS_LABEL="GitHub Copilot" ;;
+    2) HARNESS="opencode";  HARNESS_LABEL="opencode" ;;
+    3) HARNESS="claude";    HARNESS_LABEL="Claude Code" ;;
+    4) HARNESS="agents";    HARNESS_LABEL="Generic .agents" ;;
     *) warn "Unrecognised choice '$choice', defaulting to generic .agents"
        HARNESS="agents"; HARNESS_LABEL="Generic .agents" ;;
   esac
@@ -224,21 +228,26 @@ select_harness() {
 create_repo() {
   step "Step 3 of 9: Create repository"
 
-  local repo_name
-  prompt repo_name "Repository name (no spaces)" ""
+  local repo_name repo_description repo_visibility parent_dir
+
+  if [[ "$NON_INTERACTIVE" == true ]]; then
+    repo_name="${FORGE_REPO_NAME:-}"
+    [[ -n "$repo_name" ]] || { fail "Non-interactive mode: \$FORGE_REPO_NAME is not set."; exit 1; }
+    repo_description="${FORGE_REPO_DESCRIPTION:-}"
+    repo_visibility="${FORGE_REPO_VISIBILITY:-private}"
+    parent_dir="${FORGE_REPO_PARENT_DIR:-$(pwd)}"
+  else
+    prompt repo_name "Repository name (no spaces)" ""
+    [[ -n "$repo_name" ]] || { fail "Repository name cannot be empty."; exit 1; }
+    prompt repo_description "Short description (optional)" ""
+    prompt repo_visibility "Visibility -public or private" "private"
+    parent_dir="$(pwd)"
+    prompt parent_dir "Parent directory for the new repo" "$(pwd)"
+  fi
+
   [[ -n "$repo_name" ]] || { fail "Repository name cannot be empty."; exit 1; }
-
-  local repo_description
-  prompt repo_description "Short description (optional)" ""
-
-  local repo_visibility
-  prompt repo_visibility "Visibility -public or private" "private"
   repo_visibility="${repo_visibility,,}"
   [[ "$repo_visibility" == "public" || "$repo_visibility" == "private" ]] || repo_visibility="private"
-
-  # Resolve where to put the new repo
-  local parent_dir
-  prompt parent_dir "Parent directory for the new repo" "$(pwd)"
   parent_dir="${parent_dir:-$(pwd)}"
   parent_dir="$(realpath -m "$parent_dir")"
 
@@ -550,7 +559,15 @@ launch_autobuild() {
       fi
       ;;
     agents)
-      if [[ "$OPENCODE_AVAILABLE" == true && "$HARNESS_LABEL" == "opencode" ]]; then
+      info "Open the repository in your agent harness and run:"
+      echo ""
+      echo "    ${BOLD}@workspace $(autobuild_command)${RESET}"
+      echo ""
+      info "Agent templates are in:"
+      echo "    $REPO_DIR/.agents/agents/"
+      ;;
+    opencode)
+      if [[ "$OPENCODE_AVAILABLE" == true ]]; then
         prompt_yn "Launch opencode in the new repository now?"
         if [[ "${REPLY_YN,,}" == "y" ]]; then
           info "Launching opencode in: $REPO_DIR"
@@ -568,16 +585,9 @@ launch_autobuild() {
           echo "    Then: ${BOLD}$(autobuild_command)${RESET}"
         fi
       else
-        info "Open the repository in your agent harness and run:"
-        echo ""
-        echo "    ${BOLD}@workspace $(autobuild_command)${RESET}"
-        echo ""
-        info "Agent templates are in:"
-        case "$HARNESS" in
-          agents) echo "    $REPO_DIR/.agents/agents/" ;;
-          github) echo "    $REPO_DIR/.github/agents/" ;;
-          claude) echo "    $REPO_DIR/.claude/agents/" ;;
-        esac
+        warn "opencode CLI is not installed. Install it from https://opencode.ai then run:"
+        echo "    cd \"$REPO_DIR\" && opencode ."
+        echo "    Then: ${BOLD}$(autobuild_command)${RESET}"
       fi
       ;;
   esac
@@ -613,7 +623,14 @@ completion_summary() {
   echo ""
   echo "  References:"
   echo "   • Prompt playbook : $REPO_DIR/docs/prompt-playbook.md"
-  echo "   • forge-auto-build: $REPO_DIR/.agents/skills/forge-auto-build/SKILL.md"
+  local skills_root
+  case "$HARNESS" in
+    github)   skills_root=".github" ;;
+    claude)   skills_root=".claude" ;;
+    opencode) skills_root=".opencode" ;;
+    *)        skills_root=".agents" ;;
+  esac
+  echo "   • forge-auto-build: $REPO_DIR/$skills_root/skills/forge-auto-build/SKILL.md"
   echo "       (path may vary by harness)"
   echo ""
 }
