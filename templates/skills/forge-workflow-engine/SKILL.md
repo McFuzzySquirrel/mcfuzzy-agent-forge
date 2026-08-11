@@ -184,17 +184,17 @@ Each task is retried up to `--max-retries` times (default: 2) before being marke
 
 ---
 
-## Integration with forge-auto-build (Stage 5)
+## Integration with forge-auto-build (alternative Stage 4 path)
 
-`forge-auto-build` can optionally invoke this engine as a Stage 5 after the build phases are complete:
+`forge-auto-build` can optionally select this engine as its Stage 4 build path instead of `forge-orchestrate-build`:
 
 ```bash
-# After forge-auto-build has run all prompt-driven phases:
+# Stage 4 alternative: harness-driven build path
 cd .agents/skills/forge-execution-adapter && npm install && npm run forge-execution-adapter -- compile
 cd .agents/skills/forge-workflow-engine  && npm install && npm run workflow-engine -- run --harness opencode
 ```
 
-This allows the same project to be executed both interactively (via `project-orchestrator`) and autonomously (via the workflow engine), using whichever mode fits the context.
+This gives the same project two mutually exclusive execution modes for a given run: interactive/prompt-driven (via `project-orchestrator`) or autonomous/harness-driven (via the workflow engine).
 
 ---
 

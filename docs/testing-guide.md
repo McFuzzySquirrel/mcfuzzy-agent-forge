@@ -177,9 +177,13 @@ This part verifies the autonomous execution layer. Recall: **dark orchestration 
 
 ### Test Steps
 
-**Step 1 – Run the full forge pipeline through Stage 4**
+**Step 1 – Prepare a workflow-engine-ready project**
 
-Complete Stages 1–4 of `forge-auto-build` (or use the team you generated in Part 1 if it has an `EXECUTION-MANIFEST.json`). The manifest must exist at `docs/EXECUTION-MANIFEST.json` before the engine can start.
+Either:
+- run Stages 1–3 of `forge-auto-build` and then start the engine path with `GO --workflow-engine`, or
+- use the team you generated in Part 1 and compile a manifest manually.
+
+The manifest must exist at `docs/EXECUTION-MANIFEST.json` before the engine can start.
 
 If you don't have a manifest yet, compile one:
 ```bash

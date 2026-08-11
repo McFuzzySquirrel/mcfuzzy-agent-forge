@@ -13,7 +13,7 @@ Detailed release and change notes for McFuzzy Agent Forge.
 - Three harness adapters ship in MVP: `OpenCodeAdapter` (shells out to `opencode run`), `OpenAIAdapter` (direct API), and `StubAdapter` (synthetic results for testing).
 - Machine-readable run state is stored in `docs/WORKFLOW-STATE.json`; `docs/PROGRESS.md` stays in sync so existing `project-orchestrator`-style resume flows remain compatible.
 - CLI supports `run`, `status`, `replay`, and `pause` operations.
-- Opt-in Stage 5 for `forge-auto-build`: compile manifest with `forge-execution-adapter`, then execute autonomously with `workflow-engine run --harness opencode`. Stages 1–4 are unchanged.
+- `forge-auto-build` now supports either/or build execution: the default Stage 4 path uses `forge-orchestrate-build`, while `GO --workflow-engine` switches Stage 4 to manifest compilation plus autonomous execution with `workflow-engine run --harness opencode`.
 - Auto-deployed by bootstrap scripts; no bootstrap changes required.
 
 Related architecture decision:
