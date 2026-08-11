@@ -21,7 +21,10 @@ This skill does **not** replace the prompt-driven flows. It is an optional, addi
 Before running this skill, the following must exist in the repository:
 
 - `docs/EXECUTION-MANIFEST.json` — compiled by `forge-execution-adapter`
-- `.agents/agents/*.agent.md` — generated agent team
+- Agent `.agent.md` files under the harness agents directory:
+  - `.agents/agents/` (default harness)
+  - `.opencode/agents/` (OpenCode harness)
+  - `.github/agents/` or `.claude/agents/` (other harnesses)
 - A configured execution harness (OpenCode CLI in `$PATH`, or `OPENAI_API_KEY` set)
 
 If the manifest does not exist yet, run the adapter first:

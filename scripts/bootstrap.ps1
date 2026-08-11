@@ -30,7 +30,7 @@
 [CmdletBinding()]
 param (
     [string]$Target = "",
-    [ValidateSet("agents", "github", "claude")]
+    [ValidateSet("agents", "github", "claude", "opencode")]
     [string]$Harness = "agents",
     [switch]$Force
 )
@@ -44,9 +44,10 @@ $DocsDir     = Join-Path $ScriptDir "..\docs" | Resolve-Path
 
 # Map harness to root directory
 $RootDir = switch ($Harness) {
-    "agents" { ".agents" }
-    "github" { ".github" }
-    "claude" { ".claude" }
+    "agents"   { ".agents" }
+    "github"   { ".github" }
+    "claude"   { ".claude" }
+    "opencode" { ".opencode" }
 }
 
 # ---------------------------------------------------------------------------

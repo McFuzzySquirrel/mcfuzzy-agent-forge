@@ -1,4 +1,4 @@
-export type HarnessRoot = ".agents" | ".github" | ".claude";
+export type HarnessRoot = ".agents" | ".github" | ".claude" | ".opencode";
 
 export interface AgentDescriptor {
   name: string;

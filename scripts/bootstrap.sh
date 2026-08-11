@@ -39,10 +39,11 @@ done
 
 # Map harness to root directory
 case "$HARNESS" in
-  agents) ROOT=".agents" ;;
-  github) ROOT=".github" ;;
-  claude) ROOT=".claude" ;;
-  *)      echo "Error: Unknown harness '$HARNESS'. Valid: agents, github, claude" >&2; exit 1 ;;
+  agents)   ROOT=".agents" ;;
+  github)   ROOT=".github" ;;
+  claude)   ROOT=".claude" ;;
+  opencode) ROOT=".opencode" ;;
+  *)      echo "Error: Unknown harness '$HARNESS'. Valid: agents, github, claude, opencode" >&2; exit 1 ;;
 esac
 
 # Prompt if no target supplied
