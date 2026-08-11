@@ -1,9 +1,11 @@
 # McFuzzy Agent Forge – Manual Testing Guide
 
-This guide walks you through a concrete end-to-end scenario you can run by hand to verify that the forge pipeline works as expected.  It covers two capabilities in sequence:
+This guide walks you through a concrete end-to-end scenario you can run by hand to verify that the forge pipeline works as expected.  It covers four capabilities in sequence:
 
 1. **Skill creation from the team builder** – confirming `forge-build-agent-team` invokes `skill-creator` and enforces the `skill-review` quality gate.
 2. **Workflow engine (dark orchestration)** – verifying that `forge-workflow-engine` can execute a compiled manifest autonomously.
+3. **End-to-end with forge-launcher** – testing the full journey from zero to autonomous execution.
+4. **Dark orchestration with the OpenAI harness** – running the workflow engine against the OpenAI API directly (no `opencode` or `claude` CLI required).
 
 ---
 
@@ -436,6 +438,189 @@ Then run the functional test script to assert the expected layout:
 
 ---
 
+## Part 4 – Dark Orchestration with the OpenAI Harness
+
+This part verifies that the workflow engine can execute a compiled manifest by calling the OpenAI API directly. **No `opencode`, `claude`, or other CLI harness is required** — only an API key and Node.js. Use this path when you want to run dark orchestration on any machine that already has internet access and an OpenAI (or compatible) API key.
+
+### Prerequisites for Part 4
+
+- All prerequisites from Part 2 (`forge-execution-adapter` compiled, `forge-workflow-engine` installed)
+- `OPENAI_API_KEY` set in your environment (see Step 1 below)
+- `node` ≥ 18 and `npm` installed
+- `docs/EXECUTION-MANIFEST.json` must exist before starting the engine
+
+---
+
+### Test Steps
+
+**Step 1 – Verify your API key is exported**
+
+```bash
+echo $OPENAI_API_KEY     # should print a non-empty value starting with sk-
+```
+
+If it is empty, export it now:
+
+```bash
+export OPENAI_API_KEY=sk-...your-key-here...
+```
+
+Optionally smoke-test connectivity to the API:
+
+```bash
+curl -s -o /dev/null -w "%{http_code}" \
+  -H "Authorization: ******" \
+  https://api.openai.com/v1/models
+```
+
+**Check ✓** The `curl` command returns `200`. A `401` means the key is invalid or not exported; a `429` means you have hit a rate limit.
+
+---
+
+**Step 2 – (Optional) Set model and base URL overrides**
+
+The engine defaults to `gpt-4o` and `https://api.openai.com/v1`. Override either with environment variables before running:
+
+```bash
+# Use a different model
+export OPENAI_MODEL=gpt-4o-mini
+
+# Azure OpenAI or any OpenAI-compatible endpoint
+export OPENAI_BASE_URL=https://<your-resource>.openai.azure.com/openai/deployments/<deployment>/
+
+# Local LLM with an OpenAI-compatible API (e.g. LM Studio, Ollama with openai-compat)
+export OPENAI_BASE_URL=http://localhost:11434/v1
+export OPENAI_MODEL=llama3
+```
+
+Individual agents can still override the model via their `model:` frontmatter field; the environment variable is the fallback default.
+
+**Check ✓** Variables are set as intended (`echo $OPENAI_MODEL`, `echo $OPENAI_BASE_URL`). Leave them unset to use the OpenAI defaults.
+
+---
+
+**Step 3 – Dry-run with the stub harness first**
+
+Always validate engine wiring with a stub run before spending tokens:
+
+```bash
+cd .agents/skills/forge-workflow-engine
+npm run workflow-engine -- run --harness stub
+```
+
+Add `STUB_DELAY_MS` to simulate realistic task latency and expose any timing issues before committing to a real run:
+
+```bash
+STUB_DELAY_MS=500 npm run workflow-engine -- run --harness stub
+```
+
+**Check ✓** The engine runs through all tasks, printing status lines for each, and exits cleanly. `docs/WORKFLOW-STATE.json` shows every task as `complete`. If any task shows `failed`, investigate before proceeding to the OpenAI run.
+
+---
+
+**Step 4 – Start the engine with the OpenAI harness**
+
+```bash
+cd .agents/skills/forge-workflow-engine
+npm run workflow-engine -- run --harness openai
+```
+
+The engine prints a pre-run summary showing the harness, phase count, task count, and model, then waits for confirmation:
+
+```
+Forge Workflow Engine – Pre-run Summary
+  Harness : openai
+  Model   : gpt-4o  (override with OPENAI_MODEL)
+  Phases  : 3
+  Tasks   : 12
+Type "yes" to start dark orchestration, or Ctrl+C to abort.
+```
+
+**Check ✓** You see the pre-run summary. The engine does **not** dispatch any tasks until you confirm. The summary correctly shows `harness: openai`.
+
+---
+
+**Step 5 – Confirm and observe autonomous execution**
+
+Type `yes` to proceed.
+
+**Check ✓** The engine dispatches tasks one by one, printing status lines like:
+
+```
+[Phase 1 / Task 1] project-architect → scaffolding ... ok
+[Phase 1 / Task 2] backend-engineer → database schema ... ok
+```
+
+No human input is required between tasks. Each task consumes real API tokens; monitor `docs/EXECUTION-AUDIT.jsonl` for a per-task record of every dispatch:
+
+```bash
+# Stream the audit log as tasks complete
+tail -f docs/EXECUTION-AUDIT.jsonl | jq .
+```
+
+**Check ✓** `docs/EXECUTION-AUDIT.jsonl` grows with one event per task. Each event includes the task ID, agent name, model, and a timestamp.
+
+---
+
+**Step 6 – Resume after interruption and replay a failed task**
+
+Kill the engine mid-run (`Ctrl+C`). Then restart:
+
+```bash
+npm run workflow-engine -- run --harness openai
+```
+
+**Check ✓** The engine resumes from the last incomplete task. Tasks already marked `complete` in `docs/WORKFLOW-STATE.json` are not re-run and no additional tokens are consumed for them.
+
+To replay a single failed task:
+
+```bash
+npm run workflow-engine -- replay <task-id> --harness openai
+```
+
+**Check ✓** Only the replayed task re-runs against the OpenAI API. All other completed tasks remain untouched.
+
+---
+
+**Step 7 – Azure OpenAI and compatible-API variant**
+
+Set `OPENAI_BASE_URL` to your Azure endpoint before running:
+
+```bash
+export OPENAI_API_KEY=<your-azure-api-key>
+export OPENAI_BASE_URL=https://<resource-name>.openai.azure.com/openai/deployments/<deployment-name>/
+export OPENAI_MODEL=<deployment-name>    # Azure uses the deployment name as the model
+
+npm run workflow-engine -- run --harness openai
+```
+
+For any other endpoint that exposes the OpenAI chat completions API (LM Studio, vLLM, Together AI, etc.):
+
+```bash
+export OPENAI_BASE_URL=https://api.together.xyz/v1
+export OPENAI_MODEL=meta-llama/Llama-3-70b-chat-hf
+npm run workflow-engine -- run --harness openai
+```
+
+**Check ✓** The pre-run summary shows the overridden `OPENAI_BASE_URL` and model. Tasks complete successfully against the alternative endpoint.
+
+---
+
+### Part 4 Pass/Fail Summary
+
+| Check | Expected |
+|---|---|
+| `OPENAI_API_KEY` exported and `/v1/models` returns `200` | ✅ |
+| Stub dry-run completes with all tasks `complete` | ✅ |
+| Pre-run gate shown before any tasks fire (harness shows `openai`) | ✅ |
+| Tasks execute autonomously; no human input required between tasks | ✅ |
+| `EXECUTION-AUDIT.jsonl` grows with one event per task | ✅ |
+| Resume skips already-complete tasks; no duplicate token usage | ✅ |
+| Replay re-runs only the targeted task | ✅ |
+| Azure / compatible-API variant works with `OPENAI_BASE_URL` override | ✅ |
+
+---
+
 ## Quick Reference: Key File Locations
 
 | File | Purpose |
@@ -463,3 +648,15 @@ Run `forge-execution-adapter -- compile` first to generate `docs/EXECUTION-MANIF
 
 **Skill `name:` mismatch warning**
 The `name:` field in a skill's YAML frontmatter must match the directory name exactly. Edit the frontmatter to fix it.
+
+**`401 Unauthorized` from the OpenAI harness**
+Your `OPENAI_API_KEY` is missing, expired, or incorrect. Re-export the correct key and retry.
+
+**`429 Too Many Requests` from the OpenAI harness**
+You have hit the API rate limit. Wait a moment and re-run, or add `--retry-delay-ms 15000` to give the engine more time between retries: `npm run workflow-engine -- run --harness openai --retry-delay-ms 15000`.
+
+**`model_not_found` error from the OpenAI harness**
+The value of `OPENAI_MODEL` (or an agent's `model:` frontmatter field) does not match a model available to your API key. Check your OpenAI account's model access and update `OPENAI_MODEL` accordingly.
+
+**Azure endpoint returns `404` or `ResourceNotFound`**
+`OPENAI_BASE_URL` for Azure must include the deployment name and end with a trailing slash, e.g. `https://<resource>.openai.azure.com/openai/deployments/<deployment>/`. Also ensure `OPENAI_MODEL` matches the deployment name exactly.
