@@ -50,6 +50,9 @@
 ### Non-interactive mode (CI / automation)
 
 ```bash
+export FORGE_HARNESS_CHOICE="2"                   # 1=GitHub Copilot, 2=opencode, 3=Claude Code, 4=agents
+export FORGE_REPO_NAME="my-app"
+export FORGE_REPO_PARENT_DIR="/home/user/projects"
 export FORGE_IDEA="A task management web app with a React frontend and a Node.js API"
 export FORGE_PRD_FILE="/path/to/my-prd.md"          # optional
 export FORGE_RESEARCH_FILES="/path/to/research.md,/path/to/notes.md"  # optional
@@ -89,10 +92,10 @@ The launcher checks each required and optional tool and reports its version or a
 
   Which agent harness will this project use?
 
-    1) GitHub Copilot   (harness: github,  dir: .github/)
-    2) opencode         (harness: agents,  dir: .agents/)
-    3) Claude Code      (harness: claude,  dir: .claude/)
-    4) Generic .agents  (harness: agents,  dir: .agents/)  [default]
+    1) GitHub Copilot   (harness: github,    dir: .github/)
+    2) opencode         (harness: opencode,  dir: .opencode/)
+    3) Claude Code      (harness: claude,    dir: .claude/)
+    4) Generic .agents  (harness: agents,    dir: .agents/)  [default]
 
 Select [1-4] [4]:
 ```
@@ -257,7 +260,7 @@ For GitHub Copilot, the launcher now tries to open the GitHub Copilot CLI in a s
 | Harness | Repo create | Bootstrap flag | Auto-build launch |
 |---------|------------|----------------|-------------------|
 | GitHub Copilot | `gh repo create` | `--harness github` | Printed instructions (manual) |
-| opencode | `git init` + optional remote | `--harness agents` | `opencode .` spawn (optional) |
+| opencode | `git init` + optional remote | `--harness opencode` | `opencode .` spawn (optional) |
 | Claude Code | `git init` + optional remote | `--harness claude` | `claude .` spawn (optional) |
 | Generic `.agents` | `git init` + optional remote | `--harness agents` | Printed instructions |
 
@@ -267,6 +270,11 @@ For GitHub Copilot, the launcher now tries to open the GitHub Copilot CLI in a s
 
 | Variable | Used in step | Description |
 |----------|-------------|-------------|
+| `FORGE_HARNESS_CHOICE` | 2 | Harness selection: `1`=GitHub Copilot, `2`=opencode, `3`=Claude Code, `4`=generic `.agents` (default: `4`) |
+| `FORGE_REPO_NAME` | 3 | Repository name (required in non-interactive mode) |
+| `FORGE_REPO_DESCRIPTION` | 3 | Short repository description (optional) |
+| `FORGE_REPO_VISIBILITY` | 3 | `public` or `private` (default: `private`) |
+| `FORGE_REPO_PARENT_DIR` | 3 | Parent directory in which the repo directory is created (default: current working directory) |
 | `FORGE_IDEA` | 5 | Project idea text written to `docs/IDEA.md` (and mirrored to `IDEA.md`) |
 | `FORGE_PRD_FILE` | 6 | Absolute path to an existing PRD file to copy in as `docs/PRD.md` |
 | `FORGE_RESEARCH_FILES` | 6 | Comma-separated list of absolute paths to research/seed documents copied to `docs/research/` |

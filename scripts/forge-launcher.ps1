@@ -223,19 +223,23 @@ function Select-Harness {
     Write-Host ""
     Write-Host "  Which agent harness will this project use?" -ForegroundColor White
     Write-Host ""
-    Write-Host "    1) GitHub Copilot   (harness: github,  dir: .github/)"
-    Write-Host "    2) opencode         (harness: agents,  dir: .agents/)"
-    Write-Host "    3) Claude Code      (harness: claude,  dir: .claude/)"
-    Write-Host "    4) Generic .agents  (harness: agents,  dir: .agents/)  [default]"
+    Write-Host "    1) GitHub Copilot   (harness: github,    dir: .github/)"
+    Write-Host "    2) opencode         (harness: opencode,  dir: .opencode/)"
+    Write-Host "    3) Claude Code      (harness: claude,    dir: .claude/)"
+    Write-Host "    4) Generic .agents  (harness: agents,    dir: .agents/)  [default]"
     Write-Host ""
 
-    $choice = Read-Prompt "Select [1-4]" "4"
+    $choice = if ($NonInteractive) {
+        if ($env:FORGE_HARNESS_CHOICE) { $env:FORGE_HARNESS_CHOICE } else { "4" }
+    } else {
+        Read-Prompt "Select [1-4]" "4"
+    }
 
     switch ($choice) {
-        "1" { $script:Harness = "github"; $script:HarnessLabel = "GitHub Copilot" }
-        "2" { $script:Harness = "agents"; $script:HarnessLabel = "opencode" }
-        "3" { $script:Harness = "claude"; $script:HarnessLabel = "Claude Code" }
-        "4" { $script:Harness = "agents"; $script:HarnessLabel = "Generic .agents" }
+        "1" { $script:Harness = "github";   $script:HarnessLabel = "GitHub Copilot" }
+        "2" { $script:Harness = "opencode"; $script:HarnessLabel = "opencode" }
+        "3" { $script:Harness = "claude";   $script:HarnessLabel = "Claude Code" }
+        "4" { $script:Harness = "agents";   $script:HarnessLabel = "Generic .agents" }
         default {
             Write-Warn "Unrecognised choice '$choice', defaulting to generic .agents"
             $script:Harness = "agents"; $script:HarnessLabel = "Generic .agents"
@@ -251,23 +255,21 @@ function Select-Harness {
 function New-Repository {
     Write-Step "Step 3 of 9: Create repository"
 
-    $repoName = Read-Prompt "Repository name (no spaces)" ""
+    $repoName        = if ($NonInteractive) { $env:FORGE_REPO_NAME        ?? "" } else { Read-Prompt "Repository name (no spaces)" "" }
+    $repoDescription = if ($NonInteractive) { $env:FORGE_REPO_DESCRIPTION ?? "" } else { Read-Prompt "Short description (optional)" "" }
+    $repoVisibility  = if ($NonInteractive) { $env:FORGE_REPO_VISIBILITY  ?? "private" } else { Read-Prompt "Visibility -public or private" "private" }
+    $parentDirRaw    = if ($NonInteractive) { $env:FORGE_REPO_PARENT_DIR  ?? (Get-Location).Path } else { Read-Prompt "Parent directory for the new repo" (Get-Location).Path }
+
     if (-not $repoName) {
-        Write-Fail "Repository name cannot be empty."
+        Write-Fail "Non-interactive mode: `$env:FORGE_REPO_NAME is not set."
         exit 1
     }
 
-    $repoDescription = Read-Prompt "Short description (optional)" ""
-
-    $repoVisibility = Read-Prompt "Visibility -public or private" "private"
     $repoVisibility = $repoVisibility.ToLower()
-    if ($repoVisibility -ne "public" -and $repoVisibility -ne "private") {
-        $repoVisibility = "private"
-    }
+    if ($repoVisibility -ne "public" -and $repoVisibility -ne "private") { $repoVisibility = "private" }
 
-    $parentDir = Read-Prompt "Parent directory for the new repo" (Get-Location).Path
-    if (-not $parentDir) { $parentDir = (Get-Location).Path }
-    $parentDir = [System.IO.Path]::GetFullPath($parentDir)
+    if (-not $parentDirRaw) { $parentDirRaw = (Get-Location).Path }
+    $parentDir = [System.IO.Path]::GetFullPath($parentDirRaw)
 
     $script:RepoDir = Join-Path $parentDir $repoName
     $script:RemoteCreated = $false
@@ -603,8 +605,16 @@ function Invoke-LaunchAutobuild {
                 Write-Host "    Then: $(Get-AutobuildCommand)"
             }
         }
-        default {
-            if ($script:OpencodeAvailable -and $script:HarnessLabel -eq "opencode") {
+        "agents" {
+            Write-Info "Open the repository in your agent harness and run:"
+            Write-Host ""
+            Write-Host "    @workspace $(Get-AutobuildCommand)" -ForegroundColor White
+            Write-Host ""
+            Write-Info "Agent templates are in:"
+            Write-Host "    $($script:RepoDir)\.agents\agents\"
+        }
+        "opencode" {
+            if ($script:OpencodeAvailable) {
                 $launch = Read-YesNo "Launch opencode in the new repository now?" "y"
                 if ($launch -eq "y" -or $launch -eq "Y") {
                     Write-Info "Launching opencode in: $($script:RepoDir)"
@@ -622,12 +632,9 @@ function Invoke-LaunchAutobuild {
                     Write-Host "    Then: $(Get-AutobuildCommand)"
                 }
             } else {
-                Write-Info "Open the repository in your agent harness and run:"
-                Write-Host ""
-                Write-Host "    @workspace $(Get-AutobuildCommand)" -ForegroundColor White
-                Write-Host ""
-                Write-Info "Agent templates are in:"
-                Write-Host "    $($script:RepoDir)\.agents\agents\"
+                Write-Warn "opencode CLI is not installed. Install it from https://opencode.ai then run:"
+                Write-Host "    cd `"$($script:RepoDir)`"; opencode ."
+                Write-Host "    Then: $(Get-AutobuildCommand)"
             }
         }
     }
@@ -663,7 +670,13 @@ function Write-CompletionSummary {
     Write-Host ""
     Write-Host "  References:"
     Write-Host "   • Prompt playbook : $(Join-Path $script:RepoDir 'docs\prompt-playbook.md')"
-    Write-Host "   • forge-auto-build: $(Join-Path $script:RepoDir '.agents\skills\forge-auto-build\SKILL.md')"
+    $skillsRoot = switch ($script:Harness) {
+        "github"   { ".github" }
+        "claude"   { ".claude" }
+        "opencode" { ".opencode" }
+        default    { ".agents" }
+    }
+    Write-Host "   • forge-auto-build: $(Join-Path $script:RepoDir "$skillsRoot\skills\forge-auto-build\SKILL.md")"
     Write-Host "       (path may vary by harness)"
     Write-Host ""
 }

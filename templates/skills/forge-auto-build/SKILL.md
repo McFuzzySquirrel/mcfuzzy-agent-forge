@@ -64,12 +64,13 @@ When the user invokes this skill, perform the following before touching any file
    - Stage 2: `forge-build-agent-team` → produce agent and skill files
    - Stage 3 (optional): `forge-assign-models` → recommend or apply per-agent models *(opt-in -include if user passed `--assign-models`)*
    - Stage 4: `forge-orchestrate-build` -execute all phases continuously, committing after each
+   - Stage 5 (optional): `forge-workflow-engine` → compile execution manifest and re-execute through a real harness *(opt-in -include if user passed `--workflow-engine`)*
 5. **State the commit strategy** explicitly:
    - After Stage 2: `chore: bootstrap Agent Forge agent and skill templates`
    - After each build phase N: `feat: complete Phase N -<phase name>`
    - After all phases: `chore: auto-build complete -all phases delivered`
 6. **Present the pre-flight checklist** (see below).
-7. **Prompt**: *"Review the plan above. Type `GO` to start the full auto-build, `GO --assign-models` to also run model assignment, or `stop` to exit."*
+7. **Prompt**: *"Review the plan above. Type `GO` to start the full auto-build, `GO --assign-models` to also run model assignment, `GO --workflow-engine` to also run harness-driven execution after Stage 4, or `stop` to exit."*
 
 **Input-resolution behavior examples:**
 
@@ -184,6 +185,48 @@ If any validation check fails, do **not** commit and do **not** proceed. Stop an
 
 ---
 
+### Stage 5 (Optional): Run `forge-workflow-engine` — Harness-Driven Execution
+
+Run this stage only if the user included `--workflow-engine` in their `GO` command.
+
+This stage compiles the completed build into a structured execution manifest and re-executes every task through a real model harness (OpenCode CLI by default), producing a fully harness-driven execution record alongside the prompt-driven build.
+
+**Step 5a: Compile the execution manifest**
+
+```bash
+cd .agents/skills/forge-execution-adapter
+npm install
+npm run forge-execution-adapter -- compile
+```
+
+Verify that `docs/EXECUTION-MANIFEST.json` was written and contains at least one phase with tasks. If the adapter reports warnings, surface them to the user before continuing.
+
+**Step 5b: Run the workflow engine**
+
+```bash
+cd .agents/skills/forge-workflow-engine
+npm install
+npm run workflow-engine -- run --harness opencode
+```
+
+Monitor the engine until it reports `status: "complete"` or stops with `status: "failed"`.
+
+**Step 5c: Verify completion**
+
+- [ ] `docs/WORKFLOW-STATE.json` exists and `status` is `"complete"`
+- [ ] All tasks in the manifest are `"complete"` or `"skipped"`
+- [ ] `docs/PROGRESS.md` reflects the completed state
+- [ ] `docs/EXECUTION-AUDIT.jsonl` contains a `run.complete` event
+
+If the engine reports failures, surface the failing task IDs and error messages. Do not mark Stage 5 complete until the run status is `"complete"`.
+
+When it finishes:
+- Report: "Stage 5 complete — harness-driven execution finished. All tasks complete."
+
+If `--workflow-engine` was not requested, skip this stage and note: "Stage 5 skipped (no --workflow-engine flag). You can run the workflow engine manually at any time. Moving to Final Stage."
+
+---
+
 ### Final Stage: Completion Summary
 
 After all phases in Stage 4 are complete and committed:
@@ -203,6 +246,7 @@ Stages completed:
   ✅ Stage 2: Agent team generated (N agents, M skills)
   [✅ or ⏭️] Stage 3: Per-agent models [applied | skipped]
   ✅ Stage 4: All N phases built and committed
+  [✅ or ⏭️] Stage 5: Harness-driven execution [run | skipped]
 
 Commits made: <N>
 Files produced: <list key output files>
@@ -214,6 +258,7 @@ Next steps:
   - Add a new feature: @workspace /forge-build-feature-prd I want to add [feature]...
   - Audit generated skills (automated): cd .agents/skills/skill-review && npm install && npm run skill-review -- --provider stdout --min-score 1.5
   - Audit generated skills (manual): @workspace /forge-optimize-skills Audit all skills...
+  - Dark orchestration: cd .agents/skills/forge-workflow-engine && npm run workflow-engine -- run --harness opencode
 ```
 
 ---
@@ -228,6 +273,7 @@ If this skill is invoked in a repo that has an incomplete auto-build (detected b
    - If interrupted mid-Stage 2: re-invoke `forge-build-agent-team`.
    - If interrupted mid-Stage 3: re-run the affected stage from the beginning.
    - If interrupted mid-Stage 4: invoke `forge-orchestrate-build` with `resume from last checkpoint`.
+   - If interrupted mid-Stage 5: run `npm run workflow-engine -- run` in the `forge-workflow-engine` skill directory; the engine resumes from `docs/WORKFLOW-STATE.json`.
 3. Report to the user: "Resuming auto-build from Stage N, last completed: [task description]."
 4. Do not re-run stages whose outputs are already committed and verified.
 
@@ -242,6 +288,8 @@ If this skill is invoked in a repo that has an incomplete auto-build (detected b
 | Stage 3 model assignment fails | Log the failure, skip Stage 3, continue to Stage 4 -report at the end |
 | Stage 4 phase fails validation | Stop after the failing phase; report error, blocked phase, and responsible agent |
 | Stage 4 commit fails | Stop immediately; report the git error |
+| Stage 5 manifest compile fails | Surface adapter warnings; do not start the engine until resolved |
+| Stage 5 engine task fails | Surface the failing task ID and error; suggest `npm run workflow-engine -- replay <task-id>` |
 | Any unexpected file conflict | Stop and ask the user whether to overwrite, merge, or abort |
 
 ---

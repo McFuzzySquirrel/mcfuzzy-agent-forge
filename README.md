@@ -9,12 +9,13 @@
 
 **McFuzzy Agent Forge** turns your requirements document into a coordinated team of specialist agents. Each agent owns a specific domain, understands its dependencies, and works in sequence so nothing gets missed.
 
-[Quick Start](#quick-start-forge-launcher) • [Getting Started](#getting-started) • [How It Works](#how-it-works) • [Usage](#usage) • [Prompt Playbook](docs/prompt-playbook.md) • [Local Models](docs/running-with-local-models.md) • [FAQ](#faq) • [Recent Updates](#recent-updates)
+[Quick Start](#quick-start-forge-launcher) • [Getting Started](#getting-started) • [How It Works](#how-it-works) • [Usage](#usage) • [Prompt Playbook](docs/prompt-playbook.md) • [Local Models](docs/running-with-local-models.md) • [Testing Guide](docs/testing-guide.md) • [FAQ](#faq) • [Recent Updates](#recent-updates)
 
 ---
 
 ## Recent Updates
 
+- **August 2026 - v3.5:** Dynamic Workflow Orchestration — `forge-workflow-engine` runtime layer and `workflow-orchestrator` agent for fully autonomous, harness-agnostic build execution. Added [`docs/testing-guide.md`](docs/testing-guide.md) with step-by-step manual verification for skill creation and workflow orchestration. See [docs/updates.md](docs/updates.md#august-2026---v35) and [docs/adr/014-dynamic-workflow-orchestration.md](docs/adr/014-dynamic-workflow-orchestration.md).
 - **August 2026 - v3.4:** Auto-build input auto-detection and launcher handoff alignment. See [docs/updates.md](docs/updates.md#august-2026---v34) and [docs/adr/013-auto-build-input-auto-detection.md](docs/adr/013-auto-build-input-auto-detection.md).
 - **August 2026 - v3.3:** Forge Execution Adapter for contract-driven external runners. See [docs/updates.md](docs/updates.md#august-2026---v33) and [docs/adr/011-forge-execution-adapter.md](docs/adr/011-forge-execution-adapter.md).
 - **August 2026 - v3.2:** Forge Launcher lifecycle CLI plus launch hardening. See [docs/updates.md](docs/updates.md#august-2026---v32), [docs/adr/010-forge-launcher.md](docs/adr/010-forge-launcher.md), and [docs/adr/012-launcher-terminal-handoff-and-prd-guidance.md](docs/adr/012-launcher-terminal-handoff-and-prd-guidance.md).
@@ -53,6 +54,8 @@ Both approaches use the same core toolkit:
 | `project-orchestrator` agent | Coordinates agents through implementation phases, phase by phase |
 | `forge-orchestrate-build` skill | Contains the detailed execution process used by `project-orchestrator` (analysis, phase execution, coordination, output formatting) |
 | `forge-execution-adapter` skill | Compiles a Forge repo into a contract-driven execution manifest and checkpoint bridge for external runners such as FlowForge-style backends |
+| `forge-workflow-engine` skill | Runtime layer that reads `docs/EXECUTION-MANIFEST.json`, drives a task DAG through a pluggable harness adapter, retries failures, and syncs `PROGRESS.md` and `WORKFLOW-STATE.json` after every transition |
+| `workflow-orchestrator` agent | Human-facing companion to `forge-workflow-engine`: pre-run verification, CLI invocation, blocker escalation, replay coordination, and post-run summaries |
 | `forge-launcher` scripts | Interactive CLI: create repo → select harness → bootstrap → capture idea → commit → launch auto-build in one terminal session |
 | Bootstrap scripts | Copy all templates into any target repository with one command |
 
@@ -215,6 +218,29 @@ This writes `docs/EXECUTION-MANIFEST.json`, keeps `docs/PROGRESS.md` synchronize
 > [!TIP]
 > See [docs/prompt-playbook.md](docs/prompt-playbook.md) for the full copy-paste prompt sequence, including feature additions, decomposition, and resume flows.
 
+### 9. (Optional) Run the build autonomously with dark orchestration
+
+Once the execution manifest exists, hand it to `workflow-orchestrator` to drive the entire build unattended — no per-phase approvals, no per-task prompts:
+
+```
+@workspace @workflow-orchestrator Run the workflow
+```
+
+The agent invokes `forge-workflow-engine`, which reads `docs/EXECUTION-MANIFEST.json`, builds a live task DAG, dispatches tasks through your chosen harness adapter, retries failures automatically, and keeps `docs/WORKFLOW-STATE.json` and `docs/PROGRESS.md` in sync throughout. Resume after interruption:
+
+```
+@workspace @workflow-orchestrator Resume the workflow
+```
+
+Replay a single failed task without re-running anything else:
+
+```
+@workspace @workflow-orchestrator Replay task <task-id>
+```
+
+> [!NOTE]
+> **Dark orchestration** means the engine runs unattended between the pre-run gate and the end of the build — no human approval is needed between tasks. Use `@project-orchestrator` instead if you prefer per-phase review and approval.
+
 ---
 
 ## Usage
@@ -362,24 +388,6 @@ The optional `forge-assign-models` skill fixes that. It:
 
 ---
 
-## Persistent Memory with EJS
-
-The [Engineering Journey System (EJS)](https://github.com/McFuzzySquirrel/Engineering-Journey-System) adds session memory to your agent team. Without it, agents start fresh every conversation with no awareness of past decisions. With it, they query a local SQLite database of past ADRs, learnings, and architectural choices.
-
-EJS is optional but recommended. Bootstrap it before Agent Forge for a new project, then add the EJS recording contract to your harness instructions file (e.g. `.github/copilot-instructions.md`, `.agents/instructions.md`, or `.claude/CLAUDE.md` depending on your harness):
-
-```markdown
-## EJS Recording Contract
-- Record decisions and sub-agent work to the session journey file
-- Query `.ejs.db` before reading raw markdown for past context
-- Attribute every entry by agent name
-```
-
-> [!TIP]
-> With EJS + Agent Forge + BYOK, you get a fully local, context-aware agent team that remembers past decisions - no cloud dependency required.
-
----
-
 ## Template Structure
 
 ```
@@ -390,6 +398,7 @@ mcfuzzy-agent-forge/
 ├── templates/
 │   ├── agents/
 │   │   ├── project-orchestrator.md     # Coordinates agents through PRD phases or features
+│   │   ├── workflow-orchestrator.md    # Human-facing companion to forge-workflow-engine (pre-run gate, status, replay)
 │   │   └── forge-team-builder.md       # PRD → agent team generator
 │   └── skills/
 │       ├── forge-auto-build/SKILL.md         # Meta-skill: idea → PRD → team → full build (autonomous, one gate)
@@ -413,6 +422,8 @@ mcfuzzy-agent-forge/
 │       │   └── scripts/                      # TypeScript audit engine (rubric.ts, detect.ts, providers/)
 │       └── skill-review-updater/SKILL.md     # Keep skill-review rubric aligned with latest agentskills.io guidance
 │           └── references/                   # Quality baseline, rubric mapping, validation checks
+│       ├── forge-execution-adapter/SKILL.md  # Compile Forge repo into EXECUTION-MANIFEST.json; checkpoint bridge for external runners
+│       └── forge-workflow-engine/SKILL.md    # Runtime DAG engine: dispatch, retry, WORKFLOW-STATE.json, pluggable harness adapters
 ├── scripts/
 │   ├── bootstrap.sh                    # Bash bootstrap script
 │   └── bootstrap.ps1                   # PowerShell bootstrap script
@@ -488,6 +499,8 @@ Use `skill-creator` during team building to produce quality skills from the star
 
 ## Resources
 
+- [The Story](docs/THE-STORY.md) - How Agent Forge was designed and why: the full origin story
+- [The Story, Part 2](docs/THE-STORY-PART-2.md) - The continuation: skill quality gates, forge-auto-build, forge-launcher, and dark orchestration
 - [Prompt Playbook](docs/prompt-playbook.md) - Full copy-paste prompt sequence for every workflow
 - [Updates](docs/updates.md) - Detailed release notes and change history
 - [Running with Local Models](docs/running-with-local-models.md) - BYOK / Ollama setup and model recommendations

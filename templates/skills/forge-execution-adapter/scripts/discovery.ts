@@ -4,7 +4,7 @@ import matter from "gray-matter";
 
 import type { AgentDescriptor, ForgeRepo, HarnessRoot, SkillDescriptor } from "./types.ts";
 
-const HARNESS_ROOTS: HarnessRoot[] = [".agents", ".github", ".claude"];
+const HARNESS_ROOTS: HarnessRoot[] = [".agents", ".github", ".claude", ".opencode"];
 
 function isDir(path: string): boolean {
   return existsSync(path) && statSync(path).isDirectory();

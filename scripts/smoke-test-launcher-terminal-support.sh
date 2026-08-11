@@ -37,8 +37,12 @@ fi
 check_contains "$BASH_LAUNCHER" "copilot" "Bash launcher checks for Copilot CLI"
 check_contains "$BASH_LAUNCHER" "launch_cli_in_terminal" "Bash launcher has a dedicated terminal-launch helper"
 check_contains "$BASH_LAUNCHER" "gnome-terminal\|x-terminal-emulator\|konsole" "Bash launcher can use a desktop terminal emulator"
+check_contains "$BASH_LAUNCHER" 'HARNESS="opencode"' "Bash launcher maps opencode choice to harness=opencode"
+check_contains "$BASH_LAUNCHER" '\.opencode' "Bash launcher references .opencode directory for opencode harness"
 check_contains "$PS1_LAUNCHER" "copilot" "PowerShell launcher checks for Copilot CLI"
 check_contains "$PS1_LAUNCHER" "Start-Process" "PowerShell launcher can start a new terminal process"
+check_contains "$PS1_LAUNCHER" '"opencode"' "PowerShell launcher maps opencode choice to Harness=opencode"
+check_contains "$PS1_LAUNCHER" '\.opencode' "PowerShell launcher references .opencode directory for opencode harness"
 
 echo ""
 echo "Summary: $pass_count passed, $fail_count failed"
