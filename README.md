@@ -218,6 +218,29 @@ This writes `docs/EXECUTION-MANIFEST.json`, keeps `docs/PROGRESS.md` synchronize
 > [!TIP]
 > See [docs/prompt-playbook.md](docs/prompt-playbook.md) for the full copy-paste prompt sequence, including feature additions, decomposition, and resume flows.
 
+### 9. (Optional) Run the build autonomously with dark orchestration
+
+Once the execution manifest exists, hand it to `workflow-orchestrator` to drive the entire build unattended — no per-phase approvals, no per-task prompts:
+
+```
+@workspace @workflow-orchestrator Run the workflow
+```
+
+The agent invokes `forge-workflow-engine`, which reads `docs/EXECUTION-MANIFEST.json`, builds a live task DAG, dispatches tasks through your chosen harness adapter, retries failures automatically, and keeps `docs/WORKFLOW-STATE.json` and `docs/PROGRESS.md` in sync throughout. Resume after interruption:
+
+```
+@workspace @workflow-orchestrator Resume the workflow
+```
+
+Replay a single failed task without re-running anything else:
+
+```
+@workspace @workflow-orchestrator Replay task <task-id>
+```
+
+> [!NOTE]
+> **Dark orchestration** means the engine runs unattended between the pre-run gate and the end of the build — no human approval is needed between tasks. Use `@project-orchestrator` instead if you prefer per-phase review and approval.
+
 ---
 
 ## Usage
