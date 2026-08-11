@@ -330,18 +330,83 @@ Stop after F1 and report status.
 
 ---
 
-## Step 7 - Optimize Existing Skills
+## Step 7 - Dark Orchestration / Fully Autonomous Execution (Optional)
+
+After the PRD and agent team are generated, you can execute the build through a real model harness instead of (or in addition to) the prompt-driven `project-orchestrator` flow. This is "dark orchestration" — a background process that fires actual model invocations, persists state, and requires no human input between tasks.
+
+### 7a. Compile the execution manifest
+
+The workflow engine reads `docs/EXECUTION-MANIFEST.json`, which is produced by the `forge-execution-adapter` skill:
+
+```bash
+cd .agents/skills/forge-execution-adapter
+npm install
+npm run forge-execution-adapter -- compile
+```
+
+Inspect the compiled manifest and review any warnings before running:
+
+```bash
+npm run forge-execution-adapter -- inspect
+```
+
+### 7b. Run the workflow engine
+
+Choose your execution harness:
+
+```bash
+cd .agents/skills/forge-workflow-engine
+npm install
+
+# OpenCode CLI (default) — requires `opencode` in $PATH
+npm run workflow-engine -- run --harness opencode
+
+# OpenAI API — requires OPENAI_API_KEY env var
+npm run workflow-engine -- run --harness openai
+
+# Stub / dry-run — no real calls, verifies engine setup
+npm run workflow-engine -- run --harness stub
+```
+
+Or, use the `workflow-orchestrator` agent for a guided interactive experience:
+
+```
+@workspace @workflow-orchestrator Run the workflow using OpenCode.
+```
+
+### 7c. Monitor and recover
+
+```bash
+# Check current run state
+npm run workflow-engine -- status
+
+# Replay a failed task after fixing the root cause
+npm run workflow-engine -- replay P1-T1 --harness opencode
+
+# Pause after the current task (then resume with `run`)
+npm run workflow-engine -- pause
+```
+
+> **When to use `workflow-orchestrator` vs. `project-orchestrator`:**
+>
+> Use `project-orchestrator` for interactive, phase-by-phase builds with human review at each stage.
+> Use `workflow-orchestrator` (backed by the workflow engine) for fully autonomous execution in CI/CD, scheduled jobs, or when you want zero interruptions after the pre-run gate.
+> Both can be used on the same project — they share `docs/PROGRESS.md` as the common state.
+
+---
+
+## Step 8 - Optimize Existing Skills
 
 After building a project, audit the generated skills against agentskills.io best practices:
 
-### 7a. Audit skills
+### 8a. Audit skills
 
 ```
 @workspace /forge-optimize-skills Audit all skills in .agents/skills/ against best practices.
 Score each skill and produce docs/SKILL-AUDIT.md. Do not modify any files yet.
 ```
 
-### 7b. Apply approved improvements
+### 8b. Apply approved improvements
 
 After reviewing `docs/SKILL-AUDIT.md`:
 
@@ -382,6 +447,13 @@ Only modify skills I've approved in the audit report.
 | Execute feature phase | `@workspace @project-orchestrator Read docs/features/feature-XX.md, execute Phase F1 only...` |
 | Audit skills | `@workspace /forge-optimize-skills Audit all skills in .agents/skills/ against best practices...` |
 | Apply skill improvements | `@workspace /forge-optimize-skills Apply the approved changes from docs/SKILL-AUDIT.md` |
+| Compile execution manifest | `cd .agents/skills/forge-execution-adapter && npm install && npm run forge-execution-adapter -- compile` |
+| Dark run (OpenCode harness) | `cd .agents/skills/forge-workflow-engine && npm install && npm run workflow-engine -- run --harness opencode` |
+| Dark run (OpenAI harness) | `cd .agents/skills/forge-workflow-engine && npm run workflow-engine -- run --harness openai` |
+| Dark run (stub / dry-run) | `cd .agents/skills/forge-workflow-engine && npm run workflow-engine -- run --harness stub` |
+| Workflow status | `cd .agents/skills/forge-workflow-engine && npm run workflow-engine -- status` |
+| Replay failed task | `cd .agents/skills/forge-workflow-engine && npm run workflow-engine -- replay <task-id>` |
+| Dark run (via agent) | `@workspace @workflow-orchestrator Run the workflow using OpenCode.` |
 
 ---
 
@@ -395,3 +467,4 @@ Only modify skills I've approved in the audit report.
 - **Re-bootstrap safely** - run `bootstrap.sh --force` any time you want to pull in updated Agent Forge templates without losing your generated agents.
 - **Optimize generated skills** - after the initial build, run `@workspace /forge-optimize-skills` to audit your skills against best practices. The audit surfaces specific improvements you can apply immediately.
 - **Full auto build** - use `forge-auto-build` when you have a clear idea and want a single command to take you from idea to committed, validated code. One pre-flight gate, then fully autonomous. If the run is interrupted, just re-invoke it -it resumes from `docs/PROGRESS.md`.
+- **Dark orchestration** - use `workflow-orchestrator` + the workflow engine for fully autonomous execution through a real harness (OpenCode or OpenAI API). Dry-run first with `--harness stub` to verify the engine setup before spending tokens.
