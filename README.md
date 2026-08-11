@@ -9,7 +9,7 @@
 
 **McFuzzy Agent Forge** turns your requirements document into a coordinated team of specialist agents. Each agent owns a specific domain, understands its dependencies, and works in sequence so nothing gets missed.
 
-[Quick Start](#quick-start-forge-launcher) • [Getting Started](#getting-started) • [How It Works](#how-it-works) • [Usage](#usage) • [Prompt Playbook](docs/prompt-playbook.md) • [Local Models](docs/running-with-local-models.md) • [FAQ](#faq) • [Recent Updates](#recent-updates)
+[Quick Start](#quick-start-forge-launcher) • [Getting Started](#getting-started) • [How It Works](#how-it-works) • [Usage](#usage) • [Prompt Playbook](docs/prompt-playbook.md) • [Local Models](docs/running-with-local-models.md) • [Testing Guide](docs/testing-guide.md) • [FAQ](#faq) • [Recent Updates](#recent-updates)
 
 ---
 
