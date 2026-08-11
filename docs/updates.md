@@ -20,6 +20,10 @@ Related architecture decision:
 
 - [ADR-014](adr/014-dynamic-workflow-orchestration.md): engine architecture, harness adapter interface, DAG ordering, retry policy, and integration with `forge-auto-build`.
 
+### Manual Testing Guide
+
+- [`docs/testing-guide.md`](testing-guide.md): step-by-step manual verification guide covering (1) skill creation from the team builder — confirming `skill-creator` and `skill-review` are invoked and the quality gate is enforced — and (2) workflow engine dark orchestration — verifying manifest compilation, the pre-run gate, autonomous task dispatch, state sync, resume, retry, and replay. Includes a plain-language explanation of "dark orchestration" (background/autonomous execution, not anything security-related) and a troubleshooting section.
+
 ---
 
 ## August 2026 - v3.4

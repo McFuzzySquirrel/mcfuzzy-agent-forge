@@ -15,7 +15,7 @@
 
 ## Recent Updates
 
-- **August 2026 - v3.5:** Dynamic Workflow Orchestration — `forge-workflow-engine` runtime layer and `workflow-orchestrator` agent for fully autonomous, harness-agnostic build execution. See [docs/updates.md](docs/updates.md#august-2026---v35) and [docs/adr/014-dynamic-workflow-orchestration.md](docs/adr/014-dynamic-workflow-orchestration.md).
+- **August 2026 - v3.5:** Dynamic Workflow Orchestration — `forge-workflow-engine` runtime layer and `workflow-orchestrator` agent for fully autonomous, harness-agnostic build execution. Added [`docs/testing-guide.md`](docs/testing-guide.md) with step-by-step manual verification for skill creation and workflow orchestration. See [docs/updates.md](docs/updates.md#august-2026---v35) and [docs/adr/014-dynamic-workflow-orchestration.md](docs/adr/014-dynamic-workflow-orchestration.md).
 - **August 2026 - v3.4:** Auto-build input auto-detection and launcher handoff alignment. See [docs/updates.md](docs/updates.md#august-2026---v34) and [docs/adr/013-auto-build-input-auto-detection.md](docs/adr/013-auto-build-input-auto-detection.md).
 - **August 2026 - v3.3:** Forge Execution Adapter for contract-driven external runners. See [docs/updates.md](docs/updates.md#august-2026---v33) and [docs/adr/011-forge-execution-adapter.md](docs/adr/011-forge-execution-adapter.md).
 - **August 2026 - v3.2:** Forge Launcher lifecycle CLI plus launch hardening. See [docs/updates.md](docs/updates.md#august-2026---v32), [docs/adr/010-forge-launcher.md](docs/adr/010-forge-launcher.md), and [docs/adr/012-launcher-terminal-handoff-and-prd-guidance.md](docs/adr/012-launcher-terminal-handoff-and-prd-guidance.md).
