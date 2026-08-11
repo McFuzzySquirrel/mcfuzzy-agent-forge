@@ -274,6 +274,158 @@ npm run workflow-engine -- replay --task backend-engineer-phase2-task1
 
 ---
 
+## Part 3 – End-to-End with forge-launcher (Dark Orchestration)
+
+This part tests the full journey from zero to autonomous execution using `forge-launcher` to set up the repository and then running the workflow engine through dark orchestration. It combines the launcher's onboarding flow with the Parts 1 and 2 checks in a single pass.
+
+### Prerequisites for Part 3
+
+- All prerequisites from Parts 1 and 2
+- `forge-launcher.sh` (Linux / macOS) or `forge-launcher.ps1` (Windows) in `scripts/`
+- `gh` CLI installed and authenticated, **or** a parent directory writable for a local `git init`
+
+---
+
+### Test Steps
+
+**Step 1 – Run forge-launcher to create and bootstrap a fresh repository**
+
+From the root of your `mcfuzzy-agent-forge` clone:
+
+```bash
+./scripts/forge-launcher.sh
+```
+
+Walk through the prompts:
+
+- **Step 2 (Harness):** Choose your harness. For a dark-orchestration test, option `2` (opencode) or `3` (Claude Code) is recommended because the engine supports those harnesses directly.
+- **Step 3 (Repo):** Provide a name such as `forge-dark-test` and accept the defaults.
+- **Step 5 (Idea):** Enter a short idea that implies at least one repeating pattern, for example:
+  ```
+  A simple task manager that sends email notifications when tasks are created and when tasks are completed.
+  Node.js, Express, PostgreSQL.
+  ```
+- **Step 6 (PRD):** Skip if you don't have an existing PRD; the pipeline will generate one.
+- **Step 8 (Auto-build):** Answer `n` — you will start the build manually in the next step.
+
+**Check ✓** The launcher prints `forge-launcher: Complete` and reports the repo path, harness, and `docs/IDEA.md` path. The harness directory (`.opencode/`, `.claude/`, `.github/`, or `.agents/`) exists and contains agent and skill templates.
+
+---
+
+**Step 2 – Verify the repository layout**
+
+```bash
+cd <repo-path-from-launcher-summary>
+ls docs/           # IDEA.md (and optionally PRD.md)
+ls <harness-dir>/agents/   # agent templates
+ls <harness-dir>/skills/   # skill templates
+```
+
+**Check ✓** `docs/IDEA.md` (and root `IDEA.md`) exists and contains the idea text you entered. Agent and skill templates are in the correct harness directory.
+
+---
+
+**Step 3 – Run the forge pipeline through Stage 4 to produce an execution manifest**
+
+In your harness (Copilot Chat, opencode, or Claude Code), run:
+
+```
+/forge-auto-build Use docs/IDEA.md as the project idea
+```
+
+Wait for the pipeline to complete Stages 1–4 and produce `docs/EXECUTION-MANIFEST.json`. Alternatively, compile the manifest manually:
+
+```bash
+cd <harness-dir>/skills/forge-execution-adapter
+npm install
+npm run forge-execution-adapter -- compile
+```
+
+**Check ✓** `docs/EXECUTION-MANIFEST.json` exists and is non-empty.
+
+---
+
+**Step 4 – Confirm skill creation used skill-creator (Part 1 gate)**
+
+During Stage 3 (team builder), watch for the same checks from Part 1:
+
+**Check ✓** `skill-creator` interview runs for each reusable skill identified. `skill-review` scores every axis ≥ 2.0 before any skill is finalised.
+
+---
+
+**Step 5 – Start the workflow engine (dark orchestration)**
+
+```bash
+cd <harness-dir>/skills/forge-workflow-engine
+npm install
+npm run workflow-engine -- run --harness <your-harness>
+```
+
+Replace `<your-harness>` with `opencode`, `claude`, `github`, or `stub`.
+
+The engine prints a pre-run summary and pauses for confirmation.
+
+**Check ✓** You see the pre-run gate. The engine does **not** dispatch tasks until you type `yes`.
+
+---
+
+**Step 6 – Confirm and observe autonomous execution**
+
+Type `yes` to proceed.
+
+**Check ✓** Tasks execute one by one with status lines and no human input between them — this is dark orchestration running end-to-end from a launcher-bootstrapped repository.
+
+---
+
+**Step 7 – Verify state files**
+
+```bash
+cat docs/WORKFLOW-STATE.json   # per-task status
+cat docs/PROGRESS.md           # human-readable summary
+```
+
+**Check ✓** Both files exist and reflect the completed tasks. `docs/EXECUTION-AUDIT.jsonl` contains one event per task dispatch.
+
+---
+
+### Non-interactive variant (CI)
+
+You can run the entire setup unattended:
+
+```bash
+export FORGE_HARNESS_CHOICE="2"          # opencode
+export FORGE_REPO_NAME="forge-dark-ci"
+export FORGE_REPO_PARENT_DIR="/tmp"
+export FORGE_IDEA="A task manager with email notifications. Node.js, Express, PostgreSQL."
+export FORGE_YN_DEFAULT="n"
+./scripts/forge-launcher.sh --non-interactive
+```
+
+Then run the functional test script to assert the expected layout:
+
+```bash
+./scripts/test-forge-launcher.sh
+```
+
+**Check ✓** All assertions pass (`0 failed`). Proceed to Steps 3–7 above in the newly created repository.
+
+---
+
+### Part 3 Pass/Fail Summary
+
+| Check | Expected |
+|---|---|
+| forge-launcher completes and reports the repo path | ✅ |
+| Harness directory and templates exist in the correct location | ✅ |
+| `docs/IDEA.md` contains the entered idea text | ✅ |
+| `EXECUTION-MANIFEST.json` compiled successfully | ✅ |
+| `skill-creator` interview ran for each skill; `skill-review` ≥ 2.0 on all axes | ✅ |
+| Pre-run gate shown before any tasks fire | ✅ |
+| Tasks execute autonomously (no human input between tasks) | ✅ |
+| `WORKFLOW-STATE.json`, `PROGRESS.md`, and `EXECUTION-AUDIT.jsonl` all present | ✅ |
+
+---
+
 ## Quick Reference: Key File Locations
 
 | File | Purpose |
