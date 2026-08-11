@@ -185,7 +185,7 @@ If any validation check fails, do **not** commit and do **not** proceed. Stop an
 
 ---
 
-### Stage 5 (Optional): Run `forge-workflow-engine` — Harness-Driven Execution
+### Stage 5 (Optional): Run `forge-workflow-engine` - Harness-Driven Execution
 
 Run this stage only if the user included `--workflow-engine` in their `GO` command.
 
@@ -221,7 +221,7 @@ Monitor the engine until it reports `status: "complete"` or stops with `status: 
 If the engine reports failures, surface the failing task IDs and error messages. Do not mark Stage 5 complete until the run status is `"complete"`.
 
 When it finishes:
-- Report: "Stage 5 complete — harness-driven execution finished. All tasks complete."
+- Report: "Stage 5 complete - harness-driven execution finished. All tasks complete."
 
 If `--workflow-engine` was not requested, skip this stage and note: "Stage 5 skipped (no --workflow-engine flag). You can run the workflow engine manually at any time. Moving to Final Stage."
 

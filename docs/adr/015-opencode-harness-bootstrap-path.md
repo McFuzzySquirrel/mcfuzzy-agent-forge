@@ -17,7 +17,7 @@ The discovery module (`discovery.ts`) and the bootstrap scripts (`bootstrap.sh` 
 | `github` | `.github` | GitHub Copilot |
 | `claude` | `.claude` | Claude |
 
-OpenCode reads agents from `.opencode/agents/` — its own conventional directory. Without explicit support for this root, two problems arise:
+OpenCode reads agents from `.opencode/agents/` - its own conventional directory. Without explicit support for this root, two problems arise:
 
 1. **Bootstrap gap.** Running `bootstrap.sh --harness opencode` fails with an "Unknown harness" error, leaving the user with no automated way to install agent files into the location OpenCode expects.
 
@@ -77,7 +77,7 @@ Update the prerequisites section to list `.opencode/agents/` as the expected age
 
 - **Zero-friction bootstrap for OpenCode.** `bootstrap.sh --harness opencode` (or `bootstrap.ps1 -Harness opencode`) now correctly installs agent files to `.opencode/agents/`, which is where the OpenCode CLI looks for them.
 - **Full discovery coverage.** The execution adapter and workflow engine can find and invoke agents installed under `.opencode/agents/`, so `ownerAgent` assignments in the manifest are resolved correctly when the OpenCode harness is active.
-- **Consistent pattern.** The change mirrors how `.github` and `.claude` were added — no special-casing elsewhere; harness selection is a single flag at bootstrap time.
+- **Consistent pattern.** The change mirrors how `.github` and `.claude` were added - no special-casing elsewhere; harness selection is a single flag at bootstrap time.
 
 ### Negative
 

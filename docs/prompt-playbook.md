@@ -332,7 +332,7 @@ Stop after F1 and report status.
 
 ## Step 7 - Dark Orchestration / Fully Autonomous Execution (Optional)
 
-After the PRD and agent team are generated, you can execute the build through a real model harness instead of (or in addition to) the prompt-driven `project-orchestrator` flow. This is "dark orchestration" — a background process that fires actual model invocations, persists state, and requires no human input between tasks.
+After the PRD and agent team are generated, you can execute the build through a real model harness instead of (or in addition to) the prompt-driven `project-orchestrator` flow. This is "dark orchestration" - a background process that fires actual model invocations, persists state, and requires no human input between tasks.
 
 ### 7a. Compile the execution manifest
 
@@ -358,13 +358,13 @@ Choose your execution harness:
 cd .agents/skills/forge-workflow-engine
 npm install
 
-# OpenCode CLI (default) — requires `opencode` in $PATH
+# OpenCode CLI (default) - requires `opencode` in $PATH
 npm run workflow-engine -- run --harness opencode
 
-# OpenAI API — requires OPENAI_API_KEY env var
+# OpenAI API - requires OPENAI_API_KEY env var
 npm run workflow-engine -- run --harness openai
 
-# Stub / dry-run — no real calls, verifies engine setup
+# Stub / dry-run - no real calls, verifies engine setup
 npm run workflow-engine -- run --harness stub
 ```
 
@@ -391,7 +391,7 @@ npm run workflow-engine -- pause
 >
 > Use `project-orchestrator` for interactive, phase-by-phase builds with human review at each stage.
 > Use `workflow-orchestrator` (backed by the workflow engine) for fully autonomous execution in CI/CD, scheduled jobs, or when you want zero interruptions after the pre-run gate.
-> Both can be used on the same project — they share `docs/PROGRESS.md` as the common state.
+> Both can be used on the same project - they share `docs/PROGRESS.md` as the common state.
 
 ---
 

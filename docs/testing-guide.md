@@ -9,7 +9,7 @@ This guide walks you through a concrete end-to-end scenario you can run by hand 
 
 ## A note on "dark orchestration"
 
-The term **dark orchestration** is used throughout Agent Forge documentation and is not a security concern or anything harmful. It simply means **background execution with no human in the loop**: once the pre-run gate is accepted, the workflow engine dispatches agent invocations, waits for results, retries failures, and advances the task graph on its own — you do not need to approve each step. Think of it the same way you would a CI/CD pipeline: it runs "in the dark" (unattended) until it finishes or hits a blocker that needs human input.
+The term **dark orchestration** is used throughout Agent Forge documentation and is not a security concern or anything harmful. It simply means **background execution with no human in the loop**: once the pre-run gate is accepted, the workflow engine dispatches agent invocations, waits for results, retries failures, and advances the task graph on its own - you do not need to approve each step. Think of it the same way you would a CI/CD pipeline: it runs "in the dark" (unattended) until it finishes or hits a blocker that needs human input.
 
 This is the explicit opposite of the interactive `project-orchestrator` flow, where a human confirms each phase before the next one starts.
 
@@ -39,7 +39,7 @@ git add -A && git commit -m "bootstrap"
 
 **2. Write a minimal PRD at `docs/PRD.md`.**
 
-Use a PRD that contains at least one *repeating* pattern — that is what triggers skill creation. The notification example below works well:
+Use a PRD that contains at least one *repeating* pattern - that is what triggers skill creation. The notification example below works well:
 
 ```markdown
 # Task Manager PRD
@@ -98,7 +98,7 @@ For each identified skill, the agent should say it is running `skill-creator` an
 
 After scaffolding each skill, the agent should invoke `skill-review` and present a six-axis quality report.
 
-**Check ✓** Every axis scores ≥ 2.0 before the skill is handed to any agent. If a score is below 2.0, the agent should fix and re-review — not proceed.
+**Check ✓** Every axis scores ≥ 2.0 before the skill is handed to any agent. If a score is below 2.0, the agent should fix and re-review - not proceed.
 
 ---
 
@@ -213,7 +213,7 @@ Type `yes` (or the harness-specific confirmation) to proceed.
 [Phase 1 / Task 1] project-architect → scaffolding ... ok
 [Phase 1 / Task 2] backend-engineer → database schema ... ok
 ```
-No human input is required between tasks — this is dark orchestration in action.
+No human input is required between tasks - this is dark orchestration in action.
 
 ---
 
@@ -237,7 +237,7 @@ Kill the engine mid-run (`Ctrl+C`). Then restart it:
 npm run workflow-engine -- run --harness opencode
 ```
 
-**Check ✓** The engine resumes from the last incomplete task — it does not re-run tasks already marked `complete` in `WORKFLOW-STATE.json`.
+**Check ✓** The engine resumes from the last incomplete task - it does not re-run tasks already marked `complete` in `WORKFLOW-STATE.json`.
 
 ---
 
@@ -306,7 +306,7 @@ Walk through the prompts:
   Node.js, Express, PostgreSQL.
   ```
 - **Step 6 (PRD):** Skip if you don't have an existing PRD; the pipeline will generate one.
-- **Step 8 (Auto-build):** Answer `n` — you will start the build manually in the next step.
+- **Step 8 (Auto-build):** Answer `n` - you will start the build manually in the next step.
 
 **Check ✓** The launcher prints `forge-launcher: Complete` and reports the repo path, harness, and `docs/IDEA.md` path. The harness directory (`.opencode/`, `.claude/`, `.github/`, or `.agents/`) exists and contains agent and skill templates.
 
@@ -373,7 +373,7 @@ The engine prints a pre-run summary and pauses for confirmation.
 
 Type `yes` to proceed.
 
-**Check ✓** Tasks execute one by one with status lines and no human input between them — this is dark orchestration running end-to-end from a launcher-bootstrapped repository.
+**Check ✓** Tasks execute one by one with status lines and no human input between them - this is dark orchestration running end-to-end from a launcher-bootstrapped repository.
 
 ---
 

@@ -10,7 +10,7 @@ description: >
 
 # Skill: Forge Workflow Engine
 
-You are the **runtime execution layer** for an Agent Forge repository. Where `forge-auto-build` and `project-orchestrator` operate as prompt-driven orchestrators inside a chat harness, this skill runs **outside** the chat session — it reads the structured execution contract produced by `forge-execution-adapter` and drives every agent task through a real execution backend until the workflow is complete.
+You are the **runtime execution layer** for an Agent Forge repository. Where `forge-auto-build` and `project-orchestrator` operate as prompt-driven orchestrators inside a chat harness, this skill runs **outside** the chat session - it reads the structured execution contract produced by `forge-execution-adapter` and drives every agent task through a real execution backend until the workflow is complete.
 
 This skill does **not** replace the prompt-driven flows. It is an optional, additive layer for teams that want **dark orchestration**: a background process that fires agent invocations autonomously, persists state across interruptions, and requires no human intervention between tasks.
 
@@ -20,7 +20,7 @@ This skill does **not** replace the prompt-driven flows. It is an optional, addi
 
 Before running this skill, the following must exist in the repository:
 
-- `docs/EXECUTION-MANIFEST.json` — compiled by `forge-execution-adapter`
+- `docs/EXECUTION-MANIFEST.json` - compiled by `forge-execution-adapter`
 - Agent `.agent.md` files under the harness agents directory:
   - `.agents/agents/` (default harness)
   - `.opencode/agents/` (OpenCode harness)
@@ -73,7 +73,7 @@ npm run workflow-engine -- replay P2.3 --harness opencode
 npm run workflow-engine -- pause
 ```
 
-Resume the run at any time with `run` — the engine reads `docs/WORKFLOW-STATE.json` and continues from the last completed task.
+Resume the run at any time with `run` - the engine reads `docs/WORKFLOW-STATE.json` and continues from the last completed task.
 
 ---
 
@@ -115,7 +115,7 @@ The engine is harness-agnostic. Select the backend with `--harness`:
 
 | File | Purpose |
 |---|---|
-| `docs/WORKFLOW-STATE.json` | Machine-readable run state — task statuses, retries, outputs, blockers |
+| `docs/WORKFLOW-STATE.json` | Machine-readable run state - task statuses, retries, outputs, blockers |
 | `docs/PROGRESS.md` | Human-readable progress (synced after every task, compatible with `forge-orchestrate-build` format) |
 | `docs/EXECUTION-AUDIT.jsonl` | Append-only audit trail for every state transition |
 
@@ -200,7 +200,7 @@ This allows the same project to be executed both interactively (via `project-orc
 
 ## Gotchas
 
-- **Manifest must exist first.** The engine reads `docs/EXECUTION-MANIFEST.json` — it does not re-parse the PRD. If the PRD changes after a compile, re-run `forge-execution-adapter compile` and then start a fresh run.
+- **Manifest must exist first.** The engine reads `docs/EXECUTION-MANIFEST.json` - it does not re-parse the PRD. If the PRD changes after a compile, re-run `forge-execution-adapter compile` and then start a fresh run.
 - **State is tied to a run ID.** Compiling a new manifest after a partial run will produce a manifest that no longer matches the in-progress state. Start a new run (`rm docs/WORKFLOW-STATE.json`) rather than mixing them.
 - **OpenCode must be in `$PATH`.** The `opencode` adapter shells out to the binary. If OpenCode is installed at a non-standard path, set `OPENCODE_BIN`.
 - **Agent file paths must be absolute or resolvable from the repo root.** The adapter passes `--system-prompt <agent.path>` to OpenCode; the path comes from discovery, which returns absolute paths.

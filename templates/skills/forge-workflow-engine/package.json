@@ -2,7 +2,7 @@
   "name": "forge-workflow-engine",
   "version": "1.0.0",
   "type": "module",
-  "description": "Dynamic workflow orchestration engine for Agent Forge repositories — executes EXECUTION-MANIFEST.json tasks through a pluggable harness adapter",
+  "description": "Dynamic workflow orchestration engine for Agent Forge repositories - executes EXECUTION-MANIFEST.json tasks through a pluggable harness adapter",
   "scripts": {
     "workflow-engine": "tsx scripts/cli.ts",
     "typecheck": "tsc --noEmit"

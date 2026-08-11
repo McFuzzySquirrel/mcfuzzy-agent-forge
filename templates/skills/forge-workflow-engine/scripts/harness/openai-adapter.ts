@@ -7,9 +7,9 @@ import type { AgentDescriptor, HarnessAdapter, ManifestTask, TaskResult, Workflo
  * the user message, then returns the assistant reply as agentOutput.
  *
  * Required env vars:
- *   OPENAI_API_KEY    — API key
- *   OPENAI_BASE_URL   — optional override (default: https://api.openai.com/v1)
- *   OPENAI_MODEL      — optional model override (default: gpt-4o)
+ *   OPENAI_API_KEY    - API key
+ *   OPENAI_BASE_URL   - optional override (default: https://api.openai.com/v1)
+ *   OPENAI_MODEL      - optional model override (default: gpt-4o)
  */
 export class OpenAIAdapter implements HarnessAdapter {
   readonly name = "openai";

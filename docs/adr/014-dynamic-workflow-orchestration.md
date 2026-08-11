@@ -13,13 +13,13 @@ Agent Forge already provides a complete authoring pipeline and two modes of prom
 - `project-orchestrator` + `forge-orchestrate-build` coordinate agents conversationally, phase by phase.
 - `forge-execution-adapter` (ADR-011) compiles a neutral `docs/EXECUTION-MANIFEST.json` contract for external runners.
 
-The execution adapter closes the **compilation gap** — there is now a structured, machine-readable contract that describes every phase, task, owning agent, dependency, expected output, and validation command. What it does not provide is a **runtime loop** that actually reads that contract and fires invocations against a real execution harness.
+The execution adapter closes the **compilation gap** - there is now a structured, machine-readable contract that describes every phase, task, owning agent, dependency, expected output, and validation command. What it does not provide is a **runtime loop** that actually reads that contract and fires invocations against a real execution harness.
 
 This leaves three gaps:
 
 ### Gap 1: No runtime driver
 
-Every execution path in the current system terminates at a prompt instruction ("call this agent now"). There is no process that picks up `EXECUTION-MANIFEST.json` and autonomously dispatches agent invocations, waits for results, validates outputs, retries on failure, and advances the task graph — without a human in the loop.
+Every execution path in the current system terminates at a prompt instruction ("call this agent now"). There is no process that picks up `EXECUTION-MANIFEST.json` and autonomously dispatches agent invocations, waits for results, validates outputs, retries on failure, and advances the task graph - without a human in the loop.
 
 ### Gap 2: No machine-readable run state
 
@@ -130,7 +130,7 @@ cd .agents/skills/forge-execution-adapter && npm install && npm run forge-execut
 cd .agents/skills/forge-workflow-engine  && npm install && npm run workflow-engine -- run --harness opencode
 ```
 
-This is additive — `forge-auto-build` Stages 1–4 are unchanged. The engine is an opt-in alternative to Stage 4's prompt-driven orchestration, not a replacement for it.
+This is additive - `forge-auto-build` Stages 1–4 are unchanged. The engine is an opt-in alternative to Stage 4's prompt-driven orchestration, not a replacement for it.
 
 ### 7. Companion agent: `workflow-orchestrator`
 
@@ -165,7 +165,7 @@ Similarly, `templates/agents/workflow-orchestrator.md` is in `templates/agents/`
 ### Negative
 
 - **Harness availability is a runtime precondition.** If `opencode` is not in `$PATH`, or `OPENAI_API_KEY` is not set, the engine fails at startup. This is a deployment concern that each team must manage.
-- **Sequential execution in MVP.** Tasks within a phase execute one at a time. Parallel dispatch — which could significantly reduce wall-clock time on large projects — is deferred until a backend isolation model is defined.
+- **Sequential execution in MVP.** Tasks within a phase execute one at a time. Parallel dispatch - which could significantly reduce wall-clock time on large projects - is deferred until a backend isolation model is defined.
 - **Heuristic agent matching.** The engine inherits the manifest's owner-agent assignments, which are heuristic matches from `forge-execution-adapter`. Unmatched tasks are skipped rather than failed, which is safe but may produce incomplete builds if the agent team is sparse.
 - **New TypeScript dependency.** Like `forge-execution-adapter`, this skill requires `npm install` before use. The `node_modules` directory is not committed.
 

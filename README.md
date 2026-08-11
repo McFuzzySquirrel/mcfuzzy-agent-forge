@@ -15,7 +15,7 @@
 
 ## Recent Updates
 
-- **August 2026 - v3.5:** Dynamic Workflow Orchestration — `forge-workflow-engine` runtime layer and `workflow-orchestrator` agent for fully autonomous, harness-agnostic build execution. Added [`docs/testing-guide.md`](docs/testing-guide.md) with step-by-step manual verification for skill creation and workflow orchestration. See [docs/updates.md](docs/updates.md#august-2026---v35) and [docs/adr/014-dynamic-workflow-orchestration.md](docs/adr/014-dynamic-workflow-orchestration.md).
+- **August 2026 - v3.5:** Dynamic Workflow Orchestration - `forge-workflow-engine` runtime layer and `workflow-orchestrator` agent for fully autonomous, harness-agnostic build execution. Added [`docs/testing-guide.md`](docs/testing-guide.md) with step-by-step manual verification for skill creation and workflow orchestration. See [docs/updates.md](docs/updates.md#august-2026---v35) and [docs/adr/014-dynamic-workflow-orchestration.md](docs/adr/014-dynamic-workflow-orchestration.md).
 - **August 2026 - v3.4:** Auto-build input auto-detection and launcher handoff alignment. See [docs/updates.md](docs/updates.md#august-2026---v34) and [docs/adr/013-auto-build-input-auto-detection.md](docs/adr/013-auto-build-input-auto-detection.md).
 - **August 2026 - v3.3:** Forge Execution Adapter for contract-driven external runners. See [docs/updates.md](docs/updates.md#august-2026---v33) and [docs/adr/011-forge-execution-adapter.md](docs/adr/011-forge-execution-adapter.md).
 - **August 2026 - v3.2:** Forge Launcher lifecycle CLI plus launch hardening. See [docs/updates.md](docs/updates.md#august-2026---v32), [docs/adr/010-forge-launcher.md](docs/adr/010-forge-launcher.md), and [docs/adr/012-launcher-terminal-handoff-and-prd-guidance.md](docs/adr/012-launcher-terminal-handoff-and-prd-guidance.md).
@@ -220,7 +220,7 @@ This writes `docs/EXECUTION-MANIFEST.json`, keeps `docs/PROGRESS.md` synchronize
 
 ### 9. (Optional) Run the build autonomously with dark orchestration
 
-Once the execution manifest exists, hand it to `workflow-orchestrator` to drive the entire build unattended — no per-phase approvals, no per-task prompts:
+Once the execution manifest exists, hand it to `workflow-orchestrator` to drive the entire build unattended - no per-phase approvals, no per-task prompts:
 
 ```
 @workspace @workflow-orchestrator Run the workflow
@@ -239,7 +239,7 @@ Replay a single failed task without re-running anything else:
 ```
 
 > [!NOTE]
-> **Dark orchestration** means the engine runs unattended between the pre-run gate and the end of the build — no human approval is needed between tasks. Use `@project-orchestrator` instead if you prefer per-phase review and approval.
+> **Dark orchestration** means the engine runs unattended between the pre-run gate and the end of the build - no human approval is needed between tasks. Use `@project-orchestrator` instead if you prefer per-phase review and approval.
 
 ---
 
