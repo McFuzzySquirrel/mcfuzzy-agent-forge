@@ -4,6 +4,24 @@ Detailed release and change notes for McFuzzy Agent Forge.
 
 ---
 
+## August 2026 - v3.5
+
+### Dynamic Workflow Orchestration via `forge-workflow-engine`
+
+- `forge-workflow-engine` (`templates/skills/forge-workflow-engine/`): runtime layer that reads `docs/EXECUTION-MANIFEST.json`, builds a live task DAG, dispatches agent invocations through a pluggable harness adapter, retries failed tasks, and syncs `docs/PROGRESS.md` and `docs/EXECUTION-AUDIT.jsonl` after every state transition.
+- `workflow-orchestrator` (`templates/agents/workflow-orchestrator.md`): human-facing companion agent that handles pre-run verification, CLI invocation, blocker escalation, and post-run summaries.
+- Three harness adapters ship in MVP: `OpenCodeAdapter` (shells out to `opencode run`), `OpenAIAdapter` (direct API), and `StubAdapter` (synthetic results for testing).
+- Machine-readable run state is stored in `docs/WORKFLOW-STATE.json`; `docs/PROGRESS.md` stays in sync so existing `project-orchestrator`-style resume flows remain compatible.
+- CLI supports `run`, `status`, `replay`, and `pause` operations.
+- Opt-in Stage 5 for `forge-auto-build`: compile manifest with `forge-execution-adapter`, then execute autonomously with `workflow-engine run --harness opencode`. Stages 1–4 are unchanged.
+- Auto-deployed by bootstrap scripts; no bootstrap changes required.
+
+Related architecture decision:
+
+- [ADR-014](adr/014-dynamic-workflow-orchestration.md): engine architecture, harness adapter interface, DAG ordering, retry policy, and integration with `forge-auto-build`.
+
+---
+
 ## August 2026 - v3.4
 
 ### Auto-build input auto-detection and launcher handoff alignment

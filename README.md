@@ -15,6 +15,7 @@
 
 ## Recent Updates
 
+- **August 2026 - v3.5:** Dynamic Workflow Orchestration — `forge-workflow-engine` runtime layer and `workflow-orchestrator` agent for fully autonomous, harness-agnostic build execution. See [docs/updates.md](docs/updates.md#august-2026---v35) and [docs/adr/014-dynamic-workflow-orchestration.md](docs/adr/014-dynamic-workflow-orchestration.md).
 - **August 2026 - v3.4:** Auto-build input auto-detection and launcher handoff alignment. See [docs/updates.md](docs/updates.md#august-2026---v34) and [docs/adr/013-auto-build-input-auto-detection.md](docs/adr/013-auto-build-input-auto-detection.md).
 - **August 2026 - v3.3:** Forge Execution Adapter for contract-driven external runners. See [docs/updates.md](docs/updates.md#august-2026---v33) and [docs/adr/011-forge-execution-adapter.md](docs/adr/011-forge-execution-adapter.md).
 - **August 2026 - v3.2:** Forge Launcher lifecycle CLI plus launch hardening. See [docs/updates.md](docs/updates.md#august-2026---v32), [docs/adr/010-forge-launcher.md](docs/adr/010-forge-launcher.md), and [docs/adr/012-launcher-terminal-handoff-and-prd-guidance.md](docs/adr/012-launcher-terminal-handoff-and-prd-guidance.md).
@@ -53,6 +54,8 @@ Both approaches use the same core toolkit:
 | `project-orchestrator` agent | Coordinates agents through implementation phases, phase by phase |
 | `forge-orchestrate-build` skill | Contains the detailed execution process used by `project-orchestrator` (analysis, phase execution, coordination, output formatting) |
 | `forge-execution-adapter` skill | Compiles a Forge repo into a contract-driven execution manifest and checkpoint bridge for external runners such as FlowForge-style backends |
+| `forge-workflow-engine` skill | Runtime layer that reads `docs/EXECUTION-MANIFEST.json`, drives a task DAG through a pluggable harness adapter, retries failures, and syncs `PROGRESS.md` and `WORKFLOW-STATE.json` after every transition |
+| `workflow-orchestrator` agent | Human-facing companion to `forge-workflow-engine`: pre-run verification, CLI invocation, blocker escalation, replay coordination, and post-run summaries |
 | `forge-launcher` scripts | Interactive CLI: create repo → select harness → bootstrap → capture idea → commit → launch auto-build in one terminal session |
 | Bootstrap scripts | Copy all templates into any target repository with one command |
 
@@ -390,6 +393,7 @@ mcfuzzy-agent-forge/
 ├── templates/
 │   ├── agents/
 │   │   ├── project-orchestrator.md     # Coordinates agents through PRD phases or features
+│   │   ├── workflow-orchestrator.md    # Human-facing companion to forge-workflow-engine (pre-run gate, status, replay)
 │   │   └── forge-team-builder.md       # PRD → agent team generator
 │   └── skills/
 │       ├── forge-auto-build/SKILL.md         # Meta-skill: idea → PRD → team → full build (autonomous, one gate)
@@ -413,6 +417,8 @@ mcfuzzy-agent-forge/
 │       │   └── scripts/                      # TypeScript audit engine (rubric.ts, detect.ts, providers/)
 │       └── skill-review-updater/SKILL.md     # Keep skill-review rubric aligned with latest agentskills.io guidance
 │           └── references/                   # Quality baseline, rubric mapping, validation checks
+│       ├── forge-execution-adapter/SKILL.md  # Compile Forge repo into EXECUTION-MANIFEST.json; checkpoint bridge for external runners
+│       └── forge-workflow-engine/SKILL.md    # Runtime DAG engine: dispatch, retry, WORKFLOW-STATE.json, pluggable harness adapters
 ├── scripts/
 │   ├── bootstrap.sh                    # Bash bootstrap script
 │   └── bootstrap.ps1                   # PowerShell bootstrap script
