@@ -194,7 +194,7 @@ If any validation check fails, do **not** commit and do **not** proceed. Stop an
 
 Run this path only if the user included `--workflow-engine` in their `GO` command.
 
-This path uses the workflow engine as the build executor instead of `forge-orchestrate-build`. The manifest is the execution plan; the engine performs the actual autonomous run through the selected harness (OpenCode CLI by default).
+This path uses the workflow engine as the build executor instead of `forge-orchestrate-build`. The manifest is the execution plan; the engine performs the actual autonomous run through the selected harness (OpenCode CLI by default). As part of this path, run the required `npm install` steps for both `forge-execution-adapter` and `forge-workflow-engine`, then compile the manifest and start the engine.
 
 **Step 4a: Compile the execution manifest**
 

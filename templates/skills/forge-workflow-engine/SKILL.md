@@ -12,7 +12,7 @@ description: >
 
 You are the **runtime execution layer** for an Agent Forge repository. Where `forge-auto-build` and `project-orchestrator` operate as prompt-driven orchestrators inside a chat harness, this skill runs **outside** the chat session - it reads the structured execution contract produced by `forge-execution-adapter` and drives every agent task through a real execution backend until the workflow is complete.
 
-This skill does **not** replace the prompt-driven flows. It is an optional, additive layer for teams that want **dark orchestration**: a background process that fires agent invocations autonomously, persists state across interruptions, and requires no human intervention between tasks.
+This skill is the autonomous execution alternative to the prompt-driven flows. Teams use it when they want **dark orchestration**: a background process that fires agent invocations autonomously, persists state across interruptions, and requires no human intervention between tasks. In `forge-auto-build`, choosing `GO --workflow-engine` selects this skill as the Stage 4 executor instead of `forge-orchestrate-build`.
 
 ---
 

@@ -135,7 +135,7 @@ The manifest captured everything an external runner needed to know:
 
 The adapter also handled the other direction: keeping `docs/PROGRESS.md` in sync when an external runner reported task completion, and appending `docs/EXECUTION-AUDIT.jsonl` as an append-only event log for auditability.
 
-The design decision that made this useful was keeping it *separate from the authoring pipeline*. The adapter was not a new step in `forge-auto-build`. It was a standalone tool you ran when you wanted a manifest - and when you didn't need one, you didn't have to think about it. The existing conversational orchestration path was completely unchanged.
+The design decision that made this useful was keeping it *separate from authoring*. The adapter was not folded into PRD generation or team design. It sat at the execution boundary: available as a standalone tool when you wanted a manifest, and later wired into `forge-auto-build` as the workflow-engine build path for users who chose autonomous execution instead of the conversational path.
 
 ### The Takeaway for Builders
 
@@ -169,7 +169,7 @@ The engine shipped with three harness adapters: `OpenCodeAdapter` (shells out to
 
 Resume was a first-class feature from day one. Kill the engine mid-run, restart it, and it reads `WORKFLOW-STATE.json` and picks up from the last incomplete task. Tasks already marked `complete` are never re-run. Replay let you re-run a single failed task without touching anything else.
 
-The engine was deliberately scoped to *start where `forge-execution-adapter` ended*. It did not do PRD authoring, team generation, model assignment, or manifest compilation. It did not replace `forge-auto-build` or `project-orchestrator`. It was the runtime layer that the execution adapter's output had been waiting for.
+The engine was deliberately scoped to *start where `forge-execution-adapter` ended*. It did not do PRD authoring, team generation, or model assignment. In the either/or auto-build flow it handles Stage 4 execution after the manifest is compiled; outside that flow it can still be run directly. It does not replace the prompt-driven path - it is the autonomous alternative when a user wants the build run by a real harness.
 
 The testing guide added to this release made the distinction concrete: a step-by-step manual verification protocol covering skill quality gates, manifest compilation, the pre-run gate, autonomous execution, state sync, resume, retry, and replay - and, critically, a Part 3 that combined `forge-launcher` with dark orchestration into a single end-to-end test: from zero to autonomous build in one terminal session.
 

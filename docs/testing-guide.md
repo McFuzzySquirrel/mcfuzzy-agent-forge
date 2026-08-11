@@ -329,7 +329,7 @@ ls <harness-dir>/skills/   # skill templates
 
 ---
 
-**Step 3 – Run the forge pipeline through Stage 4 to produce an execution manifest**
+**Step 3 – Start the either/or auto-build flow**
 
 In your harness (Copilot Chat, opencode, or Claude Code), run:
 
@@ -337,7 +337,13 @@ In your harness (Copilot Chat, opencode, or Claude Code), run:
 /forge-auto-build Use docs/IDEA.md as the project idea
 ```
 
-Wait for the pipeline to complete Stages 1–4 and produce `docs/EXECUTION-MANIFEST.json`. Alternatively, compile the manifest manually:
+At the pre-flight gate, choose the workflow-engine path:
+
+```
+GO --workflow-engine
+```
+
+This runs Stages 1–3, then Stage 4 via the workflow engine path. That path installs the required execution packages, compiles `docs/EXECUTION-MANIFEST.json`, and starts the engine. Alternatively, compile the manifest manually:
 
 ```bash
 cd <harness-dir>/skills/forge-execution-adapter
@@ -345,7 +351,7 @@ npm install
 npm run forge-execution-adapter -- compile
 ```
 
-**Check ✓** `docs/EXECUTION-MANIFEST.json` exists and is non-empty.
+**Check ✓** `docs/EXECUTION-MANIFEST.json` exists and is non-empty, and the workflow-engine path begins instead of the prompt-driven `forge-orchestrate-build` path.
 
 ---
 
