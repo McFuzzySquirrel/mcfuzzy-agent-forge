@@ -84,7 +84,7 @@ Three adapters ship in MVP:
 
 | Adapter | Class | Invocation strategy |
 |---|---|---|
-| OpenCode CLI | `OpenCodeAdapter` | Shells out to `opencode run --model … --system-prompt <agent.md> "<prompt>"` |
+| OpenCode CLI | `OpenCodeAdapter` | Shells out to `opencode run --agent <name> --model … --system-prompt <agent.md> "<prompt>"` |
 | OpenAI API | `OpenAIAdapter` | Sends agent `rawBody` as system prompt, task description as user message |
 | Stub | `StubAdapter` | Returns synthetic results; configurable failures via env var |
 
