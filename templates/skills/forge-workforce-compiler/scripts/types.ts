@@ -58,6 +58,7 @@ export interface WorkforceCompileOptions {
   packageVersion?: string;
   workflowId?: string;
   outputDir?: string;
+  workflowRetryMaxAttempts?: number;
 }
 
 export interface WorkforceCompileResult {

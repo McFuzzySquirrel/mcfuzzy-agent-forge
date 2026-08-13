@@ -1,12 +1,8 @@
-import { execSync } from "node:child_process";
+import { execFileSync } from "node:child_process";
 import { existsSync } from "node:fs";
 import { join } from "node:path";
 
 import type { AgentDescriptor, HarnessAdapter, ManifestTask, TaskResult, WorkflowState } from "../types.ts";
-
-function shellQuote(value: string): string {
-  return value.includes(" ") ? `"${value.replace(/"/g, "\\\"")}"` : value;
-}
 
 function resolveCompilerDir(repoRoot: string): string | null {
   const candidates = [
@@ -24,7 +20,7 @@ export class FlowForgeKernelAdapter implements HarnessAdapter {
   private readonly bin: string;
   private readonly extraFlags: string[];
   private readonly workflowId: string;
-  private readonly commandTemplate?: string;
+  private readonly commandArgsTemplate?: string;
   private readonly validateBeforeRun: boolean;
   private readonly validatedRepos = new Set<string>();
 
@@ -32,7 +28,7 @@ export class FlowForgeKernelAdapter implements HarnessAdapter {
     this.bin = process.env["FLOWFORGE_KERNEL_BIN"] ?? "flowforge";
     this.extraFlags = (process.env["FLOWFORGE_KERNEL_EXTRA_FLAGS"] ?? "").split(/\s+/).filter(Boolean);
     this.workflowId = process.env["FLOWFORGE_WORKFLOW_ID"] ?? "forge-build";
-    this.commandTemplate = process.env["FLOWFORGE_KERNEL_COMMAND_TEMPLATE"];
+    this.commandArgsTemplate = process.env["FLOWFORGE_KERNEL_COMMAND_ARGS_JSON"];
     this.validateBeforeRun = (process.env["FLOWFORGE_VALIDATE_WORKFORCE"] ?? "true").toLowerCase() !== "false";
   }
 
@@ -50,8 +46,8 @@ export class FlowForgeKernelAdapter implements HarnessAdapter {
     try {
       this.validatePackage(repoRoot, workforcePath);
 
-      const command = this.buildCommand(repoRoot, workforcePath, task, agent);
-      const stdout = execSync(command, {
+      const args = this.buildArgs(repoRoot, workforcePath, task, agent);
+      const stdout = execFileSync(this.bin, args, {
         cwd: repoRoot,
         encoding: "utf8",
         timeout: 10 * 60 * 1000,
@@ -86,27 +82,35 @@ export class FlowForgeKernelAdapter implements HarnessAdapter {
     }
   }
 
-  private buildCommand(repoRoot: string, workforcePath: string, task: ManifestTask, agent: AgentDescriptor): string {
-    if (this.commandTemplate) {
-      return this.commandTemplate
-        .replaceAll("{bin}", this.bin)
-        .replaceAll("{repoRoot}", repoRoot)
-        .replaceAll("{workforce}", workforcePath)
-        .replaceAll("{workflow}", this.workflowId)
-        .replaceAll("{taskId}", task.id)
-        .replaceAll("{agent}", agent.name);
+  private buildArgs(repoRoot: string, workforcePath: string, task: ManifestTask, agent: AgentDescriptor): string[] {
+    if (this.commandArgsTemplate) {
+      let template: unknown;
+      try {
+        template = JSON.parse(this.commandArgsTemplate);
+      } catch {
+        throw new Error("FLOWFORGE_KERNEL_COMMAND_ARGS_JSON must be valid JSON.");
+      }
+      if (!Array.isArray(template) || template.some((item) => typeof item !== "string")) {
+        throw new Error("FLOWFORGE_KERNEL_COMMAND_ARGS_JSON must be a JSON string array.");
+      }
+
+      return template.map((item) =>
+        item
+          .replaceAll("{repoRoot}", repoRoot)
+          .replaceAll("{workforce}", workforcePath)
+          .replaceAll("{workflow}", this.workflowId)
+          .replaceAll("{taskId}", task.id)
+          .replaceAll("{agent}", agent.name),
+      );
     }
 
-    const args = [
-      this.bin,
+    return [
       "run",
       workforcePath,
       this.workflowId,
       "--mock",
       ...this.extraFlags,
     ];
-
-    return args.map(shellQuote).join(" ");
   }
 
   private validatePackage(repoRoot: string, workforcePath: string): void {
@@ -118,8 +122,7 @@ export class FlowForgeKernelAdapter implements HarnessAdapter {
       throw new Error("forge-workforce-compiler skill was not found. Install/bootstrap it before using flowforge-kernel harness.");
     }
 
-    const cmd = `npm run forge-workforce-compiler -- validate --package ${shellQuote(workforcePath)}`;
-    execSync(cmd, {
+    execFileSync("npm", ["run", "forge-workforce-compiler", "--", "validate", "--package", workforcePath], {
       cwd: compilerDir,
       encoding: "utf8",
       timeout: 2 * 60 * 1000,

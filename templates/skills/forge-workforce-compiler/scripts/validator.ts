@@ -195,10 +195,6 @@ export function validateWorkforcePackage(workforcePath: string): ValidationResul
   visit("skills", validateSkill);
   visit("workflows", validateWorkflow);
 
-  if (!existsSync(join(workforcePath, "workforce.json"))) {
-    warnings.push(issue("workforce.json", "No workforce manifest found."));
-  }
-
   return {
     ok: errors.length === 0,
     errors,

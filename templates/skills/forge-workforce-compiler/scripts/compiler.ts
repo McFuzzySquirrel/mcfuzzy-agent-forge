@@ -42,11 +42,33 @@ function ensureDir(path: string): void {
   mkdirSync(path, { recursive: true });
 }
 
-function buildWorkflow(manifest: ExecutionManifest, fallbackAgent: string | undefined, warnings: string[], workflowId: string) {
+function buildWorkflow(
+  manifest: ExecutionManifest,
+  manifestPath: string,
+  fallbackAgent: string | undefined,
+  warnings: string[],
+  workflowId: string,
+  retryMaxAttempts: number,
+) {
   const tasks = flattenTasks(manifest);
   const nodeIds = tasks.map((task) => safeTaskNodeId(task.id));
 
-  const nodes = tasks.map((task, index) => {
+  type WorkflowNode =
+    | {
+      id: string;
+      type: "agent";
+      agent: string;
+      action: string;
+      output: string;
+      retry: { maxAttempts: number };
+      next: string;
+    }
+    | {
+      id: "end";
+      type: "end";
+    };
+
+  const nodes: WorkflowNode[] = tasks.map((task, index) => {
     const owner = task.ownerAgent ?? fallbackAgent;
     if (!task.ownerAgent) {
       warnings.push(`Task ${task.id} has no ownerAgent; using '${owner ?? "unknown"}'.`);
@@ -58,11 +80,11 @@ function buildWorkflow(manifest: ExecutionManifest, fallbackAgent: string | unde
     const next = nodeIds[index + 1] ?? "end";
     return {
       id: nodeIds[index]!,
-      type: "agent",
+      type: "agent" as const,
       agent: owner,
       action: task.description || task.title,
       output: `task.${task.id}.output`,
-      retry: { maxAttempts: 1 },
+      retry: { maxAttempts: retryMaxAttempts },
       next,
     };
   });
@@ -75,7 +97,7 @@ function buildWorkflow(manifest: ExecutionManifest, fallbackAgent: string | unde
     description: "Generated from docs/EXECUTION-MANIFEST.json by forge-workforce-compiler.",
     start: nodeIds[0] ?? "end",
     state: {
-      sourceManifest: manifest.repoRoot,
+      sourceManifest: manifestPath,
       generatedAt: new Date().toISOString(),
     },
     nodes,
@@ -91,6 +113,7 @@ export function compileWorkforcePackage(repo: ForgeRepo, options: WorkforceCompi
   const packageName = options.packageName ?? `Agent Forge Workforce (${basename(repo.repoRoot)})`;
   const packageVersion = options.packageVersion ?? "0.1.0";
   const workflowId = options.workflowId ?? "forge-build";
+  const workflowRetryMaxAttempts = options.workflowRetryMaxAttempts ?? 1;
 
   const outputDir = resolve(options.outputDir ?? join(repo.repoRoot, "dist"));
   const workforceDir = join(outputDir, `${slug(packageId)}.workforce`);
@@ -103,7 +126,14 @@ export function compileWorkforcePackage(repo: ForgeRepo, options: WorkforceCompi
   ensureDir(workflowsDir);
 
   const fallbackAgent = pickFallbackAgent(repo.agents);
-  const workflow = buildWorkflow(manifest, fallbackAgent, warnings, workflowId);
+  const workflow = buildWorkflow(
+    manifest,
+    repo.manifestPath,
+    fallbackAgent,
+    warnings,
+    workflowId,
+    workflowRetryMaxAttempts,
+  );
 
   const agentPaths: string[] = [];
   for (const agent of repo.agents) {
