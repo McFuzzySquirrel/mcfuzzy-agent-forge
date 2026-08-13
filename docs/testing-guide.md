@@ -1,11 +1,12 @@
 # McFuzzy Agent Forge – Manual Testing Guide
 
-This guide walks you through a concrete end-to-end scenario you can run by hand to verify that the forge pipeline works as expected.  It covers four capabilities in sequence:
+This guide walks you through a concrete end-to-end scenario you can run by hand to verify that the forge pipeline works as expected.  It covers five capabilities in sequence:
 
 1. **Skill creation from the team builder** – confirming `forge-build-agent-team` invokes `skill-creator` and enforces the `skill-review` quality gate.
 2. **Workflow engine (dark orchestration)** – verifying that `forge-workflow-engine` can execute a compiled manifest autonomously.
 3. **End-to-end with forge-launcher** – testing the full journey from zero to autonomous execution.
 4. **Dark orchestration with the OpenAI harness** – running the workflow engine against the OpenAI API directly (no `opencode` or `claude` CLI required).
+5. **Workforce compiler + kernel handoff path** – compiling a `.workforce` package, validating it, and running the workflow engine with `--harness flowforge-kernel`.
 
 ---
 
@@ -621,6 +622,120 @@ npm run workflow-engine -- run --harness openai
 
 ---
 
+## Part 5 – Workforce Compiler + FlowForge Kernel Handoff
+
+This part verifies the v3.6 packaging and kernel handoff path: compile Forge artifacts into a `.workforce` package, validate package shape, then execute the workflow engine using `--harness flowforge-kernel`.
+
+### Prerequisites for Part 5
+
+- All prerequisites from Part 2 (`forge-execution-adapter` compiled, `forge-workflow-engine` installed)
+- `forge-workforce-compiler` installed: `cd .agents/skills/forge-workforce-compiler && npm install`
+- A generated agent team and skills under your active harness root
+- `docs/EXECUTION-MANIFEST.json` exists
+- Optional: FlowForge CLI installed and available as `flowforge` (or set `FLOWFORGE_KERNEL_BIN`)
+
+---
+
+### Test Steps
+
+**Step 1 – Inspect compiler inputs**
+
+```bash
+cd .agents/skills/forge-workforce-compiler
+npm run forge-workforce-compiler -- inspect
+```
+
+**Check ✓** Output reports a valid `repoRoot`, a detected `harnessRoot`, and non-zero `agentCount`/`skillCount`.
+
+---
+
+**Step 2 – Compile workforce package**
+
+```bash
+npm run forge-workforce-compiler -- compile
+```
+
+**Check ✓** Compile succeeds and writes:
+
+- `dist/<package-id>.workforce/workforce.json`
+- `dist/<package-id>.workforce/workflows/<workflow-id>.json`
+- `docs/KERNEL-BRIDGE.json`
+
+Also confirm `docs/KERNEL-BRIDGE.json` contains a non-empty `taskNodeMap`.
+
+---
+
+**Step 3 – Run explicit validation**
+
+```bash
+npm run forge-workforce-compiler -- validate
+```
+
+**Check ✓** Validation returns `"ok": true` with `errorCount: 0`.
+
+---
+
+**Step 4 – Exercise workflow-engine kernel handoff**
+
+In one terminal, switch to the workflow engine skill:
+
+```bash
+cd ../forge-workflow-engine
+```
+
+If you have the FlowForge CLI available, run:
+
+```bash
+FLOWFORGE_KERNEL_MOCK=true npm run workflow-engine -- run --harness flowforge-kernel
+```
+
+If you do not have FlowForge CLI yet, run a contract-level smoke test with `echo` as the kernel binary:
+
+```bash
+FLOWFORGE_KERNEL_BIN=echo npm run workflow-engine -- run --harness flowforge-kernel
+```
+
+**Check ✓** The pre-run summary shows `harness: flowforge-kernel`, then tasks dispatch without requiring human input between tasks once confirmed.
+
+---
+
+**Step 5 – Verify adapter package-path resolution and validation gate**
+
+Unset any explicit path override and run again:
+
+```bash
+unset FLOWFORGE_WORKFORCE_PATH
+FLOWFORGE_KERNEL_BIN=echo npm run workflow-engine -- run --harness flowforge-kernel
+```
+
+**Check ✓** The adapter resolves workforce path from `docs/KERNEL-BRIDGE.json` and starts dispatching tasks.
+
+Now force a broken path:
+
+```bash
+FLOWFORGE_WORKFORCE_PATH=dist/does-not-exist.workforce \
+FLOWFORGE_KERNEL_BIN=echo \
+npm run workflow-engine -- run --harness flowforge-kernel
+```
+
+**Check ✓** Run fails fast with a workforce-path/validation error instead of silently dispatching tasks against missing artifacts.
+
+---
+
+### Part 5 Pass/Fail Summary
+
+| Check | Expected |
+|---|---|
+| `forge-workforce-compiler -- inspect` detects repo, harness, and artifacts | ✅ |
+| `forge-workforce-compiler -- compile` writes workforce package + bridge file | ✅ |
+| `docs/KERNEL-BRIDGE.json` contains non-empty `taskNodeMap` | ✅ |
+| `forge-workforce-compiler -- validate` reports `ok: true` | ✅ |
+| Workflow engine runs with `--harness flowforge-kernel` and pre-run gate appears | ✅ |
+| Adapter resolves package path from `KERNEL-BRIDGE.json` when no override is set | ✅ |
+| Invalid workforce path fails fast with an explicit error | ✅ |
+
+---
+
 ## Quick Reference: Key File Locations
 
 | File | Purpose |
@@ -632,6 +747,9 @@ npm run workflow-engine -- run --harness openai
 | `docs/WORKFLOW-STATE.json` | Machine-readable run state (generated at runtime) |
 | `docs/PROGRESS.md` | Human-readable progress (kept in sync by engine) |
 | `docs/EXECUTION-AUDIT.jsonl` | Append-only event log (generated at runtime) |
+| `dist/<package-id>.workforce/workforce.json` | Compiled FlowForge-compatible package manifest |
+| `dist/<package-id>.workforce/workflows/<workflow-id>.json` | Generated workflow definition for kernel runtimes |
+| `docs/KERNEL-BRIDGE.json` | Task↔workflow-node mapping and kernel handoff metadata |
 
 ---
 
@@ -651,6 +769,12 @@ The `name:` field in a skill's YAML frontmatter must match the directory name ex
 
 **`401 Unauthorized` from the OpenAI harness**
 Your `OPENAI_API_KEY` is missing, expired, or incorrect. Re-export the correct key and retry.
+
+**`FLOWFORGE_WORKFORCE_PATH is not set ...` when using `flowforge-kernel`**
+Compile first (`npm run forge-workforce-compiler -- compile`) so `docs/KERNEL-BRIDGE.json` includes `workforcePath`, or set `FLOWFORGE_WORKFORCE_PATH` explicitly.
+
+**`forge-workforce-compiler skill was not found` in kernel mode**
+The workflow engine could not find the compiler skill under your harness root. Re-run bootstrap or restore `forge-workforce-compiler` under `.agents/skills/` (or your active harness equivalent).
 
 **`429 Too Many Requests` from the OpenAI harness**
 You have hit the API rate limit. Wait a moment and re-run, or add `--retry-delay-ms 15000` to give the engine more time between retries: `npm run workflow-engine -- run --harness openai --retry-delay-ms 15000`.
