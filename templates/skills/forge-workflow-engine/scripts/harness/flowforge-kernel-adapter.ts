@@ -1,5 +1,5 @@
 import { execFileSync } from "node:child_process";
-import { existsSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 
 import type { AgentDescriptor, HarnessAdapter, ManifestTask, TaskResult, WorkflowState } from "../types.ts";
@@ -21,6 +21,7 @@ export class FlowForgeKernelAdapter implements HarnessAdapter {
   private readonly extraFlags: string[];
   private readonly workflowId: string;
   private readonly commandArgsTemplate?: string;
+  private readonly mockMode: boolean;
   private readonly validateBeforeRun: boolean;
   private readonly validatedRepos = new Set<string>();
 
@@ -29,6 +30,7 @@ export class FlowForgeKernelAdapter implements HarnessAdapter {
     this.extraFlags = (process.env["FLOWFORGE_KERNEL_EXTRA_FLAGS"] ?? "").split(/\s+/).filter(Boolean);
     this.workflowId = process.env["FLOWFORGE_WORKFLOW_ID"] ?? "forge-build";
     this.commandArgsTemplate = process.env["FLOWFORGE_KERNEL_COMMAND_ARGS_JSON"];
+    this.mockMode = (process.env["FLOWFORGE_KERNEL_MOCK"] ?? "false").toLowerCase() === "true";
     this.validateBeforeRun = (process.env["FLOWFORGE_VALIDATE_WORKFORCE"] ?? "true").toLowerCase() !== "false";
   }
 
@@ -40,8 +42,7 @@ export class FlowForgeKernelAdapter implements HarnessAdapter {
   ): Promise<TaskResult> {
     const start = Date.now();
 
-    const workforcePath = process.env["FLOWFORGE_WORKFORCE_PATH"]
-      ?? join(repoRoot, "dist", "dev-agent-forge-project.workforce");
+    const workforcePath = this.resolveWorkforcePath(repoRoot);
 
     try {
       this.validatePackage(repoRoot, workforcePath);
@@ -104,13 +105,14 @@ export class FlowForgeKernelAdapter implements HarnessAdapter {
       );
     }
 
-    return [
+    const args = [
       "run",
       workforcePath,
       this.workflowId,
-      "--mock",
       ...this.extraFlags,
     ];
+    if (this.mockMode) args.push("--mock");
+    return args;
   }
 
   private validatePackage(repoRoot: string, workforcePath: string): void {
@@ -122,7 +124,8 @@ export class FlowForgeKernelAdapter implements HarnessAdapter {
       throw new Error("forge-workforce-compiler skill was not found. Install/bootstrap it before using flowforge-kernel harness.");
     }
 
-    execFileSync("npm", ["run", "forge-workforce-compiler", "--", "validate", "--package", workforcePath], {
+    const npmBin = process.platform === "win32" ? "npm.cmd" : "npm";
+    execFileSync(npmBin, ["run", "forge-workforce-compiler", "--", "validate", "--package", workforcePath], {
       cwd: compilerDir,
       encoding: "utf8",
       timeout: 2 * 60 * 1000,
@@ -130,5 +133,27 @@ export class FlowForgeKernelAdapter implements HarnessAdapter {
     });
 
     this.validatedRepos.add(repoRoot);
+  }
+
+  private resolveWorkforcePath(repoRoot: string): string {
+    if (process.env["FLOWFORGE_WORKFORCE_PATH"]) {
+      return process.env["FLOWFORGE_WORKFORCE_PATH"]!;
+    }
+
+    const bridgePath = join(repoRoot, "docs", "KERNEL-BRIDGE.json");
+    if (existsSync(bridgePath)) {
+      try {
+        const bridge = JSON.parse(readFileSync(bridgePath, "utf8")) as { workforcePath?: string };
+        if (bridge.workforcePath) {
+          return join(repoRoot, bridge.workforcePath);
+        }
+      } catch {
+        // Ignore parse errors and fall through to explicit configuration error.
+      }
+    }
+
+    throw new Error(
+      "FLOWFORGE_WORKFORCE_PATH is not set and docs/KERNEL-BRIDGE.json did not provide workforcePath. Run forge-workforce-compiler -- compile first or set FLOWFORGE_WORKFORCE_PATH.",
+    );
   }
 }

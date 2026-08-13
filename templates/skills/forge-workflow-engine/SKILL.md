@@ -116,8 +116,9 @@ The engine is harness-agnostic. Select the backend with `--harness`:
 | Variable | Default | Purpose |
 |---|---|---|
 | `FLOWFORGE_KERNEL_BIN` | `flowforge` | Path to the FlowForge CLI |
-| `FLOWFORGE_WORKFORCE_PATH` | `dist/dev-agent-forge-project.workforce` | Path to the compiled workforce package directory |
+| `FLOWFORGE_WORKFORCE_PATH` | *(auto-detected from `docs/KERNEL-BRIDGE.json`)* | Optional override for the compiled workforce package directory |
 | `FLOWFORGE_WORKFLOW_ID` | `forge-build` | Workflow id inside the workforce package |
+| `FLOWFORGE_KERNEL_MOCK` | `false` | When `true`, append `--mock` to the kernel command |
 | `FLOWFORGE_KERNEL_EXTRA_FLAGS` | *(empty)* | Extra flags appended to the kernel command |
 | `FLOWFORGE_KERNEL_COMMAND_ARGS_JSON` | *(empty)* | Optional JSON array of command args using `{repoRoot}`, `{workforce}`, `{workflow}`, `{taskId}`, `{agent}` placeholders |
 | `FLOWFORGE_VALIDATE_WORKFORCE` | `true` | Run workforce validation gate before first task dispatch |

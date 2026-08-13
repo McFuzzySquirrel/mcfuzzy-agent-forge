@@ -37,15 +37,15 @@ function validateWorkforceManifest(workforcePath: string, errors: ValidationIssu
     if (!(key in data)) errors.push(issue(`workforce.json.${key}`, "Required field is missing."));
   }
 
-  if (typeof data["specVersion"] !== "string" || data["specVersion"] !== "1.0") {
+  if ("specVersion" in data && (typeof data["specVersion"] !== "string" || data["specVersion"] !== "1.0")) {
     errors.push(issue("workforce.json.specVersion", "specVersion must be '1.0'."));
   }
 
-  if (typeof data["id"] !== "string" || !matchPattern(data["id"], /^[a-z0-9]+([.-][a-z0-9]+)*$/)) {
+  if ("id" in data && (typeof data["id"] !== "string" || !matchPattern(data["id"], /^[a-z0-9]+([.-][a-z0-9]+)*$/))) {
     errors.push(issue("workforce.json.id", "id must match reverse-DNS style pattern."));
   }
 
-  if (typeof data["version"] !== "string" || !matchPattern(data["version"], /^\d+\.\d+\.\d+(-[0-9A-Za-z.-]+)?$/)) {
+  if ("version" in data && (typeof data["version"] !== "string" || !matchPattern(data["version"], /^\d+\.\d+\.\d+(-[0-9A-Za-z.-]+)?$/))) {
     errors.push(issue("workforce.json.version", "version must be semver."));
   }
 
@@ -60,7 +60,13 @@ function validateWorkforceManifest(workforcePath: string, errors: ValidationIssu
 }
 
 function validateAgent(path: string, errors: ValidationIssue[]): void {
-  const value = readJson(path);
+  let value: unknown;
+  try {
+    value = readJson(path);
+  } catch (error) {
+    errors.push(issue(path, `Could not parse JSON: ${error instanceof Error ? error.message : String(error)}`));
+    return;
+  }
   if (!isObject(value)) {
     errors.push(issue(path, "Agent definition must be a JSON object."));
     return;
@@ -71,26 +77,34 @@ function validateAgent(path: string, errors: ValidationIssue[]): void {
     if (!(key in value)) errors.push(issue(`${path}.${key}`, "Required field is missing."));
   }
 
-  if (typeof value["id"] !== "string" || !matchPattern(value["id"], /^[a-z0-9]+(-[a-z0-9]+)*$/)) {
+  if ("id" in value && (typeof value["id"] !== "string" || !matchPattern(value["id"], /^[a-z0-9]+(-[a-z0-9]+)*$/))) {
     errors.push(issue(`${path}.id`, "id must be lowercase-hyphenated."));
   }
 
-  if (typeof value["name"] !== "string" || value["name"].trim().length === 0) {
+  if ("name" in value && (typeof value["name"] !== "string" || value["name"].trim().length === 0)) {
     errors.push(issue(`${path}.name`, "name must be a non-empty string."));
   }
 
-  if (!isObject(value["model"])) {
+  if ("model" in value && !isObject(value["model"])) {
     errors.push(issue(`${path}.model`, "model must be an object."));
-  } else {
+  } else if ("model" in value && isObject(value["model"])) {
     const tier = value["model"]["tier"];
-    if (tier !== "small" && tier !== "medium" && tier !== "large") {
+    if (tier === undefined) {
+      errors.push(issue(`${path}.model.tier`, "Required field is missing."));
+    } else if (tier !== "small" && tier !== "medium" && tier !== "large") {
       errors.push(issue(`${path}.model.tier`, "model.tier must be one of: small, medium, large."));
     }
   }
 }
 
 function validateSkill(path: string, errors: ValidationIssue[]): void {
-  const content = readFileSync(path, "utf8");
+  let content: string;
+  try {
+    content = readFileSync(path, "utf8");
+  } catch (error) {
+    errors.push(issue(path, `Could not read skill file: ${error instanceof Error ? error.message : String(error)}`));
+    return;
+  }
   const frontmatter = content.match(/^---\r?\n([\s\S]*?)\r?\n---/);
   if (!frontmatter) {
     errors.push(issue(path, "SKILL.md must include YAML frontmatter."));
@@ -118,7 +132,13 @@ function validateSkill(path: string, errors: ValidationIssue[]): void {
 }
 
 function validateWorkflow(path: string, errors: ValidationIssue[]): void {
-  const value = readJson(path);
+  let value: unknown;
+  try {
+    value = readJson(path);
+  } catch (error) {
+    errors.push(issue(path, `Could not parse JSON: ${error instanceof Error ? error.message : String(error)}`));
+    return;
+  }
   if (!isObject(value)) {
     errors.push(issue(path, "Workflow must be a JSON object."));
     return;

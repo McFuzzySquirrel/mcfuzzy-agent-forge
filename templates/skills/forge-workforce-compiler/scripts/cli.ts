@@ -31,11 +31,11 @@ function repoRootFrom(args: string[]): string {
   return detectRepoRoot(value ? resolve(value) : process.cwd());
 }
 
-function defaultWorkforcePath(repoRoot: string): string {
+function defaultWorkforcePath(repoRoot: string): string | undefined {
   const dist = join(repoRoot, "dist");
-  if (!existsSync(dist)) return join(dist, "dev-agent-forge-project.workforce");
+  if (!existsSync(dist)) return undefined;
   const match = readdirSync(dist).find((entry) => entry.endsWith(".workforce"));
-  return join(dist, match ?? "dev-agent-forge-project.workforce");
+  return match ? join(dist, match) : undefined;
 }
 
 function main(): void {
@@ -91,7 +91,14 @@ function main(): void {
     }
 
     case "validate": {
-      const packagePath = resolve(flag(args, "--package") ?? defaultWorkforcePath(repoRoot));
+      const explicitPackage = flag(args, "--package");
+      const autoDetectedPackage = defaultWorkforcePath(repoRoot);
+      if (!explicitPackage && !autoDetectedPackage) {
+        console.error("No workforce package path provided and no .workforce directory found under dist/. Run compile first or pass --package <path>.");
+        process.exit(1);
+      }
+
+      const packagePath = resolve(explicitPackage ?? autoDetectedPackage!);
       const validation = validateWorkforcePackage(packagePath);
 
       console.log(JSON.stringify({

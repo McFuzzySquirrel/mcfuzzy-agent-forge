@@ -22,7 +22,7 @@ function tierForModel(model: string | undefined): "small" | "medium" | "large" {
   const value = (model ?? "").toLowerCase();
   if (!value) return "medium";
   if (value.includes("mini") || value.includes("haiku") || value.includes("flash") || value.includes("small")) return "small";
-  if (value.includes("opus") || value.includes("gpt-5") || value.includes("large") || value.includes("max")) return "large";
+  if (value.includes("opus") || /\bgpt-5(?!-mini)\b/.test(value) || value.includes("large") || value.includes("max")) return "large";
   return "medium";
 }
 
@@ -223,10 +223,10 @@ export function compileWorkforcePackage(repo: ForgeRepo, options: WorkforceCompi
     generatedAt: new Date().toISOString(),
     mode: "flowforge-kernel",
     sourceOfTruth: "workforce-runtime",
-    manifestPath: repo.manifestPath,
-    workflowStatePath: repo.statePath,
-    executionAuditPath: repo.auditPath,
-    workforcePath: workforceDir,
+    manifestPath: relative(repo.repoRoot, repo.manifestPath),
+    workflowStatePath: relative(repo.repoRoot, repo.statePath),
+    executionAuditPath: relative(repo.repoRoot, repo.auditPath),
+    workforcePath: relative(repo.repoRoot, workforceDir),
     workflowId,
     taskNodeMap,
     warnings,

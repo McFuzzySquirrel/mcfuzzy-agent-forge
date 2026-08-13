@@ -31,8 +31,10 @@ Environment variables:
   STUB_FAIL_TASK_IDS     Comma-separated task IDs to fail in stub adapter
   STUB_DELAY_MS          Simulated latency for stub adapter
   FLOWFORGE_KERNEL_BIN               FlowForge CLI binary (default: flowforge)
-  FLOWFORGE_WORKFORCE_PATH           Path to compiled .workforce directory
+  FLOWFORGE_WORKFORCE_PATH           Optional override for compiled .workforce directory
   FLOWFORGE_WORKFLOW_ID              Workflow id in workforce package (default: forge-build)
+  FLOWFORGE_KERNEL_MOCK              Use --mock when invoking FlowForge CLI (default: false)
+  FLOWFORGE_KERNEL_EXTRA_FLAGS       Extra flags appended to FlowForge kernel command
   FLOWFORGE_KERNEL_COMMAND_ARGS_JSON Optional JSON array of args with placeholders
   FLOWFORGE_VALIDATE_WORKFORCE       Validate workforce before run (default: true)
 `);
