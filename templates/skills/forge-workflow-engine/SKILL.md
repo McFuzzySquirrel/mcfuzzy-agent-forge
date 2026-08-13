@@ -51,6 +51,7 @@ npm run workflow-engine -- run
 npm run workflow-engine -- run --harness opencode
 npm run workflow-engine -- run --harness openai
 npm run workflow-engine -- run --harness stub          # dry-run, no real calls
+npm run workflow-engine -- run --harness flowforge-kernel
 npm run workflow-engine -- run --max-retries 3 --retry-delay-ms 10000
 ```
 
@@ -86,6 +87,7 @@ The engine is harness-agnostic. Select the backend with `--harness`:
 | **OpenCode CLI** (default) | `--harness opencode` | `opencode run --model <m> --system-prompt <agent.md> "<prompt>"` |
 | **OpenAI API** | `--harness openai` | `POST /v1/chat/completions` with agent rawBody as system prompt |
 | **Stub** | `--harness stub` | Returns synthetic success; no real calls (for testing) |
+| **FlowForge Kernel CLI** | `--harness flowforge-kernel` | Hands off task execution to `flowforge run` against a compiled `.workforce` package |
 
 ### OpenCode adapter environment variables
 
@@ -108,6 +110,17 @@ The engine is harness-agnostic. Select the backend with `--harness`:
 |---|---|---|
 | `STUB_FAIL_TASK_IDS` | *(empty)* | Comma-separated task IDs to fail synthetically |
 | `STUB_DELAY_MS` | `0` | Simulated latency per task in milliseconds |
+
+### FlowForge kernel adapter environment variables
+
+| Variable | Default | Purpose |
+|---|---|---|
+| `FLOWFORGE_KERNEL_BIN` | `flowforge` | Path to the FlowForge CLI |
+| `FLOWFORGE_WORKFORCE_PATH` | `dist/dev-agent-forge-project.workforce` | Path to the compiled workforce package directory |
+| `FLOWFORGE_WORKFLOW_ID` | `forge-build` | Workflow id inside the workforce package |
+| `FLOWFORGE_KERNEL_EXTRA_FLAGS` | *(empty)* | Extra flags appended to the kernel command |
+| `FLOWFORGE_KERNEL_COMMAND_TEMPLATE` | *(empty)* | Optional full command template using `{bin}`, `{workforce}`, `{workflow}`, `{taskId}`, `{agent}` placeholders |
+| `FLOWFORGE_VALIDATE_WORKFORCE` | `true` | Run workforce validation gate before first task dispatch |
 
 ---
 
@@ -195,6 +208,13 @@ cd .agents/skills/forge-workflow-engine  && npm install && npm run workflow-engi
 ```
 
 This gives the same project two mutually exclusive execution modes for a given run: interactive/prompt-driven (via `project-orchestrator`) or autonomous/harness-driven (via the workflow engine).
+
+For FlowForge-kernel execution, compile a workforce package first:
+
+```bash
+cd .agents/skills/forge-workforce-compiler && npm install && npm run forge-workforce-compiler -- compile
+cd .agents/skills/forge-workflow-engine   && npm install && npm run workflow-engine -- run --harness flowforge-kernel
+```
 
 ---
 

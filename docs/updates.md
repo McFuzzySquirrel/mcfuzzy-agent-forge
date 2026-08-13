@@ -4,6 +4,21 @@ Detailed release and change notes for McFuzzy Agent Forge.
 
 ---
 
+## August 2026 - v3.6
+
+### Workforce compiler + optional FlowForge kernel handoff
+
+- Added `forge-workforce-compiler` (`templates/skills/forge-workforce-compiler/`): portable TypeScript tooling that compiles Forge artifacts into `dist/<package-id>.workforce`, writes FlowForge-style `workforce.json` + workflow files, and emits `docs/KERNEL-BRIDGE.json` for task/node mapping and state/audit bridge metadata.
+- Added a FlowForge-compatible schema gate to the compiler (`validate` command and post-compile fail-fast validation).
+- Added optional `flowforge-kernel` harness mode to `forge-workflow-engine` so Stage 4 execution can hand off to FlowForge CLI/runtime while preserving existing `opencode`, `openai`, and `stub` modes.
+- Updated docs and prompt playbook with the new compile + kernel execution path.
+
+Related architecture decision:
+
+- [ADR-016](adr/016-forge-workforce-compiler-and-kernel-handoff.md): Forge-as-authoring + kernel-as-execution boundary, interop contract v1, and state/audit bridge policy.
+
+---
+
 ## August 2026 - v3.5
 
 ### Dynamic Workflow Orchestration via `forge-workflow-engine`

@@ -7,6 +7,7 @@ import { loadState, statePath, auditPath } from "./state.ts";
 import { OpenCodeAdapter } from "./harness/opencode-adapter.ts";
 import { OpenAIAdapter } from "./harness/openai-adapter.ts";
 import { StubAdapter } from "./harness/stub-adapter.ts";
+import { FlowForgeKernelAdapter } from "./harness/flowforge-kernel-adapter.ts";
 import type { HarnessAdapter, EngineOptions } from "./types.ts";
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -15,10 +16,10 @@ function usage(): never {
   console.log(`forge-workflow-engine
 
 Usage:
-  npm run workflow-engine -- run     [--repo <path>] [--harness opencode|openai|stub]
+  npm run workflow-engine -- run     [--repo <path>] [--harness opencode|openai|stub|flowforge-kernel]
                                      [--max-retries <n>] [--retry-delay-ms <ms>]
   npm run workflow-engine -- status  [--repo <path>]
-  npm run workflow-engine -- replay  <task-id> [--repo <path>] [--harness opencode|openai|stub]
+  npm run workflow-engine -- replay  <task-id> [--repo <path>] [--harness opencode|openai|stub|flowforge-kernel]
   npm run workflow-engine -- pause   [--repo <path>]
 
 Environment variables:
@@ -29,6 +30,11 @@ Environment variables:
   OPENAI_MODEL           Model override for OpenAI adapter (default: gpt-4o)
   STUB_FAIL_TASK_IDS     Comma-separated task IDs to fail in stub adapter
   STUB_DELAY_MS          Simulated latency for stub adapter
+  FLOWFORGE_KERNEL_BIN               FlowForge CLI binary (default: flowforge)
+  FLOWFORGE_WORKFORCE_PATH           Path to compiled .workforce directory
+  FLOWFORGE_WORKFLOW_ID              Workflow id in workforce package (default: forge-build)
+  FLOWFORGE_KERNEL_COMMAND_TEMPLATE  Optional command template with placeholders
+  FLOWFORGE_VALIDATE_WORKFORCE       Validate workforce before run (default: true)
 `);
   process.exit(1);
 }
@@ -58,8 +64,9 @@ function resolveHarness(name: string | undefined): HarnessAdapter {
     case "opencode": return new OpenCodeAdapter();
     case "openai": return new OpenAIAdapter();
     case "stub": return new StubAdapter();
+    case "flowforge-kernel": return new FlowForgeKernelAdapter();
     default:
-      console.error(`Unknown harness: '${name}'. Choose opencode, openai, or stub.`);
+      console.error(`Unknown harness: '${name}'. Choose opencode, openai, stub, or flowforge-kernel.`);
       process.exit(1);
   }
 }

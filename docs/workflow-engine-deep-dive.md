@@ -198,6 +198,10 @@ This enables fully API-driven builds without any local tooling installed.
 
 Returns a synthetic success for every task without making any real call. The environment variable `STUB_FAIL_TASK_IDS` can be set to a comma-separated list of task IDs that should fail — useful for testing the retry and failure handling logic without a real backend.
 
+### `FlowForgeKernelAdapter`
+
+Hands task execution to a FlowForge CLI/runtime path (`flowforge run ...`) against a compiled `.workforce` package. It can run a pre-dispatch workforce validation gate via `forge-workforce-compiler` and supports command templating through environment variables for deployment-specific handoff contracts.
+
 The beauty of this pattern: **the engine code never changes when you swap backends**. Adding a new harness (say, a Claude MCP adapter, a local Ollama runner, or a GitHub Actions backend) only requires implementing the `HarnessAdapter` interface and registering it in `cli.ts`.
 
 ---
