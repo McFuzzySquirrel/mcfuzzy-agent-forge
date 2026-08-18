@@ -17,11 +17,13 @@ You are building a team of custom agents and reusable skills from a PRD, Product
 
 ### Step 0: Detect Mode
 
+Load `references/detect-harness.md` (from `forge-bootstrap-project`) to determine `HARNESS_AGENTS_DIR` and `HARNESS_SKILLS_DIR` for this repository. Use these variables wherever agent or skill file paths are referenced below.
+
 | Mode | Signals | Action |
 |------|---------|--------|
-| **Full Build** | Complete PRD with Overview, Technical Architecture, Implementation Phases. No `.agent.md` files in `.agents/agents/` beyond forge templates. | Continue with Steps 1–8 below. |
+| **Full Build** | Complete PRD with Overview, Technical Architecture, Implementation Phases. No `.agent.md` files in `HARNESS_AGENTS_DIR` beyond forge templates. | Continue with Steps 1–8 below. |
 | **Vision + Features** | `docs/product-vision.md` exists with feature documents in `docs/features/`. No `.agent.md` files beyond forge templates. | Load `references/vision-features-mode.md` and follow its process. |
-| **Feature Increment** | Document is a Feature PRD (has "Feature Overview", "Agent Impact Assessment"). Existing `.agent.md` files in `.agents/agents/`. | Load `references/feature-increment-mode.md` and follow its process. |
+| **Feature Increment** | Document is a Feature PRD (has "Feature Overview", "Agent Impact Assessment"). Existing `.agent.md` files in `HARNESS_AGENTS_DIR`. | Load `references/feature-increment-mode.md` and follow its process. |
 
 ### Step 1: Locate and Analyze the PRD
 
@@ -76,7 +78,7 @@ Skills are reusable process templates. Create a skill only when a pattern repeat
 
 ### Step 5: Write the Agent Files
 
-Create each agent file at `.agents/agents/{agent-name}.agent.md`:
+Create each agent file at `HARNESS_AGENTS_DIR/{agent-name}.agent.md`:
 
 ````markdown
 ---
@@ -171,7 +173,7 @@ If validation fails, fix and re-run before committing.
 
 ### Step 6: Write the Skill Files
 
-Create each skill file at `.agents/skills/{skill-name}/SKILL.md`.
+Create each skill file at `HARNESS_SKILLS_DIR/{skill-name}/SKILL.md`.
 
 **Required approach: use `skill-creator`** for each new skill. It guides through a structured interview, selects the correct template (flat or modular), and validates the output with `skill-review` before the skill is finalized. Every generated skill must score ≥2.0 across all six quality axes.
 
@@ -264,6 +266,7 @@ Before finalizing:
 - [ ] Every agent has a `## Gotchas` section populated with project-specific edge cases
 - [ ] Every skill has a `## Validation` section with concrete checks
 - [ ] Generated skills use progressive disclosure for content exceeding ~50 lines of templates
+- [ ] All agent files have been written to `HARNESS_AGENTS_DIR`, not to `.agents/agents/` unless that is the detected harness directory
 
 ### Step 8: Present the Team
 

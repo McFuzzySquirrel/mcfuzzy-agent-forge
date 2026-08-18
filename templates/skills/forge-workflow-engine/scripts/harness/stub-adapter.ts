@@ -31,6 +31,7 @@ export class StubAdapter implements HarnessAdapter {
     task: ManifestTask,
     _context: WorkflowState,
     repoRoot: string,
+    _contextBlock?: string,
   ): Promise<TaskResult> {
     const start = Date.now();
 

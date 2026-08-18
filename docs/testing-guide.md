@@ -1,11 +1,13 @@
 # McFuzzy Agent Forge – Manual Testing Guide
 
-This guide walks you through a concrete end-to-end scenario you can run by hand to verify that the forge pipeline works as expected.  It covers four capabilities in sequence:
+This guide walks you through a concrete end-to-end scenario you can run by hand to verify that the forge pipeline works as expected.  It covers six capabilities in sequence:
 
 1. **Skill creation from the team builder** – confirming `forge-build-agent-team` invokes `skill-creator` and enforces the `skill-review` quality gate.
 2. **Workflow engine (dark orchestration)** – verifying that `forge-workflow-engine` can execute a compiled manifest autonomously.
 3. **End-to-end with forge-launcher** – testing the full journey from zero to autonomous execution.
 4. **Dark orchestration with the OpenAI harness** – running the workflow engine against the OpenAI API directly (no `opencode` or `claude` CLI required).
+5. **Workforce compiler + kernel handoff path** – compiling a `.workforce` package, validating it, and running the workflow engine with `--harness flowforge-kernel`.
+6. **Artifact store and context projection** – verifying that the engine writes typed JSON artifacts to `docs/artifacts/`, projects a minimal context block per task, and emits the expected audit events.
 
 ---
 
@@ -621,6 +623,276 @@ npm run workflow-engine -- run --harness openai
 
 ---
 
+## Part 5 – Workforce Compiler + FlowForge Kernel Handoff
+
+This part verifies the v3.6 packaging and kernel handoff path: compile Forge artifacts into a `.workforce` package, validate package shape, then execute the workflow engine using `--harness flowforge-kernel`.
+
+### Prerequisites for Part 5
+
+- All prerequisites from Part 2 (`forge-execution-adapter` compiled, `forge-workflow-engine` installed)
+- `forge-workforce-compiler` installed: `cd .agents/skills/forge-workforce-compiler && npm install`
+- A generated agent team and skills under your active harness root
+- `docs/EXECUTION-MANIFEST.json` exists
+- Optional: FlowForge CLI installed and available as `flowforge` (or set `FLOWFORGE_KERNEL_BIN`)
+
+---
+
+### Test Steps
+
+**Step 1 – Inspect compiler inputs**
+
+```bash
+cd .agents/skills/forge-workforce-compiler
+npm run forge-workforce-compiler -- inspect
+```
+
+**Check ✓** Output reports a valid `repoRoot`, a detected `harnessRoot`, and non-zero `agentCount`/`skillCount`.
+
+---
+
+**Step 2 – Compile workforce package**
+
+```bash
+npm run forge-workforce-compiler -- compile
+```
+
+**Check ✓** Compile succeeds and writes:
+
+- `dist/<package-id>.workforce/workforce.json`
+- `dist/<package-id>.workforce/workflows/<workflow-id>.json`
+- `docs/KERNEL-BRIDGE.json`
+
+Also confirm `docs/KERNEL-BRIDGE.json` contains a non-empty `taskNodeMap`.
+
+---
+
+**Step 3 – Run explicit validation**
+
+```bash
+npm run forge-workforce-compiler -- validate
+```
+
+**Check ✓** Validation returns `"ok": true` with `errorCount: 0`.
+
+---
+
+**Step 4 – Exercise workflow-engine kernel handoff**
+
+In one terminal, switch to the workflow engine skill:
+
+```bash
+cd ../forge-workflow-engine
+```
+
+If you have the FlowForge CLI available, run:
+
+```bash
+FLOWFORGE_KERNEL_MOCK=true npm run workflow-engine -- run --harness flowforge-kernel
+```
+
+If you do not have FlowForge CLI yet, run a contract-level smoke test with `echo` as the kernel binary:
+
+```bash
+FLOWFORGE_KERNEL_BIN=echo npm run workflow-engine -- run --harness flowforge-kernel
+```
+
+**Check ✓** The pre-run summary shows `harness: flowforge-kernel`, then tasks dispatch without requiring human input between tasks once confirmed.
+
+---
+
+**Step 5 – Verify adapter package-path resolution and validation gate**
+
+Unset any explicit path override and run again:
+
+```bash
+unset FLOWFORGE_WORKFORCE_PATH
+FLOWFORGE_KERNEL_BIN=echo npm run workflow-engine -- run --harness flowforge-kernel
+```
+
+**Check ✓** The adapter resolves workforce path from `docs/KERNEL-BRIDGE.json` and starts dispatching tasks.
+
+Now force a broken path:
+
+```bash
+FLOWFORGE_WORKFORCE_PATH=dist/does-not-exist.workforce \
+FLOWFORGE_KERNEL_BIN=echo \
+npm run workflow-engine -- run --harness flowforge-kernel
+```
+
+**Check ✓** Run fails fast with a workforce-path/validation error instead of silently dispatching tasks against missing artifacts.
+
+---
+
+### Part 5 Pass/Fail Summary
+
+| Check | Expected |
+|---|---|
+| `forge-workforce-compiler -- inspect` detects repo, harness, and artifacts | ✅ |
+| `forge-workforce-compiler -- compile` writes workforce package + bridge file | ✅ |
+| `docs/KERNEL-BRIDGE.json` contains non-empty `taskNodeMap` | ✅ |
+| `forge-workforce-compiler -- validate` reports `ok: true` | ✅ |
+| Workflow engine runs with `--harness flowforge-kernel` and pre-run gate appears | ✅ |
+| Adapter resolves package path from `KERNEL-BRIDGE.json` when no override is set | ✅ |
+| Invalid workforce path fails fast with an explicit error | ✅ |
+
+---
+
+## Part 6 – Artifact Store and Context Projection
+
+This part verifies the v3.7 artifact store and context projection path: the engine writes compact, typed JSON artifacts to `docs/artifacts/` after each task, projects only the relevant artifacts as the context block for the next agent, and records token-reduction telemetry in the audit log.
+
+### Prerequisites for Part 6
+
+- All prerequisites from Part 2 (`forge-execution-adapter` compiled, `forge-workflow-engine` installed)
+- `docs/EXECUTION-MANIFEST.json` exists (compiled by the execution adapter)
+- The manifest must have at least one task that declares `produces` and at least one task that declares `inputs`. See the sample below if you need to add these fields.
+
+**Minimal manifest extension example** — edit `docs/EXECUTION-MANIFEST.json` and add `inputs`/`produces` to two tasks:
+
+```json
+{
+  "id": "architecture-task",
+  "title": "Design system architecture",
+  "ownerAgent": "project-architect",
+  "dependencies": [],
+  "expectedOutputs": ["docs/ARCHITECTURE.md"],
+  "validationCommands": [],
+  "approvalRequired": false,
+  "produces": "solution.architecture"
+},
+{
+  "id": "implement-api-task",
+  "title": "Implement API layer",
+  "ownerAgent": "backend-engineer",
+  "dependencies": ["architecture-task"],
+  "expectedOutputs": ["src/api/index.ts"],
+  "validationCommands": [],
+  "approvalRequired": false,
+  "inputs": ["solution.architecture"],
+  "produces": "implementation.result"
+}
+```
+
+Tasks that declare neither `inputs` nor `produces` continue to work unchanged — the artifact layer is additive.
+
+---
+
+### Test Steps
+
+**Step 1 – Run the engine with the stub harness**
+
+Use the stub adapter so tasks complete immediately without a live harness:
+
+```bash
+cd .agents/skills/forge-workflow-engine
+npm run workflow-engine -- run --harness stub
+```
+
+Confirm at the pre-run gate and let the run complete.
+
+**Check ✓** The run completes without errors and `docs/WORKFLOW-STATE.json` shows all tasks `"complete"`.
+
+---
+
+**Step 2 – Verify artifact files were created**
+
+```bash
+ls -R docs/artifacts/
+```
+
+**Check ✓** A `docs/artifacts/` directory exists and contains at least one subdirectory (e.g. `architecture/`, `implementation/`) with `*.json` artifact files.
+
+Inspect one file:
+
+```bash
+cat docs/artifacts/architecture/architecture-001.json
+```
+
+**Check ✓** The file is valid JSON and contains at minimum the fields `id`, `type`, `createdAt`, `taskId`, `producedBy`, and `summary`.
+
+---
+
+**Step 3 – Verify task records link to artifacts**
+
+```bash
+cat docs/WORKFLOW-STATE.json | python3 -m json.tool | grep -A4 "artifactId"
+```
+
+(If `python3` is not available, open `docs/WORKFLOW-STATE.json` in any editor.)
+
+**Check ✓** Tasks that declared `produces` have a non-null `"artifactId"` field. Tasks that declared `inputs` have a non-empty `"inputArtifactIds"` array.
+
+---
+
+**Step 4 – Verify context projection audit events**
+
+```bash
+grep "context.projected" docs/EXECUTION-AUDIT.jsonl
+```
+
+**Check ✓** At least one line contains `"event":"context.projected"` with `sourceTokenEstimate`, `projectedTokenEstimate`, and `reductionPercent` fields — confirming the projection layer fired before the consuming task.
+
+Example expected output:
+
+```json
+{"timestamp":"...","action":"context.projected","taskId":"implement-api-task","sourceTokenEstimate":9840,"projectedTokenEstimate":1720,"reductionPercent":82.5}
+```
+
+---
+
+**Step 5 – Verify artifact.created audit events**
+
+```bash
+grep "artifact.created" docs/EXECUTION-AUDIT.jsonl
+```
+
+**Check ✓** One `"artifact.created"` event exists for each task that declared `produces`, each containing `artifactId`, `artifactType`, and `inputArtifacts`.
+
+---
+
+**Step 6 – Confirm tasks without artifact declarations are unaffected**
+
+Run the engine on a manifest that has no `inputs`/`produces` fields at all:
+
+```bash
+# Remove inputs/produces temporarily (or use a clean manifest copy)
+npm run workflow-engine -- run --harness stub
+```
+
+**Check ✓** The run completes without errors. No `docs/artifacts/` directory is created (or the existing one is unchanged). The audit log contains no `artifact.created` or `context.projected` events for those tasks.
+
+---
+
+**Step 7 – Confirm artifact data persists across resume**
+
+Start a run, kill it after the first task completes (`Ctrl+C`), then resume:
+
+```bash
+npm run workflow-engine -- run --harness stub
+# Ctrl+C after first task
+npm run workflow-engine -- run --harness stub
+```
+
+**Check ✓** On resume, the artifact file written by the first task still exists in `docs/artifacts/`. The engine does not attempt to recreate it; it reads it from the store when projecting context for downstream tasks.
+
+---
+
+### Part 6 Pass/Fail Summary
+
+| Check | Expected |
+|---|---|
+| Engine completes run without errors | ✅ |
+| `docs/artifacts/` created with typed JSON files | ✅ |
+| Each artifact file contains `id`, `type`, `createdAt`, `taskId`, `producedBy`, `summary` | ✅ |
+| Tasks with `produces` have non-null `artifactId` in `WORKFLOW-STATE.json` | ✅ |
+| Tasks with `inputs` have non-empty `inputArtifactIds` in `WORKFLOW-STATE.json` | ✅ |
+| `context.projected` events present in audit log with token telemetry | ✅ |
+| `artifact.created` events present in audit log for each producing task | ✅ |
+| Tasks with no `inputs`/`produces` declarations complete without errors | ✅ |
+| Artifact files survive a resume cycle and are not re-written | ✅ |
+
+---
+
 ## Quick Reference: Key File Locations
 
 | File | Purpose |
@@ -632,6 +904,10 @@ npm run workflow-engine -- run --harness openai
 | `docs/WORKFLOW-STATE.json` | Machine-readable run state (generated at runtime) |
 | `docs/PROGRESS.md` | Human-readable progress (kept in sync by engine) |
 | `docs/EXECUTION-AUDIT.jsonl` | Append-only event log (generated at runtime) |
+| `dist/<package-id>.workforce/workforce.json` | Compiled FlowForge-compatible package manifest |
+| `dist/<package-id>.workforce/workflows/<workflow-id>.json` | Generated workflow definition for kernel runtimes |
+| `docs/KERNEL-BRIDGE.json` | Task↔workflow-node mapping and kernel handoff metadata |
+| `docs/artifacts/<type>/<id>.json` | Typed JSON artifact files written by the engine (one per producing task) |
 
 ---
 
@@ -651,6 +927,21 @@ The `name:` field in a skill's YAML frontmatter must match the directory name ex
 
 **`401 Unauthorized` from the OpenAI harness**
 Your `OPENAI_API_KEY` is missing, expired, or incorrect. Re-export the correct key and retry.
+
+**`FLOWFORGE_WORKFORCE_PATH is not set ...` when using `flowforge-kernel`**
+Compile first (`npm run forge-workforce-compiler -- compile`) so `docs/KERNEL-BRIDGE.json` includes `workforcePath`, or set `FLOWFORGE_WORKFORCE_PATH` explicitly.
+
+**`docs/artifacts/` is empty after a run**
+Only tasks that declare a `produces` field write artifacts. If no tasks in your manifest have `produces`, no artifact files are created — this is expected. Add the field to any task you want to participate in the artifact pattern.
+
+**`context.projected` events missing from audit log**
+Context projection only fires for tasks that declare at least one entry in `inputs`. Confirm the consuming task has `"inputs": ["<artifact-type>"]` in `docs/EXECUTION-MANIFEST.json` and that a prior task already created an artifact of that type.
+
+**Artifact file is missing for a task that declares `produces`**
+If the task failed or was skipped, no artifact is written. Check `docs/WORKFLOW-STATE.json` for the task's `status` and `errorMessage`. Replay the task (`npm run workflow-engine -- replay --task <task-id>`) to retry after fixing the underlying issue.
+
+**`forge-workforce-compiler skill was not found` in kernel mode**
+The workflow engine could not find the compiler skill under your harness root. Re-run bootstrap or restore `forge-workforce-compiler` under `.agents/skills/` (or your active harness equivalent).
 
 **`429 Too Many Requests` from the OpenAI harness**
 You have hit the API rate limit. Wait a moment and re-run, or add `--retry-delay-ms 15000` to give the engine more time between retries: `npm run workflow-engine -- run --harness openai --retry-delay-ms 15000`.

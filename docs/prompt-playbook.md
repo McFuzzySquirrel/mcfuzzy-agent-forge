@@ -366,6 +366,18 @@ npm run workflow-engine -- run --harness openai
 
 # Stub / dry-run - no real calls, verifies engine setup
 npm run workflow-engine -- run --harness stub
+
+# FlowForge kernel handoff - requires compiled .workforce package + flowforge CLI
+npm run workflow-engine -- run --harness flowforge-kernel
+```
+
+If you want the kernel handoff path, compile the workforce package first:
+
+```bash
+cd .agents/skills/forge-workforce-compiler
+npm install
+npm run forge-workforce-compiler -- compile
+npm run forge-workforce-compiler -- validate --package dist/dev-agent-forge-project.workforce
 ```
 
 Or, use the `workflow-orchestrator` agent for a guided interactive experience:
@@ -448,9 +460,11 @@ Only modify skills I've approved in the audit report.
 | Audit skills | `@workspace /forge-optimize-skills Audit all skills in .agents/skills/ against best practices...` |
 | Apply skill improvements | `@workspace /forge-optimize-skills Apply the approved changes from docs/SKILL-AUDIT.md` |
 | Compile execution manifest | `cd .agents/skills/forge-execution-adapter && npm install && npm run forge-execution-adapter -- compile` |
+| Compile workforce package | `cd .agents/skills/forge-workforce-compiler && npm install && npm run forge-workforce-compiler -- compile` |
 | Dark run (OpenCode harness) | `cd .agents/skills/forge-workflow-engine && npm install && npm run workflow-engine -- run --harness opencode` |
 | Dark run (OpenAI harness) | `cd .agents/skills/forge-workflow-engine && npm run workflow-engine -- run --harness openai` |
 | Dark run (stub / dry-run) | `cd .agents/skills/forge-workflow-engine && npm run workflow-engine -- run --harness stub` |
+| Dark run (FlowForge kernel) | `cd .agents/skills/forge-workflow-engine && npm run workflow-engine -- run --harness flowforge-kernel` |
 | Workflow status | `cd .agents/skills/forge-workflow-engine && npm run workflow-engine -- status` |
 | Replay failed task | `cd .agents/skills/forge-workflow-engine && npm run workflow-engine -- replay <task-id>` |
 | Dark run (via agent) | `@workspace @workflow-orchestrator Run the workflow using OpenCode.` |

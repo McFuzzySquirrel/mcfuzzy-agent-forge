@@ -16,6 +16,10 @@ export interface TaskRecord {
   outputFiles: string[];
   agentOutput?: string;
   errorMessage?: string;
+  /** ID of the artifact produced by this task, if any */
+  artifactId?: string;
+  /** IDs of artifacts consumed as input context for this task */
+  inputArtifactIds?: string[];
 }
 
 // ─── Workflow run state ───────────────────────────────────────────────────────
@@ -54,6 +58,13 @@ export interface HarnessAdapter {
     task: ManifestTask,
     context: WorkflowState,
     repoRoot: string,
+    /**
+     * Optional pre-rendered context projection markdown block.
+     * When provided by the engine, the adapter prepends this to the
+     * user prompt so the agent sees only the projected artifact summary
+     * rather than the full workflow state.
+     */
+    contextBlock?: string,
   ): Promise<TaskResult>;
 }
 
@@ -65,6 +76,8 @@ export interface EngineOptions {
   statePath: string;
   progressPath: string;
   auditPath: string;
+  /** Absolute path to docs/artifacts directory (artifact store root) */
+  artifactsPath: string;
   harness: HarnessAdapter;
   maxRetries: number;
   retryDelayMs: number;
@@ -88,7 +101,9 @@ export interface AuditEvent {
     | "task.skipped"
     | "phase.started"
     | "phase.complete"
-    | "state.saved";
+    | "state.saved"
+    | "artifact.created"
+    | "context.projected";
   runId?: string;
   taskId?: string;
   phaseId?: string;
@@ -96,4 +111,12 @@ export interface AuditEvent {
   outputFiles?: string[];
   durationMs?: number;
   note?: string;
+  /** Populated for artifact.created events */
+  artifactId?: string;
+  artifactType?: string;
+  inputArtifacts?: string[];
+  /** Populated for context.projected events */
+  sourceTokenEstimate?: number;
+  projectedTokenEstimate?: number;
+  reductionPercent?: number;
 }

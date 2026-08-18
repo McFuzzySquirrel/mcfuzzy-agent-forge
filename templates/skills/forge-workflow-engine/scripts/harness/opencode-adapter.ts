@@ -31,13 +31,14 @@ export class OpenCodeAdapter implements HarnessAdapter {
     task: ManifestTask,
     _context: WorkflowState,
     repoRoot: string,
+    contextBlock?: string,
   ): Promise<TaskResult> {
     const start = Date.now();
 
     const modelFlag = agent.model ? ["--model", agent.model] : [];
     const systemPromptFlag = existsSync(agent.path) ? ["--system-prompt", agent.path] : [];
 
-    const prompt = this.buildPrompt(agent, task);
+    const prompt = this.buildPrompt(agent, task, contextBlock);
     const args = [
       this.bin,
       "run",
@@ -81,7 +82,7 @@ export class OpenCodeAdapter implements HarnessAdapter {
     }
   }
 
-  private buildPrompt(agent: AgentDescriptor, task: ManifestTask): string {
+  private buildPrompt(agent: AgentDescriptor, task: ManifestTask, contextBlock?: string): string {
     const contextHints = task.expectedOutputs.length > 0
       ? `\n\nExpected output files: ${task.expectedOutputs.join(", ")}`
       : "";
@@ -91,12 +92,13 @@ export class OpenCodeAdapter implements HarnessAdapter {
       : "";
 
     return [
+      contextBlock ?? "",
       `Task: ${task.title}`,
       "",
       task.description,
       contextHints,
       validationHint,
-    ].join("\n").trim();
+    ].filter(Boolean).join("\n").trim();
   }
 }
 

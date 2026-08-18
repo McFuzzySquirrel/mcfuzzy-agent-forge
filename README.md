@@ -15,6 +15,8 @@
 
 ## Recent Updates
 
+- **August 2026 - v3.7:** Artifact Store and Context Projection in `forge-workflow-engine`. Compact typed JSON artifacts replace full-state context hand-off between agents, cutting per-task token consumption. Adds `docs/artifacts/` store, context projection layer, manifest `inputs`/`produces` fields, and audit events. See [docs/updates.md](docs/updates.md#august-2026---v37), [docs/adr/017-artifact-store-and-context-projection.md](docs/adr/017-artifact-store-and-context-projection.md), and [docs/artifact-store-deep-dive.md](docs/artifact-store-deep-dive.md).
+- **August 2026 - v3.6:** Workforce compiler + optional FlowForge kernel handoff. Added `forge-workforce-compiler` to emit `dist/*.workforce`, run FlowForge-compatible schema validation, and write `docs/KERNEL-BRIDGE.json`. Added optional `flowforge-kernel` harness mode in `forge-workflow-engine`, plus a deep-dive and testing coverage for the new path. See [docs/updates.md](docs/updates.md#august-2026---v36), [docs/adr/016-forge-workforce-compiler-and-kernel-handoff.md](docs/adr/016-forge-workforce-compiler-and-kernel-handoff.md), and [docs/workforce-compiler-deep-dive.md](docs/workforce-compiler-deep-dive.md).
 - **August 2026 - v3.5:** Dynamic Workflow Orchestration - `forge-workflow-engine` runtime layer and `workflow-orchestrator` agent for fully autonomous, harness-agnostic build execution. Added [`docs/testing-guide.md`](docs/testing-guide.md) with step-by-step manual verification for skill creation and workflow orchestration. See [docs/updates.md](docs/updates.md#august-2026---v35) and [docs/adr/014-dynamic-workflow-orchestration.md](docs/adr/014-dynamic-workflow-orchestration.md).
 - **August 2026 - v3.4:** Auto-build input auto-detection and launcher handoff alignment. See [docs/updates.md](docs/updates.md#august-2026---v34) and [docs/adr/013-auto-build-input-auto-detection.md](docs/adr/013-auto-build-input-auto-detection.md).
 - **August 2026 - v3.3:** Forge Execution Adapter for contract-driven external runners. See [docs/updates.md](docs/updates.md#august-2026---v33) and [docs/adr/011-forge-execution-adapter.md](docs/adr/011-forge-execution-adapter.md).
@@ -54,7 +56,8 @@ Both approaches use the same core toolkit:
 | `project-orchestrator` agent | Coordinates agents through implementation phases, phase by phase |
 | `forge-orchestrate-build` skill | Contains the detailed execution process used by `project-orchestrator` (analysis, phase execution, coordination, output formatting) |
 | `forge-execution-adapter` skill | Compiles a Forge repo into a contract-driven execution manifest and checkpoint bridge for external runners such as FlowForge-style backends |
-| `forge-workflow-engine` skill | Runtime layer that reads `docs/EXECUTION-MANIFEST.json`, drives a task DAG through a pluggable harness adapter, retries failures, and syncs `PROGRESS.md` and `WORKFLOW-STATE.json` after every transition |
+| `forge-workforce-compiler` skill | Compiles Forge outputs into a FlowForge-compatible `.workforce` package, validates package shape, and writes `docs/KERNEL-BRIDGE.json` task mapping metadata |
+| `forge-workflow-engine` skill | Runtime layer that reads `docs/EXECUTION-MANIFEST.json`, drives a task DAG through a pluggable harness adapter, retries failures, and syncs `PROGRESS.md` and `WORKFLOW-STATE.json` after every transition. Stores typed JSON artifacts in `docs/artifacts/` and projects a minimal context block per task to reduce agent token consumption |
 | `workflow-orchestrator` agent | Human-facing companion to `forge-workflow-engine`: pre-run verification, CLI invocation, blocker escalation, replay coordination, and post-run summaries |
 | `forge-launcher` scripts | Interactive CLI: create repo → select harness → bootstrap → capture idea → commit → launch auto-build in one terminal session |
 | Bootstrap scripts | Copy all templates into any target repository with one command |
@@ -151,7 +154,7 @@ git add .agents/
 git commit -m "chore: bootstrap Agent Forge templates"
 ```
 
-Open the project in your agent harness - agents and skills are auto-detected from `.agents/agents/` and `.agents/skills/`.
+Open the project in your agent harness - agents and skills are picked up from the harness-specific directory the bootstrap script targeted (e.g., `.github/agents/` for GitHub Copilot, `.claude/agents/` for Claude Code, `.opencode/agents/` for OpenCode, or `.agents/agents/` when using the generic default).
 
 ### 4. (Optional) Full auto build -idea to committed code in one command
 
@@ -186,7 +189,7 @@ The skill interviews you for requirements and saves a complete PRD to `docs/PRD.
 @workspace /forge-team-builder Analyze docs/PRD.md and generate the agent team
 ```
 
-Agent files (`.agent.md`) appear in `.agents/agents/`. Each specialist owns a clear domain with no overlaps.
+Agent files (`.agent.md`) appear in the harness agents directory (e.g., `.github/agents/`, `.claude/agents/`, or `.agents/agents/` for the generic default). Each specialist owns a clear domain with no overlaps.
 
 ### 7. Execute the build
 
@@ -204,16 +207,21 @@ Review the plan, then run one phase at a time:
 
 ### 8. (Optional) Compile a runner contract for an external backend
 
-If you want a FlowForge-style execution backend instead of relying only on harness prompts, compile the generated Forge repo into a neutral execution manifest:
+If you want a FlowForge-style execution backend instead of relying only on harness prompts, compile the generated Forge repo into a neutral execution manifest and `.workforce` package:
 
 ```bash
 cd .agents/skills/forge-execution-adapter
 npm install
 npm run forge-execution-adapter -- compile
 npm run forge-execution-adapter -- status
+
+cd ../forge-workforce-compiler
+npm install
+npm run forge-workforce-compiler -- compile
+npm run forge-workforce-compiler -- validate --package dist/dev-agent-forge-project.workforce
 ```
 
-This writes `docs/EXECUTION-MANIFEST.json`, keeps `docs/PROGRESS.md` synchronized, and appends `docs/EXECUTION-AUDIT.jsonl` for resume/audit use cases.
+This writes `docs/EXECUTION-MANIFEST.json`, `dist/*.workforce` package artifacts, `docs/KERNEL-BRIDGE.json`, keeps `docs/PROGRESS.md` synchronized, and appends `docs/EXECUTION-AUDIT.jsonl` for resume/audit use cases.
 
 > [!TIP]
 > See [docs/prompt-playbook.md](docs/prompt-playbook.md) for the full copy-paste prompt sequence, including feature additions, decomposition, and resume flows.
@@ -423,12 +431,15 @@ mcfuzzy-agent-forge/
 │       └── skill-review-updater/SKILL.md     # Keep skill-review rubric aligned with latest agentskills.io guidance
 │           └── references/                   # Quality baseline, rubric mapping, validation checks
 │       ├── forge-execution-adapter/SKILL.md  # Compile Forge repo into EXECUTION-MANIFEST.json; checkpoint bridge for external runners
+│       ├── forge-workforce-compiler/SKILL.md # Compile FlowForge-compatible .workforce package + validation + KERNEL-BRIDGE.json
 │       └── forge-workflow-engine/SKILL.md    # Runtime DAG engine: dispatch, retry, WORKFLOW-STATE.json, pluggable harness adapters
+│           └── scripts/artifacts.ts          # File-based artifact store + context projection layer (docs/artifacts/)
 ├── scripts/
 │   ├── bootstrap.sh                    # Bash bootstrap script
 │   └── bootstrap.ps1                   # PowerShell bootstrap script
 └── docs/
     ├── prompt-playbook.md              # Full copy-paste prompt sequence
+    ├── artifact-store-deep-dive.md     # Task → Agent → Artifact → Task pattern, schema, and projection mechanics
     └── running-with-local-models.md    # BYOK / Ollama setup guide
 ```
 
@@ -445,7 +456,7 @@ chmod +x scripts/bootstrap.sh
 
 **Agents not appearing in the harness**
 - Files must be committed (not just saved)
-- Verify paths match your harness: `.agents/agents/*.agent.md` (default), `.github/agents/*.agent.md` (GitHub Copilot), or `.claude/agents/*.agent.md` (Claude Code)
+- Verify paths match your harness: `.github/agents/*.agent.md` (GitHub Copilot), `.claude/agents/*.agent.md` (Claude Code), `.opencode/agents/*.agent.md` (OpenCode), or `.agents/agents/*.agent.md` (generic default)
 - Agent files end with `.agent.md` and use valid YAML frontmatter; `name:` must match the filename (without extension)
 - Skill directory name must match the skill `name` field
 
