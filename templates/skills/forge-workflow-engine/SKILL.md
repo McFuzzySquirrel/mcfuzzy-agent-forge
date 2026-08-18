@@ -313,3 +313,13 @@ Before reporting a run complete:
 - [ ] `docs/EXECUTION-AUDIT.jsonl` contains a `run.complete` event
 - [ ] No tasks have `status: "failed"` (if any do, the run status will be `"failed"`, not `"complete"`)
 - [ ] For each task with `produces`, a corresponding artifact file exists in `docs/artifacts/`
+
+---
+
+## References
+
+- Architecture decision: [ADR-017 — Artifact Store and Context Projection](../../../../docs/adr/017-artifact-store-and-context-projection.md)
+- Pattern deep-dive: [docs/artifact-store-deep-dive.md](../../../../docs/artifact-store-deep-dive.md)
+- Implementation: [`scripts/artifacts.ts`](scripts/artifacts.ts)
+- ADR-014: [Dynamic Workflow Orchestration](../../../../docs/adr/014-dynamic-workflow-orchestration.md)
+- ADR-016: [Forge Workforce Compiler and Kernel Handoff](../../../../docs/adr/016-forge-workforce-compiler-and-kernel-handoff.md)
