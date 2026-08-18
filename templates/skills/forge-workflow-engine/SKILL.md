@@ -21,10 +21,11 @@ This skill is the autonomous execution alternative to the prompt-driven flows. T
 Before running this skill, the following must exist in the repository:
 
 - `docs/EXECUTION-MANIFEST.json` - compiled by `forge-execution-adapter`
-- Agent `.agent.md` files under the harness agents directory:
-  - `.agents/agents/` (default harness)
+- Agent `.agent.md` files under the harness agents directory. Load `forge-bootstrap-project/references/detect-harness.md` to detect the active harness; the conventional paths are:
+  - `.github/agents/` (GitHub Copilot harness)
+  - `.claude/agents/` (Claude Code harness)
   - `.opencode/agents/` (OpenCode harness)
-  - `.github/agents/` or `.claude/agents/` (other harnesses)
+  - `.agents/agents/` (generic / default fallback)
 - A configured execution harness (OpenCode CLI in `$PATH`, or `OPENAI_API_KEY` set)
 
 If the manifest does not exist yet, run the adapter first:
@@ -229,6 +230,80 @@ cd .agents/skills/forge-workflow-engine   && npm install && npm run workflow-eng
 
 ---
 
+## Artifact Pattern
+
+The engine implements the **Task → Agent → Artifact → Task** pattern described in the Agent Forge research. Instead of passing the full workflow state or previous agent output to each agent, the engine:
+
+1. Resolves which artifact types the next task declares as `inputs`
+2. Loads only those artifacts from `docs/artifacts/`
+3. Projects a compact summary (the fields the agent actually needs)
+4. Prepends the projection block to the agent's prompt
+
+This is the primary mechanism for **context-window efficiency** — especially useful with small local models.
+
+### Declaring artifact contracts in the manifest
+
+Add `inputs` and `produces` to tasks in `docs/EXECUTION-MANIFEST.json`:
+
+```json
+{
+  "task_id": "implement-api",
+  "agent": "developer",
+  "inputs": ["solution.architecture"],
+  "produces": "implementation.result"
+}
+```
+
+- **`inputs`** — list of artifact type strings the engine will load and project before running this task
+- **`produces`** — the artifact type the engine expects the task to create; if the agent does not write one explicitly, the engine synthesises a minimal one from the task's outputs
+
+### Artifact storage layout
+
+```
+docs/artifacts/
+  architecture/
+    architecture-001.json
+  implementation/
+    implementation-001.json
+    implementation-002.json
+  review/
+    review-001.json
+```
+
+Each artifact is a small JSON document with a `summary` field, an optional `payload`, and metadata (`taskId`, `producedBy`, `inputs`, `filesChanged`, `nextActions`).
+
+### Audit events
+
+Two new events appear in `docs/EXECUTION-AUDIT.jsonl`:
+
+```jsonc
+// Emitted once per projected context (before task starts)
+{
+  "event": "context.projected",
+  "taskId": "review-api",
+  "sourceTokenEstimate": 12480,
+  "projectedTokenEstimate": 2180,
+  "reductionPercent": 82.5
+}
+
+// Emitted once per artifact created (after task completes)
+{
+  "event": "artifact.created",
+  "taskId": "implement-api",
+  "artifactId": "implementation-001",
+  "artifactType": "implementation.result",
+  "inputArtifacts": ["architecture-001"]
+}
+```
+
+The `reductionPercent` field is the quantitative proof-of-value: it records how much context was *not* sent to the agent.
+
+### Skipping the artifact pattern
+
+Tasks without `inputs` or `produces` are unaffected. The artifact layer is strictly additive — existing manifests continue to work unchanged.
+
+---
+
 ## Validation
 
 Before reporting a run complete:
@@ -238,3 +313,14 @@ Before reporting a run complete:
 - [ ] `docs/PROGRESS.md` reflects the completed state
 - [ ] `docs/EXECUTION-AUDIT.jsonl` contains a `run.complete` event
 - [ ] No tasks have `status: "failed"` (if any do, the run status will be `"failed"`, not `"complete"`)
+- [ ] For each task with `produces`, a corresponding artifact file exists in `docs/artifacts/`
+
+---
+
+## References
+
+- Architecture decision: [ADR-017 — Artifact Store and Context Projection](../../../../docs/adr/017-artifact-store-and-context-projection.md)
+- Pattern deep-dive: [docs/artifact-store-deep-dive.md](../../../../docs/artifact-store-deep-dive.md)
+- Implementation: [`scripts/artifacts.ts`](scripts/artifacts.ts)
+- ADR-014: [Dynamic Workflow Orchestration](../../../../docs/adr/014-dynamic-workflow-orchestration.md)
+- ADR-016: [Forge Workforce Compiler and Kernel Handoff](../../../../docs/adr/016-forge-workforce-compiler-and-kernel-handoff.md)

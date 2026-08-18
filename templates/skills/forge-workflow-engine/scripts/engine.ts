@@ -27,6 +27,8 @@ import {
   writeAuditEvent,
 } from "./state.ts";
 
+import { ArtifactStore } from "./artifacts.ts";
+
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
 function sleep(ms: number): Promise<void> {
@@ -111,6 +113,7 @@ async function executeTask(
   agents: AgentDescriptor[],
   state: WorkflowState,
   opts: EngineOptions,
+  store: ArtifactStore,
 ): Promise<WorkflowState> {
   const { task } = entry;
   const agent = findAgentForTask(agents, task.ownerAgent);
@@ -125,6 +128,44 @@ async function executeTask(
       note: `No agent matched owner '${task.ownerAgent ?? "unassigned"}'`,
     });
     return markTaskSkipped(state, task.id);
+  }
+
+  // ── Context projection ──────────────────────────────────────────────────────
+  // Resolve input artifacts declared in the task manifest and build a
+  // projection.  The harness receives only the projection, not raw artifacts.
+  const inputTypes = task.inputs ?? [];
+  let inputArtifactIds: string[] = [];
+  let contextBlock = "";
+
+  if (inputTypes.length > 0) {
+    const projection = store.project({ taskId: task.id, inputTypes });
+    inputArtifactIds = projection.artifacts.map((a) => a.artifactId);
+    contextBlock = store.renderProjection(projection);
+
+    if (projection.sourceTokenEstimate > 0) {
+      const reductionPercent = parseFloat(
+        (
+          (1 - projection.projectedTokenEstimate / projection.sourceTokenEstimate) *
+          100
+        ).toFixed(1),
+      );
+
+      writeAuditEvent(opts.auditPath, {
+        timestamp: new Date().toISOString(),
+        action: "context.projected",
+        runId: state.runId,
+        taskId: task.id,
+        sourceTokenEstimate: projection.sourceTokenEstimate,
+        projectedTokenEstimate: projection.projectedTokenEstimate,
+        reductionPercent,
+        note: `${inputArtifactIds.length} artifact(s) projected for task ${task.id}`,
+      });
+
+      console.log(
+        `[engine] Context projected for ${task.id}: ~${projection.projectedTokenEstimate} tokens ` +
+          `(${reductionPercent}% reduction from ~${projection.sourceTokenEstimate})`,
+      );
+    }
   }
 
   let currentState = markTaskStarted(state, task.id);
@@ -153,10 +194,44 @@ async function executeTask(
       await sleep(opts.retryDelayMs);
     }
 
-    const result = await opts.harness.invoke(agent, task, currentState, opts.repoRoot);
+    const result = await opts.harness.invoke(agent, task, currentState, opts.repoRoot, contextBlock);
 
     if (result.success) {
-      currentState = markTaskComplete(currentState, task.id, result.outputFiles, result.stdout);
+      // ── Artifact creation ─────────────────────────────────────────────────
+      let artifactId: string | undefined;
+
+      if (task.produces) {
+        const artifact = store.synthesise({
+          type: task.produces,
+          taskId: task.id,
+          producedBy: agent.name,
+          outputFiles: result.outputFiles,
+          agentOutput: result.stdout,
+          inputArtifactIds,
+        });
+        artifactId = artifact.artifactId;
+
+        writeAuditEvent(opts.auditPath, {
+          timestamp: new Date().toISOString(),
+          action: "artifact.created",
+          runId: currentState.runId,
+          taskId: task.id,
+          artifactId: artifact.artifactId,
+          artifactType: artifact.type,
+          inputArtifacts: inputArtifactIds,
+        });
+
+        console.log(`[engine] Artifact created: ${artifact.artifactId} (${artifact.type})`);
+      }
+
+      currentState = markTaskComplete(
+        currentState,
+        task.id,
+        result.outputFiles,
+        result.stdout,
+        artifactId,
+        inputArtifactIds.length > 0 ? inputArtifactIds : undefined,
+      );
       writeAuditEvent(opts.auditPath, {
         timestamp: new Date().toISOString(),
         action: "task.complete",
@@ -226,6 +301,7 @@ export async function runEngine(opts: EngineOptions): Promise<WorkflowState> {
     console.warn("[engine] Could not discover agent files; owner matching will be skipped.");
   }
 
+  const store = new ArtifactStore({ artifactsPath: opts.artifactsPath });
   let currentPhaseId: string | undefined;
 
   while (!isComplete(manifest, state) && !opts.pauseRequested) {
@@ -257,7 +333,7 @@ export async function runEngine(opts: EngineOptions): Promise<WorkflowState> {
         console.log(`[engine] === Phase ${currentPhaseId} ===`);
       }
 
-      state = await executeTask(entry, agents, state, opts);
+      state = await executeTask(entry, agents, state, opts, store);
       saveState(opts.statePath, state);
       syncProgressMd(opts.progressPath, state, manifest);
 
@@ -317,12 +393,13 @@ export async function replayTask(taskId: string, opts: EngineOptions): Promise<W
     console.warn("[engine] Could not discover agent files.");
   }
 
+  const store = new ArtifactStore({ artifactsPath: opts.artifactsPath });
   const phaseId = findPhaseForTask(manifest, taskId);
   const task = findTask(manifest, taskId);
   if (!task || !phaseId) throw new Error(`Task '${taskId}' not found in manifest.`);
 
   const entry = { phaseId, phaseIndex: manifest.phases.findIndex((p) => p.id === phaseId), task };
-  state = await executeTask(entry, agents, state, opts);
+  state = await executeTask(entry, agents, state, opts, store);
   if (!hasFailed(state) && isComplete(manifest, state)) {
     state = { ...state, status: "complete" };
   }

@@ -48,30 +48,31 @@ Use this skill when you want the entire pipeline to run hands-free after a singl
 
 When the user invokes this skill, perform the following before touching any files:
 
-1. **Resolve the effective input source.** Determine what idea or PRD to use with the following precedence:
+1. **Detect the harness.** Load `forge-bootstrap-project/references/detect-harness.md` and determine `HARNESS_AGENTS_DIR` and `HARNESS_SKILLS_DIR`. Report the detected path to the user in the pre-flight summary.
+2. **Resolve the effective input source.** Determine what idea or PRD to use with the following precedence:
    - If the user supplied an explicit argument (inline idea text or file path), use it as-is.
    - Otherwise, check repository files in this order: `docs/PRD.md`, `docs/IDEA.md`, `IDEA.md`.
    - If multiple candidate files exist and no explicit argument was supplied, present a short numbered choice and ask the user to pick one source for this run.
    - If no explicit argument and no candidate files exist, ask the user for a one-line idea or PRD path.
-2. **Echo the selected input.** Restate the selected idea or PRD path in one or two sentences so the user can see what this run will use.
+3. **Echo the selected input.** Restate the selected idea or PRD path in one or two sentences so the user can see what this run will use.
    - Do not add any extra confirmation gate here; continue to the normal pre-flight summary and `GO` checkpoint.
-3. **Check repo state** and flag anything that changes the flow:
+4. **Check repo state** and flag anything that changes the flow:
    - Does `docs/PRD.md` already exist? If yes, note that Stage 1 (PRD generation) will be skipped and the existing PRD will be used.
-   - Do `.agent.md` files already exist in `.agents/agents/` (beyond the forge templates)? If yes, note that Stage 2 (team generation) will run in **Feature Increment Mode**.
+   - Do `.agent.md` files already exist in `HARNESS_AGENTS_DIR` (beyond the forge templates)? If yes, note that Stage 2 (team generation) will run in **Feature Increment Mode**.
    - Does `docs/product-vision.md` with `docs/features/*.md` exist? If yes, note that Stage 2 will run in **Vision + Features Mode**.
-4. **Present the planned stages** as a numbered list:
+5. **Present the planned stages** as a numbered list:
    - Stage 1: `forge-build-prd` → produce `docs/PRD.md` *(skip if PRD already exists)*
    - Stage 2: `forge-build-agent-team` → produce agent and skill files
    - Stage 3 (optional): `forge-assign-models` → recommend or apply per-agent models *(opt-in -include if user passed `--assign-models`)*
    - Stage 4: Build execution *(choose one path)*:
      - Default: `forge-orchestrate-build` - execute all phases continuously, committing after each phase
      - With `--workflow-engine`: compile `docs/EXECUTION-MANIFEST.json` and execute the build through `forge-workflow-engine`
-5. **State the commit strategy** explicitly:
+6. **State the commit strategy** explicitly:
    - After Stage 2: `chore: bootstrap Agent Forge agent and skill templates`
    - After each build phase N: `feat: complete Phase N -<phase name>`
    - After all phases: `chore: auto-build complete -all phases delivered`
-6. **Present the pre-flight checklist** (see below).
-7. **Prompt**: *"Review the plan above. Type `GO` to start the full auto-build on the default prompt-driven path, `GO --assign-models` to also run model assignment, `GO --workflow-engine` to use the workflow-engine path instead of `forge-orchestrate-build`, or `stop` to exit."*
+7. **Present the pre-flight checklist** (see below).
+8. **Prompt**: *"Review the plan above. Type `GO` to start the full auto-build on the default prompt-driven path, `GO --assign-models` to also run model assignment, `GO --workflow-engine` to use the workflow-engine path instead of `forge-orchestrate-build`, or `stop` to exit."*
 
 **Input-resolution behavior examples:**
 
@@ -92,7 +93,7 @@ Pre-flight checklist -verify before typing GO:
 Input
 - [ ] The idea or PRD path is correct
 - [ ] The target project directory is open and git-initialised
-- [ ] Agent Forge templates are bootstrapped (.agents/agents/ and .agents/skills/ exist)
+- [ ] Agent Forge templates are bootstrapped (`HARNESS_AGENTS_DIR` and `HARNESS_SKILLS_DIR` exist)
 
 Scope
 - [ ] You understand that this skill will run autonomously until all phases are complete
@@ -125,11 +126,11 @@ When `forge-build-prd` finishes and `docs/PRD.md` is saved:
 Invoke the `forge-build-agent-team` skill against the approved PRD (or against `docs/product-vision.md` + `docs/features/*.md` if that layout exists). Let the skill detect its own mode (Full Build, Vision + Features, or Feature Increment).
 
 When it finishes:
-- Verify `.agent.md` files exist under `.agents/agents/`.
+- Verify `.agent.md` files exist under `HARNESS_AGENTS_DIR`.
 - Verify the forge template agents (`project-orchestrator`, `forge-team-builder`) are still present and untouched.
 - Commit the generated files:
   ```
-  git add .agents/agents/ .agents/skills/ docs/
+  git add {HARNESS_AGENTS_DIR}/ {HARNESS_SKILLS_DIR}/ docs/
   git commit -m "chore: bootstrap Agent Forge agent and skill templates"
   ```
 - Report: "Stage 2 complete -agent team committed. Moving to Stage 3."
@@ -146,7 +147,7 @@ When it finishes:
 - Verify `docs/MODEL-PLAN.md` exists and each agent file has a `model:` field.
 - Commit:
   ```
-  git add .agents/agents/ docs/MODEL-PLAN.md
+  git add {HARNESS_AGENTS_DIR}/ docs/MODEL-PLAN.md
   git commit -m "chore: apply per-agent model assignments"
   ```
 - Report: "Stage 3 complete -per-agent models applied. Moving to Stage 4."

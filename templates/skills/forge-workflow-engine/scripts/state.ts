@@ -76,6 +76,8 @@ export function markTaskComplete(
   taskId: string,
   outputFiles: string[],
   agentOutput: string,
+  artifactId?: string,
+  inputArtifactIds?: string[],
 ): WorkflowState {
   const task = state.tasks[taskId];
   if (!task) throw new Error(`Unknown task: ${taskId}`);
@@ -91,6 +93,8 @@ export function markTaskComplete(
         completedAt: new Date().toISOString(),
         outputFiles,
         agentOutput,
+        ...(artifactId !== undefined ? { artifactId } : {}),
+        ...(inputArtifactIds !== undefined ? { inputArtifactIds } : {}),
       },
     },
   };

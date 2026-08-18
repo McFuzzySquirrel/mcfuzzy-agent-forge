@@ -10,11 +10,7 @@ description: >
 
 # Skill: Assign Models to a Generated Agent Team
 
-You are assigning a per-agent LLM model to each agent in `.agents/agents/`. The goal is to
-match each agent's actual workload (reasoning depth, context size, tool-use, latency
-sensitivity, safety) to a model from the **inventory the user actually has access to** —
-including local Ollama models - instead of defaulting every agent to the strongest (and
-most expensive) cloud model.
+You are assigning a per-agent LLM model to each agent in `HARNESS_AGENTS_DIR`. Load `forge-bootstrap-project/references/detect-harness.md` to determine `HARNESS_AGENTS_DIR` for this repository before proceeding. The goal is to match each agent's actual workload (reasoning depth, context size, tool-use, latency sensitivity, safety) to a model from the **inventory the user actually has access to** — including local Ollama models - instead of defaulting every agent to the strongest (and most expensive) cloud model.
 
 This skill is **opt-in and post-hoc**. The `model:` field is optional; absence means "use
 the user's current default model".
@@ -38,7 +34,7 @@ Default to **Recommend** if no mode is specified.
 
 ### Step 0: Detect Mode and Preconditions
 
-1. Confirm `.agents/agents/` exists and contains agent files beyond the forge templates
+1. Confirm `HARNESS_AGENTS_DIR` exists and contains agent files beyond the forge templates
    (`project-orchestrator`, `forge-team-builder`). If not, stop and instruct the user to
    run `forge-build-agent-team` first.
 2. Determine mode from the user's prompt:
@@ -83,7 +79,7 @@ If in **Discover** mode, stop here and present a human-readable summary.
 
 ### Step 2: Read and Classify Each Agent's Workload
 
-For each file matching `.agents/agents/*.agent.md` (also fallback to `*.md` for backward compat with agents generated before the `.agent.md` convention):
+For each file matching `HARNESS_AGENTS_DIR/*.agent.md` (also fallback to `*.md` for backward compat with agents generated before the `.agent.md` convention):
 1. Parse YAML frontmatter (`name`, `description`, `model`, `modelFallback`).
 2. Read skills referenced in `## Collaboration` / `## Skills` sections - they often reveal the real workload.
 
@@ -164,7 +160,7 @@ Write with this structure:
 
 ### Step 5 (Apply mode only): Write `model:` into Agent Frontmatter
 
-For each `.agents/agents/*.agent.md` (with fallback to `*.md` for backward compat):
+For each `HARNESS_AGENTS_DIR/*.agent.md` (with fallback to `*.md` for backward compat):
 1. Parse YAML frontmatter.
 2. Add/update only `model:` and `modelFallback:`. Preserve all other keys and ordering.
 3. Do not modify the body. Do not reformat.
@@ -178,7 +174,7 @@ For each `.agents/agents/*.agent.md` (with fallback to `*.md` for backward compa
 ### Step 6 (Re-tune mode): Targeted Refresh After Team Changes
 
 1. Read prior `docs/MODEL-PLAN.md` and inventory.
-2. Diff `.agents/agents/*.agent.md` (or `*.md` for backward compat) against prior plan. New agents → score. Changed agents → re-score, update only if tier changes. Unchanged → leave alone.
+2. Diff `HARNESS_AGENTS_DIR/*.agent.md` (or `*.md` for backward compat) against prior plan. New agents → score. Changed agents → re-score, update only if tier changes. Unchanged → leave alone.
 3. Refresh inventory only if > 7 days old or user requests.
 4. Update `docs/MODEL-PLAN.md` and affected agent files only.
 
@@ -209,7 +205,7 @@ For each `.agents/agents/*.agent.md` (with fallback to `*.md` for backward compa
 
 - Inventory cache → `docs/research/model-inventory.json`
 - Plan document → `docs/MODEL-PLAN.md`
-- Per-agent assignment → `model:` and `modelFallback:` in `.agents/agents/*.agent.md` (Apply mode only)
+- Per-agent assignment → `model:` and `modelFallback:` in `HARNESS_AGENTS_DIR/*.agent.md` (Apply mode only)
 
 ---
 
