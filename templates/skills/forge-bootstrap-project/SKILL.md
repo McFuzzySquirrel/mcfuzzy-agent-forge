@@ -42,9 +42,9 @@ This skill chains:
   `forge-build-agent-team`, `forge-assign-models`) and let it own its full
   process - including any clarifying questions it normally asks.
 - **Preserve all existing outputs.** The artifacts produced (`docs/PRD.md`,
-  `.agents/agents/*.agent.md`, `.agents/skills/*/SKILL.md`, `docs/MODEL-PLAN.md`,
-  etc.) must be identical to what you would get by running the underlying
-  skills directly. This skill is glue, not a rewrite.
+  agent files under `HARNESS_AGENTS_DIR`, skills under `HARNESS_SKILLS_DIR`,
+  `docs/MODEL-PLAN.md`, etc.) must be identical to what you would get by
+  running the underlying skills directly. This skill is glue, not a rewrite.
 - **Stay inside the existing model.** You are one skill calling the procedures
   of other skills. Do not introduce new files, formats, or tools beyond what
   the underlying skills already produce.
@@ -52,7 +52,7 @@ This skill chains:
   current step (e.g., "Step 1 of 3: forge-build-prd") so the user knows where
   they are in the flow.
 - **Resumability.** If the user starts this skill in a repo that already has a
-  `docs/PRD.md` or existing `.agent.md` files in `.agents/agents/`, detect it and offer to
+  `docs/PRD.md` or existing `.agent.md` files in `HARNESS_AGENTS_DIR`, detect it and offer to
   resume from the appropriate step instead of overwriting.
 
 ---
@@ -67,9 +67,13 @@ The user invokes this skill with (typically) a one-liner idea, e.g.:
 
 Do the following before invoking any other skill:
 
-1. **Echo the idea back** in one or two sentences so the user can confirm you
+1. **Detect the harness.** Load `references/detect-harness.md` and run the
+   detection algorithm to determine `HARNESS_AGENTS_DIR` and
+   `HARNESS_SKILLS_DIR`. Use these variables for all subsequent steps.
+   Report the detected path to the user so they can confirm it is correct.
+2. **Echo the idea back** in one or two sentences so the user can confirm you
    understood it.
-2. **State the flow** explicitly:
+3. **State the flow** explicitly:
    - Step 1: `forge-build-prd` → produces `docs/PRD.md`
    - Pause 1: PRD review
    - Step 2: `forge-build-agent-team` → produces agent + skill files
@@ -78,16 +82,16 @@ Do the following before invoking any other skill:
 
    (These are Steps 1–3 of the bootstrap flow itself; this confirmation is
    Step 0 - the pre-flight before any underlying skill is invoked.)
-3. **Check repo state** and flag anything that affects the flow:
+4. **Check repo state** and flag anything that affects the flow:
    - Does `docs/PRD.md` already exist? If yes, ask whether to keep, replace,
      or extend it before running Step 1.
-   - Do `.agent.md` files already exist in `.agents/agents/` (beyond the forge
+   - Do `.agent.md` files already exist in `HARNESS_AGENTS_DIR` (beyond the forge
      templates `project-orchestrator` and `forge-team-builder`)? If yes,
      warn that Step 2 will run in **Feature Increment Mode** rather than
      Full Build, and confirm whether the user wants that.
    - Does `docs/product-vision.md` with `docs/features/*.md` exist? If yes,
      Step 2 will run in **Vision + Features Mode**; confirm with the user.
-4. **Wait for confirmation.** Do not proceed to Step 1 until the user says to
+5. **Wait for confirmation.** Do not proceed to Step 1 until the user says to
    start.
 
 ---
@@ -166,8 +170,8 @@ if that layout exists). Let that skill detect its own mode (Full Build,
 Vision + Features, or Feature Increment) - do not override its mode
 detection.
 
-When it finishes and `.agent.md` files have been written under `.agents/agents/`
-(and any skills under `.agents/skills/`), transition to **Pause 2**.
+When it finishes and `.agent.md` files have been written under `HARNESS_AGENTS_DIR`
+(and any skills under `HARNESS_SKILLS_DIR`), transition to **Pause 2**.
 
 ---
 
@@ -271,14 +275,14 @@ next step (typically: commit the changes, then invoke
   than starting over.
 - **No new file formats.** Do not introduce a new state file, manifest, or
   config to track progress between pauses. The artifacts on disk
-  (`docs/PRD.md`, `.agents/agents/*.agent.md`, `docs/MODEL-PLAN.md`) are the
+  (`docs/PRD.md`, agent files under `HARNESS_AGENTS_DIR`, `docs/MODEL-PLAN.md`) are the
   state.
 
 ---
 
 ## Gotchas
 
-- **Idempotent re-entry edge case.** If `docs/PRD.md` exists but `.agents/agents/` has no `.agent.md` files, resume from Step 2 (team building). If both exist, assume the flow completed and summarize what was produced - don't re-run.
-- **Feature Increment mode on re-entry.** If `.agents/agents/` already has `.agent.md` files and the user says "bootstrap my project," Step 0's repo check must warn that Step 2 will run in Feature Increment Mode, not Full Build. Confirm with the user or they'll get unexpected behavior.
+- **Idempotent re-entry edge case.** If `docs/PRD.md` exists but `HARNESS_AGENTS_DIR` has no `.agent.md` files, resume from Step 2 (team building). If both exist, assume the flow completed and summarize what was produced - don't re-run.
+- **Feature Increment mode on re-entry.** If `HARNESS_AGENTS_DIR` already has `.agent.md` files and the user says "bootstrap my project," Step 0's repo check must warn that Step 2 will run in Feature Increment Mode, not Full Build. Confirm with the user or they'll get unexpected behavior.
 - **Model assignment is opt-in only.** Never auto-run `forge-assign-models`. It requires the user's model inventory to exist and writing to agent YAML without explicit Apply confirmation is a violation of that skill's safety constraint.
 - **Don't re-implement the underlying skills.** This is the most common failure mode - duplicating the PRD interview or team design logic instead of invoking the skills. If you find yourself asking clarifying questions that `forge-build-prd` would ask, stop and invoke it instead.

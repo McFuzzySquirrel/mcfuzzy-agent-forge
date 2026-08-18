@@ -27,7 +27,7 @@ All procedural detail -analysis steps, phase execution, coordination, output for
 
 ## Key Reference
 
-Always consult the project's PRD, Product Vision, or Feature PRD for requirements, phases, dependencies, and acceptance criteria. Review all agent files in `.agents/agents/*.agent.md` to understand each specialist's expertise, collaboration needs, and ownership boundaries.
+Always consult the project's PRD, Product Vision, or Feature PRD for requirements, phases, dependencies, and acceptance criteria. Review all agent files in the harness agents directory (`.github/agents/`, `.claude/agents/`, `.opencode/agents/`, or `.agents/agents/` — whichever exists in this repository) to understand each specialist's expertise, collaboration needs, and ownership boundaries.
 
 ---
 
