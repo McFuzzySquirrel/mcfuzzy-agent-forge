@@ -66,6 +66,8 @@ Convert the forge outputs into a structured manifest containing:
 - validation commands
 - approval gates
 - compile warnings for anything ambiguous
+- **`inputs`** — artifact types consumed as context by the task (optional, used by forge-workflow-engine for context projection)
+- **`produces`** — artifact type the task must create on completion (optional)
 
 The manifest is a **contract**, not a prompt. Preserve uncertainty as warnings instead of inventing certainty.
 
@@ -83,6 +85,24 @@ The checkpoint flow should make "resume from last checkpoint" possible even when
 ### Step 4: Hand Off to the Runner
 
 Once the manifest exists and progress is synchronized, hand the structured contract to the execution backend. For MVP mode, keep execution sequential and phase-ordered. Do not attempt speculative parallelism unless the backend explicitly guarantees dependency-safe execution.
+
+---
+
+## Artifact Directory Convention
+
+When `forge-workflow-engine` runs a build against the compiled manifest, it stores task output artifacts in:
+
+```
+docs/artifacts/
+  architecture/     ← decision artifacts (solution.architecture)
+  implementation/   ← work artifacts (implementation.result)
+  testing/          ← evidence artifacts (test.result)
+  review/           ← work artifacts (code.review)
+```
+
+Each file is a compact JSON document — not the full agent output, but a structured summary with a `payload` field containing details for downstream agents that need them. Downstream agents receive only the projected summary, which is the source of token savings.
+
+The adapter does not create this directory — it is created on demand by the workflow engine. However, if the adapter detects that `inputs`/`produces` fields are absent from manifest tasks, it should emit a warning encouraging the user to annotate the manifest for optimal context projection.
 
 ---
 

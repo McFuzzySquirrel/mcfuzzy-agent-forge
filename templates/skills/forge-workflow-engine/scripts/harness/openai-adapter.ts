@@ -31,11 +31,12 @@ export class OpenAIAdapter implements HarnessAdapter {
     task: ManifestTask,
     _context: WorkflowState,
     _repoRoot: string,
+    contextBlock?: string,
   ): Promise<TaskResult> {
     const start = Date.now();
     const model = agent.model ?? this.defaultModel;
     const systemPrompt = this.buildSystemPrompt(agent);
-    const userPrompt = this.buildUserPrompt(task);
+    const userPrompt = this.buildUserPrompt(task, contextBlock);
 
     try {
       const response = await fetch(`${this.baseUrl}/chat/completions`, {
@@ -98,12 +99,14 @@ export class OpenAIAdapter implements HarnessAdapter {
     ].join("\n").trim();
   }
 
-  private buildUserPrompt(task: ManifestTask): string {
-    const lines = [
-      `## Task: ${task.title}`,
-      "",
-      task.description,
-    ];
+  private buildUserPrompt(task: ManifestTask, contextBlock?: string): string {
+    const lines: string[] = [];
+
+    if (contextBlock) {
+      lines.push(contextBlock, "");
+    }
+
+    lines.push(`## Task: ${task.title}`, "", task.description);
 
     if (task.expectedOutputs.length > 0) {
       lines.push("", `**Expected outputs:** ${task.expectedOutputs.join(", ")}`);

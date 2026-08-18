@@ -90,6 +90,7 @@ function buildOptions(args: string[], harnessName?: string): EngineOptions {
     statePath: statePath(repoRoot),
     progressPath: join(repoRoot, "docs", "PROGRESS.md"),
     auditPath: auditPath(repoRoot),
+    artifactsPath: join(repoRoot, "docs", "artifacts"),
     harness: resolveHarness(harnessName ?? flag(args, "--harness")),
     maxRetries: Number(flag(args, "--max-retries") ?? "2"),
     retryDelayMs: Number(flag(args, "--retry-delay-ms") ?? "5000"),
