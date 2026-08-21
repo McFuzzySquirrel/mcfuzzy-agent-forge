@@ -133,11 +133,11 @@ export function discoverForgeRepo(start = process.cwd()): ForgeRepo {
     warnings.push("Detected docs/features/. This adapter currently compiles only the monolithic PRD flow.");
   }
 
-  const agents = walk(agentRoot, (entry) => entry.endsWith(".agent.md")).map((path) => parseAgent(path, repoRoot));
+  const agents = walk(agentRoot, (entry) => entry.endsWith(".md") && !entry.endsWith("SKILL.md")).map((path) => parseAgent(path, repoRoot));
   const skills = walk(skillRoot, (entry) => entry === "SKILL.md").map((path) => parseSkill(path, repoRoot));
 
   if (agents.length === 0) {
-    warnings.push(`No .agent.md files found under ${agentRoot}.`);
+    warnings.push(`No .md agent files found under ${agentRoot}.`);
   }
   if (skills.length === 0) {
     warnings.push(`No SKILL.md files found under ${skillRoot}.`);

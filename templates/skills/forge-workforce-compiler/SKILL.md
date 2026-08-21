@@ -15,7 +15,7 @@ Use this skill after `forge-execution-adapter` has produced `docs/EXECUTION-MANI
 ## Prerequisites
 
 - `docs/EXECUTION-MANIFEST.json` exists
-- Generated `.agent.md` files exist under the active harness root
+- Generated `.md` agent files exist under the active harness root
 - Generated `SKILL.md` files exist under the active harness root
 
 ---

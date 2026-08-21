@@ -14,7 +14,7 @@ function fixtureRoot() {
   mkdirSync(join(root, ".agents", "skills", "build-api"), { recursive: true });
   mkdirSync(join(root, "docs"), { recursive: true });
 
-  writeFileSync(join(root, ".agents", "agents", "api-engineer.agent.md"), `---\nname: api-engineer\ndescription: Builds APIs\nmodel: gpt-5-mini\n---\n\n# API Engineer\n`, "utf8");
+  writeFileSync(join(root, ".agents", "agents", "api-engineer.md"), `---\nname: api-engineer\ndescription: Builds APIs\nmodel: gpt-5-mini\n---\n\n# API Engineer\n`, "utf8");
   writeFileSync(join(root, ".agents", "skills", "build-api", "SKILL.md"), `---\nname: build-api\ndescription: Build backend APIs\n---\n\n# Skill\n`, "utf8");
 
   writeFileSync(join(root, "docs", "EXECUTION-MANIFEST.json"), `${JSON.stringify({

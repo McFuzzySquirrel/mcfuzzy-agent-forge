@@ -189,7 +189,7 @@ The skill interviews you for requirements and saves a complete PRD to `docs/PRD.
 @workspace /forge-team-builder Analyze docs/PRD.md and generate the agent team
 ```
 
-Agent files (`.agent.md`) appear in the harness agents directory (e.g., `.github/agents/`, `.claude/agents/`, or `.agents/agents/` for the generic default). Each specialist owns a clear domain with no overlaps.
+Agent files (`.md`) appear in the harness agents directory (e.g., `.github/agents/`, `.claude/agents/`, or `.agents/agents/` for the generic default). Each specialist owns a clear domain with no overlaps.
 
 ### 7. Execute the build
 
@@ -456,8 +456,8 @@ chmod +x scripts/bootstrap.sh
 
 **Agents not appearing in the harness**
 - Files must be committed (not just saved)
-- Verify paths match your harness: `.github/agents/*.agent.md` (GitHub Copilot), `.claude/agents/*.agent.md` (Claude Code), `.opencode/agents/*.agent.md` (OpenCode), or `.agents/agents/*.agent.md` (generic default)
-- Agent files end with `.agent.md` and use valid YAML frontmatter; `name:` must match the filename (without extension)
+- Verify paths match your harness: `.github/agents/*.md` (GitHub Copilot), `.claude/agents/*.md` (Claude Code), `.opencode/agents/*.md` (OpenCode), or `.agents/agents/*.md` (generic default)
+- Agent files end with `.md` and use valid YAML frontmatter; `name:` must match the filename (without extension)
 - Skill directory name must match the skill `name` field
 
 **Team builder creates too many or too few agents**
