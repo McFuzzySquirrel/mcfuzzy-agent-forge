@@ -9,7 +9,7 @@ description: >
 
 # Skill: Build a Custom Agent Team from a PRD
 
-You are building a team of custom agents and reusable skills from a PRD, Product Vision with Feature documents, or a Feature PRD. The goal is to produce specialist `.agent.md` files committed to a repository so the agent harness can act as each team member.
+You are building a team of custom agents and reusable skills from a PRD, Product Vision with Feature documents, or a Feature PRD. The goal is to produce specialist `.md` agent files committed to a repository so the agent harness can act as each team member.
 
 ---
 
@@ -21,9 +21,9 @@ Load `references/detect-harness.md` (from `forge-bootstrap-project`) to determin
 
 | Mode | Signals | Action |
 |------|---------|--------|
-| **Full Build** | Complete PRD with Overview, Technical Architecture, Implementation Phases. No `.agent.md` files in `HARNESS_AGENTS_DIR` beyond forge templates. | Continue with Steps 1–8 below. |
-| **Vision + Features** | `docs/product-vision.md` exists with feature documents in `docs/features/`. No `.agent.md` files beyond forge templates. | Load `references/vision-features-mode.md` and follow its process. |
-| **Feature Increment** | Document is a Feature PRD (has "Feature Overview", "Agent Impact Assessment"). Existing `.agent.md` files in `HARNESS_AGENTS_DIR`. | Load `references/feature-increment-mode.md` and follow its process. |
+| **Full Build** | Complete PRD with Overview, Technical Architecture, Implementation Phases. No `.md` agent files in `HARNESS_AGENTS_DIR` beyond forge templates. | Continue with Steps 1–8 below. |
+| **Vision + Features** | `docs/product-vision.md` exists with feature documents in `docs/features/`. No `.md` agent files beyond forge templates. | Load `references/vision-features-mode.md` and follow its process. |
+| **Feature Increment** | Document is a Feature PRD (has "Feature Overview", "Agent Impact Assessment"). Existing `.md` agent files in `HARNESS_AGENTS_DIR`. | Load `references/feature-increment-mode.md` and follow its process. |
 
 ### Step 1: Locate and Analyze the PRD
 
@@ -78,7 +78,7 @@ Skills are reusable process templates. Create a skill only when a pattern repeat
 
 ### Step 5: Write the Agent Files
 
-Create each agent file at `HARNESS_AGENTS_DIR/{agent-name}.agent.md`:
+Create each agent file at `HARNESS_AGENTS_DIR/{agent-name}.md`:
 
 ````markdown
 ---
@@ -258,7 +258,7 @@ Before finalizing:
 - [ ] Every PRD functional requirement maps to exactly one agent
 - [ ] Every agent has `## Collaboration` listing agents it depends on
 - [ ] No two agents own the same file or responsibility
-- [ ] Agent files end with `.agent.md` and use valid YAML frontmatter with `name` and `description`; `name:` matches filename (without extension)
+- [ ] Agent files end with `.md` and use valid YAML frontmatter with `name` and `description`; `name:` matches filename (without extension)
 - [ ] Skill directory names match the skill `name` field; valid YAML frontmatter
 - [ ] All PRD section references are accurate
 - [ ] Agent names are lowercase-hyphenated
@@ -295,7 +295,7 @@ After Feature Increment Mode runs, suggest Re-tune mode for targeted refresh.
 
 ## Gotchas
 
-- **Agent `name:` must match the filename (without extension).** `my-agent.agent.md` → `name: my-agent`. A mismatch silently breaks agent detection.
+- **Agent `name:` must match the filename (without extension).** `my-agent.md` → `name: my-agent`. A mismatch silently breaks agent detection.
 - **Never generate agents for areas the PRD doesn't cover.** If in doubt, ask the user rather than speculating.
 - **Code block templates must escape nested fenced blocks.** If a generated skill's output template contains markdown code blocks, use ` ``` `` ` syntax or indent differently to avoid breaking the parent template.
 - **Feature Increment Mode must never regenerate untouched agents.** It's the most common source of regressions. Always diff before writing.

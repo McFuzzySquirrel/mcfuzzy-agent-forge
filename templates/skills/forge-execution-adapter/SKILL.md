@@ -11,7 +11,7 @@ This skill does **not** replace Agent Forge. It starts **after** the forge has a
 
 - `docs/PRD.md`
 - `docs/PROGRESS.md` (optional on first run)
-- `.agents/agents/*.agent.md` (or the harness-specific equivalent — see `forge-bootstrap-project/references/detect-harness.md`)
+- `.agents/agents/*.md` (or the harness-specific equivalent — see `forge-bootstrap-project/references/detect-harness.md`)
 - `.agents/skills/*/SKILL.md` (or harness-specific equivalent)
 
 ## Embedded Tooling (Portable Install)

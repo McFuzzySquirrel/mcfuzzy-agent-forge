@@ -8,7 +8,7 @@
     repository so agent harnesses can use them.
 
     What it copies:
-      templates/agents/*.md            -> TARGET/<root>/agents/*.agent.md
+      templates/agents/*.md            -> TARGET/<root>/agents/*.md
       templates/skills/<skill>/*       -> TARGET/<root>/skills/<skill>/** (recursive)
       docs/prompt-playbook.md          -> TARGET/docs/prompt-playbook.md
 
@@ -147,7 +147,7 @@ Write-Host "Agents ($agentsDest):"
 $agentsSource = Join-Path $TemplatesDir "agents"
 if (Test-Path $agentsSource) {
     Get-ChildItem -Path $agentsSource -Filter "*.md" -File | ForEach-Object {
-        $dest = Join-Path $agentsDest "$($_.BaseName).agent.md"
+        $dest = Join-Path $agentsDest "$($_.Name)"
         Copy-File -Src $_.FullName -Dest $dest
     }
 }
@@ -174,7 +174,7 @@ if (Test-Path $playbookSrc -PathType Leaf) {
 
 # --- Apply harness path rewrite to copied agent files ---
 if ($Harness -ne "agents") {
-    Get-ChildItem -Path $agentsDest -Filter "*.agent.md" | ForEach-Object {
+    Get-ChildItem -Path $agentsDest -Filter "*.md" | ForEach-Object {
         $content = Get-Content -Path $_.FullName -Raw
         $content = $content -replace '\.agents/', "$RootDir/"
         Set-Content -Path $_.FullName -Value $content -NoNewline
@@ -183,4 +183,4 @@ if ($Harness -ne "agents") {
 
 Write-Host ""
 Write-Host "Bootstrap complete."
-Write-Host "Commit $RootDir\agents\ (.agent.md), $RootDir\skills\, and docs\ to your repository."
+Write-Host "Commit $RootDir\agents\ (.md), $RootDir\skills\, and docs\ to your repository."

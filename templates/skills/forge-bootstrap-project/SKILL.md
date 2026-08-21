@@ -52,7 +52,7 @@ This skill chains:
   current step (e.g., "Step 1 of 3: forge-build-prd") so the user knows where
   they are in the flow.
 - **Resumability.** If the user starts this skill in a repo that already has a
-  `docs/PRD.md` or existing `.agent.md` files in `HARNESS_AGENTS_DIR`, detect it and offer to
+  `docs/PRD.md` or existing `.md` agent files in `HARNESS_AGENTS_DIR`, detect it and offer to
   resume from the appropriate step instead of overwriting.
 
 ---
@@ -85,7 +85,7 @@ Do the following before invoking any other skill:
 4. **Check repo state** and flag anything that affects the flow:
    - Does `docs/PRD.md` already exist? If yes, ask whether to keep, replace,
      or extend it before running Step 1.
-   - Do `.agent.md` files already exist in `HARNESS_AGENTS_DIR` (beyond the forge
+   - Do `.md` agent files already exist in `HARNESS_AGENTS_DIR` (beyond the forge
      templates `project-orchestrator` and `forge-team-builder`)? If yes,
      warn that Step 2 will run in **Feature Increment Mode** rather than
      Full Build, and confirm whether the user wants that.
@@ -170,7 +170,7 @@ if that layout exists). Let that skill detect its own mode (Full Build,
 Vision + Features, or Feature Increment) - do not override its mode
 detection.
 
-When it finishes and `.agent.md` files have been written under `HARNESS_AGENTS_DIR`
+When it finishes and `.md` agent files have been written under `HARNESS_AGENTS_DIR`
 (and any skills under `HARNESS_SKILLS_DIR`), transition to **Pause 2**.
 
 ---
@@ -282,7 +282,7 @@ next step (typically: commit the changes, then invoke
 
 ## Gotchas
 
-- **Idempotent re-entry edge case.** If `docs/PRD.md` exists but `HARNESS_AGENTS_DIR` has no `.agent.md` files, resume from Step 2 (team building). If both exist, assume the flow completed and summarize what was produced - don't re-run.
-- **Feature Increment mode on re-entry.** If `HARNESS_AGENTS_DIR` already has `.agent.md` files and the user says "bootstrap my project," Step 0's repo check must warn that Step 2 will run in Feature Increment Mode, not Full Build. Confirm with the user or they'll get unexpected behavior.
+- **Idempotent re-entry edge case.** If `docs/PRD.md` exists but `HARNESS_AGENTS_DIR` has no `.md` agent files, resume from Step 2 (team building). If both exist, assume the flow completed and summarize what was produced - don't re-run.
+- **Feature Increment mode on re-entry.** If `HARNESS_AGENTS_DIR` already has `.md` agent files and the user says "bootstrap my project," Step 0's repo check must warn that Step 2 will run in Feature Increment Mode, not Full Build. Confirm with the user or they'll get unexpected behavior.
 - **Model assignment is opt-in only.** Never auto-run `forge-assign-models`. It requires the user's model inventory to exist and writing to agent YAML without explicit Apply confirmation is a violation of that skill's safety constraint.
 - **Don't re-implement the underlying skills.** This is the most common failure mode - duplicating the PRD interview or team design logic instead of invoking the skills. If you find yourself asking clarifying questions that `forge-build-prd` would ask, stop and invoke it instead.

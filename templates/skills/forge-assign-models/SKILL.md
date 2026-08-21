@@ -79,7 +79,7 @@ If in **Discover** mode, stop here and present a human-readable summary.
 
 ### Step 2: Read and Classify Each Agent's Workload
 
-For each file matching `HARNESS_AGENTS_DIR/*.agent.md` (also fallback to `*.md` for backward compat with agents generated before the `.agent.md` convention):
+For each file matching `HARNESS_AGENTS_DIR/*.md`:
 1. Parse YAML frontmatter (`name`, `description`, `model`, `modelFallback`).
 2. Read skills referenced in `## Collaboration` / `## Skills` sections - they often reveal the real workload.
 
@@ -160,7 +160,7 @@ Write with this structure:
 
 ### Step 5 (Apply mode only): Write `model:` into Agent Frontmatter
 
-For each `HARNESS_AGENTS_DIR/*.agent.md` (with fallback to `*.md` for backward compat):
+For each `HARNESS_AGENTS_DIR/*.md`:
 1. Parse YAML frontmatter.
 2. Add/update only `model:` and `modelFallback:`. Preserve all other keys and ordering.
 3. Do not modify the body. Do not reformat.
@@ -174,7 +174,7 @@ For each `HARNESS_AGENTS_DIR/*.agent.md` (with fallback to `*.md` for backward c
 ### Step 6 (Re-tune mode): Targeted Refresh After Team Changes
 
 1. Read prior `docs/MODEL-PLAN.md` and inventory.
-2. Diff `HARNESS_AGENTS_DIR/*.agent.md` (or `*.md` for backward compat) against prior plan. New agents → score. Changed agents → re-score, update only if tier changes. Unchanged → leave alone.
+2. Diff `HARNESS_AGENTS_DIR/*.md` against prior plan. New agents → score. Changed agents → re-score, update only if tier changes. Unchanged → leave alone.
 3. Refresh inventory only if > 7 days old or user requests.
 4. Update `docs/MODEL-PLAN.md` and affected agent files only.
 
@@ -205,7 +205,7 @@ For each `HARNESS_AGENTS_DIR/*.agent.md` (with fallback to `*.md` for backward c
 
 - Inventory cache → `docs/research/model-inventory.json`
 - Plan document → `docs/MODEL-PLAN.md`
-- Per-agent assignment → `model:` and `modelFallback:` in `HARNESS_AGENTS_DIR/*.agent.md` (Apply mode only)
+- Per-agent assignment → `model:` and `modelFallback:` in `HARNESS_AGENTS_DIR/*.md` (Apply mode only)
 
 ---
 

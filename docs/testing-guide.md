@@ -132,7 +132,7 @@ git add -A && git commit -m "restore skill-creator"
 After a successful run:
 
 ```bash
-ls .agents/agents/   # *.agent.md files
+ls .agents/agents/   # *.md agent files
 ls .agents/skills/   # skill directories, each with SKILL.md
 ```
 
@@ -897,7 +897,7 @@ npm run workflow-engine -- run --harness stub
 
 | File | Purpose |
 |---|---|
-| `.agents/agents/*.agent.md` | Generated specialist agents |
+| `.agents/agents/*.md` | Generated specialist agents |
 | `.agents/skills/*/SKILL.md` | Generated and forge skills |
 | `docs/PRD.md` | Input requirements document |
 | `docs/EXECUTION-MANIFEST.json` | Compiled task graph for the engine |

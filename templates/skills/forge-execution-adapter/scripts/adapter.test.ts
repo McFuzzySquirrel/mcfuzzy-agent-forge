@@ -14,7 +14,7 @@ function createFixture(harness = ".agents") {
   mkdirSync(join(root, harness, "skills", "api-contracts", "references"), { recursive: true });
   mkdirSync(join(root, "docs"), { recursive: true });
 
-  writeFileSync(join(root, harness, "agents", "api-engineer.agent.md"), `---
+  writeFileSync(join(root, harness, "agents", "api-engineer.md"), `---
 name: api-engineer
 description: Builds API endpoints and backend integrations.
 model: gpt-5-mini
@@ -27,7 +27,7 @@ model: gpt-5-mini
 ## Collaboration
 - frontend-engineer
 `, "utf8");
-  writeFileSync(join(root, harness, "agents", "frontend-engineer.agent.md"), `---
+  writeFileSync(join(root, harness, "agents", "frontend-engineer.md"), `---
 name: frontend-engineer
 description: Builds UI flows and client-side components.
 ---

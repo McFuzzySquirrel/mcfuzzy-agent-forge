@@ -10,7 +10,7 @@
 #   --force      Overwrite existing files without prompting
 #
 # What it does:
-#   Copies templates/agents/*.md       → TARGET_DIR/<root>/agents/*.agent.md
+#   Copies templates/agents/*.md       → TARGET_DIR/<root>/agents/*.md
 #   Copies templates/skills/<skill>/*   → TARGET_DIR/<root>/skills/<skill>/** (recursively)
 #   Copies docs/prompt-playbook.md     → TARGET_DIR/docs/prompt-playbook.md
 #   Adapts internal path references when a non-default harness is selected.
@@ -126,7 +126,7 @@ DOCS_TARGET="$TARGET_DIR/docs"
 echo "Agents ($AGENTS_DIR):"
 for agent in "$TEMPLATES_DIR/agents/"*.md; do
   [[ -f "$agent" ]] || continue
-  dest="$AGENTS_DIR/$(basename "$agent" .md).agent.md"
+  dest="$AGENTS_DIR/$(basename "$agent")"
   copy_file "$agent" "$dest"
 done
 
@@ -148,9 +148,9 @@ fi
 
 # --- Apply harness path rewrite to copied agent files ---
 if [[ "$HARNESS" != "agents" ]]; then
-  find "$AGENTS_DIR" -name '*.agent.md' -exec sed -i "s|\.agents/|${ROOT}/|g" {} +
+  find "$AGENTS_DIR" -name '*.md' -exec sed -i "s|\.agents/|${ROOT}/|g" {} +
 fi
 
 echo ""
 echo "Bootstrap complete."
-echo "Commit $ROOT/agents/ (.agent.md), $ROOT/skills/, and docs/ to your repository."
+echo "Commit $ROOT/agents/ (.md), $ROOT/skills/, and docs/ to your repository."

@@ -58,7 +58,7 @@ When the user invokes this skill, perform the following before touching any file
    - Do not add any extra confirmation gate here; continue to the normal pre-flight summary and `GO` checkpoint.
 4. **Check repo state** and flag anything that changes the flow:
    - Does `docs/PRD.md` already exist? If yes, note that Stage 1 (PRD generation) will be skipped and the existing PRD will be used.
-   - Do `.agent.md` files already exist in `HARNESS_AGENTS_DIR` (beyond the forge templates)? If yes, note that Stage 2 (team generation) will run in **Feature Increment Mode**.
+   - Do `.md` agent files already exist in `HARNESS_AGENTS_DIR` (beyond the forge templates)? If yes, note that Stage 2 (team generation) will run in **Feature Increment Mode**.
    - Does `docs/product-vision.md` with `docs/features/*.md` exist? If yes, note that Stage 2 will run in **Vision + Features Mode**.
 5. **Present the planned stages** as a numbered list:
    - Stage 1: `forge-build-prd` → produce `docs/PRD.md` *(skip if PRD already exists)*
@@ -126,7 +126,7 @@ When `forge-build-prd` finishes and `docs/PRD.md` is saved:
 Invoke the `forge-build-agent-team` skill against the approved PRD (or against `docs/product-vision.md` + `docs/features/*.md` if that layout exists). Let the skill detect its own mode (Full Build, Vision + Features, or Feature Increment).
 
 When it finishes:
-- Verify `.agent.md` files exist under `HARNESS_AGENTS_DIR`.
+- Verify `.md` agent files exist under `HARNESS_AGENTS_DIR`.
 - Verify the forge template agents (`project-orchestrator`, `forge-team-builder`) are still present and untouched.
 - Commit the generated files:
   ```

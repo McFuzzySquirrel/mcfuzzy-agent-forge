@@ -21,7 +21,7 @@ This skill is the autonomous execution alternative to the prompt-driven flows. T
 Before running this skill, the following must exist in the repository:
 
 - `docs/EXECUTION-MANIFEST.json` - compiled by `forge-execution-adapter`
-- Agent `.agent.md` files under the harness agents directory. Load `forge-bootstrap-project/references/detect-harness.md` to detect the active harness; the conventional paths are:
+- Agent `.md` files under the harness agents directory. Load `forge-bootstrap-project/references/detect-harness.md` to detect the active harness; the conventional paths are:
   - `.github/agents/` (GitHub Copilot harness)
   - `.claude/agents/` (Claude Code harness)
   - `.opencode/agents/` (OpenCode harness)
@@ -176,7 +176,7 @@ The engine builds a live task graph from `EXECUTION-MANIFEST.json`:
 1. Phases execute in dependency order (Phase 2 only starts after all Phase 1 tasks are complete).
 2. Within a phase, tasks with resolved dependencies run first.
 3. Tasks with no unresolved dependencies within a ready phase run immediately (sequential for safety in MVP mode).
-4. A task whose `ownerAgent` cannot be matched to a discovered `.agent.md` file is **skipped** with a warning rather than failing the run.
+4. A task whose `ownerAgent` cannot be matched to a discovered `.md` agent file is **skipped** with a warning rather than failing the run.
 
 ---
 

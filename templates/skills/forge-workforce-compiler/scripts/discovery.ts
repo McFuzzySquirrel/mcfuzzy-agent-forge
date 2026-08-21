@@ -106,10 +106,10 @@ export function discoverForgeRepo(start = process.cwd()): ForgeRepo {
   }
 
   const warnings = [...harness.warnings];
-  const agents = walk(agentRoot, (name) => name.endsWith(".agent.md")).map(parseAgent);
+  const agents = walk(agentRoot, (name) => name.endsWith(".md") && name !== "SKILL.md").map(parseAgent);
   const skills = walk(skillRoot, (name) => name === "SKILL.md").map(parseSkill);
 
-  if (agents.length === 0) warnings.push(`No .agent.md files found under ${agentRoot}`);
+  if (agents.length === 0) warnings.push(`No .md agent files found under ${agentRoot}`);
   if (skills.length === 0) warnings.push(`No SKILL.md files found under ${skillRoot}`);
 
   return {
