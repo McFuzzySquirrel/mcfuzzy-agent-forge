@@ -180,7 +180,7 @@ Each adapter translates a `(agent, task)` pair into a real execution call:
 Shells out to the `opencode` CLI:
 
 ```
-opencode run --model <agent.model> --system-prompt <agent.path> "<task title + description>"
+opencode run --agent <agent.name> --model <agent.model> --system-prompt <agent.path> "<task title + description>"
 ```
 
 The agent's `.agent.md` file becomes the system prompt. The task's title and description become the user prompt. Outputs are verified by checking whether the `expectedOutputs` files exist on disk after the call.

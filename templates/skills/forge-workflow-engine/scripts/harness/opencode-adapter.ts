@@ -6,11 +6,11 @@ import type { AgentDescriptor, HarnessAdapter, ManifestTask, TaskResult, Workflo
 /**
  * OpenCode CLI harness adapter.
  *
- * Invokes `opencode run` with the agent's system prompt and the task prompt,
+ * Invokes `opencode run` with the agent name, system prompt, and task prompt,
  * captures stdout/stderr, and returns a structured TaskResult.
  *
  * Expected CLI shape:
- *   opencode run [--model <model-id>] [--system-prompt <path-or-text>] "<prompt>"
+ *   opencode run [--agent <name>] [--model <model-id>] [--system-prompt <path-or-text>] "<prompt>"
  *
  * Set OPENCODE_BIN env var to override the opencode binary path.
  * Set OPENCODE_EXTRA_FLAGS env var to inject extra flags (e.g. "--no-stream").
@@ -35,6 +35,7 @@ export class OpenCodeAdapter implements HarnessAdapter {
   ): Promise<TaskResult> {
     const start = Date.now();
 
+    const agentFlag = agent.name ? ["--agent", agent.name] : [];
     const modelFlag = agent.model ? ["--model", agent.model] : [];
     const systemPromptFlag = existsSync(agent.path) ? ["--system-prompt", agent.path] : [];
 
@@ -42,6 +43,7 @@ export class OpenCodeAdapter implements HarnessAdapter {
     const args = [
       this.bin,
       "run",
+      ...agentFlag,
       ...modelFlag,
       ...systemPromptFlag,
       ...this.extraFlags,
