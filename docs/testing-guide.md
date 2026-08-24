@@ -1,6 +1,6 @@
 # McFuzzy Agent Forge – Manual Testing Guide
 
-This guide walks you through a concrete end-to-end scenario you can run by hand to verify that the forge pipeline works as expected.  It covers six capabilities in sequence:
+This guide walks you through a concrete end-to-end scenario you can run by hand to verify that the forge pipeline works as expected.  It covers eight capabilities in sequence:
 
 1. **Skill creation from the team builder** – confirming `forge-build-agent-team` invokes `skill-creator` and enforces the `skill-review` quality gate.
 2. **Workflow engine (dark orchestration)** – verifying that `forge-workflow-engine` can execute a compiled manifest autonomously.
@@ -9,6 +9,7 @@ This guide walks you through a concrete end-to-end scenario you can run by hand 
 5. **Workforce compiler + kernel handoff path** – compiling a `.workforce` package, validating it, and running the workflow engine with `--harness flowforge-kernel`.
 6. **Artifact store and context projection** – verifying that the engine writes typed JSON artifacts to `docs/artifacts/`, projects a minimal context block per task, and emits the expected audit events.
 7. **Headless / terminal-driven execution** – driving skills via `opencode run --auto` / `copilot -p --yolo` and the launcher's `--headless` mode, with no interactive CLI.
+8. **Launcher auto-draft smoke test (reusable test idea)** – a copy-paste project idea that exercises the auto-draft flow, automatic decomposition, vision + features → team, and the engine hand-off.
 
 ---
 
@@ -19,6 +20,7 @@ Agent Forge has several deliberately different paths. Which one you exercise in 
 | Situation | Path | What it produces | Verified in |
 |---|---|---|---|
 | Idea → reviewed PRD, guided | `forge-auto-build-prd` | `docs/PRD.md` (+ `docs/product-vision.md` + `docs/features/*.md` when the PRD qualifies) | Part 3 |
+| Idea → PRD → team, auto-drafted (review boundaries) | launcher `--draft` / `FORGE_AUTO_DRAFT=1` | PRD (+ decomposed layout) then agent team, committed per stage | Part 8 |
 | Manual PRD authoring | `forge-build-prd` | `docs/PRD.md` | Parts 1, 2 |
 | Automatic decomposition of a qualifying PRD | `forge-build-prd` Step 5 (auto-invokes `forge-decompose-prd`) | `docs/product-vision.md` + `docs/features/*.md` | see note in Part 1 |
 | Manual decomposition of any PRD | `forge-decompose-prd` | decomposed layout | — |
@@ -1117,6 +1119,111 @@ export FORGE_YN_DEFAULT="n"
 | auto-build engine path starts the engine detached (nohup + log) and polls state | ✅ |
 | Launcher `--headless` runs the queued skill end-to-end from the terminal | ✅ |
 | Launcher auto-draft (`--draft` / `FORGE_AUTO_DRAFT=1`) dry-run prints the PRD, team, and engine commands with review boundaries | ✅ |
+
+---
+
+## Part 8 – Launcher Auto-Draft Smoke Test (Reusable Test Idea)
+
+This part is a fast, reusable way to exercise the launcher's **auto-draft** flow
+(`--draft` / `FORGE_AUTO_DRAFT=1`), the automatic-decomposition path, and the
+workflow-engine hand-off - without hand-writing a PRD. Use it whenever you want
+to sanity-check the launcher on a fresh machine or after a launcher change.
+
+### The test idea (copy-paste)
+
+Paste this into the launcher's Step 5 idea prompt (or set it as `FORGE_IDEA` in
+non-interactive runs):
+
+> A Node.js command-line expense tracker. Users add expenses with an amount,
+> category, date, and optional tags; set monthly budgets per category; view
+> monthly summaries with budget alerts; filter and search expenses; and
+> import/export CSV. Data is stored in a local JSON file with no external
+> services. Implementation phases: (1) data layer and core add/list commands,
+> (2) budgets, summaries, and filtering, (3) CSV import/export and polish.
+
+**Why this idea?** A pure CLI + JSON tool builds quickly (no framework, database,
+or UI), and its three implementation phases / 15+ functional requirements make
+it **qualify for automatic decomposition** - so you also verify the
+vision + features → team path.
+
+### Expected outcome
+
+- `docs/PRD.md` (auto-drafted, Open Questions recorded).
+- `docs/product-vision.md` + `docs/features/*.md` (auto-decomposed because the
+  PRD qualifies).
+- Agent team under the harness directory, built **from the features**
+  (Vision + Features mode), committed as `feat: generate auto-drafted agent team`.
+- The workflow-engine run command printed
+  (`forge-engine-run.sh --repo <repo> --harness <h> --yes`).
+
+### Test Steps
+
+**Step 1 – Dry-run first (no tokens, no harness)**
+
+```bash
+./scripts/forge-launcher.sh --draft --dry-run
+```
+
+**Check ✓** Step 8 asks the two auto-draft questions, prints the headless
+`forge-auto-build-prd` and `forge-build-agent-team` commands, and (after the team
+stage) the `forge-engine-run.sh --repo … --yes` command - without executing any.
+
+**Step 2 – Real auto-draft run**
+
+```bash
+./scripts/forge-launcher.sh --draft
+```
+
+Answer: harness `4` (generic `.agents`), a repo name, decline a PRD file
+(`3`), decline research docs, then accept both auto-draft prompts and choose
+**2) Print the engine command to run later**.
+
+**Check ✓** Step 6 shows no PRD added; Step 8 generates the PRD, commits
+`docs: add auto-drafted PRD`, generates the team, commits
+`feat: generate auto-drafted agent team`, and prints the engine command.
+
+**Step 3 – Review the artifacts before building**
+
+**Check ✓** `docs/PRD.md`, `docs/product-vision.md`, and at least one
+`docs/features/*.md` exist. The generated agents under `.agents/agents/` reflect
+the feature requirements (Vision + Features mode).
+
+**Step 4 – Run the engine (stub first, then a real harness)**
+
+```bash
+# Validate mechanics without spending tokens:
+./scripts/forge-engine-run.sh --repo "$(ls -d ./expense-tracker)" --harness stub --yes
+
+# Real build through the harness CLI:
+./scripts/forge-engine-run.sh --repo ./expense-tracker --harness opencode --yes
+```
+
+**Check ✓** The stub run reaches `complete` with no failing tasks; the opencode
+run builds the project. Then verify the CLI works:
+
+```bash
+node src/index.js add --amount 12.50 --category food
+node src/index.js summary
+```
+
+### Part 8 Pass/Fail Summary
+
+| Check | Expected |
+|---|---|
+| `--draft --dry-run` prints the PRD, team, and engine commands | ✅ |
+| Auto-drafted PRD qualifies for decomposition (vision + features produced) | ✅ |
+| Team generated from the features (Vision + Features mode) | ✅ |
+| Engine command printed for a later run | ✅ |
+| Stub harness run reaches `complete` (mechanics validated) | ✅ |
+| Real harness run builds a working CLI (`add` / `summary` work) | ✅ |
+
+### Smaller alternatives (monolithic, even faster)
+
+Use these when you want to exercise the `docs/PRD.md` team path instead of the
+decomposed one - both stay monolithic (2 implementation phases):
+
+- **cli-notes** – *"A Node.js CLI markdown note manager: create, backlink, tag, and search notes stored as .md files in a local notes/ directory. Phases: (1) core create/list/search commands, (2) backlinks and tagging."*
+- **cli-todo** – *"A Node.js CLI task manager: projects, priorities, due dates, and filters stored in a local JSON file. Phases: (1) add/list/complete commands, (2) filtering and priorities."*
 
 ---
 

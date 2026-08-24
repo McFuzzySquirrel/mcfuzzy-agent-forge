@@ -180,6 +180,10 @@ set `FORGE_AUTO_DRAFT=1` in non-interactive runs. The workflow-engine run later:
 > Auto-draft drives the harness CLI directly, so it needs `opencode` (or
 > `copilot` via `FORGE_RUN_WITH=copilot`). It commits each generated artifact so
 > your repo stays reviewable at every boundary.
+>
+> Want a quick way to try it? The [testing guide Part 8](testing-guide.md#part-8--launcher-auto-draft-smoke-test-reusable-test-idea)
+> ships a copy-paste test idea (a small expense-tracker CLI) that exercises the
+> whole auto-draft → decompose → team → engine flow.
 
 ---
 
