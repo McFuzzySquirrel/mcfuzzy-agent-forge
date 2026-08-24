@@ -981,6 +981,36 @@ Set `FORGE_RUN_WITH=copilot`:
 
 ---
 
+**Step 1b – Launcher auto-draft dry-run prints the PRD/team/engine commands**
+
+The optional auto-draft flow (`--draft` interactively, `FORGE_AUTO_DRAFT=1`
+non-interactively) prints the PRD and/or agent-team commands at their review
+boundaries. With no PRD captured:
+
+```bash
+export FORGE_HARNESS_CHOICE="4"
+export FORGE_REPO_NAME="forge-autodraft-ci"
+export FORGE_REPO_PARENT_DIR="/tmp"
+export FORGE_IDEA="A task manager with email notifications. Node.js, Express, PostgreSQL."
+export FORGE_YN_DEFAULT="n"
+export FORGE_AUTO_DRAFT="1"
+./scripts/forge-launcher.sh --non-interactive --dry-run
+```
+
+**Check ✓** The output includes `Auto-drafting the PRD from docs/IDEA.md
+(headless) …` and the headless `forge-auto-build-prd` command, and does **not**
+attempt a team draft (no PRD exists yet).
+
+Repeat with a PRD captured (`FORGE_PRD_FILE=/path/to/prd.md`):
+
+**Check ✓** The output skips the PRD draft and instead includes `Auto-drafting
+the agent team from the PRD (headless) …` with the headless
+`forge-build-agent-team` command (using `docs/PRD.md`, or the decomposed
+`docs/product-vision.md` + `docs/features/*.md` when that layout exists), followed
+by the `forge-engine-run.sh --repo … --yes` command for the workflow-engine run.
+
+---
+
 **Step 2 – Invoke a skill headlessly via `opencode run`**
 
 From the bootstrapped repository (or the one created in Step 1), run the skill non-interactively:
@@ -1086,6 +1116,7 @@ export FORGE_YN_DEFAULT="n"
 | `forge-engine-run.sh` dry-run prints commands; real stub run reaches `complete` | ✅ |
 | auto-build engine path starts the engine detached (nohup + log) and polls state | ✅ |
 | Launcher `--headless` runs the queued skill end-to-end from the terminal | ✅ |
+| Launcher auto-draft (`--draft` / `FORGE_AUTO_DRAFT=1`) dry-run prints the PRD, team, and engine commands with review boundaries | ✅ |
 
 ---
 

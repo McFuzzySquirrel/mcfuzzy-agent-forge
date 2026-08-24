@@ -4,6 +4,48 @@ Detailed release and change notes for McFuzzy Agent Forge.
 
 ---
 
+## August 2026 - v3.10
+
+### Forge launcher: auto-draft flow and friendlier path input
+
+The launcher's interactive and headless paths get three quality-of-life upgrades
+for getting from an idea to a reviewable PRD/team to an engine run.
+
+- **Path prompts support Tab completion and shell shorthand.** Parent-directory,
+  PRD, and research/seed path prompts now use bash readline (`read -e`) on Bash
+  and PSReadLine (`PSConsoleReadLine::ReadLine`) on PowerShell for **Tab
+  completion** to existing files/folders. Typed paths also expand `~`, `~/`,
+  `~user`, and `$VAR` / `${VAR}` (e.g. `$HOME/docs/prd.md`) before validation -
+  so external PRD/seed locations work without typing full absolute paths.
+  Validation now normalises paths (`realpath -m`) and reports *"file not found"*
+  vs. *"not a regular file"* distinctly.
+- **Optional auto-draft flow.** At Step 8, the launcher can run the authoring
+  stages non-interactively with **review boundaries**:
+  - **Idea → PRD:** runs `forge-auto-build-prd` headless (auto-proceed, every
+    unknown recorded as an Open Question), commits `docs: add auto-drafted PRD`,
+    then points you at the result (monolithic or decomposed) for review.
+  - **PRD → team:** runs `forge-build-agent-team` headless, commits
+    `feat: generate auto-drafted agent team`, then points you at the generated
+    agents/skills for review. When a decomposed layout exists, the team is built
+    from `docs/product-vision.md` + `docs/features/*.md` (Vision + Features
+    mode); otherwise from `docs/PRD.md`.
+  - **Engine decision:** after the team, choose to run the workflow engine now
+    (detached via `forge-engine-run.sh --repo <repo> --harness <h> --yes`), print
+    the command to run later, or skip and build manually.
+  - Exposed as interactive prompts, pre-answered with `--draft` (`-Draft` on
+    PowerShell), or forced headlessly with `FORGE_AUTO_DRAFT=1`.
+- **Generalised headless runner.** The queued-skill headless path and the
+  auto-draft stages share `headless_cmd_for` / `run_skill_headless` (Bash) and
+  `Get-HeadlessCommandFor` / `Invoke-SkillHeadless` (PowerShell), so `--headless`,
+  `--draft`, and `FORGE_AUTO_DRAFT=1` all print the same `opencode run --auto` /
+  `copilot -p --yolo` command shape under `--dry-run`.
+
+Related architecture decision:
+
+- [ADR-020](adr/020-launcher-auto-draft-and-path-input.md): auto-draft review-boundary flow and path-input handling.
+
+---
+
 ## August 2026 - v3.9
 
 ### Authoring/execution split, detached engine, and GitHub Copilot harness

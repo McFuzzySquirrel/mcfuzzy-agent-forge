@@ -443,6 +443,7 @@ Only modify skills I've approved in the audit report.
 | **Full auto build (workflow-engine path)** | `@workspace /forge-auto-build docs/PRD.md GO --workflow-engine` |
 | **Headless build via workflow engine** | `opencode run --auto "/forge-auto-build Use docs/PRD.md as the project PRD. GO --workflow-engine"` |
 | **Launcher headless (whole pipeline)** | `./scripts/forge-launcher.sh --headless` (add `--dry-run` to print the command) |
+| **Launcher auto-draft (idea → PRD → team)** | `./scripts/forge-launcher.sh --draft` (non-interactive: set `FORGE_AUTO_DRAFT=1`) |
 | Bootstrap (Bash, default) | `./scripts/bootstrap.sh ~/Projects/my-project` |
 | Bootstrap (Bash, GitHub) | `./scripts/bootstrap.sh ~/Projects/my-project --harness github` |
 | Bootstrap (Bash, Claude) | `./scripts/bootstrap.sh ~/Projects/my-project --harness claude` |

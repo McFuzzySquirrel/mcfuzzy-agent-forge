@@ -77,6 +77,86 @@ assert_contains "$LAUNCHER" 'opencode run --auto' \
 assert_contains "$LAUNCHER" 'copilot -p' \
   'forge-launcher.sh headless mode uses copilot -p --yolo'
 
+# Path prompts (parent dir, PRD, research/seed docs) must support Tab completion
+# so users can autocomplete to existing locations (readline on bash,
+# PSReadLine on PowerShell).
+assert_contains "$LAUNCHER" 'prompt_path()' \
+  'forge-launcher.sh defines a prompt_path helper for Tab-completed path input'
+assert_contains "$LAUNCHER" 'read -e -r -p' \
+  'forge-launcher.sh path prompts use read -e for readline Tab completion'
+assert_contains "$LAUNCHER" 'prompt_path prd_src' \
+  'forge-launcher.sh PRD path prompt uses prompt_path'
+assert_contains "$LAUNCHER" 'prompt_path parent_dir' \
+  'forge-launcher.sh parent directory prompt uses prompt_path'
+
+assert_file "$ROOT_DIR/scripts/forge-launcher.ps1" "forge-launcher.ps1 exists"
+assert_contains "$ROOT_DIR/scripts/forge-launcher.ps1" 'function Read-PromptTab' \
+  'forge-launcher.ps1 defines a Read-PromptTab helper for Tab-completed path input'
+assert_contains "$ROOT_DIR/scripts/forge-launcher.ps1" 'PSConsoleReadLine' \
+  'forge-launcher.ps1 path prompts use PSReadLine for Tab completion'
+assert_contains "$ROOT_DIR/scripts/forge-launcher.ps1" 'Read-PromptTab "Path to your PRD file"' \
+  'forge-launcher.ps1 PRD path prompt uses Read-PromptTab'
+assert_contains "$ROOT_DIR/scripts/forge-launcher.ps1" 'Read-PromptTab "Parent directory' \
+  'forge-launcher.ps1 parent directory prompt uses Read-PromptTab'
+
+# User-typed paths (~, $VAR) must be expanded so external PRD/seed locations
+# are found instead of failing with "file not found".
+assert_contains "$LAUNCHER" 'expand_path()' \
+  'forge-launcher.sh defines expand_path for ~/$VAR path expansion'
+assert_contains "$LAUNCHER" 'resolve_input_file()' \
+  'forge-launcher.sh defines resolve_input_file for validating typed paths'
+assert_contains "$LAUNCHER" 'resolve_input_file "$prd_src"' \
+  'forge-launcher.sh PRD path prompt expands ~/$VAR before validating'
+assert_contains "$LAUNCHER" 'resolve_input_file "$_f"' \
+  'forge-launcher.sh research paths expand ~/$VAR before validating'
+assert_contains "$ROOT_DIR/scripts/forge-launcher.ps1" 'function Expand-Path' \
+  'forge-launcher.ps1 defines Expand-Path for ~/$VAR path expansion'
+assert_contains "$ROOT_DIR/scripts/forge-launcher.ps1" 'function Resolve-InputFile' \
+  'forge-launcher.ps1 defines Resolve-InputFile for validating typed paths'
+assert_contains "$ROOT_DIR/scripts/forge-launcher.ps1" 'Resolve-InputFile $prdSrc' \
+  'forge-launcher.ps1 PRD path prompt expands ~/$VAR before validating'
+assert_contains "$ROOT_DIR/scripts/forge-launcher.ps1" 'Resolve-InputFile $resPath' \
+  'forge-launcher.ps1 research paths expand ~/$VAR before validating'
+
+# Optional auto-draft flow: generate the PRD and/or agent team non-interactively
+# (review boundaries), then decide how to run the workflow engine.
+assert_contains "$LAUNCHER" '--draft)' \
+  'forge-launcher.sh accepts the --draft flag'
+assert_contains "$LAUNCHER" 'FORGE_AUTO_DRAFT' \
+  'forge-launcher.sh honours FORGE_AUTO_DRAFT in non-interactive mode'
+assert_contains "$LAUNCHER" 'auto_draft_prd()' \
+  'forge-launcher.sh defines auto_draft_prd (idea -> PRD)'
+assert_contains "$LAUNCHER" 'auto_draft_team()' \
+  'forge-launcher.sh defines auto_draft_team (PRD -> agent team)'
+assert_contains "$LAUNCHER" 'engine_decision()' \
+  'forge-launcher.sh defines engine_decision (run engine now/later)'
+assert_contains "$LAUNCHER" 'run_skill_headless()' \
+  'forge-launcher.sh defines a reusable run_skill_headless'
+assert_contains "$LAUNCHER" 'forge-engine-run.sh' \
+  'forge-launcher.sh references forge-engine-run.sh for the engine run'
+assert_contains "$LAUNCHER" 'prd_source_for_team()' \
+  'forge-launcher.sh prefers the decomposed vision+features for the team auto-draft'
+assert_contains "$LAUNCHER" 'auto_draft_menu' \
+  'forge-launcher.sh wires the auto-draft menu into Step 8'
+assert_contains "$ROOT_DIR/scripts/forge-launcher.ps1" '\[switch]\$Draft' \
+  'forge-launcher.ps1 accepts the -Draft switch'
+assert_contains "$ROOT_DIR/scripts/forge-launcher.ps1" 'FORGE_AUTO_DRAFT' \
+  'forge-launcher.ps1 honours FORGE_AUTO_DRAFT in non-interactive mode'
+assert_contains "$ROOT_DIR/scripts/forge-launcher.ps1" 'function Invoke-AutoDraftPrd' \
+  'forge-launcher.ps1 defines Invoke-AutoDraftPrd (idea -> PRD)'
+assert_contains "$ROOT_DIR/scripts/forge-launcher.ps1" 'function Invoke-AutoDraftTeam' \
+  'forge-launcher.ps1 defines Invoke-AutoDraftTeam (PRD -> agent team)'
+assert_contains "$ROOT_DIR/scripts/forge-launcher.ps1" 'Invoke-EngineDecision' \
+  'forge-launcher.ps1 defines Invoke-EngineDecision (run engine now/later)'
+assert_contains "$ROOT_DIR/scripts/forge-launcher.ps1" 'function Invoke-SkillHeadless' \
+  'forge-launcher.ps1 defines a reusable Invoke-SkillHeadless'
+assert_contains "$ROOT_DIR/scripts/forge-launcher.ps1" 'forge-engine-run.ps1' \
+  'forge-launcher.ps1 references forge-engine-run.ps1 for the engine run'
+assert_contains "$ROOT_DIR/scripts/forge-launcher.ps1" 'Get-AutoDraftPrdSource' \
+  'forge-launcher.ps1 prefers the decomposed vision+features for the team auto-draft'
+assert_contains "$ROOT_DIR/scripts/forge-launcher.ps1" 'Invoke-AutoDraftMenu' \
+  'forge-launcher.ps1 wires the auto-draft menu into Step 8'
+
 # ---------------------------------------------------------------------------
 # Test: non-interactive run for each harness
 # ---------------------------------------------------------------------------
@@ -244,6 +324,167 @@ else
   else
     pass "agents harness (with PRD): does not queue forge-auto-build-prd when a PRD exists"
   fi
+fi
+
+rm -rf "$REPO_PARENT" 2>/dev/null || true
+
+# --- generic agents harness with ~/$VAR-expanded PRD and research paths ---
+echo ""
+echo "--- generic agents harness with tilde/\$VAR PRD and research paths ---"
+
+REPO_PARENT="$(mktemp -d)"
+REPO_NAME="test-tilde-paths-$$"
+TILDE_PRD="$HOME/forge-tilde-prd-$$.md"
+TILDE_RESEARCH="$HOME/forge-tilde-research-$$.md"
+printf '# PRD\n\n## Functional Requirements\n\n- FR-01 Tilde\n\n## Implementation Phases\n\n1. Foundation\n' > "$TILDE_PRD"
+printf '# Research\n\n- external seed doc\n' > "$TILDE_RESEARCH"
+
+export FORGE_IDEA="Test project for tilde and var path expansion"
+export FORGE_YN_DEFAULT="n"
+export FORGE_HARNESS_CHOICE="4"
+export FORGE_REPO_NAME="$REPO_NAME"
+export FORGE_REPO_DESCRIPTION=""
+export FORGE_REPO_VISIBILITY="private"
+export FORGE_REPO_PARENT_DIR="$REPO_PARENT"
+export FORGE_PRD_FILE="~/forge-tilde-prd-$$.md"
+export FORGE_RESEARCH_FILES="\$HOME/forge-tilde-research-$$.md"
+
+EXIT_CODE=0
+bash "$LAUNCHER" --non-interactive \
+  >/tmp/forge-launcher-test-tilde.txt 2>&1 || EXIT_CODE=$?
+unset FORGE_HARNESS_CHOICE FORGE_REPO_NAME FORGE_REPO_DESCRIPTION FORGE_REPO_VISIBILITY FORGE_REPO_PARENT_DIR FORGE_PRD_FILE FORGE_RESEARCH_FILES
+rm -f "$TILDE_PRD" "$TILDE_RESEARCH"
+
+if [[ $EXIT_CODE -ne 0 ]]; then
+  fail "tilde paths: launcher exited with code $EXIT_CODE"
+  cat /tmp/forge-launcher-test-tilde.txt >&2 || true
+else
+  REPO_DIR="$REPO_PARENT/$REPO_NAME"
+  pass "tilde paths: launcher completed successfully"
+  assert_file "$REPO_DIR/docs/PRD.md" "tilde paths: docs/PRD.md copied from a ~/... path"
+  assert_file "$REPO_DIR/docs/research/forge-tilde-research-$$.md" "tilde paths: research doc copied from a \$HOME/... path"
+  if grep -q "FORGE_PRD_FILE is set but file not found" /tmp/forge-launcher-test-tilde.txt; then
+    fail "tilde paths: ~/ PRD path must be expanded, not reported missing"
+  else
+    pass "tilde paths: ~/ PRD path was expanded (no file-not-found warning)"
+  fi
+  if grep -q "FORGE_RESEARCH_FILES: file not found" /tmp/forge-launcher-test-tilde.txt; then
+    fail "tilde paths: \$HOME/ research path must be expanded, not reported missing"
+  else
+    pass "tilde paths: \$HOME/ research path was expanded (no file-not-found warning)"
+  fi
+fi
+
+rm -rf "$REPO_PARENT" 2>/dev/null || true
+
+# --- auto-draft PRD generation (idea -> PRD, no PRD yet, dry-run) ---
+echo ""
+echo "--- auto-draft PRD generation (no PRD, dry-run) ---"
+
+REPO_PARENT="$(mktemp -d)"
+REPO_NAME="test-autodraft-noprd-$$"
+
+export FORGE_IDEA="Auto-draft test idea"
+export FORGE_YN_DEFAULT="n"
+export FORGE_HARNESS_CHOICE="4"
+export FORGE_REPO_NAME="$REPO_NAME"
+export FORGE_REPO_DESCRIPTION=""
+export FORGE_REPO_VISIBILITY="private"
+export FORGE_REPO_PARENT_DIR="$REPO_PARENT"
+export FORGE_AUTO_DRAFT="1"
+
+EXIT_CODE=0
+bash "$LAUNCHER" --non-interactive --dry-run \
+  >/tmp/forge-launcher-test-autodraft-noprd.txt 2>&1 || EXIT_CODE=$?
+unset FORGE_HARNESS_CHOICE FORGE_REPO_NAME FORGE_REPO_DESCRIPTION FORGE_REPO_VISIBILITY FORGE_REPO_PARENT_DIR FORGE_AUTO_DRAFT
+
+if [[ $EXIT_CODE -ne 0 ]]; then
+  fail "auto-draft (no PRD): launcher exited with code $EXIT_CODE"
+  cat /tmp/forge-launcher-test-autodraft-noprd.txt >&2 || true
+else
+  pass "auto-draft (no PRD): launcher completed successfully"
+  assert_contains "/tmp/forge-launcher-test-autodraft-noprd.txt" 'Auto-drafting the PRD from docs/IDEA.md (headless)' \
+    "auto-draft (no PRD): runs the PRD auto-draft stage"
+  assert_contains "/tmp/forge-launcher-test-autodraft-noprd.txt" 'opencode run --auto "/forge-auto-build-prd Use docs/IDEA.md as the project idea. Headless mode: auto-proceed with default assumptions and approve the PRD."' \
+    "auto-draft (no PRD): queues headless forge-auto-build-prd"
+  if grep -q "Auto-drafting the agent team" /tmp/forge-launcher-test-autodraft-noprd.txt; then
+    fail "auto-draft (no PRD): must not draft the team without a PRD"
+  else
+    pass "auto-draft (no PRD): skips team draft when no PRD exists"
+  fi
+fi
+
+rm -rf "$REPO_PARENT" 2>/dev/null || true
+
+# --- auto-draft team + engine (PRD exists, dry-run) ---
+echo ""
+echo "--- auto-draft team + engine (with PRD, dry-run) ---"
+
+REPO_PARENT="$(mktemp -d)"
+REPO_NAME="test-autodraft-prd-$$"
+PRD_FILE="$REPO_PARENT/seed-prd.md"
+printf '# PRD\n\n## Functional Requirements\n\n- FR-01 Foo\n\n## Implementation Phases\n\n1. Foundation\n' > "$PRD_FILE"
+
+export FORGE_IDEA="Auto-draft test idea"
+export FORGE_YN_DEFAULT="n"
+export FORGE_HARNESS_CHOICE="4"
+export FORGE_REPO_NAME="$REPO_NAME"
+export FORGE_REPO_DESCRIPTION=""
+export FORGE_REPO_VISIBILITY="private"
+export FORGE_REPO_PARENT_DIR="$REPO_PARENT"
+export FORGE_PRD_FILE="$PRD_FILE"
+export FORGE_AUTO_DRAFT="1"
+export FORGE_ENGINE_HARNESS="opencode"
+
+EXIT_CODE=0
+bash "$LAUNCHER" --non-interactive --dry-run \
+  >/tmp/forge-launcher-test-autodraft-prd.txt 2>&1 || EXIT_CODE=$?
+unset FORGE_HARNESS_CHOICE FORGE_REPO_NAME FORGE_REPO_DESCRIPTION FORGE_REPO_VISIBILITY FORGE_REPO_PARENT_DIR FORGE_PRD_FILE FORGE_AUTO_DRAFT FORGE_ENGINE_HARNESS
+
+if [[ $EXIT_CODE -ne 0 ]]; then
+  fail "auto-draft (with PRD): launcher exited with code $EXIT_CODE"
+  cat /tmp/forge-launcher-test-autodraft-prd.txt >&2 || true
+else
+  pass "auto-draft (with PRD): launcher completed successfully"
+  if grep -q "Auto-drafting the PRD" /tmp/forge-launcher-test-autodraft-prd.txt; then
+    fail "auto-draft (with PRD): must not re-draft the PRD when one exists"
+  else
+    pass "auto-draft (with PRD): skips PRD draft when a PRD exists"
+  fi
+  assert_contains "/tmp/forge-launcher-test-autodraft-prd.txt" 'Auto-drafting the agent team from the PRD (headless)' \
+    "auto-draft (with PRD): runs the team auto-draft stage"
+  assert_contains "/tmp/forge-launcher-test-autodraft-prd.txt" 'opencode run --auto "/forge-build-agent-team Use docs/PRD.md to build the agent team' \
+    "auto-draft (with PRD): queues headless forge-build-agent-team against the monolithic PRD"
+  assert_contains "/tmp/forge-launcher-test-autodraft-prd.txt" 'forge-engine-run.sh --repo' \
+    "auto-draft (with PRD): prints the workflow-engine run command"
+fi
+
+rm -rf "$REPO_PARENT" 2>/dev/null || true
+
+# --- auto-draft team PRD-source selection (monolithic vs decomposed) ---
+echo ""
+echo "--- auto-draft team PRD-source selection ---"
+
+PRD_SRC_FN="$(sed -n '/^prd_source_for_team() {/,/^}/p' "$LAUNCHER")"
+REPO_PARENT="$(mktemp -d)"
+mkdir -p "$REPO_PARENT/mono/docs" "$REPO_PARENT/decomp/docs/features"
+printf '# PRD\n' > "$REPO_PARENT/mono/docs/PRD.md"
+printf '# PRD\n' > "$REPO_PARENT/decomp/docs/PRD.md"
+printf '# Vision\n' > "$REPO_PARENT/decomp/docs/product-vision.md"
+printf '# Feature\n' > "$REPO_PARENT/decomp/docs/features/F-01.md"
+
+MONO_SRC="$(REPO_DIR="$REPO_PARENT/mono" bash -c "$PRD_SRC_FN; prd_source_for_team")"
+if [[ "$MONO_SRC" == "docs/PRD.md" ]]; then
+  pass "team auto-draft uses docs/PRD.md when not decomposed"
+else
+  fail "team auto-draft monolithic source mismatch: '$MONO_SRC'"
+fi
+
+DECOMP_SRC="$(REPO_DIR="$REPO_PARENT/decomp" bash -c "$PRD_SRC_FN; prd_source_for_team")"
+if [[ "$DECOMP_SRC" == *"decomposed PRD representation"* ]]; then
+  pass "team auto-draft uses vision+features when decomposed layout exists"
+else
+  fail "team auto-draft decomposed source mismatch: '$DECOMP_SRC'"
 fi
 
 rm -rf "$REPO_PARENT" 2>/dev/null || true

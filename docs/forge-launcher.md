@@ -15,7 +15,7 @@
 5. **Idea capture** -prompts for your project idea and saves it to `docs/IDEA.md`.
 6. **PRD & research** *(optional, recommended)* -add an existing PRD (`docs/PRD.md`) and/or research / seed documents (`docs/research/`). If skipped, the pipeline queues `forge-auto-build-prd` to build a reviewed PRD from the idea first.
 7. **Commit + push** -commits the bootstrapped forge, idea file, PRD, and any research docs.
-8. **Auto-build launch** -queues `forge-auto-build` when a PRD was captured (it generates the agent team then executes the build), or `forge-auto-build-prd` when it was not (it produces the reviewed PRD first). Opens Copilot CLI, opencode, or Claude Code in a separate terminal when available, with clear fallback commands if not.
+8. **Auto-build launch** -offers the optional **auto-draft** flow: generate the PRD (`forge-auto-build-prd`) and/or the agent team (`forge-build-agent-team`) non-interactively, with review boundaries in between, then run the workflow engine now (detached), print its command to run later, or build manually. It queues `forge-auto-build` when a PRD was captured (it generates the agent team then executes the build), or `forge-auto-build-prd` when it was not (it produces the reviewed PRD first). Opens Copilot CLI, opencode, or Claude Code in a separate terminal when available, with clear fallback commands if not.
 9. **Summary** -prints the repo path, harness, and next steps.
 
 ---
@@ -47,6 +47,28 @@
 .\scripts\forge-launcher.ps1
 ```
 
+### Draft (auto-author) mode
+
+The optional **auto-draft** flow generates the PRD and/or the agent team
+non-interactively (best answers, every unknown recorded as an Open Question),
+stopping at review boundaries before any build execution. Use `--draft` to
+pre-answer "yes" to both auto-draft prompts interactively:
+
+```bash
+./scripts/forge-launcher.sh --draft
+.\scripts\forge-launcher.ps1 -Draft
+```
+
+In non-interactive runs, set `FORGE_AUTO_DRAFT=1` instead:
+
+```bash
+export FORGE_AUTO_DRAFT="1"
+./scripts/forge-launcher.sh --non-interactive
+```
+
+See the [Auto-draft (optional)](#auto-draft-optional-idea--prd--team-with-review-boundaries)
+section below for the full flow.
+
 ### Non-interactive mode (CI / automation)
 
 ```bash
@@ -56,6 +78,7 @@ export FORGE_REPO_PARENT_DIR="/home/user/projects"
 export FORGE_IDEA="A task management web app with a React frontend and a Node.js API"
 export FORGE_PRD_FILE="/path/to/my-prd.md"          # optional
 export FORGE_RESEARCH_FILES="/path/to/research.md,/path/to/notes.md"  # optional
+export FORGE_AUTO_DRAFT="1"                        # optional: run the auto-draft stages headlessly
 export FORGE_YN_DEFAULT="y"
 ./scripts/forge-launcher.sh --non-interactive
 ```
@@ -123,6 +146,41 @@ blocking child of the session) and the per-task harness is selected with
 > auto-skips when stdin is not a TTY, and `--yes` (or `FORGE_ENGINE_YES=1`)
 > skips it explicitly for CI/headless runs.
 
+### Auto-draft (optional): idea → PRD → team, with review boundaries
+
+The **auto-draft** option lets you run the authoring stages non-interactively
+("best answers provided", every unknown recorded as an Open Question with a
+default assumption) and still keep human review between stages:
+
+1. **Idea → PRD.** With no PRD yet, Step 8 asks *"Generate the PRD from
+   `docs/IDEA.md` automatically now?"*. Answering yes runs `forge-auto-build-prd`
+   headless (via `opencode run --auto` / `copilot -p --yolo`), producing
+   `docs/PRD.md` (plus `docs/product-vision.md` + `docs/features/*.md` when it
+   qualifies for decomposition), committed as `docs: add auto-drafted PRD`.
+   Review it, then choose: draft the team now, launch the harness CLI to be
+   interviewed/refine interactively, or stop.
+2. **PRD → team.** With a PRD present, Step 8 asks *"Generate the agent team
+   from the PRD automatically now?"*. Answering yes runs `forge-build-agent-team`
+   headless, producing the agent + skill files under the harness directory,
+   committed as `feat: generate auto-drafted agent team`. When a decomposed
+   layout exists (`docs/product-vision.md` + `docs/features/*.md`), the team is
+   built **from the feature documents** (Vision + Features mode); otherwise it is
+   built from the monolithic `docs/PRD.md`. Review them, then:
+   - run the workflow-engine build **now** (detached via `forge-engine-run.sh`),
+   - **print the engine command** to run later, or
+   - launch the CLI for a manual build.
+
+Use `--draft` to pre-answer "yes" to both auto-draft prompts (interactive), or
+set `FORGE_AUTO_DRAFT=1` in non-interactive runs. The workflow-engine run later:
+
+```bash
+./scripts/forge-engine-run.sh --repo "<repo-dir>" --harness opencode --yes
+```
+
+> Auto-draft drives the harness CLI directly, so it needs `opencode` (or
+> `copilot` via `FORGE_RUN_WITH=copilot`). It commits each generated artifact so
+> your repo stays reviewable at every boundary.
+
 ---
 
 ## Step-by-step walkthrough
@@ -170,7 +228,15 @@ Repository name (no spaces): my-cool-app
 Short description (optional): My cool app description
 Visibility -public or private [private]:
 Parent directory for the new repo [/home/user/projects]:
+```
 
+Path prompts (like the parent directory) support **Tab completion** to existing
+file/directory locations (via bash readline on Bash and PSReadLine on
+PowerShell), so you can autocomplete rather than hand-typing paths. Typed paths
+also accept shell-style shorthand: `~`/`~/...` and `$VAR`/`${VAR}` (e.g.
+`$HOME/projects`) are expanded before the path is checked.
+
+```
   Creating GitHub repository 'my-cool-app' (private) …
   ✔  GitHub repo created and cloned to: /home/user/projects/my-cool-app
 ```
@@ -236,7 +302,7 @@ Path to your PRD file: /home/user/documents/my-app-prd.md
 
 Do you have research or seed documents to add (design specs, market research, technical notes…)? [y/N]: y
 
-  Enter file paths one per line.
+  Enter file paths one per line (Tab to complete existing paths).
   Press Ctrl+D on an empty line when done:
   ──────────────────────────────────────────────────────────────
   /home/user/documents/market-research.md
@@ -245,6 +311,12 @@ Do you have research or seed documents to add (design specs, market research, te
   ✔  Research doc copied: market-research.md → docs/research/
   ✔  Research doc copied: technical-notes.md → docs/research/
 ```
+
+The PRD path and the research/seed paths accept **Tab completion** to existing
+files and folders (bash readline on Bash, PSReadLine on PowerShell), plus
+`~`/`~/...` and `$VAR`/`${VAR}` (e.g. `$HOME/...`) expansion - so you can point
+at external PRD or seed documents with their usual shorthand instead of typing a
+full absolute path.
 
 If you skip this step, the pipeline queues `forge-auto-build-prd`, which builds a reviewed PRD from `docs/IDEA.md` (including the automatic decomposition check) before the build pipeline runs. For the best results, spend extra time on the PRD or spec first: you can run `/forge-build-prd` as a separate skill, then feed that PRD into the launcher or into `/forge-auto-build` as the initial spec. Adding research or seed documents in `docs/research/` also improves downstream quality.
 
@@ -259,7 +331,39 @@ If you skip this step, the pipeline queues `forge-auto-build-prd`, which builds 
 
 ### Step 8 -Launch auto-build
 
-For harnesses with a spawnable CLI (`copilot`, `opencode`, `claude`):
+Step 8 first offers the optional **auto-draft** stages. When no PRD was captured,
+it asks whether to generate one non-interactively; when a PRD exists, it asks
+whether to generate the agent team non-interactively (from the decomposed
+vision + features when present, otherwise from `docs/PRD.md`). Each stage commits
+its artifacts and stops for review before the next step, then asks how to run
+the workflow engine - now (detached), later (prints the command), or manually:
+
+```
+Generate the PRD from docs/IDEA.md automatically now (headless, auto-proceed with best answers)? [y/N]: y
+  Auto-drafting the PRD from docs/IDEA.md (headless) …
+    opencode run --auto "/forge-auto-build-prd Use docs/IDEA.md as the project idea. Headless mode: auto-proceed with default assumptions and approve the PRD."
+  ✔  Committed: 'docs: add auto-drafted PRD'
+  ✔  PRD generated.
+  Review it before continuing:
+    - /home/user/projects/my-cool-app/docs/PRD.md
+Generate the agent team from the PRD automatically now (headless)? [y/N]: y
+  Auto-drafting the agent team from the PRD (headless) …
+    opencode run --auto "/forge-build-agent-team Use docs/PRD.md to build the agent team. Auto-proceed with default assumptions and no questions."
+  ✔  Committed: 'feat: generate auto-drafted agent team'
+  ✔  Agent team generated.
+  Review the generated team before building:
+    - Agents : /home/user/projects/my-cool-app/.agents/agents/
+    - Skills : /home/user/projects/my-cool-app/.agents/skills/
+  The agent team is ready. You can run the build now through the
+  workflow engine, run it later, or build manually.
+    1) Run the workflow-engine build now (detached)
+    2) Print the engine command to run later
+    3) Skip -I will launch the CLI / build manually
+Select [1-3] [2]: 2
+    /home/user/mcfuzzysquirrel/Projects/experiments/mcfuzzy-agent-forge/scripts/forge-engine-run.sh --repo "/home/user/projects/my-cool-app" --harness opencode --yes
+```
+
+Then, for harnesses with a spawnable CLI (`copilot`, `opencode`, `claude`):
 
 ```
 ▶ Step 8 of 9: Launch auto-build
@@ -344,11 +448,12 @@ When a PRD **was** captured in Step 6, the queued command is instead:
 | `FORGE_REPO_NAME` | 3 | Repository name (required in non-interactive mode) |
 | `FORGE_REPO_DESCRIPTION` | 3 | Short repository description (optional) |
 | `FORGE_REPO_VISIBILITY` | 3 | `public` or `private` (default: `private`) |
-| `FORGE_REPO_PARENT_DIR` | 3 | Parent directory in which the repo directory is created (default: current working directory) |
+| `FORGE_REPO_PARENT_DIR` | 3 | Parent directory in which the repo directory is created (default: current working directory). Accepts `~`/`~/...` and `$VAR` expansion |
 | `FORGE_IDEA` | 5 | Project idea text written to `docs/IDEA.md` (and mirrored to `IDEA.md`) |
-| `FORGE_PRD_FILE` | 6 | Absolute path to an existing PRD file to copy in as `docs/PRD.md` |
-| `FORGE_RESEARCH_FILES` | 6 | Comma-separated list of absolute paths to research/seed documents copied to `docs/research/` |
+| `FORGE_PRD_FILE` | 6 | Path to an existing PRD file to copy in as `docs/PRD.md`. Accepts relative, `~`/`~/...`, and `$VAR`/`${VAR}` paths (e.g. `~/docs/prd.md`) |
+| `FORGE_RESEARCH_FILES` | 6 | Comma-separated list of paths to research/seed documents copied to `docs/research/`. Each path accepts relative, `~`/`~/...`, and `$VAR`/`${VAR}` forms |
 | `FORGE_YN_DEFAULT` | 3, 7 | Default answer for yes/no prompts (`y` or `n`) |
+| `FORGE_AUTO_DRAFT` | 8 | `1` to run the applicable auto-draft stages (PRD and/or agent team) non-interactively |
 | `FORGE_RUN_WITH` | 8 | Headless runner: `opencode` or `copilot` (default: `copilot` for the GitHub harness, `opencode` otherwise) |
 | `FORGE_WORKFLOW_ENGINE` | 8 | `1` to append `GO --workflow-engine` to the queued headless command (build executes via the workflow engine) |
 | `FORGE_ENGINE_HARNESS` | 8 | Per-task harness for the workflow engine: `opencode` (default), `copilot`, `openai`, `stub`, or `flowforge-kernel` |

@@ -9,7 +9,7 @@
 
 **McFuzzy Agent Forge** turns your requirements into a team of specialist agents that plan, implement, and validate a project. The PRD is the quality gate: you deliberately review it, then the pipeline generates the team and drives the build - either interactively or fully autonomously ("dark orchestration").
 
-**Latest: v3.8** - automatic PRD decomposition and PRD-prerequisite builds. See [docs/updates.md](docs/updates.md) and [docs/adr/018-auto-prd-decomposition-and-build-prerequisite.md](docs/adr/018-auto-prd-decomposition-and-build-prerequisite.md).
+**Latest: v3.10** - launcher auto-draft flow (idea → PRD → team, with review boundaries) and Tab-completing, `~`/`$VAR`-expanding path prompts. See [docs/updates.md](docs/updates.md) and [docs/adr/020-launcher-auto-draft-and-path-input.md](docs/adr/020-launcher-auto-draft-and-path-input.md).
 
 ---
 
@@ -32,6 +32,7 @@ Answer the prompts, then open the repo in your agent harness and run the queued 
 | You want… | Run this | What happens |
 |---|---|---|
 | **Guided onboarding, zero setup** | `./scripts/forge-launcher.sh` | Creates repo, bootstraps templates, captures your idea, queues the PRD stage or the build |
+| **Idea → PRD → team, auto-drafted** | `./scripts/forge-launcher.sh --draft` | Generates the PRD and/or agent team non-interactively (best answers, review boundaries), then offers the workflow-engine run now/later |
 | **Turn an idea into a reviewed PRD** | `@workspace /forge-auto-build-prd I want to build [idea]` | Confirms idea → builds and reviews `docs/PRD.md` → auto-decomposes qualifying PRDs → stops before the team |
 | **Build from an existing PRD, hands-free** | `@workspace /forge-auto-build docs/PRD.md` | PRD → agent team → (optional models) → build, with validation + commit after every phase |
 | **…using dark orchestration** | add `GO --workflow-engine` at the pre-flight gate | Compiles `EXECUTION-MANIFEST.json` and runs `forge-workflow-engine` unattended (detached process, log: `docs/engine-run.log`) |
@@ -155,6 +156,10 @@ You never need to open an interactive CLI. Authoring (PRD → team → manifest)
 # Fastest: launcher does repo → bootstrap → idea → headless skill run
 ./scripts/forge-launcher.sh --headless
 
+# Or auto-draft the PRD and/or agent team non-interactively, with review
+# boundaries, then run the engine now (detached) or later:
+./scripts/forge-launcher.sh --draft
+
 # Or drive the queued skill directly:
 opencode run --auto "/forge-auto-build Use docs/PRD.md as the project PRD. GO --workflow-engine"
 copilot -p "/forge-auto-build Use docs/PRD.md as the project PRD. GO --workflow-engine" --yolo
@@ -168,6 +173,7 @@ copilot -p "/forge-auto-build Use docs/PRD.md as the project PRD. GO --workflow-
 - `opencode run` / `copilot -p` are non-interactive; `--auto` / `--yolo` auto-approve tool permissions.
 - `forge-auto-build`'s engine path (`GO --workflow-engine`) starts the engine **detached** (log: `docs/engine-run.log`) and polls `docs/WORKFLOW-STATE.json` to completion - the build survives the chat session and resumes with `run`.
 - With no PRD yet, the launcher queues `forge-auto-build-prd` in headless mode (auto-proceeds with default assumptions recorded in the PRD's Open Questions).
+- `--draft` (PowerShell: `-Draft`) pre-answers the Step 8 auto-draft prompts: generate the PRD from `docs/IDEA.md`, then the agent team from the PRD (from the decomposed vision + features when present), committing each stage and pausing for review before offering the engine run. Non-interactive runs use `FORGE_AUTO_DRAFT=1`.
 - `--dry-run` prints the exact command instead of running it. Configure the runner with `FORGE_RUN_WITH=opencode|copilot`, the engine path with `FORGE_WORKFLOW_ENGINE=1`, and the per-task engine harness with `FORGE_ENGINE_HARNESS=opencode|copilot|openai|stub`.
 - The workflow engine's `--yes` (or `FORGE_ENGINE_YES=1`) skips its interactive pre-run gate for CI/headless runs.
 
@@ -196,7 +202,8 @@ mcfuzzy-agent-forge/
 │                                # forge-orchestrate-build, forge-workflow-engine, forge-execution-adapter,
 │                                # forge-workforce-compiler, skill-creator, skill-review, …
 ├── scripts/
-│   ├── forge-launcher.sh/.ps1   # interactive onboarding (repo → bootstrap → idea → queue)
+│   ├── forge-launcher.sh/.ps1   # interactive onboarding (repo → bootstrap → idea → queue;
+│   │                            #   flags: --headless, --draft, --non-interactive, --dry-run)
 │   ├── forge-engine-run.sh/.ps1 # standalone dark-orchestration runner (engine, outside the CLI)
 │   └── bootstrap.sh/.ps1        # copy templates into any target repo
 └── docs/                        # prompt-playbook, forge-launcher, testing-guide, ADRs, updates
