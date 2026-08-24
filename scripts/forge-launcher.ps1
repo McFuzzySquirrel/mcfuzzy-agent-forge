@@ -71,6 +71,18 @@ function Write-Warn   { param([string]$msg); Write-Host "  ⚠  $msg" -Foregroun
 function Write-Fail   { param([string]$msg); Write-Host "  ✖  $msg" -ForegroundColor Red }
 function Write-Info   { param([string]$msg); Write-Host "  $msg" }
 
+function Show-Activity {
+    param([string]$Activity)
+    # Indeterminate animated progress bar (auto-suppressed when output is
+    # redirected, so CI/piped runs stay clean). Keeps console output visible.
+    Write-Progress -Activity $Activity -Status "Working…" -PercentComplete -1
+}
+
+function Complete-Activity {
+    param([string]$Activity)
+    Write-Progress -Activity $Activity -Completed
+}
+
 function Read-Prompt {
     param (
         [string]$Message,
@@ -300,11 +312,17 @@ function Invoke-SkillHeadless {
         Write-Warn "Dry-run: command printed, not executed."
         return
     }
-    Push-Location $script:RepoDir
+    $activity = "Running the skill (may take a while)"
+    Show-Activity $activity
     try {
-        Invoke-Expression $cmd
+        Push-Location $script:RepoDir
+        try {
+            Invoke-Expression $cmd
+        } finally {
+            Pop-Location
+        }
     } finally {
-        Pop-Location
+        Complete-Activity $activity
     }
 }
 
@@ -604,7 +622,13 @@ function New-Repository {
         Write-Info "Creating GitHub repository '$repoName' ($repoVisibility) …"
         $ghArgs = @("repo", "create", $repoName, "--$repoVisibility", "--clone")
         if ($repoDescription) { $ghArgs += @("--description", $repoDescription) }
-        & gh @ghArgs
+        $activity = "Creating GitHub repository '$repoName'"
+        Show-Activity $activity
+        try {
+            & gh @ghArgs
+        } finally {
+            Complete-Activity $activity
+        }
         $script:RepoDir = Join-Path (Get-Location).Path $repoName
         Write-Ok "GitHub repo created and cloned to: $($script:RepoDir)"
         $script:RemoteCreated = $true
@@ -645,7 +669,12 @@ function Invoke-BootstrapForge {
     Write-Step "Step 4 of 9: Bootstrap Agent Forge"
 
     Write-Info "Running bootstrap.ps1 → $($script:RepoDir) (-Harness $($script:Harness)) …"
-    & $BootstrapPs1 -Target $script:RepoDir -Harness $script:Harness -Force
+    Show-Activity "Bootstrapping Agent Forge (copying templates)"
+    try {
+        & $BootstrapPs1 -Target $script:RepoDir -Harness $script:Harness -Force
+    } finally {
+        Complete-Activity "Bootstrapping Agent Forge (copying templates)"
+    }
     Write-Ok "Agent Forge templates bootstrapped."
 }
 
@@ -858,11 +887,16 @@ function Invoke-CommitBootstrap {
 
     if ($script:RemoteCreated) {
         Write-Info "Pushing to remote …"
+        Show-Activity "Pushing to remote"
         try {
-            & git -C $script:RepoDir push -u origin HEAD 2>$null
-        } catch {
-            $branch = & git -C $script:RepoDir rev-parse --abbrev-ref HEAD
-            & git -C $script:RepoDir push -u origin $branch
+            try {
+                & git -C $script:RepoDir push -u origin HEAD 2>$null
+            } catch {
+                $branch = & git -C $script:RepoDir rev-parse --abbrev-ref HEAD
+                & git -C $script:RepoDir push -u origin $branch
+            }
+        } finally {
+            Complete-Activity "Pushing to remote"
         }
         Write-Ok "Pushed to remote."
     } else {

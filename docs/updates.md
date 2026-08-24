@@ -39,6 +39,12 @@ for getting from an idea to a reviewable PRD/team to an engine run.
   `Get-HeadlessCommandFor` / `Invoke-SkillHeadless` (PowerShell), so `--headless`,
   `--draft`, and `FORGE_AUTO_DRAFT=1` all print the same `opencode run --auto` /
   `copilot -p --yolo` command shape under `--dry-run`.
+- **"Still running" indicator.** Long-running steps (bootstrap, headless/auto-draft
+  skill runs, GitHub repo creation, push) show a periodic `still running… Ns`
+  heartbeat (Bash: `run_with_heartbeat`, TTY-only and zombie-safe; PowerShell:
+  indeterminate `Write-Progress`) so users don't think the launcher is hung.
+  Output stays visible, and the interval is configurable via
+  `FORGE_HEARTBEAT_INTERVAL` (default `15`s). Skipped for piped/CI output.
 
 Related architecture decision:
 

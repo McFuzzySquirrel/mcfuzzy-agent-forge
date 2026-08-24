@@ -157,6 +157,21 @@ assert_contains "$ROOT_DIR/scripts/forge-launcher.ps1" 'Get-AutoDraftPrdSource' 
 assert_contains "$ROOT_DIR/scripts/forge-launcher.ps1" 'Invoke-AutoDraftMenu' \
   'forge-launcher.ps1 wires the auto-draft menu into Step 8'
 
+# Long-running steps show a "still running…" indicator so users don't think the
+# launcher hung (TTY-only; disabled for CI/piped output).
+assert_contains "$LAUNCHER" 'run_with_heartbeat()' \
+  'forge-launcher.sh defines run_with_heartbeat for long-running steps'
+assert_contains "$LAUNCHER" 'proc_alive()' \
+  'forge-launcher.sh has a zombie-safe process liveness check'
+assert_contains "$LAUNCHER" 'run_with_heartbeat "Bootstrapping Agent Forge' \
+  'forge-launcher.sh heartbeat wraps the bootstrap step'
+assert_contains "$LAUNCHER" 'run_with_heartbeat "Running the skill' \
+  'forge-launcher.sh heartbeat wraps headless skill runs'
+assert_contains "$ROOT_DIR/scripts/forge-launcher.ps1" 'function Show-Activity' \
+  'forge-launcher.ps1 defines Show-Activity (Write-Progress indicator)'
+assert_contains "$ROOT_DIR/scripts/forge-launcher.ps1" 'Complete-Activity "Bootstrapping Agent Forge' \
+  'forge-launcher.ps1 indicator wraps the bootstrap step'
+
 # ---------------------------------------------------------------------------
 # Test: non-interactive run for each harness
 # ---------------------------------------------------------------------------

@@ -181,6 +181,12 @@ set `FORGE_AUTO_DRAFT=1` in non-interactive runs. The workflow-engine run later:
 > `copilot` via `FORGE_RUN_WITH=copilot`). It commits each generated artifact so
 > your repo stays reviewable at every boundary.
 >
+> Long-running steps (bootstrap, headless/auto-draft skill runs, GitHub repo
+> creation, push) print a periodic `still running… Ns` heartbeat when run from a
+> terminal, so you can tell the launcher is working rather than hung. The
+> heartbeat is skipped for piped/CI output. Set `FORGE_HEARTBEAT_INTERVAL` to
+> change how often it ticks (default `15` seconds).
+>
 > Want a quick way to try it? The [testing guide Part 8](testing-guide.md#part-8--launcher-auto-draft-smoke-test-reusable-test-idea)
 > ships a copy-paste test idea (a small expense-tracker CLI) that exercises the
 > whole auto-draft → decompose → team → engine flow.

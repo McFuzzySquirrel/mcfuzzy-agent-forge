@@ -193,6 +193,51 @@ shell_quote() {
   printf '%q' "$1"
 }
 
+proc_alive() {
+  # True while $1 is a running (non-zombie) process. Zombie-safe: a finished
+  # background child shows as 'Z' until reaped, which would otherwise stall the
+  # heartbeat loop below. Falls back to kill -0 when ps is unavailable.
+  if command -v ps &>/dev/null; then
+    local stat
+    stat="$(ps -o stat= -p "$1" 2>/dev/null)" || return 1
+    [[ "$stat" != *Z* ]]
+  else
+    kill -0 "$1" 2>/dev/null
+  fi
+}
+
+run_in_repo() {
+  ( cd "$REPO_DIR" && "$@" )
+}
+
+run_with_heartbeat() {
+  # Runs a long-running command with its output left visible (it streams
+  # normally) plus a periodic "still running… Ns" line so users don't think the
+  # launcher is hung. Disabled (runs the command directly) when stdout is not a
+  # terminal or --dry-run is set, so CI/piped output stays clean.
+  local label="$1"; shift
+  if [[ ! -t 1 || "$DRY_RUN" == true ]]; then
+    "$@"
+    return $?
+  fi
+  local interval="${FORGE_HEARTBEAT_INTERVAL:-15}"
+  local start; start="$(date +%s)"
+  "$@" &
+  local pid=$!
+  local last=0
+  while proc_alive "$pid"; do
+    sleep 1
+    local now; now="$(date +%s)"
+    local elapsed=$((now - start))
+    if (( elapsed >= interval && elapsed - last >= interval )); then
+      last=$elapsed
+      printf '  %s (still running… %ss)\n' "$label" "$elapsed"
+    fi
+  done
+  wait "$pid"
+  return $?
+}
+
 launch_cli_in_terminal() {
   local cli_name="$1"
   local repo_dir="$2"
@@ -290,7 +335,7 @@ run_skill_headless() {
     copilot) cmd=(copilot -p "$skill_msg" --yolo) ;;
     *) cmd=(opencode run --auto "$skill_msg") ;;
   esac
-  ( cd "$REPO_DIR" && "${cmd[@]}" )
+  run_with_heartbeat "Running the skill (may take a while)" run_in_repo "${cmd[@]}"
 }
 
 # Executes the queued headless build (used by --headless mode).
@@ -598,7 +643,7 @@ create_repo() {
     info "Creating GitHub repository '$repo_name' ($repo_visibility) …"
     local gh_args=(repo create "$repo_name" "--${repo_visibility}" --clone)
     [[ -n "$repo_description" ]] && gh_args+=(--description "$repo_description")
-    gh "${gh_args[@]}"
+    run_with_heartbeat "Creating GitHub repository…" gh "${gh_args[@]}"
     # gh clones into a subdirectory named after the repo
     REPO_DIR="$(pwd)/$repo_name"
     ok "GitHub repo created and cloned to: $REPO_DIR"
@@ -640,7 +685,7 @@ bootstrap_forge() {
   step "Step 4 of 9: Bootstrap Agent Forge"
 
   info "Running bootstrap.sh → $REPO_DIR (--harness $HARNESS) …"
-  "$BOOTSTRAP_SH" "$REPO_DIR" --harness "$HARNESS" --force
+  run_with_heartbeat "Bootstrapping Agent Forge (copying templates)…" "$BOOTSTRAP_SH" "$REPO_DIR" --harness "$HARNESS" --force
   ok "Agent Forge templates bootstrapped."
 }
 
@@ -830,8 +875,8 @@ commit_bootstrap() {
 
   if [[ "$REMOTE_CREATED" == true ]]; then
     info "Pushing to remote …"
-    git -C "$REPO_DIR" push -u origin HEAD 2>/dev/null || \
-      git -C "$REPO_DIR" push -u origin "$(git -C "$REPO_DIR" rev-parse --abbrev-ref HEAD)"
+    run_with_heartbeat "Pushing to remote…" git -C "$REPO_DIR" push -u origin HEAD 2>/dev/null || \
+      run_with_heartbeat "Pushing to remote…" git -C "$REPO_DIR" push -u origin "$(git -C "$REPO_DIR" rev-parse --abbrev-ref HEAD)"
     ok "Pushed to remote."
   else
     warn "No remote configured -skipping push. Add a remote and run 'git push -u origin HEAD' manually."
