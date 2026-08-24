@@ -17,7 +17,7 @@ You are building a team of custom agents and reusable skills from a PRD, Product
 
 ### Step 0: Detect Mode
 
-Load `references/detect-harness.md` (from `forge-bootstrap-project`) to determine `HARNESS_AGENTS_DIR` and `HARNESS_SKILLS_DIR` for this repository. Use these variables wherever agent or skill file paths are referenced below.
+Load `references/detect-harness.md` to determine `HARNESS_AGENTS_DIR` and `HARNESS_SKILLS_DIR` for this repository. Use these variables wherever agent or skill file paths are referenced below.
 
 | Mode | Signals | Action |
 |------|---------|--------|

@@ -21,7 +21,7 @@ This skill is the autonomous execution alternative to the prompt-driven flows. T
 Before running this skill, the following must exist in the repository:
 
 - `docs/EXECUTION-MANIFEST.json` - compiled by `forge-execution-adapter`
-- Agent `.md` files under the harness agents directory. Load `forge-bootstrap-project/references/detect-harness.md` to detect the active harness; the conventional paths are:
+- Agent `.md` files under the harness agents directory. Load `forge-build-agent-team/references/detect-harness.md` to detect the active harness; the conventional paths are:
   - `.github/agents/` (GitHub Copilot harness)
   - `.claude/agents/` (Claude Code harness)
   - `.opencode/agents/` (OpenCode harness)

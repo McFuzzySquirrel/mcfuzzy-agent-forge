@@ -58,6 +58,13 @@ assert_contains "$LAUNCHER" 'opencode)' \
 assert_contains "$LAUNCHER" '\.opencode' \
   'forge-launcher.sh references .opencode in completion summary'
 
+# The launcher must queue forge-auto-build when a PRD exists and
+# forge-auto-build-prd when it does not (CR-001 lifecycle).
+assert_contains "$LAUNCHER" 'forge-auto-build-prd' \
+  'forge-launcher.sh queues forge-auto-build-prd when no PRD is captured'
+assert_contains "$LAUNCHER" '/forge-auto-build Use docs/PRD.md as the project PRD' \
+  'forge-launcher.sh queues forge-auto-build against an existing PRD'
+
 # ---------------------------------------------------------------------------
 # Test: non-interactive run for each harness
 # ---------------------------------------------------------------------------
@@ -144,6 +151,10 @@ else
   assert_dir  "$REPO_DIR/.agents/skills"    "agents harness: .agents/skills created"
   assert_file "$REPO_DIR/docs/IDEA.md"      "agents harness: docs/IDEA.md created"
   assert_file "$REPO_DIR/IDEA.md"           "agents harness: IDEA.md (root copy) created"
+  assert_contains "/tmp/forge-launcher-test-agents.txt" "forge-auto-build-prd Use docs/IDEA.md as the project idea" \
+    "agents harness: queues forge-auto-build-prd when no PRD is captured"
+  assert_contains "/tmp/forge-launcher-test-agents.txt" "will be built from docs/IDEA.md by forge-auto-build-prd" \
+    "agents harness: summary notes PRD will be built by forge-auto-build-prd"
 fi
 
 rm -rf "$REPO_PARENT" 2>/dev/null || true
@@ -178,6 +189,49 @@ else
   assert_dir  "$REPO_DIR/.claude/agents"   "claude harness: .claude/agents created"
   assert_dir  "$REPO_DIR/.claude/skills"   "claude harness: .claude/skills created"
   assert_file "$REPO_DIR/docs/IDEA.md"     "claude harness: docs/IDEA.md created"
+fi
+
+rm -rf "$REPO_PARENT" 2>/dev/null || true
+
+# --- generic agents harness with an existing PRD captured in Step 6 ---
+echo ""
+echo "--- generic agents harness with PRD ---"
+
+REPO_PARENT="$(mktemp -d)"
+REPO_NAME="test-agents-prd-$$"
+PRD_FILE="$REPO_PARENT/seed-prd.md"
+printf '# PRD\n\n## Functional Requirements\n\n- FR-01 Foo\n- FR-02 Bar\n\n## Implementation Phases\n\n1. Foundation\n' > "$PRD_FILE"
+
+export FORGE_IDEA="Test project for generic agents harness with PRD"
+export FORGE_YN_DEFAULT="n"
+export FORGE_HARNESS_CHOICE="4"
+export FORGE_REPO_NAME="$REPO_NAME"
+export FORGE_REPO_DESCRIPTION=""
+export FORGE_REPO_VISIBILITY="private"
+export FORGE_REPO_PARENT_DIR="$REPO_PARENT"
+export FORGE_PRD_FILE="$PRD_FILE"
+
+EXIT_CODE=0
+bash "$LAUNCHER" --non-interactive \
+  >/tmp/forge-launcher-test-agents-prd.txt 2>&1 || EXIT_CODE=$?
+unset FORGE_HARNESS_CHOICE FORGE_REPO_NAME FORGE_REPO_DESCRIPTION FORGE_REPO_VISIBILITY FORGE_REPO_PARENT_DIR FORGE_PRD_FILE
+
+if [[ $EXIT_CODE -ne 0 ]]; then
+  fail "agents harness (with PRD): launcher exited with code $EXIT_CODE"
+  cat /tmp/forge-launcher-test-agents-prd.txt >&2 || true
+else
+  REPO_DIR="$REPO_PARENT/$REPO_NAME"
+  pass "agents harness (with PRD): launcher completed successfully"
+  assert_file "$REPO_DIR/docs/PRD.md"       "agents harness (with PRD): docs/PRD.md copied"
+  assert_contains "/tmp/forge-launcher-test-agents-prd.txt" "/forge-auto-build Use docs/PRD.md as the project PRD" \
+    "agents harness (with PRD): queues forge-auto-build against the captured PRD"
+  assert_contains "/tmp/forge-launcher-test-agents-prd.txt" "ready for forge-auto-build" \
+    "agents harness (with PRD): Step 8 announces forge-auto-build"
+  if grep -q "forge-auto-build-prd Use docs/IDEA.md as the project idea" /tmp/forge-launcher-test-agents-prd.txt; then
+    fail "agents harness (with PRD): must not queue forge-auto-build-prd when a PRD exists"
+  else
+    pass "agents harness (with PRD): does not queue forge-auto-build-prd when a PRD exists"
+  fi
 fi
 
 rm -rf "$REPO_PARENT" 2>/dev/null || true

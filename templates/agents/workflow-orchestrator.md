@@ -19,13 +19,14 @@ All execution logic - DAG ordering, retry handling, harness dispatch, state pers
 
 Use this agent when:
 
-- The project PRD and agent team are already generated (post `forge-auto-build` Stage 1–2 or `forge-bootstrap-project`)
+- The project PRD and agent team are already generated (post `forge-auto-build` Stage 1 or `forge-build-agent-team`)
 - `docs/EXECUTION-MANIFEST.json` exists (post `forge-execution-adapter compile`)
 - You want **fully autonomous execution** - no phase approvals, no per-task prompts
 - You are running in a CI/CD context or scheduled pipeline
 
 Do **not** use this agent if:
-- The PRD or agent team does not exist yet - use `forge-bootstrap-project` or `forge-auto-build` first
+- The PRD does not exist yet - use `forge-auto-build-prd` or `forge-build-prd` first
+- The agent team does not exist yet - use `forge-build-agent-team` (or `forge-auto-build`) first
 - You want per-phase review and approval - use `@project-orchestrator` instead
 - The manifest has not been compiled - run `forge-execution-adapter compile` first
 

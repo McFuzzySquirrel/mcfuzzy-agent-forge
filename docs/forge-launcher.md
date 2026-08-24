@@ -13,9 +13,9 @@
 3. **Repo creation** -creates a GitHub repository (via `gh`) or initialises a local `git init`.
 4. **Bootstrap** -runs the existing `bootstrap.sh` / `bootstrap.ps1` into the new repo.
 5. **Idea capture** -prompts for your project idea and saves it to `docs/IDEA.md`.
-6. **PRD & research** *(optional, recommended)* -add an existing PRD (`docs/PRD.md`) and/or research / seed documents (`docs/research/`).
+6. **PRD & research** *(optional, recommended)* -add an existing PRD (`docs/PRD.md`) and/or research / seed documents (`docs/research/`). If skipped, the pipeline queues `forge-auto-build-prd` to build a reviewed PRD from the idea first.
 7. **Commit + push** -commits the bootstrapped forge, idea file, PRD, and any research docs.
-8. **Auto-build launch** -opens Copilot CLI, opencode, or Claude Code in a separate terminal when available, with clear fallback commands if not.
+8. **Auto-build launch** -queues `forge-auto-build` when a PRD was captured (it generates the agent team then executes the build), or `forge-auto-build-prd` when it was not (it produces the reviewed PRD first). Opens Copilot CLI, opencode, or Claude Code in a separate terminal when available, with clear fallback commands if not.
 9. **Summary** -prints the repo path, harness, and next steps.
 
 ---
@@ -173,7 +173,7 @@ This step is optional but strongly recommended. Starting the pipeline with a wel
 
     1) Yes -provide a file path to copy in as docs/PRD.md
     2) Yes -paste the PRD content directly
-    3) No  -skip (the pipeline will generate one from docs/IDEA.md)
+    3) No  -skip (the pipeline will build a PRD from docs/IDEA.md first)
 
 Select [1-3] [3]: 1
 Path to your PRD file: /home/user/documents/my-app-prd.md
@@ -191,7 +191,7 @@ Do you have research or seed documents to add (design specs, market research, te
   ✔  Research doc copied: technical-notes.md → docs/research/
 ```
 
-If you skip this step, the `forge-build-prd` stage will generate a PRD interactively from `docs/IDEA.md` when `forge-auto-build` runs. For the best results, spend extra time on the PRD or spec first: you can run `/forge-build-prd` as a separate skill, then feed that PRD into the launcher or into `/forge-auto-build` as the initial spec. Adding research or seed documents in `docs/research/` also improves downstream quality.
+If you skip this step, the pipeline queues `forge-auto-build-prd`, which builds a reviewed PRD from `docs/IDEA.md` (including the automatic decomposition check) before the build pipeline runs. For the best results, spend extra time on the PRD or spec first: you can run `/forge-build-prd` as a separate skill, then feed that PRD into the launcher or into `/forge-auto-build` as the initial spec. Adding research or seed documents in `docs/research/` also improves downstream quality.
 
 ### Step 7 -Commit bootstrapped forge and idea
 
@@ -209,11 +209,13 @@ For harnesses with a spawnable CLI (`copilot`, `opencode`, `claude`):
 ```
 ▶ Step 8 of 9: Launch auto-build
 
-  The repository is bootstrapped and ready for forge-auto-build.
+  The repository is bootstrapped. The queued command depends on whether a PRD
+  was captured in Step 6.
 
 Launch claude in the new repository now? [y/N]: y
   Launching claude in: /home/user/projects/my-cool-app
-  ✔  claude launched. Use /forge-auto-build in the Claude Code chat to start the pipeline.
+  ✔  claude launched. Use /forge-auto-build-prd in the Claude Code chat to build
+     the reviewed PRD, then /forge-auto-build for the agent team and build.
 ```
 
 For GitHub Copilot, the launcher now tries to open the GitHub Copilot CLI in a separate terminal if `copilot` is installed. If that is not available, it falls back to the manual chat instructions below:
@@ -221,10 +223,20 @@ For GitHub Copilot, the launcher now tries to open the GitHub Copilot CLI in a s
 ```
   Open the repository in GitHub Copilot Chat and run:
 
-    @workspace /forge-auto-build A task management web app...
+    @workspace /forge-auto-build-prd Use docs/IDEA.md as the project idea
 
-  The skill will present a pre-flight summary. Type GO to start the full pipeline.
+  The skill will build a reviewed PRD from your idea (with automatic
+  decomposition when it qualifies), then direct you to forge-auto-build for
+  the agent team and build execution.
 ```
+
+When a PRD **was** captured in Step 6, the queued command is instead:
+
+```
+  @workspace /forge-auto-build Use docs/PRD.md as the project PRD
+```
+
+`forge-auto-build` requires the PRD to already exist. It generates the agent team, optionally assigns models, then executes the build - type `GO` at its pre-flight gate, or `GO --workflow-engine` to run the build through the workflow engine instead of the prompt-driven orchestrator.
 
 ### Step 9 -Summary
 
@@ -245,12 +257,13 @@ For GitHub Copilot, the launcher now tries to open the GitHub Copilot CLI in a s
   Next steps:
 
   1. Open the project in your agent harness.
-  2. Run the auto-build skill:
+  2. Run the queued pipeline command:
 
-      @workspace /forge-auto-build Use docs/IDEA.md as the project idea
+      @workspace /forge-auto-build Use docs/PRD.md as the project PRD
 
   3. Review the pre-flight summary that the skill presents.
-  4. Type GO to start the fully autonomous pipeline.
+  4. Type GO to start the autonomous pipeline (add --workflow-engine to run
+     the build through the workflow engine once the agent team is generated).
 ```
 
 ---
@@ -302,24 +315,28 @@ The launcher creates `docs/IDEA.md` (and mirrors it to `IDEA.md`) with the follo
 ---
 
 > Generated by forge-launcher on 2026-08-05T19:00:00Z
-> Use this file as input for: `@workspace /forge-auto-build Use docs/IDEA.md as the project idea`
+> Use this file as input for: `@workspace /forge-auto-build-prd Use docs/IDEA.md as the project idea`
 ```
 
-Pass this file to `forge-auto-build` by referencing it in the chat:
+Pass this file to `forge-auto-build-prd` by referencing it in the chat:
 
 ```
-@workspace /forge-auto-build Use docs/IDEA.md as the project idea
+@workspace /forge-auto-build-prd Use docs/IDEA.md as the project idea
 ```
 
-Or invoke without arguments and let `forge-auto-build` detect the best source from the repo:
+`forge-auto-build-prd` builds a reviewed PRD from the idea (with automatic decomposition when it qualifies) and stops there. Once `docs/PRD.md` exists, run `forge-auto-build` for the agent team and build execution:
+
+```
+@workspace /forge-auto-build Use docs/PRD.md as the project PRD
+```
+
+Or invoke `forge-auto-build` without arguments and let it detect the best PRD representation from the repo (`docs/PRD.md`, or the decomposed `docs/product-vision.md` + `docs/features/*.md`):
 
 ```
 @workspace /forge-auto-build
 ```
 
-When invoked without arguments, the skill checks in this order: `docs/PRD.md`, `docs/IDEA.md`, `IDEA.md`. If multiple inputs are available, it asks you to choose which source to use for that run.
-
-Or paste the idea text directly -all three approaches work.
+When invoked without arguments, the skill uses an explicit PRD path if one was supplied, then `docs/PRD.md`, then the decomposed layout. If no PRD representation exists, it stops and directs you to `forge-auto-build-prd` or `forge-build-prd`.
 
 ---
 
@@ -357,7 +374,7 @@ cd /path/to/your/repo && opencode .
 cd /path/to/your/repo && claude .
 ```
 
-Then in the chat or terminal, run `/forge-auto-build <your idea>`.
+Then in the chat or terminal, run `/forge-auto-build-prd <your idea>` to build the reviewed PRD first, or `/forge-auto-build docs/PRD.md` once a PRD exists.
 
 ---
 
