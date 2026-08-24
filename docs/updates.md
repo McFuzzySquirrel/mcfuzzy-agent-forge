@@ -29,6 +29,13 @@ Detailed release and change notes for McFuzzy Agent Forge.
   commands, and makes the Step 9 summary reflect the running engine instead of
   the manual `@workspace /forge-auto-build` steps. Fixed the `Skip -I will…`
   menu typo. (Bash + PowerShell.)
+- **Artifact store on by default.** `forge-execution-adapter compile` now
+  auto-declares `produces` (and wires `inputs` to the previous task) for every
+  task it emits, so `docs/artifacts/` is populated on every successful run
+  without hand-editing the manifest. Semantic types are still available as a
+  manual override.
+- **New user guide.** Added `docs/workflow-engine.md`, a `forge-launcher.md`-style
+  reference for running, resuming, and troubleshooting the workflow engine.
 
 ---
 

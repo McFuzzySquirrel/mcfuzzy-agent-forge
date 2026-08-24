@@ -286,19 +286,25 @@ This is the primary mechanism for **context-window efficiency** — especially u
 
 ### Declaring artifact contracts in the manifest
 
-Add `inputs` and `produces` to tasks in `docs/EXECUTION-MANIFEST.json`:
+`forge-execution-adapter compile` **auto-declares** `produces` (and `inputs`)
+for every task it emits, so the artifact layer is on by default — no hand-editing
+required:
 
 ```json
 {
-  "task_id": "implement-api",
-  "agent": "developer",
-  "inputs": ["solution.architecture"],
-  "produces": "implementation.result"
+  "id": "1.2",
+  "produces": "work.1.2",
+  "inputs": ["work.1.1"]
 }
 ```
 
-- **`inputs`** — list of artifact type strings the engine will load and project before running this task
-- **`produces`** — the artifact type the engine expects the task to create; if the agent does not write one explicitly, the engine synthesises a minimal one from the task's outputs
+- **`inputs`** — list of artifact type strings the engine will load and project before running this task. The compiler wires each task to the previous task's `produces` (the linear dependency chain).
+- **`produces`** — the artifact type the engine records for this task. If the agent does not write one explicitly, the engine synthesises a minimal one from the task's outputs.
+
+You can still hand-edit `docs/EXECUTION-MANIFEST.json` to use semantic types
+(e.g. `solution.architecture`, `implementation.result`, `test.result`) or to
+declare cross-task `inputs` beyond the linear chain — the compiler's defaults are
+just the starting point.
 
 ### Artifact storage layout
 
@@ -343,7 +349,7 @@ The `reductionPercent` field is the quantitative proof-of-value: it records how 
 
 ### Skipping the artifact pattern
 
-Tasks without `inputs` or `produces` are unaffected. The artifact layer is strictly additive — existing manifests continue to work unchanged.
+Tasks without `inputs` or `produces` are unaffected. The artifact layer is strictly additive — an existing hand-written manifest that omits them continues to work unchanged (the engine simply skips artifact creation and projection for those tasks).
 
 ---
 

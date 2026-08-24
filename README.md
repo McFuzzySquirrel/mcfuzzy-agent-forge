@@ -9,7 +9,7 @@
 
 **McFuzzy Agent Forge** turns your requirements into a team of specialist agents that plan, implement, and validate a project. The PRD is the quality gate: you deliberately review it, then the pipeline generates the team and drives the build - either interactively or fully autonomously ("dark orchestration").
 
-**Latest: v3.10** - launcher auto-draft flow (idea → PRD → team, with review boundaries) and Tab-completing, `~`/`$VAR`-expanding path prompts. See [docs/updates.md](docs/updates.md) and [docs/adr/020-launcher-auto-draft-and-path-input.md](docs/adr/020-launcher-auto-draft-and-path-input.md).
+**Latest: v3.11** - workflow-engine heartbeat, OpenCode adapter fix, artifact store on by default, and a clearer engine handoff in the launcher. See [docs/updates.md](docs/updates.md) and [docs/workflow-engine.md](docs/workflow-engine.md).
 
 ---
 
@@ -249,6 +249,7 @@ Yes. The orchestrator/engine writes `docs/PROGRESS.md` after each phase; both bu
 
 - [Prompt Playbook](docs/prompt-playbook.md) - full copy-paste prompt sequence
 - [Forge Launcher](docs/forge-launcher.md) - launcher reference and non-interactive mode
+- [Workflow Engine](docs/workflow-engine.md) - autonomous execution reference (run, resume, replay, harnesses)
 - [Testing Guide](docs/testing-guide.md) - manual verification of every path (skill creation, dark orchestration, launcher E2E, OpenAI, FlowForge kernel, artifacts)
 - [Updates](docs/updates.md) - release notes and change history
 - [Local Models](docs/running-with-local-models.md) - BYOK / Ollama setup

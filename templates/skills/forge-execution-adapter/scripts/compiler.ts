@@ -133,6 +133,17 @@ function taskIdFromText(text: string, phaseId: string, taskIndex: number): strin
   return `${phaseId}.${taskIndex + 1}`;
 }
 
+/**
+ * Derive a stable artifact type for a task. Every compiled task declares a
+ * `produces` type so the workflow engine's artifact store synthesises a work
+ * artifact on success (the artifact layer is on by default, not opt-in).
+ *
+ * "1.1" → "work.1.1"  (subdirectory: "work-1-1")
+ */
+function producesFor(taskId: string): string {
+  return `work.${taskId.toLowerCase()}`;
+}
+
 function extractTasks(
   phaseTitle: string,
   phaseBody: string,
@@ -151,16 +162,19 @@ function extractTasks(
     const taskId = taskIdFromText(cleaned, phaseId, tasks.length);
     const owner = chooseOwner(cleaned, agents);
     if (owner.warning) warnings.push(owner.warning);
+    const previous = tasks[tasks.length - 1];
     tasks.push({
       id: taskId,
       title: cleaned.split(/[:.]/)[0]!.trim(),
       description: cleaned,
       ownerAgent: owner.owner,
-      dependencies: tasks.length > 0 ? [tasks[tasks.length - 1]!.id] : [],
+      dependencies: previous ? [previous.id] : [],
       expectedOutputs: extractPaths(cleaned),
       validationCommands,
       approvalRequired: false,
       sourceLines: [cleaned],
+      produces: producesFor(taskId),
+      inputs: previous ? [producesFor(previous.id)] : [],
     });
   }
 
@@ -178,6 +192,8 @@ function extractTasks(
       validationCommands,
       approvalRequired: false,
       sourceLines: [summary],
+      produces: producesFor(`${phaseId}.1`),
+      inputs: [],
     });
     warnings.push(`Phase ${phaseId} had no explicit task bullets; created a single synthesized task.`);
   }
