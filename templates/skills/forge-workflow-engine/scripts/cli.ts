@@ -19,7 +19,7 @@ function usage(): never {
 
 Usage:
   npm run workflow-engine -- run     [--repo <path>] [--harness opencode|copilot|openai|stub|flowforge-kernel]
-                                     [--max-retries <n>] [--retry-delay-ms <ms>] [--heartbeat-ms <ms>] [--yes]
+                                     [--max-retries <n>] [--retry-delay-ms <ms>] [--heartbeat-ms <ms>] [--concurrency <n>] [--yes]
   npm run workflow-engine -- status  [--repo <path>]
   npm run workflow-engine -- replay  <task-id> [--repo <path>] [--harness opencode|copilot|openai|stub|flowforge-kernel]
   npm run workflow-engine -- pause   [--repo <path>]
@@ -27,6 +27,7 @@ Usage:
 Environment variables:
   FORGE_ENGINE_YES      Skip the pre-run confirmation gate (same as --yes)
   FORGE_ENGINE_HEARTBEAT_MS  Heartbeat interval in ms while a task runs (default: 15000)
+  FORGE_ENGINE_CONCURRENCY   Max ready tasks to run in parallel (default: 1; ignored unless harness supports concurrency)
   OPENCODE_BIN           Path to opencode binary (default: opencode)
   OPENCODE_EXTRA_FLAGS   Extra flags passed to opencode run
   COPILOT_BIN            Path to copilot binary (default: copilot)
@@ -106,6 +107,7 @@ function buildOptions(args: string[], harnessName?: string): EngineOptions {
     maxRetries: Number(flag(args, "--max-retries") ?? "2"),
     retryDelayMs: Number(flag(args, "--retry-delay-ms") ?? "5000"),
     heartbeatMs: Number(flag(args, "--heartbeat-ms") ?? process.env["FORGE_ENGINE_HEARTBEAT_MS"] ?? "15000"),
+    maxConcurrency: Number(flag(args, "--concurrency") ?? process.env["FORGE_ENGINE_CONCURRENCY"] ?? "1"),
     pauseRequested: false,
   };
 }

@@ -22,6 +22,7 @@ import type { AgentDescriptor, HarnessAdapter, ManifestTask, TaskResult, Workflo
  */
 export class OpenCodeAdapter implements HarnessAdapter {
   readonly name = "opencode";
+  readonly supportsConcurrency = true;
 
   private readonly bin: string;
   private readonly extraFlags: string[];

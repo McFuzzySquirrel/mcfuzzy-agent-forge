@@ -37,6 +37,34 @@ function sleep(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
+/**
+ * Run `worker` over `items` with at most `limit` invocations in flight at once,
+ * returning results in input order. Degrades to a plain sequential map when
+ * `limit <= 1` or `items.length <= 1`.
+ */
+export async function mapLimit<T, R>(
+  items: T[],
+  limit: number,
+  worker: (item: T, index: number) => Promise<R>,
+): Promise<R[]> {
+  const results = new Array<R>(items.length);
+  const cap = Math.max(1, limit);
+
+  let nextIndex = 0;
+  async function run(): Promise<void> {
+    while (true) {
+      const index = nextIndex;
+      nextIndex += 1;
+      if (index >= items.length) return;
+      results[index] = await worker(items[index]!, index);
+    }
+  }
+
+  const workers = Array.from({ length: Math.min(cap, items.length) }, () => run());
+  await Promise.all(workers);
+  return results;
+}
+
 function loadManifest(path: string): ExecutionManifest {
   return JSON.parse(readFileSync(path, "utf8")) as ExecutionManifest;
 }
@@ -175,7 +203,6 @@ async function executeTask(
   }
 
   let currentState = markTaskStarted(state, task.id);
-  saveState(opts.statePath, currentState);
   writeAuditEvent(opts.auditPath, {
     timestamp: new Date().toISOString(),
     action: "task.started",
@@ -323,6 +350,9 @@ export async function runEngine(opts: EngineOptions): Promise<WorkflowState> {
   }
 
   const store = new ArtifactStore({ artifactsPath: opts.artifactsPath });
+  const concurrency = opts.harness.supportsConcurrency && opts.maxConcurrency > 1
+    ? opts.maxConcurrency
+    : 1;
   let currentPhaseId: string | undefined;
 
   while (!isComplete(manifest, state) && !opts.pauseRequested) {
@@ -341,6 +371,7 @@ export async function runEngine(opts: EngineOptions): Promise<WorkflowState> {
       break;
     }
 
+    // Phase bookkeeping for every phase entering this wave (manifest order).
     for (const entry of ready) {
       if (entry.phaseId !== currentPhaseId) {
         currentPhaseId = entry.phaseId;
@@ -353,13 +384,29 @@ export async function runEngine(opts: EngineOptions): Promise<WorkflowState> {
         });
         console.log(`[engine] === Phase ${currentPhaseId} ===`);
       }
-
-      state = await executeTask(entry, agents, state, opts, store);
-      saveState(opts.statePath, state);
-      syncProgressMd(opts.progressPath, state, manifest);
-
-      if (hasFailed(state)) break;
     }
+
+    // Dispatch the ready frontier concurrently (bounded). Each executeTask is
+    // derived from the same base state and returns only its own task's
+    // transition, which is merged back deterministically below.
+    const results = await mapLimit(ready, concurrency, (entry) =>
+      executeTask(entry, agents, state, opts, store),
+    );
+
+    for (let i = 0; i < ready.length; i += 1) {
+      const taskId = ready[i]!.task.id;
+      const record = results[i]!.tasks[taskId];
+      if (record) {
+        state = {
+          ...state,
+          lastUpdatedAt: results[i]!.lastUpdatedAt,
+          tasks: { ...state.tasks, [taskId]: record },
+        };
+      }
+    }
+
+    saveState(opts.statePath, state);
+    syncProgressMd(opts.progressPath, state, manifest);
   }
 
   if (opts.pauseRequested && !isComplete(manifest, state) && !hasFailed(state)) {

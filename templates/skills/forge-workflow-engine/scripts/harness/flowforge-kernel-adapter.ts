@@ -1,7 +1,7 @@
-import { execFileSync } from "node:child_process";
 import { existsSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 
+import { runCommand } from "./run.ts";
 import type { AgentDescriptor, HarnessAdapter, ManifestTask, TaskResult, WorkflowState } from "../types.ts";
 
 function resolveCompilerDir(repoRoot: string): string | null {
@@ -16,6 +16,7 @@ function resolveCompilerDir(repoRoot: string): string | null {
 
 export class FlowForgeKernelAdapter implements HarnessAdapter {
   readonly name = "flowforge-kernel";
+  readonly supportsConcurrency = true;
 
   private readonly bin: string;
   private readonly extraFlags: string[];
@@ -24,6 +25,7 @@ export class FlowForgeKernelAdapter implements HarnessAdapter {
   private readonly mockMode: boolean;
   private readonly validateBeforeRun: boolean;
   private readonly validatedRepos = new Set<string>();
+  private readonly validationInFlight = new Map<string, Promise<void>>();
 
   constructor() {
     this.bin = process.env["FLOWFORGE_KERNEL_BIN"] ?? "flowforge";
@@ -46,14 +48,13 @@ export class FlowForgeKernelAdapter implements HarnessAdapter {
     const workforcePath = this.resolveWorkforcePath(repoRoot);
 
     try {
-      this.validatePackage(repoRoot, workforcePath);
+      await this.validatePackage(repoRoot, workforcePath);
 
       const args = this.buildArgs(repoRoot, workforcePath, task, agent);
-      const stdout = execFileSync(this.bin, args, {
+      const result = await runCommand(this.bin, args, {
         cwd: repoRoot,
-        encoding: "utf8",
-        timeout: 10 * 60 * 1000,
-        maxBuffer: 10 * 1024 * 1024,
+        timeoutMs: 10 * 60 * 1000,
+        maxBufferBytes: 10 * 1024 * 1024,
         env: {
           ...process.env,
           FORGE_TASK_ID: task.id,
@@ -64,10 +65,32 @@ export class FlowForgeKernelAdapter implements HarnessAdapter {
         },
       });
 
+      if (result.error) {
+        return {
+          success: false,
+          outputFiles: [],
+          stdout: result.stdout,
+          stderr: result.stderr,
+          durationMs: Date.now() - start,
+          errorMessage: result.error,
+        };
+      }
+
+      if (result.status !== 0) {
+        return {
+          success: false,
+          outputFiles: [],
+          stdout: result.stdout,
+          stderr: result.stderr,
+          durationMs: Date.now() - start,
+          errorMessage: result.stderr || `${this.bin} exited with status ${result.status}`,
+        };
+      }
+
       return {
         success: true,
         outputFiles: task.expectedOutputs,
-        stdout,
+        stdout: result.stdout,
         stderr: "",
         durationMs: Date.now() - start,
       };
@@ -116,24 +139,40 @@ export class FlowForgeKernelAdapter implements HarnessAdapter {
     return args;
   }
 
-  private validatePackage(repoRoot: string, workforcePath: string): void {
-    if (!this.validateBeforeRun) return;
-    if (this.validatedRepos.has(repoRoot)) return;
+  private validatePackage(repoRoot: string, workforcePath: string): Promise<void> {
+    if (!this.validateBeforeRun) return Promise.resolve();
+    if (this.validatedRepos.has(repoRoot)) return Promise.resolve();
 
+    let inFlight = this.validationInFlight.get(repoRoot);
+    if (!inFlight) {
+      inFlight = this.runValidation(repoRoot, workforcePath)
+        .then(() => {
+          this.validatedRepos.add(repoRoot);
+        })
+        .finally(() => {
+          this.validationInFlight.delete(repoRoot);
+        });
+      this.validationInFlight.set(repoRoot, inFlight);
+    }
+    return inFlight;
+  }
+
+  private async runValidation(repoRoot: string, workforcePath: string): Promise<void> {
     const compilerDir = resolveCompilerDir(repoRoot);
     if (!compilerDir) {
       throw new Error("forge-workforce-compiler skill was not found. Install/bootstrap it before using flowforge-kernel harness.");
     }
 
     const npmBin = process.platform === "win32" ? "npm.cmd" : "npm";
-    execFileSync(npmBin, ["run", "forge-workforce-compiler", "--", "validate", "--package", workforcePath], {
+    const result = await runCommand(npmBin, ["run", "forge-workforce-compiler", "--", "validate", "--package", workforcePath], {
       cwd: compilerDir,
-      encoding: "utf8",
-      timeout: 2 * 60 * 1000,
-      maxBuffer: 4 * 1024 * 1024,
+      timeoutMs: 2 * 60 * 1000,
+      maxBufferBytes: 4 * 1024 * 1024,
     });
 
-    this.validatedRepos.add(repoRoot);
+    if (result.status !== 0) {
+      throw new Error(`Workforce validation failed: ${result.stderr || result.error || result.stdout}`);
+    }
   }
 
   private resolveWorkforcePath(repoRoot: string): string {

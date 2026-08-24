@@ -53,6 +53,12 @@ export interface TaskResult {
 
 export interface HarnessAdapter {
   name: string;
+  /**
+   * True when the adapter can be safely invoked concurrently (stateless and
+   * non-blocking).  The engine only parallelizes ready tasks when the selected
+   * harness opts in; otherwise it forces sequential execution.
+   */
+  supportsConcurrency: boolean;
   invoke(
     agent: AgentDescriptor,
     task: ManifestTask,
@@ -83,6 +89,12 @@ export interface EngineOptions {
   retryDelayMs: number;
   /** Interval (ms) between heartbeat lines while a task is executing; 0 disables. */
   heartbeatMs: number;
+  /**
+   * Maximum number of ready tasks to execute concurrently. Values <= 1 run
+   * sequentially (the previous behavior). Ignored when the harness does not
+   * declare `supportsConcurrency`.
+   */
+  maxConcurrency: number;
   pauseRequested: boolean;
 }
 

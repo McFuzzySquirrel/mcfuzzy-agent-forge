@@ -264,7 +264,7 @@ cd .agents/skills/forge-workflow-engine   && npm install && npm run workflow-eng
 - **State is tied to a run ID.** Compiling a new manifest after a partial run will produce a manifest that no longer matches the in-progress state. Start a new run (`rm docs/WORKFLOW-STATE.json`) rather than mixing them.
 - **OpenCode must be in `$PATH`.** The `opencode` adapter shells out to the binary. If OpenCode is installed at a non-standard path, set `OPENCODE_BIN`.
 - **Agent file paths must be absolute or resolvable from the repo root.** The adapter inlines the agent persona (`agent.rawBody`) into the prompt; `rawBody` comes from discovery, which reads the agent `.md` file.
-- **No speculative parallelism in MVP.** Tasks within a phase execute sequentially even if they have independent dependencies. True parallel dispatch requires a backend that guarantees isolation.
+- **Parallelism is opt-in and harness-gated.** The engine executes the ready-task frontier concurrently up to `--concurrency <n>` (default `1` = sequential). Only harness adapters that declare `supportsConcurrency` are parallelized; repo-editing harnesses still rely on the dependency graph for file isolation. See ADR-021.
 
 ---
 

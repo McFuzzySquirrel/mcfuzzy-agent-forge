@@ -52,27 +52,6 @@ function subdirFromType(type: string): string {
   return type.replace(/\./g, "-") || "other";
 }
 
-/**
- * Generate a sequential artifact ID of the form "<subdir>-<NNN>".
- * Scans existing files in the target directory to find the next index.
- */
-function nextArtifactId(artifactsRoot: string, type: string): string {
-  const subdir = subdirFromType(type);
-  const dir = join(artifactsRoot, subdir);
-  let maxIndex = 0;
-  if (existsSync(dir)) {
-    for (const file of readdirSync(dir)) {
-      const match = file.match(new RegExp(`^${subdir}-(\\d+)\\.json$`));
-      if (match) {
-        const n = parseInt(match[1]!, 10);
-        if (n > maxIndex) maxIndex = n;
-      }
-    }
-  }
-  const index = String(maxIndex + 1).padStart(3, "0");
-  return `${subdir}-${index}`;
-}
-
 // ─── ArtifactStore ────────────────────────────────────────────────────────────
 
 export interface ArtifactStoreOptions {
@@ -82,9 +61,41 @@ export interface ArtifactStoreOptions {
 
 export class ArtifactStore {
   private readonly root: string;
+  /**
+   * In-memory monotonic artifact-index counters, keyed by type subdirectory.
+   * Seeded from disk on first use so concurrent writes never scan-then-write
+   * into the same ID.
+   */
+  private readonly idCounters = new Map<string, number>();
 
   constructor(opts: ArtifactStoreOptions) {
     this.root = opts.artifactsPath;
+  }
+
+  /**
+   * Allocate the next sequential artifact ID of the form "<subdir>-<NNN>".
+   * Uses an in-memory counter seeded once from the on-disk maximum, so
+   * concurrent writes to the same type cannot collide.
+   */
+  private reserveArtifactId(type: string): string {
+    const subdir = subdirFromType(type);
+    let next = this.idCounters.get(subdir);
+    if (next === undefined) {
+      let maxIndex = 0;
+      const dir = join(this.root, subdir);
+      if (existsSync(dir)) {
+        for (const file of readdirSync(dir)) {
+          const match = file.match(new RegExp(`^${subdir}-(\\d+)\\.json$`));
+          if (match) {
+            const n = parseInt(match[1]!, 10);
+            if (n > maxIndex) maxIndex = n;
+          }
+        }
+      }
+      next = maxIndex + 1;
+    }
+    this.idCounters.set(subdir, next + 1);
+    return `${subdir}-${String(next).padStart(3, "0")}`;
   }
 
   // ─── Write ──────────────────────────────────────────────────────────────────
@@ -95,7 +106,7 @@ export class ArtifactStore {
    * a sequential ID is generated.
    */
   write(partial: Omit<Artifact, "artifactId" | "createdAt"> & Partial<Pick<Artifact, "artifactId" | "createdAt">>): Artifact {
-    const artifactId = partial.artifactId ?? nextArtifactId(this.root, partial.type);
+    const artifactId = partial.artifactId ?? this.reserveArtifactId(partial.type);
     const artifact: Artifact = {
       ...partial,
       artifactId,

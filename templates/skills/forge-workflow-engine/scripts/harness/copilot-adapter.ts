@@ -24,6 +24,7 @@ import type { AgentDescriptor, HarnessAdapter, ManifestTask, TaskResult, Workflo
  */
 export class CopilotAdapter implements HarnessAdapter {
   readonly name = "copilot";
+  readonly supportsConcurrency = true;
 
   private readonly bin: string;
   private readonly extraFlags: string[];
