@@ -62,12 +62,26 @@ npm run workflow-engine -- run --harness stub          # dry-run, no real calls
 npm run workflow-engine -- run --harness flowforge-kernel
 npm run workflow-engine -- run --max-retries 3 --retry-delay-ms 10000
 npm run workflow-engine -- run --harness opencode --yes   # skip the pre-run gate
+npm run workflow-engine -- run --heartbeat-ms 5000        # heartbeat every 5s while a task runs
 ```
 
 The engine prints a pre-run summary (harness, phases, tasks) and, when run
 interactively, pauses for confirmation before dispatching. The gate is
 interactive-only: pass `--yes` (or set `FORGE_ENGINE_YES=1`) to skip it
 explicitly for headless/CI runs, and it auto-skips when stdin is not a TTY.
+
+### Heartbeat
+
+While a task is executing (e.g. a long `opencode run` / `copilot -p` call), the
+engine prints a `…still working on task <id> (@<agent>, Ns elapsed)` line at a
+fixed interval so a quiet terminal doesn't look hung:
+
+```bash
+npm run workflow-engine -- run --heartbeat-ms 15000        # default: 15s
+npm run workflow-engine -- run --heartbeat-ms 0            # disable
+```
+
+`--heartbeat-ms` overrides the `FORGE_ENGINE_HEARTBEAT_MS` environment variable.
 
 ### Check status
 
@@ -98,7 +112,7 @@ The engine is harness-agnostic. Select the backend with `--harness`:
 
 | Adapter | Flag | How it invokes agents |
 |---|---|---|
-| **OpenCode CLI** (default) | `--harness opencode` | `opencode run --model <m> --system-prompt <agent.md> "<prompt>"` |
+| **OpenCode CLI** (default) | `--harness opencode` | `opencode run --model <m> "<agent body + task prompt>"` |
 | **GitHub Copilot CLI** | `--harness copilot` | `copilot -p "<agent context + task prompt>" --yolo` |
 | **OpenAI API** | `--harness openai` | `POST /v1/chat/completions` with agent rawBody as system prompt |
 | **Stub** | `--harness stub` | Returns synthetic success; no real calls (for testing) |
@@ -121,6 +135,10 @@ The engine is harness-agnostic. Select the backend with `--harness`:
 The copilot adapter inlines the agent file contents into the prompt (there is no
 `--system-prompt` flag on `copilot -p`) and auto-approves tool permissions with
 `--yolo`, mirroring the opencode adapter's `--auto`.
+
+The opencode adapter does the same: `opencode run` has no `--system-prompt` flag,
+so it inlines the agent persona (`agent.rawBody`) into the prompt as an inline
+context block and auto-approves tool permissions with `--auto`.
 
 ### OpenAI adapter environment variables
 
@@ -250,7 +268,7 @@ cd .agents/skills/forge-workflow-engine   && npm install && npm run workflow-eng
 - **Manifest must exist first.** The engine reads `docs/EXECUTION-MANIFEST.json` - it does not re-parse the PRD. If the PRD changes after a compile, re-run `forge-execution-adapter compile` and then start a fresh run.
 - **State is tied to a run ID.** Compiling a new manifest after a partial run will produce a manifest that no longer matches the in-progress state. Start a new run (`rm docs/WORKFLOW-STATE.json`) rather than mixing them.
 - **OpenCode must be in `$PATH`.** The `opencode` adapter shells out to the binary. If OpenCode is installed at a non-standard path, set `OPENCODE_BIN`.
-- **Agent file paths must be absolute or resolvable from the repo root.** The adapter passes `--system-prompt <agent.path>` to OpenCode; the path comes from discovery, which returns absolute paths.
+- **Agent file paths must be absolute or resolvable from the repo root.** The adapter inlines the agent persona (`agent.rawBody`) into the prompt; `rawBody` comes from discovery, which reads the agent `.md` file.
 - **No speculative parallelism in MVP.** Tasks within a phase execute sequentially even if they have independent dependencies. True parallel dispatch requires a backend that guarantees isolation.
 
 ---

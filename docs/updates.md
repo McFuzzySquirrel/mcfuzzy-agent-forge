@@ -4,6 +4,34 @@ Detailed release and change notes for McFuzzy Agent Forge.
 
 ---
 
+## August 2026 - v3.11
+
+### Workflow-engine heartbeat, OpenCode adapter fix, and clearer engine handoff
+
+- **OpenCode adapter no longer passes `--system-prompt`.** `opencode run` (v1.18+)
+  has no such flag, so the previous invocation printed the CLI usage and failed
+  every task. The agent persona (`agent.rawBody`) is now inlined into the prompt,
+  matching the copilot and openai adapters. Docs (SKILL.md, deep-dive) updated.
+- **Shell-safe child invocation.** The `opencode` and `copilot` adapters now use
+  asynchronous `spawn` (via a shared `harness/run.ts`) instead of `spawnSync`
+  with a shell string. This fixes `/bin/sh` interpolation errors from backticks
+  and `$` in agent bodies, and keeps the event loop free for the heartbeat.
+- **Engine heartbeat.** While a task is executing, the engine prints
+  `…still working on task <id> (@<agent>, Ns elapsed)` every
+  `--heartbeat-ms <ms>` (default 15s; `0` disables, `FORGE_ENGINE_HEARTBEAT_MS`
+  env override) so a quiet terminal doesn't look hung.
+- **`--yes` actually skips the pre-run gate.** The boolean flag was parsed with a
+  value-expecting helper, so it never matched; added a proper `hasFlag` check
+  (alongside `FORGE_ENGINE_YES=1`).
+- **Clearer engine handoff in the launcher.** Choosing "Run the workflow-engine
+  build now (detached)" now sets an engine-started flag, skips the subsequent
+  interactive CLI launch prompt, prints `tail -f` / `Get-Content -Wait` monitor
+  commands, and makes the Step 9 summary reflect the running engine instead of
+  the manual `@workspace /forge-auto-build` steps. Fixed the `Skip -I will…`
+  menu typo. (Bash + PowerShell.)
+
+---
+
 ## August 2026 - v3.10
 
 ### Forge launcher: auto-draft flow and friendlier path input

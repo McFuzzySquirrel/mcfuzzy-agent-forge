@@ -6,6 +6,7 @@ import type {
   EngineOptions,
   ExecutionManifest,
   ManifestTask,
+  TaskResult,
   WorkflowState,
 } from "./types.ts";
 
@@ -194,7 +195,22 @@ async function executeTask(
       await sleep(opts.retryDelayMs);
     }
 
-    const result = await opts.harness.invoke(agent, task, currentState, opts.repoRoot, contextBlock);
+    const invokeStart = Date.now();
+    let heartbeat: ReturnType<typeof setInterval> | undefined;
+    if (opts.heartbeatMs > 0) {
+      heartbeat = setInterval(() => {
+        const elapsed = Math.round((Date.now() - invokeStart) / 1000);
+        console.log(`[engine] …still working on task ${task.id} (@${agent.name}, ${elapsed}s elapsed)`);
+      }, opts.heartbeatMs);
+      heartbeat.unref?.();
+    }
+
+    let result: TaskResult;
+    try {
+      result = await opts.harness.invoke(agent, task, currentState, opts.repoRoot, contextBlock);
+    } finally {
+      if (heartbeat) clearInterval(heartbeat);
+    }
 
     if (result.success) {
       // ── Artifact creation ─────────────────────────────────────────────────

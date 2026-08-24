@@ -19,13 +19,14 @@ function usage(): never {
 
 Usage:
   npm run workflow-engine -- run     [--repo <path>] [--harness opencode|copilot|openai|stub|flowforge-kernel]
-                                     [--max-retries <n>] [--retry-delay-ms <ms>] [--yes]
+                                     [--max-retries <n>] [--retry-delay-ms <ms>] [--heartbeat-ms <ms>] [--yes]
   npm run workflow-engine -- status  [--repo <path>]
   npm run workflow-engine -- replay  <task-id> [--repo <path>] [--harness opencode|copilot|openai|stub|flowforge-kernel]
   npm run workflow-engine -- pause   [--repo <path>]
 
 Environment variables:
   FORGE_ENGINE_YES      Skip the pre-run confirmation gate (same as --yes)
+  FORGE_ENGINE_HEARTBEAT_MS  Heartbeat interval in ms while a task runs (default: 15000)
   OPENCODE_BIN           Path to opencode binary (default: opencode)
   OPENCODE_EXTRA_FLAGS   Extra flags passed to opencode run
   COPILOT_BIN            Path to copilot binary (default: copilot)
@@ -53,6 +54,10 @@ function flag(args: string[], name: string): string | undefined {
     if (arg.startsWith(`${name}=`)) return arg.slice(name.length + 1);
   }
   return undefined;
+}
+
+function hasFlag(args: string[], name: string): boolean {
+  return args.includes(name);
 }
 
 function detectRepoRoot(start = process.cwd()): string {
@@ -100,6 +105,7 @@ function buildOptions(args: string[], harnessName?: string): EngineOptions {
     harness: resolveHarness(harnessName ?? flag(args, "--harness")),
     maxRetries: Number(flag(args, "--max-retries") ?? "2"),
     retryDelayMs: Number(flag(args, "--retry-delay-ms") ?? "5000"),
+    heartbeatMs: Number(flag(args, "--heartbeat-ms") ?? process.env["FORGE_ENGINE_HEARTBEAT_MS"] ?? "15000"),
     pauseRequested: false,
   };
 }
@@ -111,7 +117,7 @@ function buildOptions(args: string[], harnessName?: string): EngineOptions {
 async function confirmPreRun(opts: EngineOptions, args: string[]): Promise<void> {
   const manifest = JSON.parse(readFileSync(opts.manifestPath, "utf8")) as ExecutionManifest;
   const taskCount = manifest.phases.reduce((n, p) => n + (p.tasks?.length ?? 0), 0);
-  const skip = flag(args, "--yes") !== undefined || process.env["FORGE_ENGINE_YES"] === "1";
+  const skip = hasFlag(args, "--yes") || process.env["FORGE_ENGINE_YES"] === "1";
 
   console.log("Forge Workflow Engine - Pre-run Summary");
   console.log(`  Harness : ${opts.harness.name}`);

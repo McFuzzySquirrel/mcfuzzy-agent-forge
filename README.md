@@ -172,6 +172,7 @@ copilot -p "/forge-auto-build Use docs/PRD.md as the project PRD. GO --workflow-
 
 - `opencode run` / `copilot -p` are non-interactive; `--auto` / `--yolo` auto-approve tool permissions.
 - `forge-auto-build`'s engine path (`GO --workflow-engine`) starts the engine **detached** (log: `docs/engine-run.log`) and polls `docs/WORKFLOW-STATE.json` to completion - the build survives the chat session and resumes with `run`.
+- While a task runs, the engine prints a heartbeat line (`…still working on task <id> …`) so a quiet terminal doesn't look hung. Tune it with `--heartbeat-ms <ms>` or `FORGE_ENGINE_HEARTBEAT_MS` (default 15s; `0` disables).
 - With no PRD yet, the launcher queues `forge-auto-build-prd` in headless mode (auto-proceeds with default assumptions recorded in the PRD's Open Questions).
 - `--draft` (PowerShell: `-Draft`) pre-answers the Step 8 auto-draft prompts: generate the PRD from `docs/IDEA.md`, then the agent team from the PRD (from the decomposed vision + features when present), committing each stage and pausing for review before offering the engine run. Non-interactive runs use `FORGE_AUTO_DRAFT=1`.
 - `--dry-run` prints the exact command instead of running it. Configure the runner with `FORGE_RUN_WITH=opencode|copilot`, the engine path with `FORGE_WORKFLOW_ENGINE=1`, and the per-task engine harness with `FORGE_ENGINE_HARNESS=opencode|copilot|openai|stub`.

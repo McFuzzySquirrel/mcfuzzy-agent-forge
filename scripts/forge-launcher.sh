@@ -470,7 +470,7 @@ engine_decision() {
   fi
   echo "    1) Run the workflow-engine build now (detached)"
   echo "    2) Print the engine command to run later"
-  echo "    3) Skip -I will launch the CLI / build manually"
+  echo "    3) Skip - I will launch the CLI / build manually"
   echo ""
   local engine_choice
   prompt engine_choice "Select [1-3]" "2"
@@ -499,7 +499,13 @@ run_engine_detached() {
   fi
   ( nohup "$engine_script" --repo "$REPO_DIR" --harness "$harness" --yes \
       >> "$REPO_DIR/docs/engine-run.log" 2>&1 & )
+  ENGINE_STARTED=true
   ok "Engine started detached. Log: $REPO_DIR/docs/engine-run.log"
+  echo ""
+  info "The engine runs in the background, even after this launcher exits."
+  info "Monitor progress from another terminal with:"
+  echo "    ${BOLD}tail -f $REPO_DIR/docs/engine-run.log${RESET}"
+  echo "    ${BOLD}tail -f $REPO_DIR/docs/PROGRESS.md${RESET}"
 }
 
 auto_draft_menu() {
@@ -914,6 +920,13 @@ launch_autobuild() {
   # (with review boundaries), then decide how to run the workflow engine.
   auto_draft_menu
 
+  if [[ "$ENGINE_STARTED" == true ]]; then
+    echo ""
+    info "The workflow engine is already running this build in the background."
+    info "Skipping the interactive CLI launch prompt - no need to run forge-auto-build."
+    return 0
+  fi
+
   case "$HARNESS" in
     github)
       if [[ "$COPILOT_AVAILABLE" == true ]]; then
@@ -1023,14 +1036,28 @@ completion_summary() {
   echo ""
   echo "  Next steps:"
   echo ""
-  echo "  1. Open the project in your agent harness."
-  echo "  2. Run the queued pipeline command:"
-  echo ""
-  echo "       ${BOLD}@workspace $(autobuild_command)${RESET}"
-  echo ""
-  echo "  3. Review the pre-flight summary that the skill presents."
-  echo "  4. Type ${BOLD}GO${RESET} to start the autonomous pipeline (add ${BOLD}--workflow-engine${RESET} to"
-  echo "     run the build through the workflow engine once the agent team is generated)."
+  if [[ "$ENGINE_STARTED" == true ]]; then
+    local engine_harness="${FORGE_ENGINE_HARNESS:-opencode}"
+    echo "  1. The workflow engine is building the project in the background"
+    echo "     (it keeps running after this launcher exits)."
+    echo "  2. Monitor progress from another terminal:"
+    echo ""
+    echo "       ${BOLD}tail -f $REPO_DIR/docs/engine-run.log${RESET}"
+    echo "       ${BOLD}tail -f $REPO_DIR/docs/PROGRESS.md${RESET}"
+    echo ""
+    echo "  3. Re-run or resume the engine later if needed:"
+    echo ""
+    echo "       ${BOLD}$SCRIPT_DIR/forge-engine-run.sh --repo \"$REPO_DIR\" --harness $engine_harness --yes${RESET}"
+  else
+    echo "  1. Open the project in your agent harness."
+    echo "  2. Run the queued pipeline command:"
+    echo ""
+    echo "       ${BOLD}@workspace $(autobuild_command)${RESET}"
+    echo ""
+    echo "  3. Review the pre-flight summary that the skill presents."
+    echo "  4. Type ${BOLD}GO${RESET} to start the autonomous pipeline (add ${BOLD}--workflow-engine${RESET} to"
+    echo "     run the build through the workflow engine once the agent team is generated)."
+  fi
   echo ""
   echo "  References:"
   echo "   • Prompt playbook : $REPO_DIR/docs/prompt-playbook.md"
@@ -1067,6 +1094,7 @@ main() {
   FORGE_RUN_WITH="${FORGE_RUN_WITH:-}"
   FORGE_WORKFLOW_ENGINE="${FORGE_WORKFLOW_ENGINE:-0}"
   FORGE_AUTO_DRAFT="${FORGE_AUTO_DRAFT:-0}"
+  ENGINE_STARTED=false
 
   preflight_check
   select_harness

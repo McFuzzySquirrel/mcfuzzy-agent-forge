@@ -455,7 +455,7 @@ function Invoke-EngineDecision {
     }
     Write-Host "    1) Run the workflow-engine build now (detached)"
     Write-Host "    2) Print the engine command to run later"
-    Write-Host "    3) Skip -I will launch the CLI / build manually"
+    Write-Host "    3) Skip - I will launch the CLI / build manually"
     Write-Host ""
     $choice = Read-Prompt "Select [1-3]" "2"
     switch ($choice) {
@@ -484,7 +484,13 @@ function Start-EngineDetached {
     $log = Join-Path $script:RepoDir "docs\engine-run.log"
     $args = @("-Repo", $script:RepoDir, "-Harness", $harness, "-Yes")
     Start-Process -FilePath $engineScript -ArgumentList $args -RedirectStandardOutput "$log.out" -RedirectStandardError "$log.err" -WindowStyle Hidden | Out-Null
+    $script:EngineStarted = $true
     Write-Ok "Engine started detached. Log: $log (.out/.err)"
+    Write-Host ""
+    Write-Info "The engine runs in the background, even after this launcher exits."
+    Write-Info "Monitor progress from another terminal with:"
+    Write-Host "    Get-Content `"$(Join-Path $script:RepoDir 'docs\engine-run.log')`" -Wait" -ForegroundColor White
+    Write-Host "    Get-Content `"$(Join-Path $script:RepoDir 'docs\PROGRESS.md')`" -Wait" -ForegroundColor White
 }
 
 function Invoke-AutoDraftMenu {
@@ -935,6 +941,13 @@ function Invoke-LaunchAutobuild {
     # (with review boundaries), then decide how to run the workflow engine.
     Invoke-AutoDraftMenu
 
+    if ($script:EngineStarted) {
+        Write-Host ""
+        Write-Info "The workflow engine is already running this build in the background."
+        Write-Info "Skipping the interactive CLI launch prompt - no need to run forge-auto-build."
+        return
+    }
+
     switch ($script:Harness) {
         "github" {
             if ($script:CopilotAvailable) {
@@ -1044,14 +1057,29 @@ function Write-CompletionSummary {
     Write-Host ""
     Write-Host "  Next steps:"
     Write-Host ""
-    Write-Host "  1. Open the project in your agent harness."
-    Write-Host "  2. Run the queued pipeline command:"
-    Write-Host ""
-    Write-Host "       @workspace $(Get-AutobuildCommand)" -ForegroundColor White
-    Write-Host ""
-    Write-Host "  3. Review the pre-flight summary that the skill presents."
-    Write-Host "  4. Type GO to start the autonomous pipeline (add --workflow-engine to"
-    Write-Host "     run the build through the workflow engine once the agent team is generated)."
+    if ($script:EngineStarted) {
+        $engineHarness = if ($env:FORGE_ENGINE_HARNESS) { $env:FORGE_ENGINE_HARNESS } else { "opencode" }
+        $engineScript = Join-Path $ScriptDir "forge-engine-run.ps1"
+        Write-Host "  1. The workflow engine is building the project in the background"
+        Write-Host "     (it keeps running after this launcher exits)."
+        Write-Host "  2. Monitor progress from another terminal:"
+        Write-Host ""
+        Write-Host "       Get-Content `"$(Join-Path $script:RepoDir 'docs\engine-run.log')`" -Wait" -ForegroundColor White
+        Write-Host "       Get-Content `"$(Join-Path $script:RepoDir 'docs\PROGRESS.md')`" -Wait" -ForegroundColor White
+        Write-Host ""
+        Write-Host "  3. Re-run or resume the engine later if needed:"
+        Write-Host ""
+        Write-Host "       $engineScript -Repo `"$($script:RepoDir)`" -Harness $engineHarness -Yes" -ForegroundColor White
+    } else {
+        Write-Host "  1. Open the project in your agent harness."
+        Write-Host "  2. Run the queued pipeline command:"
+        Write-Host ""
+        Write-Host "       @workspace $(Get-AutobuildCommand)" -ForegroundColor White
+        Write-Host ""
+        Write-Host "  3. Review the pre-flight summary that the skill presents."
+        Write-Host "  4. Type GO to start the autonomous pipeline (add --workflow-engine to"
+        Write-Host "     run the build through the workflow engine once the agent team is generated)."
+    }
     Write-Host ""
     Write-Host "  References:"
     Write-Host "   • Prompt playbook : $(Join-Path $script:RepoDir 'docs\prompt-playbook.md')"
@@ -1082,6 +1110,7 @@ $script:OpencodeAvailable = $false
 $script:ClaudeAvailable   = $false
 $script:PrdAdded          = $false
 $script:ResearchAdded     = $false
+$script:EngineStarted     = $false
 
 Invoke-PreflightCheck
 Select-Harness

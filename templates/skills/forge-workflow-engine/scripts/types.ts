@@ -81,6 +81,8 @@ export interface EngineOptions {
   harness: HarnessAdapter;
   maxRetries: number;
   retryDelayMs: number;
+  /** Interval (ms) between heartbeat lines while a task is executing; 0 disables. */
+  heartbeatMs: number;
   pauseRequested: boolean;
 }
 
