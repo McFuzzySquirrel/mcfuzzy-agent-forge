@@ -1,15 +1,6 @@
 ---
 name: forge-auto-build
-description: >
-  Execution fast-path meta-skill that chains the build pipeline from an existing
-  PRD in a single continuous flow: forge-build-agent-team →
-  optionally forge-assign-models → one build execution path
-  (`forge-orchestrate-build` or `forge-workflow-engine`).
-  Use this skill when a PRD already exists (docs/PRD.md or the decomposed
-  product-vision + features layout) and you want to go from that approved PRD to
-  a fully built, validated, and committed project without manual hand-offs
-  between steps. A single pre-flight confirmation gate is presented before the
-  autonomous run begins.
+description: "Execution fast-path meta-skill that chains the build pipeline from an existing PRD in a single continuous flow: forge-build-agent-team → optionally forge-assign-models → one build execution path (`forge-orchestrate-build` or `forge-workflow-engine`). Use this skill when a PRD already exists (docs/PRD.md or the decomposed product-vision + features layout) and you want to go from that approved PRD to a fully built, validated, and committed project without manual hand-offs between steps. A single pre-flight confirmation gate is presented before the autonomous run begins."
 ---
 
 # Skill: Full Auto Build (End-to-End Pipeline)

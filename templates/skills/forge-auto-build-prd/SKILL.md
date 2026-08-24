@@ -1,12 +1,6 @@
 ---
 name: forge-auto-build-prd
-description: >
-  Meta-skill that takes a project idea and produces a reviewed, confirmed PRD -
-  with automatic decomposition when the PRD qualifies - then stops before team
-  generation. Chains: idea confirmation → forge-build-prd (interview, review,
-  save) → automatic decomposition check → hand off to forge-auto-build.
-  Use this skill when you are starting a new project from an idea and no
-  docs/PRD.md (or decomposed product vision + features) exists yet.
+description: "Meta-skill that takes a project idea and produces a reviewed, confirmed PRD - with automatic decomposition when the PRD qualifies - then stops before team generation. Chains: idea confirmation → forge-build-prd (interview, review, save) → automatic decomposition check → hand off to forge-auto-build. Use this skill when you are starting a new project from an idea and no docs/PRD.md (or decomposed product vision + features) exists yet."
 ---
 
 # Skill: Build a PRD from an Idea (Meta-Skill)

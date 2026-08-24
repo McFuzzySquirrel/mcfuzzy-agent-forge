@@ -1,10 +1,6 @@
 ---
 name: forge-build-agent-team
-description: >
-  Analyze a Product Requirements Document (PRD), Product Vision with Feature documents, or
-  Feature PRD and generate a complete team of custom agents and reusable skills
-  tailored to the project. Use this skill when asked to create, scaffold, or design a development
-  team from requirements documents.
+description: Analyze a Product Requirements Document (PRD), Product Vision with Feature documents, or Feature PRD and generate a complete team of custom agents and reusable skills tailored to the project. Use this skill when asked to create, scaffold, or design a development team from requirements documents.
 ---
 
 # Skill: Build a Custom Agent Team from a PRD
@@ -83,9 +79,7 @@ Create each agent file at `HARNESS_AGENTS_DIR/{agent-name}.md`:
 ````markdown
 ---
 name: {agent-name}
-description: >
-  {One-sentence summary of expertise and when to use this agent.
-  Reference the project name and specific technology domains.}
+description: {One-sentence summary of expertise and when to use this agent. Reference the project name and specific technology domains.}
 ---
 
 You are a **{Role Title}** responsible for {one-sentence scope description}.
@@ -184,9 +178,7 @@ Only after explicit user approval to proceed without these dependencies, scaffol
 ````markdown
 ---
 name: {skill-name}
-description: >
-  {One-sentence summary of what this skill does and when to use it.
-  Include specific keywords to help the agent recognize relevant tasks.}
+description: {One-sentence summary of what this skill does and when to use it. Include specific keywords to help the agent recognize relevant tasks.}
 ---
 
 # Skill: {Human-Readable Title}

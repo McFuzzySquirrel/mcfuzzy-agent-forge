@@ -1,11 +1,6 @@
 ---
 name: forge-workflow-engine
-description: >
-  Dynamic workflow orchestration engine that reads docs/EXECUTION-MANIFEST.json
-  and drives every task to completion through a pluggable harness adapter
-  (OpenCode CLI, OpenAI API, or stub). Maintains docs/WORKFLOW-STATE.json for
-  machine-readable run state and syncs docs/PROGRESS.md after every task.
-  Use this skill after forge-execution-adapter has compiled the manifest.
+description: Dynamic workflow orchestration engine that reads docs/EXECUTION-MANIFEST.json and drives every task to completion through a pluggable harness adapter (OpenCode CLI, OpenAI API, or stub). Maintains docs/WORKFLOW-STATE.json for machine-readable run state and syncs docs/PROGRESS.md after every task. Use this skill after forge-execution-adapter has compiled the manifest.
 ---
 
 # Skill: Forge Workflow Engine
