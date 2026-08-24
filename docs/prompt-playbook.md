@@ -51,53 +51,53 @@ git commit -m "chore: bootstrap Agent Forge agent and skill templates"
 
 ---
 
-## Fast Path - One-Prompt Bootstrap (Optional)
+## Fast Path - Build a Reviewed PRD in One Prompt (Optional)
 
-If you just want to go from a one-liner idea to a reviewed PRD and a generated agent team without copy-pasting between skills, use the `forge-bootstrap-project` meta-skill. It chains `forge-build-prd` → **pause for PRD review** → `forge-build-agent-team` → **pause for team review** → optionally `forge-assign-models`. The review pauses are preserved - each one emits a verification checklist before the next step runs.
+If you want to go from a one-liner idea to a **reviewed, confirmed PRD** without copy-pasting between skills, use the `forge-auto-build-prd` meta-skill. It confirms your idea, then chains `forge-build-prd` (interview → draft → review) and automatically runs the decomposition check - a qualifying PRD (15+ functional requirements or 3+ implementation phases) is decomposed into a Product Vision + Feature documents with no opt-in question. The skill stops after the PRD, before team generation.
 
 ```
-@workspace /forge-bootstrap-project I want to build [describe your idea in one sentence].
+@workspace /forge-auto-build-prd I want to build [describe your idea in one sentence].
 ```
 
-At each pause, reply `approved` to continue, `revise: <notes>` to iterate on the current artifact, or `stop` to end the flow. At Pause 2, reply `approved and assign models` to also run `forge-assign-models` in Recommend mode.
+`forge-build-prd` presents its PRD review checklist before the document is saved. Reply `revise: <notes>` to iterate on the PRD, or approve to finish. Once `docs/PRD.md` exists (plus `docs/product-vision.md` + `docs/features/*.md` when decomposed), hand off to `forge-auto-build` for the agent team and build execution.
 
-If you prefer to drive each step yourself, skip this section and follow Steps 2–4.5 below.
+If you prefer to drive the PRD yourself, use `forge-build-prd` directly (Step 2 below).
 
 ---
 
-## Full Auto Build - One Command, Entire Pipeline (Optional)
+## Full Auto Build - One Command, Entire Pipeline (Requires an Existing PRD)
 
-If you want to go from a one-liner idea all the way to a **fully built, validated, and committed project** without any manual hand-offs between steps, use the `forge-auto-build` meta-skill. It chains the entire pipeline:
+`forge-auto-build` is the **execution fast-path**: it takes an existing, reviewed PRD and runs the entire build pipeline with no manual hand-offs. It does **not** generate a PRD - that is a deliberate, separate stage. Use it once `docs/PRD.md` exists (or the decomposed `docs/product-vision.md` + `docs/features/*.md` layout):
 
-`forge-build-prd` → `forge-build-agent-team` → *(optional)* `forge-assign-models` → `forge-orchestrate-build` **(all phases, with validation + commit after each phase)**
-
-```
-@workspace /forge-auto-build I want to build [describe your idea in one sentence].
-```
-
-With per-agent model assignment:
-
-```
-@workspace /forge-auto-build I want to build [describe your idea in one sentence]. GO --assign-models
-```
-
-From an existing PRD (skips PRD generation):
+`forge-build-agent-team` → *(optional)* `forge-assign-models` → `forge-orchestrate-build` **(all phases, with validation + commit after each phase)**
 
 ```
 @workspace /forge-auto-build docs/PRD.md
 ```
 
+From a decomposed PRD (Product Vision + Features):
+
+```
+@workspace /forge-auto-build
+```
+
+With per-agent model assignment:
+
+```
+@workspace /forge-auto-build docs/PRD.md GO --assign-models
+```
+
+> If no PRD exists yet, `forge-auto-build` stops at its pre-flight check and directs you to `forge-auto-build-prd` or `forge-build-prd` first. It will not interview you for a one-line idea.
+
 **How it works:**
 
-1. A single pre-flight gate is presented -review the plan and type `GO` to launch.
-2. After `GO`, the skill runs autonomously through all stages and phases.
+1. Its pre-flight check verifies a PRD representation exists -`docs/PRD.md`, or `docs/product-vision.md` + `docs/features/*.md` -then presents a single pre-flight gate. Review the plan and type `GO` to launch.
+2. After `GO`, the skill runs autonomously through all stages: agent team, (optional) model assignment, then every build phase.
 3. After every build phase completes, validation checks run (build, lint, tests) and a commit is made automatically.
 4. If any validation fails, the run stops and reports the exact error -it does not proceed past a broken phase.
 5. A final summary lists every stage completed, every commit made, and the recommended next steps.
 
-> **When to use `forge-auto-build` vs. `forge-bootstrap-project`:**
-> Use `forge-bootstrap-project` when you want human review gates after the PRD and after the agent team are generated -good for unfamiliar or complex projects.
-> Use `forge-auto-build` when you have a clear idea and want to go directly from idea to working code with a single command.
+> **Using the workflow engine:** at the pre-flight gate, type `GO --workflow-engine` to execute Stage 3 through `forge-workflow-engine` instead of the prompt-driven `forge-orchestrate-build`. That path installs the execution packages, compiles `docs/EXECUTION-MANIFEST.json`, and runs the engine (default harness: OpenCode).
 
 > **Resuming after interruption:** If the run is interrupted, re-invoke `forge-auto-build` in the same repo. It reads `docs/PROGRESS.md` and resumes from the last completed task without re-running already-committed stages.
 
@@ -139,11 +139,13 @@ non-functional requirements (performance, security, privacy), and implementation
 Flag anything missing and fill in the gaps.
 ```
 
+> **Automatic decomposition:** once you confirm the PRD is ready and it is saved to `docs/PRD.md`, `forge-build-prd` runs its decomposition check automatically. If the PRD has **15+ functional requirements or 3+ implementation phases**, it invokes `forge-decompose-prd` to produce `docs/product-vision.md` + `docs/features/*.md` -no opt-in question. If it does not qualify, the monolithic `docs/PRD.md` is kept and the outcome is reported.
+
 ---
 
 ## Step 3 - (Optional) Decompose into Features
 
-For larger projects, break the PRD into a Product Vision + individual Feature documents before building the team. Skip this step for small-to-medium projects.
+For larger projects, break the PRD into a Product Vision + individual Feature documents before building the team. **This now happens automatically** when a PRD qualifies (15+ functional requirements or 3+ implementation phases) -see Step 2b. Use the manual skill below for older PRDs, PRDs modified after generation, or documents you want to decompose below the automatic threshold.
 
 ### 3a. Decompose
 
@@ -433,9 +435,15 @@ Only modify skills I've approved in the audit report.
 
 | Step | Command / Prompt |
 |------|-----------------|
-| **Full auto build (idea → built project)** | `@workspace /forge-auto-build I want to build [idea]` |
-| **Full auto build (with model assignment)** | `@workspace /forge-auto-build I want to build [idea]. GO --assign-models` |
-| **Full auto build from existing PRD** | `@workspace /forge-auto-build docs/PRD.md` |
+| **Build reviewed PRD from idea** | `@workspace /forge-auto-build-prd I want to build [idea]` |
+| **Headless PRD from idea** | `opencode run --auto "/forge-auto-build-prd Use docs/IDEA.md as the project idea. Headless mode: auto-proceed with default assumptions and approve the PRD."` |
+| **Full auto build (from existing PRD)** | `@workspace /forge-auto-build docs/PRD.md` |
+| **Headless full auto build** | `opencode run --auto "/forge-auto-build Use docs/PRD.md as the project PRD. GO"` or `copilot -p "..." --yolo` |
+| **Full auto build (with model assignment)** | `@workspace /forge-auto-build docs/PRD.md GO --assign-models` |
+| **Full auto build (workflow-engine path)** | `@workspace /forge-auto-build docs/PRD.md GO --workflow-engine` |
+| **Headless build via workflow engine** | `opencode run --auto "/forge-auto-build Use docs/PRD.md as the project PRD. GO --workflow-engine"` |
+| **Launcher headless (whole pipeline)** | `./scripts/forge-launcher.sh --headless` (add `--dry-run` to print the command) |
+| **Launcher auto-draft (idea → PRD → team)** | `./scripts/forge-launcher.sh --draft` (non-interactive: set `FORGE_AUTO_DRAFT=1`) |
 | Bootstrap (Bash, default) | `./scripts/bootstrap.sh ~/Projects/my-project` |
 | Bootstrap (Bash, GitHub) | `./scripts/bootstrap.sh ~/Projects/my-project --harness github` |
 | Bootstrap (Bash, Claude) | `./scripts/bootstrap.sh ~/Projects/my-project --harness claude` |
@@ -444,7 +452,7 @@ Only modify skills I've approved in the audit report.
 | Build PRD from seed docs | `@workspace /forge-build-prd Build a complete PRD using docs/...` |
 | Build PRD from idea | `@workspace /forge-build-prd I want to build [idea]...` |
 | PRD quality pass | `@workspace /forge-build-prd Review docs/PRD.md for gaps...` |
-| Decompose PRD (optional) | `@workspace /forge-decompose-prd Analyze docs/PRD.md...` |
+| Decompose PRD (manual, when needed) | `@workspace /forge-decompose-prd Analyze docs/PRD.md...` |
 | Generate agent team (PRD) | `@workspace /forge-build-agent-team Analyze docs/PRD.md...` |
 | Generate agent team (features) | `@workspace /forge-build-agent-team Analyze docs/product-vision.md...` |
 | Validate agent team | `@workspace /forge-build-agent-team Validate the agent team...` |
@@ -462,9 +470,11 @@ Only modify skills I've approved in the audit report.
 | Compile execution manifest | `cd .agents/skills/forge-execution-adapter && npm install && npm run forge-execution-adapter -- compile` |
 | Compile workforce package | `cd .agents/skills/forge-workforce-compiler && npm install && npm run forge-workforce-compiler -- compile` |
 | Dark run (OpenCode harness) | `cd .agents/skills/forge-workflow-engine && npm install && npm run workflow-engine -- run --harness opencode` |
+| Dark run (GitHub Copilot harness) | `cd .agents/skills/forge-workflow-engine && npm run workflow-engine -- run --harness copilot` |
 | Dark run (OpenAI harness) | `cd .agents/skills/forge-workflow-engine && npm run workflow-engine -- run --harness openai` |
 | Dark run (stub / dry-run) | `cd .agents/skills/forge-workflow-engine && npm run workflow-engine -- run --harness stub` |
 | Dark run (FlowForge kernel) | `cd .agents/skills/forge-workflow-engine && npm run workflow-engine -- run --harness flowforge-kernel` |
+| Standalone engine run (outside CLI) | `./scripts/forge-engine-run.sh --harness opencode --yes` (PowerShell: `.\scripts\forge-engine-run.ps1 -Harness copilot -Yes`; add `--dry-run`/`-DryRun` to print) |
 | Workflow status | `cd .agents/skills/forge-workflow-engine && npm run workflow-engine -- status` |
 | Replay failed task | `cd .agents/skills/forge-workflow-engine && npm run workflow-engine -- replay <task-id>` |
 | Dark run (via agent) | `@workspace @workflow-orchestrator Run the workflow using OpenCode.` |
@@ -480,5 +490,5 @@ Only modify skills I've approved in the audit report.
 - **The PRD is the source of truth** - if something looks wrong, fix the PRD first, then re-run the affected steps.
 - **Re-bootstrap safely** - run `bootstrap.sh --force` any time you want to pull in updated Agent Forge templates without losing your generated agents.
 - **Optimize generated skills** - after the initial build, run `@workspace /forge-optimize-skills` to audit your skills against best practices. The audit surfaces specific improvements you can apply immediately.
-- **Full auto build** - use `forge-auto-build` when you have a clear idea and want a single command to take you from idea to committed, validated code. One pre-flight gate, then fully autonomous. If the run is interrupted, just re-invoke it -it resumes from `docs/PROGRESS.md`.
+- **Full auto build** - use `forge-auto-build` when a reviewed PRD already exists (`docs/PRD.md`, or the decomposed layout) and you want a single command to take you from that PRD to committed, validated code. One pre-flight gate, then fully autonomous. If no PRD exists yet, run `forge-auto-build-prd` first. If the run is interrupted, just re-invoke it -it resumes from `docs/PROGRESS.md`.
 - **Dark orchestration** - use `workflow-orchestrator` + the workflow engine for fully autonomous execution through a real harness (OpenCode or OpenAI API). Dry-run first with `--harness stub` to verify the engine setup before spending tokens.

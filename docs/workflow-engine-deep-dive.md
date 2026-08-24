@@ -19,7 +19,7 @@ The engine is organised into three cleanly separated layers:
 ├──────────────────────────────────────────────────────────┤
 │  Layer 2 — Harness Adapters  (scripts/harness/*.ts)      │
 │   • Translates "invoke this task" into a real call       │
-│   • opencode CLI  |  OpenAI API  |  Stub (dry-run)       │
+│   • opencode CLI | copilot CLI | OpenAI API | Stub (dry) │
 ├──────────────────────────────────────────────────────────┤
 │  Layer 1 — State Manager  (scripts/state.ts)             │
 │   • Reads/writes docs/WORKFLOW-STATE.json                │
@@ -184,6 +184,18 @@ opencode run --model <agent.model> --system-prompt <agent.path> "<task title + d
 ```
 
 The agent's `.agent.md` file becomes the system prompt. The task's title and description become the user prompt. Outputs are verified by checking whether the `expectedOutputs` files exist on disk after the call.
+
+### `CopilotAdapter`
+
+Shells out to the GitHub Copilot CLI per task:
+
+```
+copilot -p "<agent context + task prompt>" --yolo
+```
+
+`copilot -p` has no `--system-prompt` flag, so the agent file contents are inlined
+into the prompt. `--yolo` auto-approves tool permissions, mirroring the opencode
+adapter's `--auto`. Select it with `--harness copilot` (or `FORGE_ENGINE_HARNESS=copilot`).
 
 ### `OpenAIAdapter`
 
@@ -380,6 +392,7 @@ The engine is essentially a **file-backed, resumable task scheduler with pluggab
 | `templates/skills/forge-workflow-engine/scripts/state.ts` | State read/write, PROGRESS.md sync, audit events |
 | `templates/skills/forge-workflow-engine/scripts/cli.ts` | CLI entry point: `run`, `status`, `replay`, `pause` |
 | `templates/skills/forge-workflow-engine/scripts/harness/opencode-adapter.ts` | Shells out to `opencode run` |
+| `templates/skills/forge-workflow-engine/scripts/harness/copilot-adapter.ts` | Shells out to `copilot -p --yolo` |
 | `templates/skills/forge-workflow-engine/scripts/harness/openai-adapter.ts` | Calls OpenAI (or compatible) API directly |
 | `templates/skills/forge-workflow-engine/scripts/harness/stub-adapter.ts` | Synthetic results for testing |
 | `docs/EXECUTION-MANIFEST.json` | Compiled build contract (produced by `forge-execution-adapter`) |

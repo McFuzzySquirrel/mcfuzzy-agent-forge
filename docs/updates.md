@@ -4,6 +4,85 @@ Detailed release and change notes for McFuzzy Agent Forge.
 
 ---
 
+## August 2026 - v3.10
+
+### Forge launcher: auto-draft flow and friendlier path input
+
+The launcher's interactive and headless paths get three quality-of-life upgrades
+for getting from an idea to a reviewable PRD/team to an engine run.
+
+- **Path prompts support Tab completion and shell shorthand.** Parent-directory,
+  PRD, and research/seed path prompts now use bash readline (`read -e`) on Bash
+  and PSReadLine (`PSConsoleReadLine::ReadLine`) on PowerShell for **Tab
+  completion** to existing files/folders. Typed paths also expand `~`, `~/`,
+  `~user`, and `$VAR` / `${VAR}` (e.g. `$HOME/docs/prd.md`) before validation -
+  so external PRD/seed locations work without typing full absolute paths.
+  Validation now normalises paths (`realpath -m`) and reports *"file not found"*
+  vs. *"not a regular file"* distinctly.
+- **Optional auto-draft flow.** At Step 8, the launcher can run the authoring
+  stages non-interactively with **review boundaries**:
+  - **Idea → PRD:** runs `forge-auto-build-prd` headless (auto-proceed, every
+    unknown recorded as an Open Question), commits `docs: add auto-drafted PRD`,
+    then points you at the result (monolithic or decomposed) for review.
+  - **PRD → team:** runs `forge-build-agent-team` headless, commits
+    `feat: generate auto-drafted agent team`, then points you at the generated
+    agents/skills for review. When a decomposed layout exists, the team is built
+    from `docs/product-vision.md` + `docs/features/*.md` (Vision + Features
+    mode); otherwise from `docs/PRD.md`.
+  - **Engine decision:** after the team, choose to run the workflow engine now
+    (detached via `forge-engine-run.sh --repo <repo> --harness <h> --yes`), print
+    the command to run later, or skip and build manually.
+  - Exposed as interactive prompts, pre-answered with `--draft` (`-Draft` on
+    PowerShell), or forced headlessly with `FORGE_AUTO_DRAFT=1`.
+- **Generalised headless runner.** The queued-skill headless path and the
+  auto-draft stages share `headless_cmd_for` / `run_skill_headless` (Bash) and
+  `Get-HeadlessCommandFor` / `Invoke-SkillHeadless` (PowerShell), so `--headless`,
+  `--draft`, and `FORGE_AUTO_DRAFT=1` all print the same `opencode run --auto` /
+  `copilot -p --yolo` command shape under `--dry-run`.
+
+Related architecture decision:
+
+- [ADR-020](adr/020-launcher-auto-draft-and-path-input.md): auto-draft review-boundary flow and path-input handling.
+
+---
+
+## August 2026 - v3.9
+
+### Authoring/execution split, detached engine, and GitHub Copilot harness
+
+The workflow engine no longer runs *inside* the CLI session. Authoring (PRD → team → manifest) stays in the chat; **execution runs detached**, as a standalone process that outlives the terminal and resumes with `run`.
+
+- **Detached engine handoff.** `forge-auto-build`'s engine path (`GO --workflow-engine`) now compiles the manifest, starts the engine with `nohup … >> docs/engine-run.log 2>&1 &`, and polls `docs/WORKFLOW-STATE.json` to completion instead of blocking the session. The build survives the chat and never dies with it.
+- **Standalone runner.** New `scripts/forge-engine-run.sh` / `forge-engine-run.ps1` run the engine from outside any CLI (second terminal, CI, or `nohup`): install deps, compile the manifest if missing, then `npm run workflow-engine -- run --harness <h> --yes`. `--dry-run` prints the sequence.
+- **GitHub Copilot per-task harness.** New `--harness copilot` adapter invokes `copilot -p "<agent context + task prompt>" --yolo` per task (agent contents inlined -`copilot -p` has no `--system-prompt` flag). Env vars: `COPILOT_BIN`, `COPILOT_EXTRA_FLAGS`. Per-task harness selected with `FORGE_ENGINE_HARNESS` (default `opencode`).
+- **Engine dependencies are explicit and never committed.** `bootstrap.sh` / `bootstrap.ps1` ensure the target repo's `.gitignore` excludes `node_modules/` and `docs/engine-run.log`; `forge-auto-build`'s final commit skips `**/node_modules/**`. Docs state the engine needs `node >= 18` + npm at build time.
+
+Related architecture decision:
+
+- [ADR-019](adr/019-authoring-execution-split-and-copilot-harness.md): authoring/execution split, detached engine, Copilot adapter, dependency hygiene.
+
+---
+
+## August 2026 - v3.8
+
+### Automatic PRD quality gates and PRD-prerequisite build execution
+
+Implements CR-001. Two principles: automate deterministic mechanical gates, preserve deliberate human gates.
+
+- **PRD decomposition is automatic.** `forge-build-prd` gains a Step 5 that evaluates the existing criteria (15+ functional requirements or 3+ implementation phases) immediately after the user confirms the PRD. A qualifying PRD automatically invokes `forge-decompose-prd` -no opt-in question. A non-qualifying PRD stays monolithic and the outcome is reported. `forge-decompose-prd` remains independently invokable.
+- **`forge-build-prd` absorbs the PRD review checklist.** The review gate from the retired `forge-bootstrap-project` (Scope & intent, Requirements, Technical choices, Plan, Open items) is now part of `forge-build-prd` Step 4.
+- **`forge-bootstrap-project` is retired** and its skill directory removed. Its idea-confirmation pattern is reused by the new `forge-auto-build-prd` skill; its PRD review checklist is reused by `forge-build-prd`.
+- **New `forge-auto-build-prd` skill.** A meta-skill that confirms an idea, invokes `forge-build-prd` (review + automatic decomposition), verifies the outputs, and stops before team generation - the PRD-creation fast path.
+- **`forge-auto-build` requires an existing PRD.** It no longer generates a PRD or interviews for a one-line idea. Its pre-flight check requires `docs/PRD.md` or the decomposed `docs/product-vision.md` + `docs/features/*.md`; if neither exists it stops and directs the user to `forge-auto-build-prd` / `forge-build-prd`. Stages are reduced to team generation → optional model assignment → build execution (`forge-orchestrate-build` or `--workflow-engine`).
+- **Launcher handoff updated.** `forge-launcher` (Bash + PowerShell) queues `forge-auto-build` when a PRD was captured in Step 6, or `forge-auto-build-prd` when it was not, so the build pipeline (agent team + build execution, including the workflow-engine path) runs once the PRD exists.
+- **`detect-harness.md` relocated** from `forge-bootstrap-project/references/` to `forge-build-agent-team/references/`; all referencing skills updated.
+
+Related architecture decision:
+
+- [ADR-018](adr/018-auto-prd-decomposition-and-build-prerequisite.md): automatic decomposition gate, `forge-bootstrap-project` retirement, and the PRD-prerequisite build pipeline.
+
+---
+
 ## August 2026 - v3.7
 
 ### Artifact Store and Context Projection in `forge-workflow-engine`

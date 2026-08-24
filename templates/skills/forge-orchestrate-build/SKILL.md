@@ -20,7 +20,7 @@ You are driving a multi-agent project build. Your job is to coordinate specialis
 
 Before starting:
 1. Read the complete PRD -goals, scope, tech stack, all requirements, phases, dependencies.
-2. Review all agent files in `HARNESS_AGENTS_DIR` — load `forge-bootstrap-project/references/detect-harness.md` to determine this path — expertise, collaboration sections, which agents operate in which phases.
+2. Review all agent files in `HARNESS_AGENTS_DIR` — load `forge-build-agent-team/references/detect-harness.md` to determine this path — expertise, collaboration sections, which agents operate in which phases.
 3. Build the execution plan: map each requirement to an owner agent, identify dependencies, determine ordering within and across phases.
 4. Verify tech stack currency -search for latest stable versions of every major technology. Flag deprecated or end-of-life dependencies. Report findings before proceeding with Phase 1.
 

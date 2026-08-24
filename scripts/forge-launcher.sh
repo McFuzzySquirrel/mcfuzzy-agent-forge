@@ -12,11 +12,21 @@
 #   9. Completion summary
 #
 # Usage:
-#   ./scripts/forge-launcher.sh [--non-interactive]
+#   ./scripts/forge-launcher.sh [--non-interactive] [--headless] [--draft] [--dry-run]
 #
 # Options:
 #   --non-interactive   Skip all interactive prompts (for CI/testing only).
 #                       Requires environment variables to be set -see docs.
+#   --headless          Instead of opening an interactive CLI, drive the queued
+#                       skill directly from the terminal via `opencode run` or
+#                       `copilot -p --yolo`. Configure with FORGE_RUN_WITH and
+#                       FORGE_WORKFLOW_ENGINE (see docs/forge-launcher.md).
+#   --draft             In the interactive flow, pre-answer "yes" to the optional
+#                       auto-draft stages: generate the PRD and/or agent team
+#                       non-interactively (with review boundaries), then choose
+#                       how to run the workflow engine. Non-interactive runs use
+#                       FORGE_AUTO_DRAFT=1 instead.
+#   --dry-run           Print the headless command without executing it.
 
 set -euo pipefail
 
@@ -24,9 +34,15 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 BOOTSTRAP_SH="$SCRIPT_DIR/bootstrap.sh"
 
 NON_INTERACTIVE=false
+HEADLESS=false
+DRY_RUN=false
+DRAFT=false
 while [[ $# -gt 0 ]]; do
   case "$1" in
     --non-interactive) NON_INTERACTIVE=true; shift ;;
+    --headless|--run)  HEADLESS=true; shift ;;
+    --dry-run)         DRY_RUN=true; shift ;;
+    --draft)           DRAFT=true; shift ;;
     *) echo "Unknown option: $1" >&2; exit 1 ;;
   esac
 done
@@ -77,6 +93,90 @@ prompt() {
   fi
 }
 
+prompt_path() {
+  # Like prompt(), but uses `read -e` so bash readline enables Tab completion
+  # for existing file/directory paths. Falls back to plain line input when
+  # stdin is not a terminal, so piped/CI input still works.
+  local var_name="$1"
+  local message="$2"
+  local default="${3:-}"
+  if [[ "$NON_INTERACTIVE" == true ]]; then
+    [[ -n "${!var_name:-}" ]] || { fail "Non-interactive mode: \$$var_name is not set."; exit 1; }
+    return
+  fi
+  local prompt_str
+  if [[ -n "$default" ]]; then
+    prompt_str="${message} [${default}]: "
+  else
+    prompt_str="${message}: "
+  fi
+  read -e -r -p "$prompt_str" "$var_name"
+  if [[ -z "${!var_name:-}" && -n "$default" ]]; then
+    printf -v "$var_name" '%s' "$default"
+  fi
+}
+
+expand_env() {
+  # Expands $VAR and ${VAR} references in a typed path without eval.
+  # Unknown variables expand to empty (matching shell behaviour).
+  local s="$1" out="" prefix var value
+  while [[ "$s" =~ ^([^$]*)\$\{([A-Za-z_][A-Za-z0-9_]*)\}(.*)$ ]]; do
+    prefix="${BASH_REMATCH[1]}"; var="${BASH_REMATCH[2]}"; s="${BASH_REMATCH[3]}"
+    out+="$prefix${!var:-}"
+  done
+  while [[ "$s" =~ ^([^$]*)\$([A-Za-z_][A-Za-z0-9_]*)(.*)$ ]]; do
+    prefix="${BASH_REMATCH[1]}"; var="${BASH_REMATCH[2]}"; s="${BASH_REMATCH[3]}"
+    out+="$prefix${!var:-}"
+  done
+  out+="$s"
+  printf '%s' "$out"
+}
+
+expand_path() {
+  # Normalises a user-typed path: trims whitespace, expands $VAR references,
+  # then expands a leading ~ / ~/ / ~user to the home directory.
+  local path="${1:-}"
+  path="$(printf '%s' "$path" | xargs)"
+  path="$(expand_env "$path")"
+  case "$path" in
+    "~") printf '%s' "$HOME"; return ;;
+    "~/"*) printf '%s/%s' "$HOME" "${path#\~/}"; return ;;
+    "~"*)
+      local user rest home
+      user="${path%%/*}"; user="${user#\~}"
+      if [[ "$path" == */* ]]; then rest="${path#*/}"; else rest=""; fi
+      home="$(getent passwd "$user" 2>/dev/null | cut -d: -f6)"
+      [[ -n "$home" ]] || home="/home/$user"
+      if [[ -n "$rest" ]]; then printf '%s/%s' "$home" "$rest"; else printf '%s' "$home"; fi
+      return ;;
+  esac
+  printf '%s' "$path"
+}
+
+resolve_input_file() {
+  # Expands a user-typed path (via expand_path), normalises it (collapses "..",
+  # resolves relative-to-CWD), and checks it is an existing regular file. Sets
+  # REPLY_PATH to the resolved path and returns 0 on success. On failure, sets
+  # REPLY_REASON to a diagnostic and returns 1.
+  local raw="$1"
+  REPLY_PATH="$(expand_path "$raw")"
+  if [[ -z "$REPLY_PATH" ]]; then
+    REPLY_REASON="empty path"
+    return 1
+  fi
+  REPLY_PATH="$(realpath -m "$REPLY_PATH")"
+  if [[ -e "$REPLY_PATH" ]]; then
+    if [[ -f "$REPLY_PATH" ]]; then
+      REPLY_REASON=""
+      return 0
+    fi
+    REPLY_REASON="not a regular file: $REPLY_PATH"
+    return 1
+  fi
+  REPLY_REASON="file not found: $REPLY_PATH"
+  return 1
+}
+
 prompt_yn() {
   # Sets global REPLY_YN to "y" or "n"
   local message="$1"
@@ -124,7 +224,247 @@ launch_cli_in_terminal() {
 }
 
 autobuild_command() {
-  echo "/forge-auto-build Use docs/IDEA.md as the project idea"
+  # forge-auto-build requires an existing PRD. If one was captured (or a
+  # decomposed PRD layout already exists), queue the build. Otherwise queue
+  # forge-auto-build-prd to create the PRD first.
+  if [[ "$PRD_ADDED" == true ]] || [[ -f "$REPO_DIR/docs/PRD.md" ]] || [[ -f "$REPO_DIR/docs/product-vision.md" ]]; then
+    echo "/forge-auto-build Use docs/PRD.md as the project PRD"
+  else
+    echo "/forge-auto-build-prd Use docs/IDEA.md as the project idea"
+  fi
+}
+
+# The skill invocation message used by the headless terminal command.
+headless_skill_msg() {
+  if [[ "$PRD_ADDED" == true ]] || [[ -f "$REPO_DIR/docs/PRD.md" ]] || [[ -f "$REPO_DIR/docs/product-vision.md" ]]; then
+    if [[ "${FORGE_WORKFLOW_ENGINE:-0}" == "1" ]]; then
+      echo "/forge-auto-build Use docs/PRD.md as the project PRD. GO --workflow-engine"
+    else
+      echo "/forge-auto-build Use docs/PRD.md as the project PRD. GO"
+    fi
+  else
+    echo "/forge-auto-build-prd Use docs/IDEA.md as the project idea. Headless mode: auto-proceed with default assumptions and approve the PRD."
+  fi
+}
+
+# The non-interactive terminal runner (opencode run --auto or copilot -p --yolo).
+headless_runner() {
+  local runner="${FORGE_RUN_WITH:-}"
+  [[ -n "$runner" ]] || runner="$( [[ "$HARNESS" == "github" ]] && echo "copilot" || echo "opencode" )"
+  echo "$runner"
+}
+
+# Builds the `opencode run --auto` / `copilot -p --yolo` command that drives a
+# skill message non-interactively from the terminal.
+headless_cmd_for() {
+  local skill_msg="$1"
+  local runner; runner="$(headless_runner)"
+  case "$runner" in
+    copilot) echo "copilot -p \"$skill_msg\" --yolo" ;;
+    *) echo "opencode run --auto \"$skill_msg\"" ;;
+  esac
+}
+
+# Builds the non-interactive terminal command that drives the queued skill via
+# `opencode run --auto` or `copilot -p --yolo`, so no interactive CLI is needed.
+headless_build_command() {
+  headless_cmd_for "$(headless_skill_msg)"
+}
+
+# Executes a skill message non-interactively in the repository (or prints it
+# with --dry-run). Used by the --headless queued-skill run and the optional
+# auto-draft stages.
+run_skill_headless() {
+  local skill_msg="$1"
+  local cmd_str; cmd_str="$(headless_cmd_for "$skill_msg")"
+
+  echo "    ${BOLD}${cmd_str}${RESET}"
+  if [[ "$DRY_RUN" == true ]]; then
+    warn "Dry-run: command printed, not executed."
+    return 0
+  fi
+
+  local runner; runner="$(headless_runner)"
+  local -a cmd
+  case "$runner" in
+    copilot) cmd=(copilot -p "$skill_msg" --yolo) ;;
+    *) cmd=(opencode run --auto "$skill_msg") ;;
+  esac
+  ( cd "$REPO_DIR" && "${cmd[@]}" )
+}
+
+# Executes the queued headless build (used by --headless mode).
+run_headless_build() {
+  run_skill_headless "$(headless_skill_msg)"
+}
+
+# ---------------------------------------------------------------------------
+# Optional auto-draft flow (idea -> PRD -> agent team -> engine), driven
+# non-interactively through the harness CLI with review boundaries in between.
+# ---------------------------------------------------------------------------
+
+has_prd() {
+  [[ -f "$REPO_DIR/docs/PRD.md" ]] || [[ -f "$REPO_DIR/docs/product-vision.md" ]]
+}
+
+harness_agents_dir() {
+  case "$HARNESS" in
+    github)   echo "$REPO_DIR/.github/agents" ;;
+    claude)   echo "$REPO_DIR/.claude/agents" ;;
+    opencode) echo "$REPO_DIR/.opencode/agents" ;;
+    *)        echo "$REPO_DIR/.agents/agents" ;;
+  esac
+}
+
+has_generated_team() {
+  local agents_dir; agents_dir="$(harness_agents_dir)"
+  # At least one project-specific agent beyond the bootstrapped forge templates.
+  local count
+  count="$(find "$agents_dir" -maxdepth 1 -name '*.md' ! -name 'forge-team-builder.md' ! -name 'project-orchestrator.md' ! -name 'workflow-orchestrator.md' 2>/dev/null | wc -l)"
+  [[ "${count:-0}" -gt 0 ]]
+}
+
+prd_source_for_team() {
+  # Returns the PRD source for the team auto-draft. Prefers the decomposed
+  # representation (vision + features) when it exists so forge-build-agent-team
+  # runs in Vision + Features mode and builds the team from the features;
+  # otherwise falls back to the monolithic docs/PRD.md.
+  if [[ -f "$REPO_DIR/docs/product-vision.md" ]] && compgen -G "$REPO_DIR/docs/features/*.md" >/dev/null; then
+    echo "the decomposed PRD representation (docs/product-vision.md + docs/features/*.md)"
+  else
+    echo "docs/PRD.md"
+  fi
+}
+
+draft_commit() {
+  # Commits the artifacts produced by an auto-draft stage so the repo stays
+  # reviewable. Skips when nothing changed.
+  local message="$1"
+  git -C "$REPO_DIR" add .
+  if git -C "$REPO_DIR" diff --cached --quiet -- . 2>/dev/null; then
+    warn "No changes to commit after auto-draft."
+    return
+  fi
+  git -C "$REPO_DIR" commit -m "$message" >/dev/null
+  ok "Committed: '$message'"
+}
+
+auto_draft_prd() {
+  # idea -> PRD (or decomposed PRD). Runs forge-auto-build-prd headless and
+  # records default assumptions for every unknown (Open Questions).
+  if has_prd; then
+    return 0
+  fi
+  if [[ "$NON_INTERACTIVE" == true ]]; then
+    [[ "${FORGE_AUTO_DRAFT:-0}" == "1" ]] || return 0
+  else
+    local default="n"; [[ "$DRAFT" == true ]] && default="y"
+    prompt_yn "Generate the PRD from docs/IDEA.md automatically now (headless, auto-proceed with best answers)?" "$default"
+    [[ "${REPLY_YN,,}" == "y" ]] || return 0
+  fi
+
+  echo ""
+  info "Auto-drafting the PRD from docs/IDEA.md (headless) …"
+  run_skill_headless "/forge-auto-build-prd Use docs/IDEA.md as the project idea. Headless mode: auto-proceed with default assumptions and approve the PRD."
+  draft_commit "docs: add auto-drafted PRD"
+
+  if has_prd; then
+    PRD_ADDED=true
+    ok "PRD generated."
+    echo ""
+    echo "  Review it before continuing:"
+    echo "    - $REPO_DIR/docs/PRD.md"
+    echo "    - $( [[ -f "$REPO_DIR/docs/product-vision.md" ]] && echo "$REPO_DIR/docs/product-vision.md (decomposed) + docs/features/*.md" || echo "docs/PRD.md is monolithic (no decomposition)")"
+  else
+    warn "The auto-draft did not produce docs/PRD.md or the decomposed layout. Review the run output and re-run manually if needed."
+  fi
+}
+
+auto_draft_team() {
+  # PRD -> agent team + skills. Runs forge-build-agent-team headless so the user
+  # can review the generated team before any build execution.
+  if has_prd; then
+    if [[ "$NON_INTERACTIVE" == true ]]; then
+      [[ "${FORGE_AUTO_DRAFT:-0}" == "1" ]] || return 0
+    else
+      local default="n"; [[ "$DRAFT" == true ]] && default="y"
+      prompt_yn "Generate the agent team from the PRD automatically now (headless)?" "$default"
+      [[ "${REPLY_YN,,}" == "y" ]] || return 0
+    fi
+
+    echo ""
+    info "Auto-drafting the agent team from the PRD (headless) …"
+    local prd_source; prd_source="$(prd_source_for_team)"
+    run_skill_headless "/forge-build-agent-team Use $prd_source to build the agent team. Auto-proceed with default assumptions and no questions."
+    draft_commit "feat: generate auto-drafted agent team"
+
+    if has_generated_team; then
+      ok "Agent team generated."
+      echo ""
+      echo "  Review the generated team before building:"
+      echo "    - Agents : $(harness_agents_dir)/"
+      echo "    - Skills : $(dirname "$(harness_agents_dir)")/skills/"
+    else
+      warn "The auto-draft did not produce project-specific agent files under $(harness_agents_dir)/."
+    fi
+    engine_decision
+  fi
+}
+
+engine_decision() {
+  # After team generation: offer to run the workflow engine now (detached),
+  # print the command to run later, or skip.
+  echo ""
+  echo "  The agent team is ready. You can run the build now through the"
+  echo "  workflow engine, run it later, or build manually."
+  echo ""
+  if [[ "$NON_INTERACTIVE" == true ]]; then
+    [[ "${FORGE_AUTO_DRAFT:-0}" == "1" ]] || return 0
+    print_engine_command
+    return 0
+  fi
+  echo "    1) Run the workflow-engine build now (detached)"
+  echo "    2) Print the engine command to run later"
+  echo "    3) Skip -I will launch the CLI / build manually"
+  echo ""
+  local engine_choice
+  prompt engine_choice "Select [1-3]" "2"
+  case "$engine_choice" in
+    1) run_engine_detached ;;
+    2) print_engine_command ;;
+    *) info "Skipping the engine for now. Run the build manually or use the printed command later." ;;
+  esac
+}
+
+print_engine_command() {
+  local engine_script="$SCRIPT_DIR/forge-engine-run.sh"
+  local harness="${FORGE_ENGINE_HARNESS:-opencode}"
+  echo "    ${BOLD}${engine_script} --repo \"$REPO_DIR\" --harness $harness --yes${RESET}"
+  echo ""
+  info "Run it from anywhere later to execute the build through the workflow engine."
+}
+
+run_engine_detached() {
+  local engine_script="$SCRIPT_DIR/forge-engine-run.sh"
+  local harness="${FORGE_ENGINE_HARNESS:-opencode}"
+  if [[ "$DRY_RUN" == true ]]; then
+    warn "Dry-run: would start the engine detached:"
+    print_engine_command
+    return 0
+  fi
+  ( nohup "$engine_script" --repo "$REPO_DIR" --harness "$harness" --yes \
+      >> "$REPO_DIR/docs/engine-run.log" 2>&1 & )
+  ok "Engine started detached. Log: $REPO_DIR/docs/engine-run.log"
+}
+
+auto_draft_menu() {
+  # Offered at Step 8 in interactive runs (and FORGE_AUTO_DRAFT runs): generate
+  # the PRD and/or agent team non-interactively, with review boundaries.
+  if [[ ! -f "$REPO_DIR/docs/IDEA.md" ]]; then
+    return 0
+  fi
+  auto_draft_prd
+  auto_draft_team
 }
 
 # ---------------------------------------------------------------------------
@@ -242,13 +582,14 @@ create_repo() {
     prompt repo_description "Short description (optional)" ""
     prompt repo_visibility "Visibility -public or private" "private"
     parent_dir="$(pwd)"
-    prompt parent_dir "Parent directory for the new repo" "$(pwd)"
+    prompt_path parent_dir "Parent directory for the new repo" "$(pwd)"
   fi
 
   [[ -n "$repo_name" ]] || { fail "Repository name cannot be empty."; exit 1; }
   repo_visibility="${repo_visibility,,}"
   [[ "$repo_visibility" == "public" || "$repo_visibility" == "private" ]] || repo_visibility="private"
   parent_dir="${parent_dir:-$(pwd)}"
+  parent_dir="$(expand_path "$parent_dir")"
   parent_dir="$(realpath -m "$parent_dir")"
 
   REPO_DIR="$parent_dir/$repo_name"
@@ -316,7 +657,7 @@ capture_idea() {
   echo "  Describe your project idea below."
   echo "  This will be saved to docs/IDEA.md (and mirrored to IDEA.md)"
   echo "  and used as the starting prompt"
-  echo "  for forge-auto-build."
+  echo "  for forge-auto-build-prd (which turns it into docs/PRD.md)."
   echo ""
   echo "  Enter your idea (press Ctrl+D on an empty line when finished):"
   echo "  ──────────────────────────────────────────────────────────────"
@@ -335,7 +676,7 @@ capture_idea() {
 
   if [[ -z "$IDEA_TEXT" ]]; then
     warn "No idea text entered. docs/IDEA.md will be created as a placeholder."
-    IDEA_TEXT="*(Replace this with your project idea before running forge-auto-build.)*"
+    IDEA_TEXT="*(Replace this with your project idea before running forge-auto-build-prd.)*"
   fi
 
   mkdir -p "$REPO_DIR/docs"
@@ -348,7 +689,7 @@ capture_idea() {
     echo "---"
     echo ""
     echo "> Generated by forge-launcher on $(date -u '+%Y-%m-%dT%H:%M:%SZ')"
-    echo "> Use this file as input for: \`@workspace /forge-auto-build Use docs/IDEA.md as the project idea\`"
+    echo "> Use this file as input for: \`@workspace /forge-auto-build-prd Use docs/IDEA.md as the project idea\`"
   } > "$idea_file_docs"
 
   cp "$idea_file_docs" "$idea_file_root"
@@ -379,13 +720,13 @@ add_prd_and_research() {
   # --- PRD ---------------------------------------------------------------
   if [[ "$NON_INTERACTIVE" == true ]]; then
     if [[ -n "${FORGE_PRD_FILE:-}" ]]; then
-      if [[ -f "$FORGE_PRD_FILE" ]]; then
+      if resolve_input_file "$FORGE_PRD_FILE"; then
         mkdir -p "$docs_dir"
-        cp "$FORGE_PRD_FILE" "$docs_dir/PRD.md"
+        cp "$REPLY_PATH" "$docs_dir/PRD.md"
         ok "PRD copied from \$FORGE_PRD_FILE → docs/PRD.md"
         PRD_ADDED=true
       else
-        warn "FORGE_PRD_FILE is set but file not found: $FORGE_PRD_FILE -skipping PRD."
+        warn "FORGE_PRD_FILE is set but $REPLY_REASON -skipping PRD."
       fi
     fi
   else
@@ -393,7 +734,7 @@ add_prd_and_research() {
     echo ""
     echo "    1) Yes -provide a file path to copy in as docs/PRD.md"
     echo "    2) Yes -paste the PRD content directly"
-    echo "    3) No  -skip (the pipeline will generate one from docs/IDEA.md)"
+    echo "    3) No  -skip (the pipeline will build a PRD from docs/IDEA.md first)"
     echo ""
     local prd_choice
     prompt prd_choice "Select [1-3]" "3"
@@ -401,14 +742,14 @@ add_prd_and_research() {
     case "$prd_choice" in
       1)
         local prd_src
-        prompt prd_src "Path to your PRD file" ""
-        if [[ -f "$prd_src" ]]; then
+        prompt_path prd_src "Path to your PRD file" ""
+        if resolve_input_file "$prd_src"; then
           mkdir -p "$docs_dir"
-          cp "$prd_src" "$docs_dir/PRD.md"
+          cp "$REPLY_PATH" "$docs_dir/PRD.md"
           ok "PRD copied → docs/PRD.md"
           PRD_ADDED=true
         else
-          warn "File not found: $prd_src -skipping PRD."
+          warn "$REPLY_REASON -skipping PRD."
         fi
         ;;
       2)
@@ -431,7 +772,7 @@ add_prd_and_research() {
         fi
         ;;
       *)
-        info "Skipping PRD -the pipeline will generate one from docs/IDEA.md."
+        info "Skipping PRD -the pipeline will build a PRD from docs/IDEA.md first (via forge-auto-build-prd)."
         ;;
     esac
   fi
@@ -443,12 +784,12 @@ add_prd_and_research() {
       IFS=',' read -ra _research_files <<< "$FORGE_RESEARCH_FILES"
       for _f in "${_research_files[@]}"; do
         _f="$(echo "$_f" | xargs)"  # trim leading/trailing whitespace
-        if [[ -f "$_f" ]]; then
-          cp "$_f" "$research_dir/"
-          ok "Research doc copied: $(basename "$_f") → docs/research/"
+        if resolve_input_file "$_f"; then
+          cp "$REPLY_PATH" "$research_dir/"
+          ok "Research doc copied: $(basename "$REPLY_PATH") → docs/research/"
           RESEARCH_ADDED=true
         else
-          warn "FORGE_RESEARCH_FILES: file not found: $_f -skipping."
+          warn "FORGE_RESEARCH_FILES: $REPLY_REASON -skipping."
         fi
       done
     fi
@@ -458,18 +799,18 @@ add_prd_and_research() {
     if [[ "${REPLY_YN,,}" == "y" ]]; then
       mkdir -p "$research_dir"
       echo ""
-      echo "  Enter file paths one per line."
+      echo "  Enter file paths one per line (Tab to complete existing paths)."
       echo "  Press Ctrl+D on an empty line when done:"
       echo "  ──────────────────────────────────────────────────────────────"
-      while IFS= read -r res_path || [[ -n "$res_path" ]]; do
+      while IFS= read -e -r -p "  path> " res_path || [[ -n "$res_path" ]]; do
         res_path="$(echo "$res_path" | xargs)"  # trim leading/trailing whitespace
         [[ -z "$res_path" ]] && continue
-        if [[ -f "$res_path" ]]; then
-          cp "$res_path" "$research_dir/"
-          ok "Research doc copied: $(basename "$res_path") → docs/research/"
+        if resolve_input_file "$res_path"; then
+          cp "$REPLY_PATH" "$research_dir/"
+          ok "Research doc copied: $(basename "$REPLY_PATH") → docs/research/"
           RESEARCH_ADDED=true
         else
-          warn "File not found: $res_path -skipping."
+          warn "$REPLY_REASON -skipping."
         fi
       done
     else
@@ -504,8 +845,29 @@ launch_autobuild() {
   step "Step 8 of 9: Launch auto-build"
 
   echo ""
-  echo "  The repository is bootstrapped and ready for forge-auto-build."
+  if [[ "$PRD_ADDED" == true ]] || [[ -f "$REPO_DIR/docs/PRD.md" ]] || [[ -f "$REPO_DIR/docs/product-vision.md" ]]; then
+    echo "  The repository is bootstrapped and ready for forge-auto-build."
+    echo "  forge-auto-build will generate the agent team, then execute the build"
+    echo "  (add 'GO --workflow-engine' at its pre-flight gate to run via the"
+    echo "  workflow engine instead of the prompt-driven orchestrator)."
+  else
+    echo "  The repository is bootstrapped. forge-auto-build-prd will turn your idea"
+    echo "  into a reviewed PRD, then forge-auto-build will generate the agent team"
+    echo "  and execute the build."
+  fi
   echo ""
+
+  if [[ "$HEADLESS" == true ]]; then
+    info "Headless mode: driving the queued skill directly from the terminal"
+    echo "  (no interactive CLI session will be opened)."
+    echo ""
+    run_headless_build
+    return 0
+  fi
+
+  # Optional auto-draft flow: generate the PRD and/or agent team non-interactively
+  # (with review boundaries), then decide how to run the workflow engine.
+  auto_draft_menu
 
   case "$HARNESS" in
     github)
@@ -531,7 +893,7 @@ launch_autobuild() {
         echo ""
         echo "    ${BOLD}@workspace $(autobuild_command)${RESET}"
         echo ""
-        info "The skill will present a pre-flight summary. Type ${BOLD}GO${RESET} to start the full pipeline."
+        info "The skill will present a pre-flight summary. Type ${BOLD}GO${RESET} to start the pipeline (use ${BOLD}GO --workflow-engine${RESET} for the workflow-engine build path)."
       fi
       ;;
     claude)
@@ -608,18 +970,22 @@ completion_summary() {
   echo "  Harness     : $HARNESS_LABEL (--harness $HARNESS)"
   echo "  Remote      : $( [[ "$REMOTE_CREATED" == true ]] && echo "yes" || echo "none configured" )"
   echo "  Idea file   : $REPO_DIR/docs/IDEA.md"
-  echo "  PRD         : $( [[ "$PRD_ADDED" == true ]] && echo "$REPO_DIR/docs/PRD.md" || echo "none (will be generated from docs/IDEA.md)" )"
+  echo "  PRD         : $( [[ "$PRD_ADDED" == true ]] && echo "$REPO_DIR/docs/PRD.md" || echo "none (will be built from docs/IDEA.md by forge-auto-build-prd)" )"
   echo "  Research    : $( [[ "$RESEARCH_ADDED" == true ]] && echo "$REPO_DIR/docs/research/" || echo "none" )"
+  if [[ "$HEADLESS" == true ]]; then
+    echo "  Mode        : headless (terminal-driven; no interactive CLI)"
+  fi
   echo ""
   echo "  Next steps:"
   echo ""
   echo "  1. Open the project in your agent harness."
-  echo "  2. Run the auto-build skill:"
+  echo "  2. Run the queued pipeline command:"
   echo ""
   echo "       ${BOLD}@workspace $(autobuild_command)${RESET}"
   echo ""
   echo "  3. Review the pre-flight summary that the skill presents."
-  echo "  4. Type ${BOLD}GO${RESET} to start the fully autonomous pipeline."
+  echo "  4. Type ${BOLD}GO${RESET} to start the autonomous pipeline (add ${BOLD}--workflow-engine${RESET} to"
+  echo "     run the build through the workflow engine once the agent team is generated)."
   echo ""
   echo "  References:"
   echo "   • Prompt playbook : $REPO_DIR/docs/prompt-playbook.md"
@@ -630,8 +996,9 @@ completion_summary() {
     opencode) skills_root=".opencode" ;;
     *)        skills_root=".agents" ;;
   esac
-  echo "   • forge-auto-build: $REPO_DIR/$skills_root/skills/forge-auto-build/SKILL.md"
-  echo "       (path may vary by harness)"
+  echo "   • forge-auto-build    : $REPO_DIR/$skills_root/skills/forge-auto-build/SKILL.md"
+  echo "   • forge-auto-build-prd: $REPO_DIR/$skills_root/skills/forge-auto-build-prd/SKILL.md"
+  echo "       (paths may vary by harness)"
   echo ""
 }
 
@@ -652,6 +1019,9 @@ main() {
   CLAUDE_AVAILABLE=false
   PRD_ADDED=false
   RESEARCH_ADDED=false
+  FORGE_RUN_WITH="${FORGE_RUN_WITH:-}"
+  FORGE_WORKFLOW_ENGINE="${FORGE_WORKFLOW_ENGINE:-0}"
+  FORGE_AUTO_DRAFT="${FORGE_AUTO_DRAFT:-0}"
 
   preflight_check
   select_harness

@@ -10,7 +10,7 @@ description: >
 
 # Skill: Assign Models to a Generated Agent Team
 
-You are assigning a per-agent LLM model to each agent in `HARNESS_AGENTS_DIR`. Load `forge-bootstrap-project/references/detect-harness.md` to determine `HARNESS_AGENTS_DIR` for this repository before proceeding. The goal is to match each agent's actual workload (reasoning depth, context size, tool-use, latency sensitivity, safety) to a model from the **inventory the user actually has access to** — including local Ollama models - instead of defaulting every agent to the strongest (and most expensive) cloud model.
+You are assigning a per-agent LLM model to each agent in `HARNESS_AGENTS_DIR`. Load `forge-build-agent-team/references/detect-harness.md` to determine `HARNESS_AGENTS_DIR` for this repository before proceeding. The goal is to match each agent's actual workload (reasoning depth, context size, tool-use, latency sensitivity, safety) to a model from the **inventory the user actually has access to** — including local Ollama models - instead of defaulting every agent to the strongest (and most expensive) cloud model.
 
 This skill is **opt-in and post-hoc**. The `model:` field is optional; absence means "use
 the user's current default model".

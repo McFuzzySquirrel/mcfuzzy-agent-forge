@@ -20,13 +20,32 @@
     Skip all interactive prompts (for CI/testing only).
     Requires environment variables to be set -see docs/forge-launcher.md.
 
+.PARAMETER Headless
+    Instead of opening an interactive CLI, drive the queued skill directly from
+    the terminal via `opencode run --auto` or `copilot -p --yolo`. Configure
+    with FORGE_RUN_WITH and FORGE_WORKFLOW_ENGINE (see docs/forge-launcher.md).
+
+.PARAMETER Draft
+    In the interactive flow, pre-answer "yes" to the optional auto-draft stages:
+    generate the PRD and/or agent team non-interactively (with review
+    boundaries), then choose how to run the workflow engine. Non-interactive
+    runs use FORGE_AUTO_DRAFT=1 instead.
+
+.PARAMETER DryRun
+    Print the headless command without executing it.
+
 .EXAMPLE
     .\scripts\forge-launcher.ps1
     .\scripts\forge-launcher.ps1 -NonInteractive
+    .\scripts\forge-launcher.ps1 -Headless -DryRun
+    .\scripts\forge-launcher.ps1 -Draft
 #>
 [CmdletBinding()]
 param (
-    [switch]$NonInteractive
+    [switch]$NonInteractive,
+    [switch]$Headless,
+    [switch]$Draft,
+    [switch]$DryRun
 )
 
 Set-StrictMode -Version Latest
@@ -78,6 +97,91 @@ function Read-YesNo {
     $value = Read-Host "$Message [y/N]"
     if (-not $value) { return $Default }
     return $value
+}
+
+function Read-PromptTab {
+    param (
+        [string]$Message,
+        [string]$Default = ""
+    )
+    if ($NonInteractive) {
+        # Caller is expected to have set the appropriate env var
+        return $Default
+    }
+    $displayMsg = if ($Default) { "$Message [$Default]" } else { "$Message" }
+    if ([System.Console]::IsInputRedirected) {
+        # Piped / redirected stdin -PSReadLine cannot edit non-interactively.
+        $value = Read-Host $displayMsg
+        if (-not $value -and $Default) { return $Default }
+        return $value
+    }
+    try {
+        Import-Module PSReadLine -ErrorAction Stop
+        # Write the prompt ourselves; PSReadLine then renders the editable buffer
+        # after it and its Tab keybindings complete file/directory paths.
+        Write-Host "$displayMsg " -NoNewline
+        $value = [Microsoft.PowerShell.PSConsoleReadLine]::ReadLine(
+            [runspace]::DefaultRunspace,
+            $ExecutionContext,
+            $null
+        )
+        Write-Host ""
+        if (-not $value -and $Default) { return $Default }
+        return $value
+    } catch {
+        # PSReadLine unavailable or the console is not usable -fall back to
+        # plain Read-Host (no Tab completion) rather than failing the launcher.
+        $value = Read-Host $displayMsg
+        if (-not $value -and $Default) { return $Default }
+        return $value
+    }
+}
+
+function Expand-Path {
+    param (
+        [string]$Path
+    )
+    # Normalises a user-typed path: trims whitespace, expands ~ / ~\ to the
+    # home directory, and expands $env:VAR / ${env:VAR} / $VAR / ${VAR}
+    # references (which are otherwise treated as literal text). Unknown
+    # variables expand to empty, matching shell behaviour.
+    if (-not $Path) { return $Path }
+    $p = $Path.Trim()
+    if ($p -match '^~([/\\].*)?$') {
+        # ~ alone, or ~/... / ~\... -home-dir shorthand (both separators)
+        $p = if ($Matches[1]) { $HOME + $Matches[1] } else { $HOME }
+    }
+    $p = [regex]::Replace(
+        $p,
+        '\$\{env:([A-Za-z_][A-Za-z0-9_]*)\}|\$env:([A-Za-z_][A-Za-z0-9_]*)|\$\{([A-Za-z_][A-Za-z0-9_]*)\}|\$([A-Za-z_][A-Za-z0-9_]*)',
+        {
+            param($m)
+            if ($m.Groups[1].Success) { $v = [Environment]::GetEnvironmentVariable($m.Groups[1].Value) }
+            elseif ($m.Groups[2].Success) { $v = [Environment]::GetEnvironmentVariable($m.Groups[2].Value) }
+            elseif ($m.Groups[3].Success) { $v = Get-Variable -Name $m.Groups[3].Value -ValueOnly -ErrorAction SilentlyContinue }
+            else { $v = Get-Variable -Name $m.Groups[4].Value -ValueOnly -ErrorAction SilentlyContinue }
+            if ($null -eq $v) { "" } else { [string]$v }
+        }
+    )
+    return $p
+}
+
+function Resolve-InputFile {
+    param (
+        [string]$Path
+    )
+    # Expands a user-typed path and reports whether it is an existing regular
+    # file. Returns the resolved path (via ResolvedPath) and True/False.
+    $script:ResolvedPath = if ($Path) { Expand-Path $Path } else { "" }
+    if (-not $script:ResolvedPath) { $script:ResolveReason = "empty path"; return $false }
+    $script:ResolveReason = ""
+    if (Test-Path -LiteralPath $script:ResolvedPath) {
+        if (Test-Path -LiteralPath $script:ResolvedPath -PathType Leaf) { return $true }
+        $script:ResolveReason = "not a regular file: $script:ResolvedPath"
+        return $false
+    }
+    $script:ResolveReason = "file not found: $script:ResolvedPath"
+    return $false
 }
 
 function Start-CliInTerminal {
@@ -148,7 +252,229 @@ function Start-CliInTerminal {
 }
 
 function Get-AutobuildCommand {
-    return "/forge-auto-build Use docs/IDEA.md as the project idea"
+    # forge-auto-build requires an existing PRD. If one was captured (or a
+    # decomposed PRD layout already exists), queue the build. Otherwise queue
+    # forge-auto-build-prd to create the PRD first.
+    if ($script:PrdAdded -or (Test-Path (Join-Path $script:RepoDir "docs\PRD.md") -PathType Leaf) -or (Test-Path (Join-Path $script:RepoDir "docs\product-vision.md") -PathType Leaf)) {
+        return "/forge-auto-build Use docs/PRD.md as the project PRD"
+    } else {
+        return "/forge-auto-build-prd Use docs/IDEA.md as the project idea"
+    }
+}
+
+function Get-HeadlessSkillMessage {
+    # Returns the skill invocation message used by the headless terminal command.
+    $hasPrd = $script:PrdAdded -or (Test-Path (Join-Path $script:RepoDir "docs\PRD.md") -PathType Leaf) -or (Test-Path (Join-Path $script:RepoDir "docs\product-vision.md") -PathType Leaf)
+    if ($hasPrd) {
+        if ($env:FORGE_WORKFLOW_ENGINE -eq "1") {
+            return "/forge-auto-build Use docs/PRD.md as the project PRD. GO --workflow-engine"
+        }
+        return "/forge-auto-build Use docs/PRD.md as the project PRD. GO"
+    }
+    return "/forge-auto-build-prd Use docs/IDEA.md as the project idea. Headless mode: auto-proceed with default assumptions and approve the PRD."
+}
+
+function Get-HeadlessCommandFor {
+    param([string]$Message)
+    # Returns the non-interactive terminal command that drives a skill message
+    # via `opencode run --auto` or `copilot -p --yolo`.
+    $runner = if ($env:FORGE_RUN_WITH) { $env:FORGE_RUN_WITH } else { if ($script:Harness -eq "github") { "copilot" } else { "opencode" } }
+    if ($runner -eq "copilot") {
+        return "copilot -p `"$Message`" --yolo"
+    }
+    return "opencode run --auto `"$Message`""
+}
+
+function Get-HeadlessCommand {
+    # Returns the non-interactive terminal command that drives the queued skill.
+    return Get-HeadlessCommandFor (Get-HeadlessSkillMessage)
+}
+
+function Invoke-SkillHeadless {
+    # Executes a skill message non-interactively in the repository (or prints it
+    # with -DryRun). Used by the --headless queued-skill run and auto-draft stages.
+    param([string]$Message)
+    $cmd = Get-HeadlessCommandFor $Message
+    Write-Host "    $cmd" -ForegroundColor White
+    if ($DryRun) {
+        Write-Warn "Dry-run: command printed, not executed."
+        return
+    }
+    Push-Location $script:RepoDir
+    try {
+        Invoke-Expression $cmd
+    } finally {
+        Pop-Location
+    }
+}
+
+function Invoke-HeadlessBuild {
+    # Executes the queued headless build (used by --headless mode).
+    Invoke-SkillHeadless (Get-HeadlessSkillMessage)
+}
+
+# ---------------------------------------------------------------------------
+# Optional auto-draft flow (idea -> PRD -> agent team -> engine), driven
+# non-interactively through the harness CLI with review boundaries in between.
+# ---------------------------------------------------------------------------
+
+function Test-HasPrd {
+    return ($script:PrdAdded -or (Test-Path (Join-Path $script:RepoDir "docs\PRD.md") -PathType Leaf) -or (Test-Path (Join-Path $script:RepoDir "docs\product-vision.md") -PathType Leaf))
+}
+
+function Get-HarnessAgentsDir {
+    switch ($script:Harness) {
+        "github"   { return (Join-Path $script:RepoDir ".github\agents") }
+        "claude"   { return (Join-Path $script:RepoDir ".claude\agents") }
+        "opencode" { return (Join-Path $script:RepoDir ".opencode\agents") }
+        default    { return (Join-Path $script:RepoDir ".agents\agents") }
+    }
+}
+
+function Test-HasGeneratedTeam {
+    $agentsDir = Get-HarnessAgentsDir
+    if (-not (Test-Path $agentsDir -PathType Container)) { return $false }
+    $templateNames = @("forge-team-builder.md", "project-orchestrator.md", "workflow-orchestrator.md")
+    $count = @(Get-ChildItem -Path $agentsDir -Filter *.md -File | Where-Object { $_.Name -notin $templateNames }).Count
+    return ($count -gt 0)
+}
+
+function Get-AutoDraftPrdSource {
+    # Returns the PRD source for the team auto-draft. Prefers the decomposed
+    # representation (vision + features) when it exists so forge-build-agent-team
+    # runs in Vision + Features mode and builds the team from the features;
+    # otherwise falls back to the monolithic docs\PRD.md.
+    if ((Test-Path (Join-Path $script:RepoDir "docs\product-vision.md") -PathType Leaf) -and @(Get-ChildItem (Join-Path $script:RepoDir "docs\features\*.md") -ErrorAction SilentlyContinue).Count -gt 0) {
+        return "the decomposed PRD representation (docs\product-vision.md + docs\features\*.md)"
+    }
+    return "docs\PRD.md"
+}
+
+function Invoke-DraftCommit {
+    param([string]$Message)
+    # Commits the artifacts produced by an auto-draft stage so the repo stays
+    # reviewable. Skips when nothing changed.
+    & git -C $script:RepoDir add "."
+    $staged = & git -C $script:RepoDir diff --cached --name-only
+    if (-not $staged) {
+        Write-Warn "No changes to commit after auto-draft."
+        return
+    }
+    & git -C $script:RepoDir commit -m $Message | Out-Null
+    Write-Ok "Committed: '$Message'"
+}
+
+function Invoke-AutoDraftPrd {
+    # idea -> PRD (or decomposed PRD). Runs forge-auto-build-prd headless and
+    # records default assumptions for every unknown (Open Questions).
+    if (Test-HasPrd) { return }
+    if ($NonInteractive) {
+        if ($env:FORGE_AUTO_DRAFT -ne "1") { return }
+    } else {
+        $default = if ($Draft) { "y" } else { "n" }
+        $answer = Read-YesNo "Generate the PRD from docs/IDEA.md automatically now (headless, auto-proceed with best answers)?" $default
+        if ($answer -ne "y" -and $answer -ne "Y") { return }
+    }
+    Write-Host ""
+    Write-Info "Auto-drafting the PRD from docs/IDEA.md (headless) …"
+    Invoke-SkillHeadless "/forge-auto-build-prd Use docs/IDEA.md as the project idea. Headless mode: auto-proceed with default assumptions and approve the PRD."
+    Invoke-DraftCommit "docs: add auto-drafted PRD"
+    if (Test-HasPrd) {
+        $script:PrdAdded = $true
+        Write-Ok "PRD generated."
+        Write-Host ""
+        Write-Host "  Review it before continuing:"
+        Write-Host "    - $(Join-Path $script:RepoDir 'docs\PRD.md')"
+        if (Test-Path (Join-Path $script:RepoDir "docs\product-vision.md") -PathType Leaf) {
+            Write-Host "    - $(Join-Path $script:RepoDir 'docs\product-vision.md') (decomposed) + docs\features\*.md"
+        } else {
+            Write-Host "    - docs\PRD.md is monolithic (no decomposition)"
+        }
+    } else {
+        Write-Warn "The auto-draft did not produce docs/PRD.md or the decomposed layout. Review the run output and re-run manually if needed."
+    }
+}
+
+function Invoke-AutoDraftTeam {
+    # PRD -> agent team + skills. Runs forge-build-agent-team headless so the
+    # user can review the generated team before any build execution.
+    if (-not (Test-HasPrd)) { return }
+    if ($NonInteractive) {
+        if ($env:FORGE_AUTO_DRAFT -ne "1") { return }
+    } else {
+        $default = if ($Draft) { "y" } else { "n" }
+        $answer = Read-YesNo "Generate the agent team from the PRD automatically now (headless)?" $default
+        if ($answer -ne "y" -and $answer -ne "Y") { return }
+    }
+    Write-Host ""
+    Write-Info "Auto-drafting the agent team from the PRD (headless) …"
+    $prdSource = Get-AutoDraftPrdSource
+    Invoke-SkillHeadless "/forge-build-agent-team Use $prdSource to build the agent team. Auto-proceed with default assumptions and no questions."
+    Invoke-DraftCommit "feat: generate auto-drafted agent team"
+    if (Test-HasGeneratedTeam) {
+        Write-Ok "Agent team generated."
+        Write-Host ""
+        Write-Host "  Review the generated team before building:"
+        Write-Host "    - Agents : $(Get-HarnessAgentsDir)"
+        Write-Host "    - Skills : $(Split-Path (Get-HarnessAgentsDir) -Parent)\skills"
+    } else {
+        Write-Warn "The auto-draft did not produce project-specific agent files under $(Get-HarnessAgentsDir)."
+    }
+    Invoke-EngineDecision
+}
+
+function Invoke-EngineDecision {
+    # After team generation: offer to run the workflow engine now (detached),
+    # print the command to run later, or skip.
+    Write-Host ""
+    Write-Host "  The agent team is ready. You can run the build now through the"
+    Write-Host "  workflow engine, run it later, or build manually."
+    Write-Host ""
+    if ($NonInteractive) {
+        if ($env:FORGE_AUTO_DRAFT -ne "1") { return }
+        Write-EngineCommand
+        return
+    }
+    Write-Host "    1) Run the workflow-engine build now (detached)"
+    Write-Host "    2) Print the engine command to run later"
+    Write-Host "    3) Skip -I will launch the CLI / build manually"
+    Write-Host ""
+    $choice = Read-Prompt "Select [1-3]" "2"
+    switch ($choice) {
+        "1" { Start-EngineDetached }
+        "2" { Write-EngineCommand }
+        default { Write-Info "Skipping the engine for now. Run the build manually or use the printed command later." }
+    }
+}
+
+function Write-EngineCommand {
+    $engineScript = Join-Path $ScriptDir "forge-engine-run.ps1"
+    $harness = if ($env:FORGE_ENGINE_HARNESS) { $env:FORGE_ENGINE_HARNESS } else { "opencode" }
+    Write-Host "    $engineScript -Repo `"$($script:RepoDir)`" -Harness $harness -Yes" -ForegroundColor White
+    Write-Host ""
+    Write-Info "Run it from anywhere later to execute the build through the workflow engine."
+}
+
+function Start-EngineDetached {
+    $engineScript = Join-Path $ScriptDir "forge-engine-run.ps1"
+    $harness = if ($env:FORGE_ENGINE_HARNESS) { $env:FORGE_ENGINE_HARNESS } else { "opencode" }
+    if ($DryRun) {
+        Write-Warn "Dry-run: would start the engine detached:"
+        Write-EngineCommand
+        return
+    }
+    $log = Join-Path $script:RepoDir "docs\engine-run.log"
+    $args = @("-Repo", $script:RepoDir, "-Harness", $harness, "-Yes")
+    Start-Process -FilePath $engineScript -ArgumentList $args -RedirectStandardOutput "$log.out" -RedirectStandardError "$log.err" -WindowStyle Hidden | Out-Null
+    Write-Ok "Engine started detached. Log: $log (.out/.err)"
+}
+
+function Invoke-AutoDraftMenu {
+    # Offered at Step 8 in interactive runs (and FORGE_AUTO_DRAFT runs): generate
+    # the PRD and/or agent team non-interactively, with review boundaries.
+    if (-not (Test-Path (Join-Path $script:RepoDir "docs\IDEA.md") -PathType Leaf)) { return }
+    Invoke-AutoDraftPrd
+    Invoke-AutoDraftTeam
 }
 
 # ---------------------------------------------------------------------------
@@ -258,7 +584,7 @@ function New-Repository {
     $repoName        = if ($NonInteractive) { $env:FORGE_REPO_NAME        ?? "" } else { Read-Prompt "Repository name (no spaces)" "" }
     $repoDescription = if ($NonInteractive) { $env:FORGE_REPO_DESCRIPTION ?? "" } else { Read-Prompt "Short description (optional)" "" }
     $repoVisibility  = if ($NonInteractive) { $env:FORGE_REPO_VISIBILITY  ?? "private" } else { Read-Prompt "Visibility -public or private" "private" }
-    $parentDirRaw    = if ($NonInteractive) { $env:FORGE_REPO_PARENT_DIR  ?? (Get-Location).Path } else { Read-Prompt "Parent directory for the new repo" (Get-Location).Path }
+    $parentDirRaw    = if ($NonInteractive) { $env:FORGE_REPO_PARENT_DIR  ?? (Get-Location).Path } else { Read-PromptTab "Parent directory for the new repo" (Get-Location).Path }
 
     if (-not $repoName) {
         Write-Fail "Non-interactive mode: `$env:FORGE_REPO_NAME is not set."
@@ -269,7 +595,7 @@ function New-Repository {
     if ($repoVisibility -ne "public" -and $repoVisibility -ne "private") { $repoVisibility = "private" }
 
     if (-not $parentDirRaw) { $parentDirRaw = (Get-Location).Path }
-    $parentDir = [System.IO.Path]::GetFullPath($parentDirRaw)
+    $parentDir = [System.IO.Path]::GetFullPath((Expand-Path $parentDirRaw))
 
     $script:RepoDir = Join-Path $parentDir $repoName
     $script:RemoteCreated = $false
@@ -336,7 +662,7 @@ function Invoke-CaptureIdea {
     Write-Host "  Describe your project idea below." -ForegroundColor White
     Write-Host "  This will be saved to docs/IDEA.md (and mirrored to IDEA.md)"
     Write-Host "  and used as the starting prompt"
-    Write-Host "  for forge-auto-build."
+    Write-Host "  for forge-auto-build-prd (which turns it into docs/PRD.md)."
     Write-Host ""
 
     $ideaText = ""
@@ -368,7 +694,7 @@ function Invoke-CaptureIdea {
 
     if (-not $ideaText.Trim()) {
         Write-Warn "No idea text entered. docs/IDEA.md will be created as a placeholder."
-        $ideaText = "*(Replace this with your project idea before running forge-auto-build.)*"
+        $ideaText = "*(Replace this with your project idea before running forge-auto-build-prd.)*"
     }
 
     New-Item -ItemType Directory -Path (Split-Path $ideaFileDocs -Parent) -Force | Out-Null
@@ -382,7 +708,7 @@ $ideaText
 ---
 
 > Generated by forge-launcher on $timestamp
-> Use this file as input for: ``@workspace /forge-auto-build Use docs/IDEA.md as the project idea``
+> Use this file as input for: ``@workspace /forge-auto-build-prd Use docs/IDEA.md as the project idea``
 "@
     $content | Set-Content -Path $ideaFileDocs -Encoding UTF8
     Copy-Item -Path $ideaFileDocs -Destination $ideaFileRoot -Force
@@ -413,13 +739,13 @@ function Invoke-AddPrdAndResearch {
     if ($NonInteractive) {
         $prdFile = $env:FORGE_PRD_FILE
         if ($prdFile) {
-            if (Test-Path $prdFile -PathType Leaf) {
+            if (Resolve-InputFile $prdFile) {
                 New-Item -ItemType Directory -Path $docsDir -Force | Out-Null
-                Copy-Item $prdFile (Join-Path $docsDir "PRD.md")
+                Copy-Item $script:ResolvedPath (Join-Path $docsDir "PRD.md")
                 Write-Ok "PRD copied from `$env:FORGE_PRD_FILE → docs/PRD.md"
                 $script:PrdAdded = $true
             } else {
-                Write-Warn "FORGE_PRD_FILE is set but file not found: $prdFile -skipping PRD."
+                Write-Warn "FORGE_PRD_FILE is set but $script:ResolveReason -skipping PRD."
             }
         }
     } else {
@@ -427,20 +753,20 @@ function Invoke-AddPrdAndResearch {
         Write-Host ""
         Write-Host "    1) Yes -provide a file path to copy in as docs/PRD.md"
         Write-Host "    2) Yes -paste the PRD content directly"
-        Write-Host "    3) No  -skip (the pipeline will generate one from docs/IDEA.md)"
+        Write-Host "    3) No  -skip (the pipeline will build a PRD from docs/IDEA.md first)"
         Write-Host ""
         $prdChoice = Read-Prompt "Select [1-3]" "3"
 
         switch ($prdChoice) {
             "1" {
-                $prdSrc = Read-Prompt "Path to your PRD file" ""
-                if ($prdSrc -and (Test-Path $prdSrc -PathType Leaf)) {
+                $prdSrc = Read-PromptTab "Path to your PRD file" ""
+                if ($prdSrc -and (Resolve-InputFile $prdSrc)) {
                     New-Item -ItemType Directory -Path $docsDir -Force | Out-Null
-                    Copy-Item $prdSrc (Join-Path $docsDir "PRD.md")
+                    Copy-Item $script:ResolvedPath (Join-Path $docsDir "PRD.md")
                     Write-Ok "PRD copied → docs/PRD.md"
                     $script:PrdAdded = $true
                 } else {
-                    Write-Warn "File not found: $prdSrc -skipping PRD."
+                    Write-Warn "$script:ResolveReason -skipping PRD."
                 }
             }
             "2" {
@@ -472,7 +798,7 @@ function Invoke-AddPrdAndResearch {
                 }
             }
             default {
-                Write-Info "Skipping PRD -the pipeline will generate one from docs/IDEA.md."
+                Write-Info "Skipping PRD -the pipeline will build a PRD from docs/IDEA.md first (via forge-auto-build-prd)."
             }
         }
     }
@@ -484,12 +810,12 @@ function Invoke-AddPrdAndResearch {
             New-Item -ItemType Directory -Path $researchDir -Force | Out-Null
             $researchFiles -split ',' | ForEach-Object {
                 $f = $_.Trim()
-                if ($f -and (Test-Path $f -PathType Leaf)) {
-                    Copy-Item $f $researchDir
-                    Write-Ok "Research doc copied: $(Split-Path $f -Leaf) → docs/research/"
+                if ($f -and (Resolve-InputFile $f)) {
+                    Copy-Item $script:ResolvedPath $researchDir
+                    Write-Ok "Research doc copied: $(Split-Path $script:ResolvedPath -Leaf) → docs/research/"
                     $script:ResearchAdded = $true
                 } elseif ($f) {
-                    Write-Warn "FORGE_RESEARCH_FILES: file not found: $f -skipping."
+                    Write-Warn "FORGE_RESEARCH_FILES: $script:ResolveReason -skipping."
                 }
             }
         }
@@ -499,19 +825,19 @@ function Invoke-AddPrdAndResearch {
         if ($addResearch -eq "y" -or $addResearch -eq "Y") {
             New-Item -ItemType Directory -Path $researchDir -Force | Out-Null
             Write-Host ""
-            Write-Host "  Enter file paths one per line."
+            Write-Host "  Enter file paths one per line (Tab to complete existing paths)."
             Write-Host "  Press Enter on a blank line when done:"
             Write-Host "  ──────────────────────────────────────────────────────────────"
             while ($true) {
-                $resPath = Read-Host
+                $resPath = Read-PromptTab "  path" ""
                 if (-not $resPath) { break }
                 $resPath = $resPath.Trim()
-                if (Test-Path $resPath -PathType Leaf) {
-                    Copy-Item $resPath $researchDir
-                    Write-Ok "Research doc copied: $(Split-Path $resPath -Leaf) → docs/research/"
+                if (Resolve-InputFile $resPath) {
+                    Copy-Item $script:ResolvedPath $researchDir
+                    Write-Ok "Research doc copied: $(Split-Path $script:ResolvedPath -Leaf) → docs/research/"
                     $script:ResearchAdded = $true
                 } else {
-                    Write-Warn "File not found: $resPath -skipping."
+                    Write-Warn "$script:ResolveReason -skipping."
                 }
             }
         } else {
@@ -551,8 +877,29 @@ function Invoke-LaunchAutobuild {
     Write-Step "Step 8 of 9: Launch auto-build"
 
     Write-Host ""
-    Write-Host "  The repository is bootstrapped and ready for forge-auto-build." -ForegroundColor White
+    if ($script:PrdAdded -or (Test-Path (Join-Path $script:RepoDir "docs\PRD.md") -PathType Leaf) -or (Test-Path (Join-Path $script:RepoDir "docs\product-vision.md") -PathType Leaf)) {
+        Write-Host "  The repository is bootstrapped and ready for forge-auto-build." -ForegroundColor White
+        Write-Host "  forge-auto-build will generate the agent team, then execute the build"
+        Write-Host "  (add 'GO --workflow-engine' at its pre-flight gate to run via the"
+        Write-Host "  workflow engine instead of the prompt-driven orchestrator)."
+    } else {
+        Write-Host "  The repository is bootstrapped. forge-auto-build-prd will turn your idea" -ForegroundColor White
+        Write-Host "  into a reviewed PRD, then forge-auto-build will generate the agent team"
+        Write-Host "  and execute the build."
+    }
     Write-Host ""
+
+    if ($Headless) {
+        Write-Info "Headless mode: driving the queued skill directly from the terminal"
+        Write-Host "  (no interactive CLI session will be opened)."
+        Write-Host ""
+        Invoke-HeadlessBuild
+        return
+    }
+
+    # Optional auto-draft flow: generate the PRD and/or agent team non-interactively
+    # (with review boundaries), then decide how to run the workflow engine.
+    Invoke-AutoDraftMenu
 
     switch ($script:Harness) {
         "github" {
@@ -578,7 +925,7 @@ function Invoke-LaunchAutobuild {
                 Write-Host ""
                 Write-Host "    @workspace $(Get-AutobuildCommand)" -ForegroundColor White
                 Write-Host ""
-                Write-Info "The skill will present a pre-flight summary. Type GO to start the full pipeline."
+                Write-Info "The skill will present a pre-flight summary. Type GO to start the pipeline (use GO --workflow-engine for the workflow-engine build path)."
             }
         }
         "claude" {
@@ -655,18 +1002,22 @@ function Write-CompletionSummary {
     Write-Host "  Harness     : $($script:HarnessLabel) (--harness $($script:Harness))"
     Write-Host "  Remote      : $( if ($script:RemoteCreated) { 'yes' } else { 'none configured' } )"
     Write-Host "  Idea file   : $(Join-Path $script:RepoDir 'docs\IDEA.md')"
-    Write-Host "  PRD         : $( if ($script:PrdAdded) { Join-Path $script:RepoDir 'docs\PRD.md' } else { 'none (will be generated from docs/IDEA.md)' } )"
+    Write-Host "  PRD         : $( if ($script:PrdAdded) { Join-Path $script:RepoDir 'docs\PRD.md' } else { 'none (will be built from docs/IDEA.md by forge-auto-build-prd)' } )"
     Write-Host "  Research    : $( if ($script:ResearchAdded) { Join-Path $script:RepoDir 'docs\research\' } else { 'none' } )"
+    if ($Headless) {
+        Write-Host "  Mode        : headless (terminal-driven; no interactive CLI)"
+    }
     Write-Host ""
     Write-Host "  Next steps:"
     Write-Host ""
     Write-Host "  1. Open the project in your agent harness."
-    Write-Host "  2. Run the auto-build skill:"
+    Write-Host "  2. Run the queued pipeline command:"
     Write-Host ""
     Write-Host "       @workspace $(Get-AutobuildCommand)" -ForegroundColor White
     Write-Host ""
     Write-Host "  3. Review the pre-flight summary that the skill presents."
-    Write-Host "  4. Type GO to start the fully autonomous pipeline."
+    Write-Host "  4. Type GO to start the autonomous pipeline (add --workflow-engine to"
+    Write-Host "     run the build through the workflow engine once the agent team is generated)."
     Write-Host ""
     Write-Host "  References:"
     Write-Host "   • Prompt playbook : $(Join-Path $script:RepoDir 'docs\prompt-playbook.md')"
@@ -676,8 +1027,9 @@ function Write-CompletionSummary {
         "opencode" { ".opencode" }
         default    { ".agents" }
     }
-    Write-Host "   • forge-auto-build: $(Join-Path $script:RepoDir "$skillsRoot\skills\forge-auto-build\SKILL.md")"
-    Write-Host "       (path may vary by harness)"
+    Write-Host "   • forge-auto-build    : $(Join-Path $script:RepoDir "$skillsRoot\skills\forge-auto-build\SKILL.md")"
+    Write-Host "   • forge-auto-build-prd: $(Join-Path $script:RepoDir "$skillsRoot\skills\forge-auto-build-prd\SKILL.md")"
+    Write-Host "       (paths may vary by harness)"
     Write-Host ""
 }
 

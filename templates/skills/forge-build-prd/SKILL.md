@@ -63,6 +63,13 @@ Ask targeted questions to fill in gaps. Group by category and ask only what the 
 
 Wait for the user to respond. Ask follow-up questions if answers reveal new unknowns.
 
+> **Headless mode.** When invoked non-interactively (`FORGE_HEADLESS=1`, or the
+> invocation says "headless" / "auto-proceed"), skip this interview entirely.
+> Draft the PRD from the supplied input (`docs/IDEA.md`, `docs/research/*`, or
+> the inline idea). For every answer the interview would have gathered, record a
+> reasonable default assumption in the PRD's **Open Questions** section so the
+> document remains honest about what was decided automatically.
+
 ### Step 3: Draft the Document
 
 Produce a structured PRD using the template in `references/prd-template.md`. Load that file now and follow its structure. Use information gathered in Steps 1–2. Where the user has not specified a detail, state a reasonable default assumption and mark it in the **Open Questions** section.
@@ -71,12 +78,66 @@ Produce a structured PRD using the template in `references/prd-template.md`. Loa
 
 ### Step 4: Review and Iterate
 
-Present the draft and ask:
+Present the draft and the review checklist below. Ask the user to verify before confirming the document is ready:
+
+```
+PRD review checklist - verify before continuing:
+
+Scope & intent
+- [ ] The Overview matches the idea you actually want to build
+- [ ] Goals and Non-Goals are correct (nothing important is missing, nothing
+      out-of-scope has crept in)
+- [ ] Target users / personas are right
+
+Requirements
+- [ ] Every must-have capability you care about appears as a functional
+      requirement with a priority
+- [ ] Non-functional requirements (performance, security, privacy,
+      accessibility) reflect your real constraints
+- [ ] Security & Privacy section is correct (data handling, auth, compliance)
+
+Technical choices
+- [ ] Technology stack is current, available to you, and acceptable
+- [ ] Project Structure is something you are willing to live with
+- [ ] No deprecated or end-of-life dependencies were selected
+
+Plan
+- [ ] Implementation Phases are ordered correctly and each phase is shippable
+- [ ] Testing Strategy matches how you actually plan to validate the product
+- [ ] Acceptance Criteria are concrete enough that "done" is unambiguous
+
+Open items
+- [ ] Every entry under "Open Questions" has either an answer or an explicit
+      "accept the default assumption" decision
+- [ ] Any flagged risks have a mitigation you can live with
+```
+
+Ask:
 - Does this accurately capture your intent?
 - Are any sections missing, incorrect, or over-specified?
 - Should any priorities be adjusted?
 
-Incorporate feedback and iterate until the user confirms the document is ready.
+Incorporate feedback and iterate until the user confirms the document is ready. Once confirmed, save the final PRD to `docs/PRD.md` and proceed to Step 5.
+
+> **Headless mode.** When invoked non-interactively, present the checklist once
+> (it is part of the audit trail) but do **not** block for approval - the
+> headless invocation has already authorized the document. Proceed to save
+> `docs/PRD.md` and run Step 5.
+
+---
+
+### Step 5: Check Decomposition Criteria
+
+Run immediately after the user confirms the PRD is ready and it has been saved to `docs/PRD.md`.
+
+1. Evaluate the existing decomposition criteria directly from the PRD:
+   - 15+ functional requirements, **or**
+   - 3+ implementation phases.
+2. If the PRD qualifies, **automatically invoke `forge-decompose-prd`** to produce `docs/product-vision.md` and `docs/features/*.md`. Do **not** ask the user whether they want decomposition -the threshold is a mechanical, deterministic check.
+3. If the PRD does not qualify, retain the monolithic `docs/PRD.md` and report that decomposition was not required.
+4. Report the outcome either way so the user knows which layout downstream stages will consume.
+
+The qualification threshold is unchanged (15+ functional requirements or 3+ implementation phases). `forge-decompose-prd` remains independently invokable for older PRDs, PRDs modified after generation, or documents the user explicitly wants to decompose below the automatic threshold.
 
 ---
 
@@ -91,6 +152,7 @@ After writing the PRD, run this self-check before presenting it to the user:
 - [ ] Implementation phases are ordered and each phase is independently shippable
 - [ ] Open Questions are populated with every unresolved decision, each with a default assumption
 - [ ] The document references any existing project docs rather than duplicating them
+- [ ] The decomposition check ran after confirmation: qualifying PRDs produced `docs/product-vision.md` + `docs/features/*.md`; non-qualifying PRDs remain monolithic and the outcome was reported
 
 If any checkbox is unchecked, fix the gap before presenting to the user.
 
@@ -102,6 +164,8 @@ If any checkbox is unchecked, fix the gap before presenting to the user.
 - **MoSCoW is the default priority scheme.** Don't invent a new one unless the user asks.
 - **Existing project docs are authoritative.** If the repo has a prior PRD, architecture docs, or research notes, review them first. Build on them rather than contradicting or duplicating existing decisions.
 - **The template uses 21 numbered sections.** Adapt depth per section but keep all headings - downstream tools (`forge-build-agent-team`, `project-orchestrator`) reference specific section numbers.
+- **Decomposition is automatic, not optional for qualifying PRDs.** If the PRD meets the threshold (15+ functional requirements or 3+ implementation phases), run `forge-decompose-prd` in Step 5 without asking. Do not present a decomposition opt-in question.
+- **Never modify `docs/PRD.md` during decomposition.** `forge-decompose-prd` produces `docs/product-vision.md` and `docs/features/*.md` alongside the original -preserve the monolithic PRD.
 
 ---
 

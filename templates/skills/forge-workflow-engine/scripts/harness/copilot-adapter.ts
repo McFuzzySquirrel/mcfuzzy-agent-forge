@@ -4,29 +4,34 @@ import { existsSync, readFileSync } from "node:fs";
 import type { AgentDescriptor, HarnessAdapter, ManifestTask, TaskResult, WorkflowState } from "../types.ts";
 
 /**
- * OpenCode CLI harness adapter.
+ * GitHub Copilot CLI harness adapter.
  *
- * Invokes `opencode run` with the agent's system prompt and the task prompt,
- * captures stdout/stderr, and returns a structured TaskResult.
+ * Invokes `copilot -p` with the agent's context inlined into the prompt and
+ * auto-approves tool permissions with `--yolo`, captures stdout/stderr, and
+ * returns a structured TaskResult.
+ *
+ * Unlike the opencode adapter, `copilot -p` has no `--system-prompt` flag, so
+ * the agent file contents are prepended to the user prompt as an inline
+ * "You are..." context block.
  *
  * Expected CLI shape:
- *   opencode run [--model <model-id>] [--system-prompt <path-or-text>] "<prompt>"
+ *   copilot -p "<system prompt + task prompt>" --yolo
  *
- * Set OPENCODE_BIN env var to override the opencode binary path.
- * Set OPENCODE_EXTRA_FLAGS env var to inject extra flags (e.g. "--no-stream").
- * `--auto` is passed by default so per-task tool permissions are auto-approved;
+ * Set COPILOT_BIN env var to override the copilot binary path.
+ * Set COPILOT_EXTRA_FLAGS env var to inject extra flags (e.g. "--model gpt-4o").
+ * `--yolo` is passed by default so per-task tool permissions are auto-approved;
  * this adapter runs non-interactively (no user is present to approve prompts).
  */
-export class OpenCodeAdapter implements HarnessAdapter {
-  readonly name = "opencode";
+export class CopilotAdapter implements HarnessAdapter {
+  readonly name = "copilot";
 
   private readonly bin: string;
   private readonly extraFlags: string[];
 
   constructor() {
-    this.bin = process.env["OPENCODE_BIN"] ?? "opencode";
-    const extra = (process.env["OPENCODE_EXTRA_FLAGS"] ?? "").split(/\s+/).filter(Boolean);
-    this.extraFlags = ["--auto", ...extra];
+    this.bin = process.env["COPILOT_BIN"] ?? "copilot";
+    const extra = (process.env["COPILOT_EXTRA_FLAGS"] ?? "").split(/\s+/).filter(Boolean);
+    this.extraFlags = ["--yolo", ...extra];
   }
 
   async invoke(
@@ -38,17 +43,12 @@ export class OpenCodeAdapter implements HarnessAdapter {
   ): Promise<TaskResult> {
     const start = Date.now();
 
-    const modelFlag = agent.model ? ["--model", agent.model] : [];
-    const systemPromptFlag = existsSync(agent.path) ? ["--system-prompt", agent.path] : [];
-
     const prompt = this.buildPrompt(agent, task, contextBlock);
     const args = [
       this.bin,
-      "run",
-      ...modelFlag,
-      ...systemPromptFlag,
-      ...this.extraFlags,
+      "-p",
       prompt,
+      ...this.extraFlags,
     ];
 
     const cmd = args.map((arg) => (arg.includes(" ") ? `"${arg}"` : arg)).join(" ");
@@ -86,6 +86,8 @@ export class OpenCodeAdapter implements HarnessAdapter {
   }
 
   private buildPrompt(agent: AgentDescriptor, task: ManifestTask, contextBlock?: string): string {
+    const agentBody = existsSync(agent.path) ? readFileSync(agent.path, "utf8") : agent.rawBody;
+
     const contextHints = task.expectedOutputs.length > 0
       ? `\n\nExpected output files: ${task.expectedOutputs.join(", ")}`
       : "";
@@ -95,6 +97,8 @@ export class OpenCodeAdapter implements HarnessAdapter {
       : "";
 
     return [
+      agentBody,
+      "",
       contextBlock ?? "",
       `Task: ${task.title}`,
       "",
@@ -103,16 +107,4 @@ export class OpenCodeAdapter implements HarnessAdapter {
       validationHint,
     ].filter(Boolean).join("\n").trim();
   }
-}
-
-export function resolveAgentForTask(
-  agents: AgentDescriptor[],
-  ownerName: string | undefined,
-): AgentDescriptor | undefined {
-  if (!ownerName) return undefined;
-  return agents.find((a) => a.name === ownerName);
-}
-
-export function loadAgentFile(agentPath: string): string {
-  return existsSync(agentPath) ? readFileSync(agentPath, "utf8") : "";
 }

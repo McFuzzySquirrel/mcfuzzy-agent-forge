@@ -80,11 +80,12 @@ interface HarnessAdapter {
 }
 ```
 
-Three adapters ship in MVP:
+Three adapters ship in MVP (a fourth, GitHub Copilot CLI, was added later - see ADR-019):
 
 | Adapter | Class | Invocation strategy |
 |---|---|---|
 | OpenCode CLI | `OpenCodeAdapter` | Shells out to `opencode run --model … --system-prompt <agent.md> "<prompt>"` |
+| GitHub Copilot CLI | `CopilotAdapter` | Shells out to `copilot -p "<agent context + task prompt>" --yolo` (agent content inlined; no `--system-prompt` flag) |
 | OpenAI API | `OpenAIAdapter` | Sends agent `rawBody` as system prompt, task description as user message |
 | Stub | `StubAdapter` | Returns synthetic results; configurable failures via env var |
 
@@ -122,12 +123,19 @@ Each task is retried up to `--max-retries` times (default: 2) with a configurabl
 
 ### 6. Integration with forge-auto-build (alternative Stage 4 path)
 
-`forge-auto-build` can invoke this engine as its Stage 4 build path instead of the prompt-driven `forge-orchestrate-build` path. When a user wants the build executed through a real harness rather than via prompt instructions, they compile the manifest and run the engine:
+`forge-auto-build` can invoke this engine as its Stage 4 build path instead of the prompt-driven `forge-orchestrate-build` path. The engine is a **standalone, detached process** - authoring happens in the chat, execution runs outside it. When a user wants the build executed through a real harness rather than via prompt instructions, the skill compiles the manifest, starts the engine detached (`nohup`, log `docs/engine-run.log`), and polls `docs/WORKFLOW-STATE.json` to completion:
 
 ```bash
-# Stage 4 alternative: harness-driven execution
+# Stage 4 alternative: harness-driven execution (skill does this, then polls)
 cd .agents/skills/forge-execution-adapter && npm install && npm run forge-execution-adapter -- compile
-cd .agents/skills/forge-workflow-engine  && npm install && npm run workflow-engine -- run --harness opencode
+cd .agents/skills/forge-workflow-engine  && npm install && nohup npm run workflow-engine -- run --harness opencode --yes >> docs/engine-run.log 2>&1 &
+```
+
+Or run the engine directly, outside any CLI session, with the standalone runner:
+
+```bash
+./scripts/forge-engine-run.sh --harness opencode --yes   # per-task: opencode run --auto
+./scripts/forge-engine-run.sh --harness copilot --yes    # per-task: copilot -p --yolo
 ```
 
 Stages 1–3 are unchanged. For Stage 4, users choose one orchestration mode per run: prompt-driven (`forge-orchestrate-build`) or harness-driven (`forge-workflow-engine`). The engine is an alternative execution path, not a post-build replay step.

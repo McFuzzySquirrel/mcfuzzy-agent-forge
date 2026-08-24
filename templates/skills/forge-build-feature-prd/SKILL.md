@@ -31,7 +31,7 @@ This skill supports two modes, auto-detected in Step 0:
 ### Step 1a: Analyze Existing Project (Post-Project Mode)
 
 1. Read the original PRD (`docs/PRD.md`) - goals, architecture, tech stack, completed phases.
-2. Review existing agent files in `HARNESS_AGENTS_DIR` — load `forge-bootstrap-project/references/detect-harness.md` to determine this path — (`.md` files) — domains, responsibilities, collaboration patterns.
+2. Review existing agent files in `HARNESS_AGENTS_DIR` — load `forge-build-agent-team/references/detect-harness.md` to determine this path — (`.md` files) — domains, responsibilities, collaboration patterns.
 3. Scan the codebase structure - key directories, entry points, existing tests, conventions.
 4. Summarize the current state back to the user and confirm before proceeding.
 

@@ -68,6 +68,42 @@ if (-not $Target -or -not (Test-Path $Target -PathType Container)) {
 # Helpers
 # ---------------------------------------------------------------------------
 
+# Ensure the target repo's .gitignore excludes engine dependencies (node_modules
+# installed at engine-prep time) and the detached engine log.
+function Ensure-Gitignore {
+    $gi = Join-Path $Target ".gitignore"
+    $entries = @("node_modules/", "docs/engine-run.log")
+    $added = $false
+
+    # .gitignore is a dotfile (hidden on Unix); use .NET file APIs so reads and
+    # appends work regardless of the hidden attribute.
+    $existing = ""
+    if (Test-Path -LiteralPath $gi) {
+        $existing = [System.IO.File]::ReadAllText($gi)
+    }
+
+    if ($existing.Length -gt 0 -and -not $existing.EndsWith("`n")) {
+        [System.IO.File]::AppendAllText($gi, "`n")
+        $existing += "`n"
+    }
+
+    foreach ($e in $entries) {
+        if ($existing.Contains($e)) {
+            continue
+        }
+        [System.IO.File]::AppendAllText($gi, "$e`n")
+        $existing += "$e`n"
+        $added = $true
+    }
+
+    if ($added) {
+        Write-Host "  Updated:  $gi (node_modules/, docs/engine-run.log)"
+    }
+    else {
+        Write-Host "  OK:       $gi already ignores node_modules/ and engine-run.log"
+    }
+}
+
 function Copy-File {
     param ([string]$Src, [string]$Dest)
 
@@ -180,6 +216,11 @@ if ($Harness -ne "agents") {
         Set-Content -Path $_.FullName -Value $content -NoNewline
     }
 }
+
+# --- Gitignore hygiene (engine node_modules + detached run log) ---
+Write-Host ""
+Write-Host "Gitignore ($(Join-Path $Target '.gitignore')):"
+Ensure-Gitignore
 
 Write-Host ""
 Write-Host "Bootstrap complete."
