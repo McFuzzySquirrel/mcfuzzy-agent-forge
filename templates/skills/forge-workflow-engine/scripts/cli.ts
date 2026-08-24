@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 import { dirname, join, resolve } from "node:path";
 import { existsSync, readFileSync } from "node:fs";
+import * as readline from "node:readline";
 
 import { runEngine, replayTask } from "./engine.ts";
 import { loadState, statePath, auditPath } from "./state.ts";
@@ -8,7 +9,7 @@ import { OpenCodeAdapter } from "./harness/opencode-adapter.ts";
 import { OpenAIAdapter } from "./harness/openai-adapter.ts";
 import { StubAdapter } from "./harness/stub-adapter.ts";
 import { FlowForgeKernelAdapter } from "./harness/flowforge-kernel-adapter.ts";
-import type { HarnessAdapter, EngineOptions } from "./types.ts";
+import type { ExecutionManifest, HarnessAdapter, EngineOptions } from "./types.ts";
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -17,12 +18,13 @@ function usage(): never {
 
 Usage:
   npm run workflow-engine -- run     [--repo <path>] [--harness opencode|openai|stub|flowforge-kernel]
-                                     [--max-retries <n>] [--retry-delay-ms <ms>]
+                                     [--max-retries <n>] [--retry-delay-ms <ms>] [--yes]
   npm run workflow-engine -- status  [--repo <path>]
   npm run workflow-engine -- replay  <task-id> [--repo <path>] [--harness opencode|openai|stub|flowforge-kernel]
   npm run workflow-engine -- pause   [--repo <path>]
 
 Environment variables:
+  FORGE_ENGINE_YES      Skip the pre-run confirmation gate (same as --yes)
   OPENCODE_BIN           Path to opencode binary (default: opencode)
   OPENCODE_EXTRA_FLAGS   Extra flags passed to opencode run
   OPENAI_API_KEY         Required for --harness openai
@@ -100,8 +102,44 @@ function buildOptions(args: string[], harnessName?: string): EngineOptions {
 
 // ─── Commands ─────────────────────────────────────────────────────────────────
 
+// Presents the pre-run gate. Skipped when `--yes` or FORGE_ENGINE_YES=1 is set,
+// or when stdin is not a TTY (CI / headless) - the gate is interactive-only.
+async function confirmPreRun(opts: EngineOptions, args: string[]): Promise<void> {
+  const manifest = JSON.parse(readFileSync(opts.manifestPath, "utf8")) as ExecutionManifest;
+  const taskCount = manifest.phases.reduce((n, p) => n + (p.tasks?.length ?? 0), 0);
+  const skip = flag(args, "--yes") !== undefined || process.env["FORGE_ENGINE_YES"] === "1";
+
+  console.log("Forge Workflow Engine - Pre-run Summary");
+  console.log(`  Harness : ${opts.harness.name}`);
+  console.log(`  Phases  : ${manifest.phases.length}`);
+  console.log(`  Tasks   : ${taskCount}`);
+  console.log(`  Manifest: ${opts.manifestPath}`);
+
+  if (skip) {
+    console.log("Confirmation skipped (--yes / FORGE_ENGINE_YES=1).");
+    return;
+  }
+  if (!process.stdin.isTTY) {
+    console.log("Non-interactive stdin detected - starting automatically. Pass --yes to skip this gate explicitly.");
+    return;
+  }
+
+  const answer = await new Promise<string>((resolve) => {
+    const rl = readline.createInterface({ input: process.stdin, output: process.stdout });
+    rl.question('Type "yes" to start dark orchestration, or Ctrl+C to abort: ', (a) => {
+      rl.close();
+      resolve(a);
+    });
+  });
+  if (answer.trim().toLowerCase() !== "yes") {
+    console.log("Aborted.");
+    process.exit(0);
+  }
+}
+
 async function cmdRun(args: string[]): Promise<void> {
   const opts = buildOptions(args);
+  await confirmPreRun(opts, args);
   const state = await runEngine(opts);
 
   console.log(`\nRun ${state.runId} finished with status: ${state.status}`);

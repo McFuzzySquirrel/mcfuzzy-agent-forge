@@ -33,7 +33,7 @@ assert_dir()  { [[ -d "$1" ]] && pass "$2" || fail "$2 (missing dir: $1)"; }
 assert_file() { [[ -f "$1" ]] && pass "$2" || fail "$2 (missing file: $1)"; }
 assert_contains() {
   local file="$1" pattern="$2" label="$3"
-  if grep -q "$pattern" "$file" 2>/dev/null; then
+  if grep -q -- "$pattern" "$file" 2>/dev/null; then
     pass "$label"
   else
     fail "$label (pattern '$pattern' not found in $file)"
@@ -64,6 +64,18 @@ assert_contains "$LAUNCHER" 'forge-auto-build-prd' \
   'forge-launcher.sh queues forge-auto-build-prd when no PRD is captured'
 assert_contains "$LAUNCHER" '/forge-auto-build Use docs/PRD.md as the project PRD' \
   'forge-launcher.sh queues forge-auto-build against an existing PRD'
+
+# Headless (terminal-driven) mode must be wired up with the right CLI invocations.
+assert_contains "$LAUNCHER" -- '--headless' \
+  'forge-launcher.sh accepts --headless/--run'
+assert_contains "$LAUNCHER" 'HEADLESS=true' \
+  'forge-launcher.sh enables headless mode'
+assert_contains "$LAUNCHER" 'headless_build_command' \
+  'forge-launcher.sh has a headless_build_command helper'
+assert_contains "$LAUNCHER" 'opencode run --auto' \
+  'forge-launcher.sh headless mode uses opencode run --auto'
+assert_contains "$LAUNCHER" 'copilot -p' \
+  'forge-launcher.sh headless mode uses copilot -p --yolo'
 
 # ---------------------------------------------------------------------------
 # Test: non-interactive run for each harness
@@ -232,6 +244,84 @@ else
   else
     pass "agents harness (with PRD): does not queue forge-auto-build-prd when a PRD exists"
   fi
+fi
+
+rm -rf "$REPO_PARENT" 2>/dev/null || true
+
+# --- headless dry-run with PRD + workflow-engine ---
+echo ""
+echo "--- headless dry-run (PRD + workflow-engine, opencode runner) ---"
+
+REPO_PARENT="$(mktemp -d)"
+REPO_NAME="test-headless-prd-$$"
+PRD_FILE="$REPO_PARENT/seed-prd.md"
+printf '# PRD\n\n## Functional Requirements\n\n- FR-01 Foo\n\n## Implementation Phases\n\n1. Foundation\n' > "$PRD_FILE"
+
+export FORGE_IDEA="Headless test project"
+export FORGE_YN_DEFAULT="n"
+export FORGE_HARNESS_CHOICE="4"
+export FORGE_REPO_NAME="$REPO_NAME"
+export FORGE_REPO_DESCRIPTION=""
+export FORGE_REPO_VISIBILITY="private"
+export FORGE_REPO_PARENT_DIR="$REPO_PARENT"
+export FORGE_PRD_FILE="$PRD_FILE"
+export FORGE_WORKFLOW_ENGINE="1"
+
+EXIT_CODE=0
+bash "$LAUNCHER" --non-interactive --headless --dry-run \
+  >/tmp/forge-launcher-test-headless.txt 2>&1 || EXIT_CODE=$?
+unset FORGE_HARNESS_CHOICE FORGE_REPO_NAME FORGE_REPO_DESCRIPTION FORGE_REPO_VISIBILITY FORGE_REPO_PARENT_DIR FORGE_PRD_FILE FORGE_WORKFLOW_ENGINE
+
+if [[ $EXIT_CODE -ne 0 ]]; then
+  fail "headless (PRD): launcher exited with code $EXIT_CODE"
+  cat /tmp/forge-launcher-test-headless.txt >&2 || true
+else
+  pass "headless (PRD): launcher completed successfully"
+  assert_contains "/tmp/forge-launcher-test-headless.txt" 'opencode run --auto' \
+    "headless (PRD): uses opencode run --auto"
+  assert_contains "/tmp/forge-launcher-test-headless.txt" '/forge-auto-build Use docs/PRD.md as the project PRD. GO --workflow-engine' \
+    "headless (PRD): embeds GO --workflow-engine for the engine path"
+  assert_contains "/tmp/forge-launcher-test-headless.txt" "Dry-run: command printed, not executed" \
+    "headless (PRD): --dry-run prints without executing"
+  assert_contains "/tmp/forge-launcher-test-headless.txt" "Mode        : headless" \
+    "headless (PRD): summary notes headless mode"
+fi
+
+rm -rf "$REPO_PARENT" 2>/dev/null || true
+
+# --- headless dry-run without PRD (queues forge-auto-build-prd, copilot runner) ---
+echo ""
+echo "--- headless dry-run (no PRD, copilot runner) ---"
+
+REPO_PARENT="$(mktemp -d)"
+REPO_NAME="test-headless-noprd-$$"
+export FORGE_IDEA="Headless no-PRD test project"
+export FORGE_YN_DEFAULT="n"
+export FORGE_HARNESS_CHOICE="4"
+export FORGE_REPO_NAME="$REPO_NAME"
+export FORGE_REPO_DESCRIPTION=""
+export FORGE_REPO_VISIBILITY="private"
+export FORGE_REPO_PARENT_DIR="$REPO_PARENT"
+export FORGE_RUN_WITH="copilot"
+
+EXIT_CODE=0
+bash "$LAUNCHER" --non-interactive --headless --dry-run \
+  >/tmp/forge-launcher-test-headless-noprd.txt 2>&1 || EXIT_CODE=$?
+unset FORGE_HARNESS_CHOICE FORGE_REPO_NAME FORGE_REPO_DESCRIPTION FORGE_REPO_VISIBILITY FORGE_REPO_PARENT_DIR FORGE_RUN_WITH
+
+if [[ $EXIT_CODE -ne 0 ]]; then
+  fail "headless (no PRD): launcher exited with code $EXIT_CODE"
+  cat /tmp/forge-launcher-test-headless-noprd.txt >&2 || true
+else
+  pass "headless (no PRD): launcher completed successfully"
+  assert_contains "/tmp/forge-launcher-test-headless-noprd.txt" 'copilot -p' \
+    "headless (no PRD): uses copilot -p --yolo"
+  assert_contains "/tmp/forge-launcher-test-headless-noprd.txt" 'forge-auto-build-prd Use docs/IDEA.md as the project idea' \
+    "headless (no PRD): queues forge-auto-build-prd"
+  assert_contains "/tmp/forge-launcher-test-headless-noprd.txt" 'Headless mode: auto-proceed' \
+    "headless (no PRD): embeds the headless auto-proceed instruction"
+  assert_contains "/tmp/forge-launcher-test-headless-noprd.txt" '--yolo' \
+    "headless (no PRD): copilot runner uses --yolo"
 fi
 
 rm -rf "$REPO_PARENT" 2>/dev/null || true

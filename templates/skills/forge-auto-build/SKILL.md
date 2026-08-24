@@ -83,6 +83,14 @@ When the user invokes this skill, perform the following before touching any file
 7. **Present the pre-flight checklist** (see below).
 8. **Prompt**: *"Review the plan above. Type `GO` to start the auto-build on the default prompt-driven path, `GO --assign-models` to also run model assignment, `GO --workflow-engine` to use the workflow-engine path instead of `forge-orchestrate-build`, or `stop` to exit."*
 
+> **Headless invocation.** When this skill is driven from a non-interactive
+> terminal (`opencode run` / `copilot -p --yolo`, e.g. via `forge-launcher
+> --headless`), the confirmation gate is satisfied by the invocation itself:
+> a `GO` (optionally with `--assign-models` / `--workflow-engine`) embedded in
+> the invocation message counts as the user's approval. Present the pre-flight
+> summary and checklist as the run's audit trail, then proceed without pausing
+> for a separate reply.
+
 **PRD-requirement behavior examples:**
 
 - User ran `forge-auto-build docs/PRD.md`: use that explicit PRD path.

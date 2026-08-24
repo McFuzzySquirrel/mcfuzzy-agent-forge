@@ -63,6 +63,13 @@ Ask targeted questions to fill in gaps. Group by category and ask only what the 
 
 Wait for the user to respond. Ask follow-up questions if answers reveal new unknowns.
 
+> **Headless mode.** When invoked non-interactively (`FORGE_HEADLESS=1`, or the
+> invocation says "headless" / "auto-proceed"), skip this interview entirely.
+> Draft the PRD from the supplied input (`docs/IDEA.md`, `docs/research/*`, or
+> the inline idea). For every answer the interview would have gathered, record a
+> reasonable default assumption in the PRD's **Open Questions** section so the
+> document remains honest about what was decided automatically.
+
 ### Step 3: Draft the Document
 
 Produce a structured PRD using the template in `references/prd-template.md`. Load that file now and follow its structure. Use information gathered in Steps 1–2. Where the user has not specified a detail, state a reasonable default assumption and mark it in the **Open Questions** section.
@@ -111,6 +118,11 @@ Ask:
 - Should any priorities be adjusted?
 
 Incorporate feedback and iterate until the user confirms the document is ready. Once confirmed, save the final PRD to `docs/PRD.md` and proceed to Step 5.
+
+> **Headless mode.** When invoked non-interactively, present the checklist once
+> (it is part of the audit trail) but do **not** block for approval - the
+> headless invocation has already authorized the document. Proceed to save
+> `docs/PRD.md` and run Step 5.
 
 ---
 

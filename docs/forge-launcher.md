@@ -68,6 +68,48 @@ $env:FORGE_YN_DEFAULT = "y"
 .\scripts\forge-launcher.ps1 -NonInteractive
 ```
 
+### Headless mode (terminal-driven, no interactive CLI)
+
+By default Step 8 opens an interactive CLI (`opencode`, `claude`, `copilot`) in a
+separate terminal and prints the skill command to run there. With `--headless`
+the launcher instead drives the queued skill directly from the terminal via
+`opencode run --auto` or `copilot -p --yolo`, so you never enter a chat session.
+The workflow engine already executes headlessly (it shells out to `opencode run`
+per task), so a `--headless` launcher run can go from idea to finished build
+without opening any interactive CLI.
+
+```bash
+# Drive the queued skill now (prints and runs the command)
+./scripts/forge-launcher.sh --headless
+
+# Print the exact command without running it (CI / testing)
+./scripts/forge-launcher.sh --headless --dry-run
+
+# PowerShell
+.\scripts\forge-launcher.ps1 -Headless
+.\scripts\forge-launcher.ps1 -Headless -DryRun
+```
+
+What gets queued:
+
+| Repo state | Queued command |
+|---|---|
+| PRD captured in Step 6 (or a decomposed PRD exists) | `opencode run --auto "/forge-auto-build Use docs/PRD.md as the project PRD. GO [--workflow-engine]"` |
+| No PRD captured | `opencode run --auto "/forge-auto-build-prd Use docs/IDEA.md as the project idea. Headless mode: auto-proceed with default assumptions and approve the PRD."` |
+
+The embedded `GO` satisfies `forge-auto-build`'s pre-flight gate, and the
+headless `forge-auto-build-prd` invocation skips its interactive confirmation
+and clarifying questions (every unknown is recorded as an Open Question with a
+default assumption in the PRD). Use `FORGE_RUN_WITH=copilot` to emit
+`copilot -p "..." --yolo` instead of `opencode run --auto` (defaults to
+`copilot` for the GitHub Copilot harness, `opencode` otherwise), and
+`FORGE_WORKFLOW_ENGINE=1` to append `GO --workflow-engine` so the build executes
+through the workflow engine.
+
+> **Headless + engine:** the engine's own pre-run gate is interactive-only. It
+> auto-skips when stdin is not a TTY, and `--yes` (or `FORGE_ENGINE_YES=1`)
+> skips it explicitly for CI/headless runs.
+
 ---
 
 ## Step-by-step walkthrough
@@ -292,6 +334,8 @@ When a PRD **was** captured in Step 6, the queued command is instead:
 | `FORGE_PRD_FILE` | 6 | Absolute path to an existing PRD file to copy in as `docs/PRD.md` |
 | `FORGE_RESEARCH_FILES` | 6 | Comma-separated list of absolute paths to research/seed documents copied to `docs/research/` |
 | `FORGE_YN_DEFAULT` | 3, 7 | Default answer for yes/no prompts (`y` or `n`) |
+| `FORGE_RUN_WITH` | 8 | Headless runner: `opencode` or `copilot` (default: `copilot` for the GitHub harness, `opencode` otherwise) |
+| `FORGE_WORKFLOW_ENGINE` | 8 | `1` to append `GO --workflow-engine` to the queued headless command (build executes via the workflow engine) |
 
 All other step inputs (repo name, description, visibility, parent directory) use their defaults in non-interactive mode. Override them by setting the variables before running:
 

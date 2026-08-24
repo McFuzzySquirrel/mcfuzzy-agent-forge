@@ -8,6 +8,7 @@ This guide walks you through a concrete end-to-end scenario you can run by hand 
 4. **Dark orchestration with the OpenAI harness** – running the workflow engine against the OpenAI API directly (no `opencode` or `claude` CLI required).
 5. **Workforce compiler + kernel handoff path** – compiling a `.workforce` package, validating it, and running the workflow engine with `--harness flowforge-kernel`.
 6. **Artifact store and context projection** – verifying that the engine writes typed JSON artifacts to `docs/artifacts/`, projects a minimal context block per task, and emits the expected audit events.
+7. **Headless / terminal-driven execution** – driving skills via `opencode run --auto` / `copilot -p --yolo` and the launcher's `--headless` mode, with no interactive CLI.
 
 ---
 
@@ -243,6 +244,8 @@ npm run workflow-engine -- run --harness opencode
 The engine prints a pre-run summary (phases, task count, harness) and asks you to confirm before proceeding.
 
 **Check ✓** You see the pre-run summary. The engine does **not** start dispatching tasks until you confirm.
+
+> The pre-run gate is interactive-only: it auto-skips when stdin is not a TTY (CI), and `--yes` (or `FORGE_ENGINE_YES=1`) skips it explicitly for headless runs - see Part 7.
 
 ---
 
@@ -936,6 +939,114 @@ npm run workflow-engine -- run --harness stub
 | `artifact.created` events present in audit log for each producing task | ✅ |
 | Tasks with no `inputs`/`produces` declarations complete without errors | ✅ |
 | Artifact files survive a resume cycle and are not re-written | ✅ |
+
+---
+
+## Part 7 – Headless / Terminal-Driven Execution (No Interactive CLI)
+
+This part verifies the terminal-driven path: `opencode run --auto` and `copilot -p --yolo` drive the forge skills non-interactively, the workflow engine executes without a chat session, and the launcher can queue the whole thing with `--headless`. Use this path for scripting, CI, or when you don't want to sit in an interactive chat.
+
+### Prerequisites for Part 7
+
+- All prerequisites from Parts 1 and 2
+- `opencode` in `$PATH` (for the opencode runner), and/or the GitHub Copilot CLI (for the copilot runner)
+- `forge-launcher.sh` in `scripts/`
+
+---
+
+### Test Steps
+
+**Step 1 – Launcher headless dry-run prints the right command**
+
+Run the launcher in headless dry-run mode so it prints the command it would execute without running it:
+
+```bash
+export FORGE_HARNESS_CHOICE="4"          # generic .agents
+export FORGE_REPO_NAME="forge-headless-ci"
+export FORGE_REPO_PARENT_DIR="/tmp"
+export FORGE_IDEA="A task manager with email notifications. Node.js, Express, PostgreSQL."
+export FORGE_YN_DEFAULT="n"
+./scripts/forge-launcher.sh --non-interactive --headless --dry-run
+```
+
+**Check ✓** The output includes `opencode run --auto "/forge-auto-build-prd Use docs/IDEA.md as the project idea. Headless mode: auto-proceed with default assumptions and approve the PRD."` and a `Dry-run: command printed, not executed.` line.
+
+Repeat with a PRD added (`FORGE_PRD_FILE=/path/to/prd.md` and `FORGE_WORKFLOW_ENGINE=1`):
+
+**Check ✓** The printed command becomes `opencode run --auto "/forge-auto-build Use docs/PRD.md as the project PRD. GO --workflow-engine"` - the engine build path is embedded in the skill invocation.
+
+Set `FORGE_RUN_WITH=copilot`:
+
+**Check ✓** The printed command becomes `copilot -p "…" --yolo` instead of `opencode run --auto "…"`.
+
+---
+
+**Step 2 – Invoke a skill headlessly via `opencode run`**
+
+From the bootstrapped repository (or the one created in Step 1), run the skill non-interactively:
+
+```bash
+cd /tmp/forge-headless-ci
+opencode run --auto "/forge-auto-build-prd Use docs/IDEA.md as the project idea. Headless mode: auto-proceed with default assumptions and approve the PRD."
+```
+
+**Check ✓** `docs/PRD.md` is produced without any interactive prompts - the skill auto-proceeds, and every unknown appears in the PRD's **Open Questions** section with a default assumption.
+
+---
+
+**Step 3 – Build the team headlessly**
+
+```bash
+opencode run --auto "/forge-build-agent-team Build an agent team from docs/PRD.md. Auto-proceed."
+```
+
+**Check ✓** `.md` agent files appear under the harness agents directory and skills under the skills directory, with no interactive pauses.
+
+---
+
+**Step 4 – Engine pre-run gate and `--yes`**
+
+Compile the manifest and run the engine:
+
+```bash
+cd .agents/skills/forge-execution-adapter && npm install && npm run forge-execution-adapter -- compile
+cd ../forge-workflow-engine
+npm run workflow-engine -- run --harness opencode --yes
+```
+
+**Check ✓** The pre-run summary prints (harness, phases, tasks) then **starts immediately** - no confirmation prompt. Without `--yes`, the gate only appears when stdin is an interactive TTY; in a non-TTY/CI context it auto-skips with a message.
+
+---
+
+**Step 5 – Full terminal pipeline via the launcher headless mode**
+
+Run the launcher with `--headless` (not `--dry-run`) in a fresh repository, with a PRD captured so the build stage is queued:
+
+```bash
+export FORGE_HARNESS_CHOICE="4"
+export FORGE_REPO_NAME="forge-headless-full"
+export FORGE_REPO_PARENT_DIR="/tmp"
+export FORGE_IDEA="A task manager with email notifications. Node.js, Express, PostgreSQL."
+export FORGE_PRD_FILE="/path/to/prd.md"
+export FORGE_WORKFLOW_ENGINE="1"
+export FORGE_YN_DEFAULT="n"
+./scripts/forge-launcher.sh --non-interactive --headless
+```
+
+**Check ✓** The launcher executes `opencode run --auto "/forge-auto-build Use docs/PRD.md as the project PRD. GO --workflow-engine"` directly from the terminal, and the build proceeds to completion without opening an interactive CLI.
+
+---
+
+### Part 7 Pass/Fail Summary
+
+| Check | Expected |
+|---|---|
+| Launcher `--headless --dry-run` prints the correct `opencode run --auto` / `copilot -p --yolo` command | ✅ |
+| `GO --workflow-engine` embedded when `FORGE_WORKFLOW_ENGINE=1` | ✅ |
+| `opencode run --auto` invokes the skill non-interactively and produces `docs/PRD.md` | ✅ |
+| Headless team build produces agent + skill files with no pauses | ✅ |
+| Engine `--yes` skips the pre-run gate and starts immediately | ✅ |
+| Launcher `--headless` runs the queued skill end-to-end from the terminal | ✅ |
 
 ---
 

@@ -14,6 +14,8 @@ import type { AgentDescriptor, HarnessAdapter, ManifestTask, TaskResult, Workflo
  *
  * Set OPENCODE_BIN env var to override the opencode binary path.
  * Set OPENCODE_EXTRA_FLAGS env var to inject extra flags (e.g. "--no-stream").
+ * `--auto` is passed by default so per-task tool permissions are auto-approved;
+ * this adapter runs non-interactively (no user is present to approve prompts).
  */
 export class OpenCodeAdapter implements HarnessAdapter {
   readonly name = "opencode";
@@ -23,7 +25,8 @@ export class OpenCodeAdapter implements HarnessAdapter {
 
   constructor() {
     this.bin = process.env["OPENCODE_BIN"] ?? "opencode";
-    this.extraFlags = (process.env["OPENCODE_EXTRA_FLAGS"] ?? "").split(/\s+/).filter(Boolean);
+    const extra = (process.env["OPENCODE_EXTRA_FLAGS"] ?? "").split(/\s+/).filter(Boolean);
+    this.extraFlags = ["--auto", ...extra];
   }
 
   async invoke(

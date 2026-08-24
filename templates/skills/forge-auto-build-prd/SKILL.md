@@ -39,6 +39,12 @@ idea up front, verifying the outputs, and making the hand-off explicit.
 - **Resumability.** If the repo already has `docs/PRD.md` or the decomposed
   layout, detect it and offer to resume/hand off instead of re-running the
   interview.
+- **Headless mode skips human gates deliberately.** When invoked from a
+  non-interactive terminal (see Step 0 below), the confirmation and review
+  gates are satisfied by the invocation itself. Every decision the interview
+  would have asked about is instead recorded as an Open Question with a stated
+  default assumption in the PRD - so the artifact stays honest about what was
+  decided automatically. Interactive use keeps all gates.
 
 ---
 
@@ -50,7 +56,17 @@ The user invokes this skill with (typically) an idea, for example:
 
 > `/forge-auto-build-prd I want to build a CLI that summarizes my git history into a weekly changelog.`
 
-Do the following before invoking any other skill:
+First, detect whether this is a **headless invocation**. Treat it as headless when
+any of the following is true:
+
+- The environment variable `FORGE_HEADLESS` is set to `1`.
+- The invocation text contains `headless`, `auto-proceed`, or `do not ask`
+  (the launcher's headless mode embeds "Headless mode: auto-proceed with
+  default assumptions and approve the PRD").
+- There is no interactive user to answer follow-up questions (e.g. a
+  one-shot `opencode run` / `copilot -p` session).
+
+**Interactive mode** (default):
 
 1. **Echo the idea back** in one or two sentences so the user can confirm you
    understood it.
@@ -69,13 +85,30 @@ Do the following before invoking any other skill:
 4. **Wait for confirmation.** Do not proceed until the user confirms the idea
    is right.
 
----
+**Headless mode:**
+
+1. **Echo the idea** (from `docs/IDEA.md` if the invocation references it, or
+   from the invocation text).
+2. **Check the repo state** as above; if a PRD already exists, stop and report
+   that `forge-auto-build` is the correct next step instead.
+3. **Skip the confirmation pause and the clarifying-question interview.** Do
+   not stop for answers. Build the PRD from `docs/IDEA.md` plus anything in
+   `docs/research/`, stating a default assumption for every unknown and listing
+   it in the PRD's **Open Questions** section.
+4. **Auto-approve the review.** Present the finished PRD summary, but do not
+   block on approval - the headless invocation has already authorized it.
 
 ### Step 1: Run `forge-build-prd`
 
 Invoke the `forge-build-prd` skill, passing the confirmed idea as the input. Let
 that skill drive its own clarifying-questions process; do not answer on the
 user's behalf and do not collapse its interview into a single batch.
+
+In **headless mode**, tell `forge-build-prd` you are in headless mode (pass
+`FORGE_HEADLESS=1` or instruct it explicitly): it should skip its clarifying
+questions, draft from `docs/IDEA.md` + `docs/research/*` with default
+assumptions recorded in **Open Questions**, and auto-approve the review
+checklist after presenting it.
 
 `forge-build-prd` handles the PRD review (with its checklist) and - once the
 user confirms the document is ready - automatically evaluates the decomposition
@@ -128,6 +161,11 @@ Do **not** proceed to team generation, model assignment, or build execution.
   monolithic, and that is reported, not asked about.
 - **Preserve the original PRD.** If decomposition runs, `docs/PRD.md` is kept
   as-is; the vision and feature documents are generated alongside it.
+- **Headless mode must not stall.** In a headless invocation there is no user to
+  answer clarifying questions or type an approval. Auto-proceed with default
+  assumptions (recorded in **Open Questions**) and treat the invocation as the
+  approval. If you genuinely cannot produce a coherent PRD from the available
+  inputs (empty idea, no seed docs), stop and report what input is missing.
 
 ---
 

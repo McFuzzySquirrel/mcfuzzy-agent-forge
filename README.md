@@ -39,6 +39,7 @@ Answer the prompts, then open the repo in your agent harness and run the queued 
 | **Fully autonomous engine agent** | `@workspace @workflow-orchestrator Run the workflow` | One pre-run gate, then the engine dispatches every task unattended |
 | **Add a feature to a finished project** | `@workspace /forge-build-feature-prd I want to add [feature]` | Feature PRD → targeted team update → execute feature phases |
 | **Per-agent model selection** | `@workspace /forge-assign-models …` | Discover → recommend (`docs/MODEL-PLAN.md`) → apply `model:` frontmatter |
+| **Fully terminal-driven (no chat)** | `./scripts/forge-launcher.sh --headless` | Kicks off the queued skill via `opencode run --auto` or `copilot -p --yolo` - never opens an interactive CLI |
 
 > **`forge-auto-build` requires an existing PRD** (`docs/PRD.md`, or the decomposed `docs/product-vision.md` + `docs/features/*.md`). It never generates one - if no PRD exists it stops and directs you to `forge-auto-build-prd` or `forge-build-prd`. PRD creation is a deliberate stage; execution is a separate, deliberate stage.
 
@@ -135,7 +136,7 @@ For fully autonomous execution through a real harness (OpenCode CLI, OpenAI API,
 
 ```bash
 cd .agents/skills/forge-execution-adapter && npm install && npm run forge-execution-adapter -- compile
-cd ../forge-workflow-engine && npm install && npm run workflow-engine -- run --harness opencode
+cd ../forge-workflow-engine && npm install && npm run workflow-engine -- run --harness opencode --yes
 ```
 
 Or drive it conversationally via the companion agent:
@@ -145,6 +146,24 @@ Or drive it conversationally via the companion agent:
 ```
 
 Dark orchestration means one pre-run gate, then unattended dispatch - no approvals between tasks. Resume with `run` after interruption; replay a failed task with `replay <task-id>`. Dry-run first with `--harness stub` to validate setup without spending tokens.
+
+### Path D - Fully terminal-driven (no chat session)
+
+You never need to open an interactive CLI. The engine already shells out to `opencode run` per task, and the launcher can drive the whole pipeline headlessly:
+
+```bash
+# Fastest: launcher does repo → bootstrap → idea → headless skill run
+./scripts/forge-launcher.sh --headless
+
+# Or drive the queued skill directly:
+opencode run --auto "/forge-auto-build Use docs/PRD.md as the project PRD. GO --workflow-engine"
+copilot -p "/forge-auto-build Use docs/PRD.md as the project PRD. GO --workflow-engine" --yolo
+```
+
+- `opencode run` / `copilot -p` are non-interactive; `--auto` / `--yolo` auto-approve tool permissions.
+- With no PRD yet, the launcher queues `forge-auto-build-prd` in headless mode (auto-proceeds with default assumptions recorded in the PRD's Open Questions).
+- `--dry-run` prints the exact command instead of running it. Configure the runner with `FORGE_RUN_WITH=opencode|copilot` and the engine path with `FORGE_WORKFLOW_ENGINE=1`.
+- The workflow engine's `--yes` (or `FORGE_ENGINE_YES=1`) skips its interactive pre-run gate for CI/headless runs.
 
 ---
 

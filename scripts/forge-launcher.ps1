@@ -20,13 +20,24 @@
     Skip all interactive prompts (for CI/testing only).
     Requires environment variables to be set -see docs/forge-launcher.md.
 
+.PARAMETER Headless
+    Instead of opening an interactive CLI, drive the queued skill directly from
+    the terminal via `opencode run --auto` or `copilot -p --yolo`. Configure
+    with FORGE_RUN_WITH and FORGE_WORKFLOW_ENGINE (see docs/forge-launcher.md).
+
+.PARAMETER DryRun
+    Print the headless command without executing it.
+
 .EXAMPLE
     .\scripts\forge-launcher.ps1
     .\scripts\forge-launcher.ps1 -NonInteractive
+    .\scripts\forge-launcher.ps1 -Headless -DryRun
 #>
 [CmdletBinding()]
 param (
-    [switch]$NonInteractive
+    [switch]$NonInteractive,
+    [switch]$Headless,
+    [switch]$DryRun
 )
 
 Set-StrictMode -Version Latest
@@ -155,6 +166,45 @@ function Get-AutobuildCommand {
         return "/forge-auto-build Use docs/PRD.md as the project PRD"
     } else {
         return "/forge-auto-build-prd Use docs/IDEA.md as the project idea"
+    }
+}
+
+function Get-HeadlessSkillMessage {
+    # Returns the skill invocation message used by the headless terminal command.
+    $hasPrd = $script:PrdAdded -or (Test-Path (Join-Path $script:RepoDir "docs\PRD.md") -PathType Leaf) -or (Test-Path (Join-Path $script:RepoDir "docs\product-vision.md") -PathType Leaf)
+    if ($hasPrd) {
+        if ($env:FORGE_WORKFLOW_ENGINE -eq "1") {
+            return "/forge-auto-build Use docs/PRD.md as the project PRD. GO --workflow-engine"
+        }
+        return "/forge-auto-build Use docs/PRD.md as the project PRD. GO"
+    }
+    return "/forge-auto-build-prd Use docs/IDEA.md as the project idea. Headless mode: auto-proceed with default assumptions and approve the PRD."
+}
+
+function Get-HeadlessCommand {
+    # Returns the non-interactive terminal command that drives the queued skill
+    # via `opencode run --auto` or `copilot -p --yolo`.
+    $runner = if ($env:FORGE_RUN_WITH) { $env:FORGE_RUN_WITH } else { if ($script:Harness -eq "github") { "copilot" } else { "opencode" } }
+    $msg = Get-HeadlessSkillMessage
+    if ($runner -eq "copilot") {
+        return "copilot -p `"$msg`" --yolo"
+    }
+    return "opencode run --auto `"$msg`""
+}
+
+function Invoke-HeadlessBuild {
+    # Executes the headless command in the repository (or prints it with -DryRun).
+    $cmd = Get-HeadlessCommand
+    Write-Host "    $cmd" -ForegroundColor White
+    if ($DryRun) {
+        Write-Warn "Dry-run: command printed, not executed."
+        return
+    }
+    Push-Location $script:RepoDir
+    try {
+        Invoke-Expression $cmd
+    } finally {
+        Pop-Location
     }
 }
 
@@ -570,6 +620,14 @@ function Invoke-LaunchAutobuild {
     }
     Write-Host ""
 
+    if ($Headless) {
+        Write-Info "Headless mode: driving the queued skill directly from the terminal"
+        Write-Host "  (no interactive CLI session will be opened)."
+        Write-Host ""
+        Invoke-HeadlessBuild
+        return
+    }
+
     switch ($script:Harness) {
         "github" {
             if ($script:CopilotAvailable) {
@@ -673,6 +731,9 @@ function Write-CompletionSummary {
     Write-Host "  Idea file   : $(Join-Path $script:RepoDir 'docs\IDEA.md')"
     Write-Host "  PRD         : $( if ($script:PrdAdded) { Join-Path $script:RepoDir 'docs\PRD.md' } else { 'none (will be built from docs/IDEA.md by forge-auto-build-prd)' } )"
     Write-Host "  Research    : $( if ($script:ResearchAdded) { Join-Path $script:RepoDir 'docs\research\' } else { 'none' } )"
+    if ($Headless) {
+        Write-Host "  Mode        : headless (terminal-driven; no interactive CLI)"
+    }
     Write-Host ""
     Write-Host "  Next steps:"
     Write-Host ""

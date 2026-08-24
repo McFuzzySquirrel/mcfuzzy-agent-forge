@@ -12,11 +12,16 @@
 #   9. Completion summary
 #
 # Usage:
-#   ./scripts/forge-launcher.sh [--non-interactive]
+#   ./scripts/forge-launcher.sh [--non-interactive] [--headless] [--dry-run]
 #
 # Options:
 #   --non-interactive   Skip all interactive prompts (for CI/testing only).
 #                       Requires environment variables to be set -see docs.
+#   --headless          Instead of opening an interactive CLI, drive the queued
+#                       skill directly from the terminal via `opencode run` or
+#                       `copilot -p --yolo`. Configure with FORGE_RUN_WITH and
+#                       FORGE_WORKFLOW_ENGINE (see docs/forge-launcher.md).
+#   --dry-run           Print the headless command without executing it.
 
 set -euo pipefail
 
@@ -24,9 +29,13 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 BOOTSTRAP_SH="$SCRIPT_DIR/bootstrap.sh"
 
 NON_INTERACTIVE=false
+HEADLESS=false
+DRY_RUN=false
 while [[ $# -gt 0 ]]; do
   case "$1" in
     --non-interactive) NON_INTERACTIVE=true; shift ;;
+    --headless|--run)  HEADLESS=true; shift ;;
+    --dry-run)         DRY_RUN=true; shift ;;
     *) echo "Unknown option: $1" >&2; exit 1 ;;
   esac
 done
@@ -132,6 +141,56 @@ autobuild_command() {
   else
     echo "/forge-auto-build-prd Use docs/IDEA.md as the project idea"
   fi
+}
+
+# The skill invocation message used by the headless terminal command.
+headless_skill_msg() {
+  if [[ "$PRD_ADDED" == true ]] || [[ -f "$REPO_DIR/docs/PRD.md" ]] || [[ -f "$REPO_DIR/docs/product-vision.md" ]]; then
+    if [[ "${FORGE_WORKFLOW_ENGINE:-0}" == "1" ]]; then
+      echo "/forge-auto-build Use docs/PRD.md as the project PRD. GO --workflow-engine"
+    else
+      echo "/forge-auto-build Use docs/PRD.md as the project PRD. GO"
+    fi
+  else
+    echo "/forge-auto-build-prd Use docs/IDEA.md as the project idea. Headless mode: auto-proceed with default assumptions and approve the PRD."
+  fi
+}
+
+# The non-interactive terminal runner (opencode run --auto or copilot -p --yolo).
+headless_runner() {
+  local runner="${FORGE_RUN_WITH:-}"
+  [[ -n "$runner" ]] || runner="$( [[ "$HARNESS" == "github" ]] && echo "copilot" || echo "opencode" )"
+  echo "$runner"
+}
+
+# Builds the non-interactive terminal command that drives the queued skill via
+# `opencode run --auto` or `copilot -p --yolo`, so no interactive CLI is needed.
+headless_build_command() {
+  local runner; runner="$(headless_runner)"
+  local skill_msg; skill_msg="$(headless_skill_msg)"
+  case "$runner" in
+    copilot) echo "copilot -p \"$skill_msg\" --yolo" ;;
+    *) echo "opencode run --auto \"$skill_msg\"" ;;
+  esac
+}
+
+# Executes the headless command in the repository (or prints it with --dry-run).
+run_headless_build() {
+  local runner; runner="$(headless_runner)"
+  local skill_msg; skill_msg="$(headless_skill_msg)"
+
+  local -a cmd
+  case "$runner" in
+    copilot) cmd=(copilot -p "$skill_msg" --yolo) ;;
+    *) cmd=(opencode run --auto "$skill_msg") ;;
+  esac
+
+  echo "    ${BOLD}${cmd[*]}${RESET}"
+  if [[ "$DRY_RUN" == true ]]; then
+    warn "Dry-run: command printed, not executed."
+    return 0
+  fi
+  ( cd "$REPO_DIR" && "${cmd[@]}" )
 }
 
 # ---------------------------------------------------------------------------
@@ -523,6 +582,14 @@ launch_autobuild() {
   fi
   echo ""
 
+  if [[ "$HEADLESS" == true ]]; then
+    info "Headless mode: driving the queued skill directly from the terminal"
+    echo "  (no interactive CLI session will be opened)."
+    echo ""
+    run_headless_build
+    return 0
+  fi
+
   case "$HARNESS" in
     github)
       if [[ "$COPILOT_AVAILABLE" == true ]]; then
@@ -626,6 +693,9 @@ completion_summary() {
   echo "  Idea file   : $REPO_DIR/docs/IDEA.md"
   echo "  PRD         : $( [[ "$PRD_ADDED" == true ]] && echo "$REPO_DIR/docs/PRD.md" || echo "none (will be built from docs/IDEA.md by forge-auto-build-prd)" )"
   echo "  Research    : $( [[ "$RESEARCH_ADDED" == true ]] && echo "$REPO_DIR/docs/research/" || echo "none" )"
+  if [[ "$HEADLESS" == true ]]; then
+    echo "  Mode        : headless (terminal-driven; no interactive CLI)"
+  fi
   echo ""
   echo "  Next steps:"
   echo ""
@@ -670,6 +740,8 @@ main() {
   CLAUDE_AVAILABLE=false
   PRD_ADDED=false
   RESEARCH_ADDED=false
+  FORGE_RUN_WITH="${FORGE_RUN_WITH:-}"
+  FORGE_WORKFLOW_ENGINE="${FORGE_WORKFLOW_ENGINE:-0}"
 
   preflight_check
   select_harness

@@ -436,9 +436,13 @@ Only modify skills I've approved in the audit report.
 | Step | Command / Prompt |
 |------|-----------------|
 | **Build reviewed PRD from idea** | `@workspace /forge-auto-build-prd I want to build [idea]` |
+| **Headless PRD from idea** | `opencode run --auto "/forge-auto-build-prd Use docs/IDEA.md as the project idea. Headless mode: auto-proceed with default assumptions and approve the PRD."` |
 | **Full auto build (from existing PRD)** | `@workspace /forge-auto-build docs/PRD.md` |
+| **Headless full auto build** | `opencode run --auto "/forge-auto-build Use docs/PRD.md as the project PRD. GO"` or `copilot -p "..." --yolo` |
 | **Full auto build (with model assignment)** | `@workspace /forge-auto-build docs/PRD.md GO --assign-models` |
 | **Full auto build (workflow-engine path)** | `@workspace /forge-auto-build docs/PRD.md GO --workflow-engine` |
+| **Headless build via workflow engine** | `opencode run --auto "/forge-auto-build Use docs/PRD.md as the project PRD. GO --workflow-engine"` |
+| **Launcher headless (whole pipeline)** | `./scripts/forge-launcher.sh --headless` (add `--dry-run` to print the command) |
 | Bootstrap (Bash, default) | `./scripts/bootstrap.sh ~/Projects/my-project` |
 | Bootstrap (Bash, GitHub) | `./scripts/bootstrap.sh ~/Projects/my-project --harness github` |
 | Bootstrap (Bash, Claude) | `./scripts/bootstrap.sh ~/Projects/my-project --harness claude` |

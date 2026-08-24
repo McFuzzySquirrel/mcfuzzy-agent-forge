@@ -54,7 +54,13 @@ npm run workflow-engine -- run --harness openai
 npm run workflow-engine -- run --harness stub          # dry-run, no real calls
 npm run workflow-engine -- run --harness flowforge-kernel
 npm run workflow-engine -- run --max-retries 3 --retry-delay-ms 10000
+npm run workflow-engine -- run --harness opencode --yes   # skip the pre-run gate
 ```
+
+The engine prints a pre-run summary (harness, phases, tasks) and, when run
+interactively, pauses for confirmation before dispatching. The gate is
+interactive-only: pass `--yes` (or set `FORGE_ENGINE_YES=1`) to skip it
+explicitly for headless/CI runs, and it auto-skips when stdin is not a TTY.
 
 ### Check status
 
