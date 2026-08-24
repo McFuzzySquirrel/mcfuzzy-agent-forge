@@ -216,10 +216,10 @@ context block and auto-approves tool permissions with `--auto`.
 
 The engine builds a live task graph from `EXECUTION-MANIFEST.json`:
 
-1. Phases execute in dependency order (Phase 2 only starts after all Phase 1 tasks are complete).
+1. Phases execute in dependency order (Phase 2 only starts after all Phase 1 tasks are complete or skipped).
 2. Within a phase, tasks with resolved dependencies run first.
 3. Tasks with no unresolved dependencies within a ready phase run immediately (sequential for safety in MVP mode).
-4. A task whose `ownerAgent` cannot be matched to a discovered `.md` agent file is **skipped** with a warning rather than failing the run.
+4. A task whose `ownerAgent` cannot be matched to a discovered `.md` agent file is **skipped** with a warning rather than failing the run. Skipped tasks satisfy dependencies (they are treated as done), so a skipped task never blocks a downstream phase.
 
 ---
 

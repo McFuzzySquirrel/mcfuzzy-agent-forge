@@ -106,6 +106,45 @@ test("compileExecutionManifest auto-declares artifact produces/inputs", () => {
   assert.deepEqual(manifest.phases[1]?.tasks[0]?.inputs, []);
 });
 
+test("compileExecutionManifest falls back to first agent when no owner matches", () => {
+  const root = createFixture();
+  writeFileSync(join(root, "docs", "PRD.md"), `# PRD
+
+## Phase 1: Foundation
+- Task 1.1: Zygomorphic flux calibration
+`, "utf8");
+
+  const repo = discoverForgeRepo(root);
+  const manifest = compileExecutionManifest(repo);
+
+  const task = manifest.phases[0]?.tasks[0];
+  assert.ok(task);
+  assert.equal(task.ownerAgent, "api-engineer"); // first agent (no orchestrator in fixture)
+  assert.match(manifest.warnings.join("\n"), /defaulting to 'api-engineer'/);
+});
+
+test("compileExecutionManifest prefers an orchestrator fallback owner", () => {
+  const root = createFixture();
+  writeFileSync(join(root, ".agents", "agents", "workflow-orchestrator.md"), `---
+name: workflow-orchestrator
+description: Coordinates the build and handles cross-cutting polish.
+---
+`, "utf8");
+  writeFileSync(join(root, "docs", "PRD.md"), `# PRD
+
+## Phase 1: Foundation
+- Task 1.1: Zygomorphic flux calibration
+`, "utf8");
+
+  const repo = discoverForgeRepo(root);
+  const manifest = compileExecutionManifest(repo);
+
+  const task = manifest.phases[0]?.tasks[0];
+  assert.ok(task);
+  assert.equal(task.ownerAgent, "workflow-orchestrator");
+  assert.match(manifest.warnings.join("\n"), /defaulting to 'workflow-orchestrator'/);
+});
+
 test("checkpointTask updates PROGRESS.md and audit state", () => {
   const root = createFixture();
   const repo = discoverForgeRepo(root);

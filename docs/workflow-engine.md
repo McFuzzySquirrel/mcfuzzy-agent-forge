@@ -121,7 +121,9 @@ the engine prints a heartbeat line every `--heartbeat-ms`:
 4. On success, record the task `complete` (and synthesize a work artifact if `produces` is declared).
 5. Save `WORKFLOW-STATE.json` and sync `PROGRESS.md` after every task.
 
-Tasks within a phase run sequentially (MVP); a failed task blocks downstream tasks in that phase, and the run stops with `status: "failed"`.
+Tasks within a phase run sequentially (MVP); a failed task blocks downstream tasks in that phase, and the run stops with `status: "failed"`. A **skipped** task is treated as done for dependency purposes, so it never blocks the next phase.
+
+> **Owner assignment.** `forge-execution-adapter compile` guarantees every task has an owner: if no agent confidently matches a task, it falls back to an `*orchestrator`-named agent (else the first agent) and records a warning. Unassigned tasks are therefore rare and only arise from a hand-edited manifest — in which case the engine skips them safely rather than deadlocking.
 
 ---
 

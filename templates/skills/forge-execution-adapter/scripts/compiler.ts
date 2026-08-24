@@ -64,6 +64,11 @@ function overlapScore(taskText: string, agent: AgentDescriptor): number {
   return score;
 }
 
+function fallbackOwner(agents: AgentDescriptor[]): string | undefined {
+  const orchestrator = agents.find((agent) => /orchestrator/i.test(agent.name));
+  return orchestrator?.name ?? agents[0]?.name;
+}
+
 function chooseOwner(taskText: string, agents: AgentDescriptor[]): { owner?: string; warning?: string } {
   let best: { agent?: AgentDescriptor; score: number } = { score: 0 };
   let second = 0;
@@ -79,6 +84,10 @@ function chooseOwner(taskText: string, agents: AgentDescriptor[]): { owner?: str
   }
 
   if (!best.agent || best.score === 0) {
+    const fallback = fallbackOwner(agents);
+    if (fallback) {
+      return { owner: fallback, warning: `No confident owner match for task '${taskText}' → defaulting to '${fallback}'` };
+    }
     return { warning: `No confident owner match for task: ${taskText}` };
   }
 

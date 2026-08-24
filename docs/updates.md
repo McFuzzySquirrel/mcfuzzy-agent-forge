@@ -36,6 +36,14 @@ Detailed release and change notes for McFuzzy Agent Forge.
   manual override.
 - **New user guide.** Added `docs/workflow-engine.md`, a `forge-launcher.md`-style
   reference for running, resuming, and troubleshooting the workflow engine.
+- **Skipped tasks no longer deadlock.** The DAG readiness checks now treat a
+  `skipped` task as done (matching `isComplete`), so a skipped task no longer
+  blocks the next phase and aborts the run with "Dependency deadlock detected".
+- **Every compiled task has an owner.** `forge-execution-adapter compile` now
+  falls back to an `*orchestrator`-named agent (else the first agent) when no
+  agent confidently matches a task, instead of leaving it `unassigned`.
+- **Engine unit tests.** Added `forge-workflow-engine/scripts/engine.test.ts`
+  (`node:test`) covering the DAG readiness, deadlock, and completion logic.
 
 ---
 
