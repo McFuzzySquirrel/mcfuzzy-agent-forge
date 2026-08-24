@@ -4,6 +4,49 @@ Detailed release and change notes for McFuzzy Agent Forge.
 
 ---
 
+## August 2026 - v3.11
+
+### Workflow-engine heartbeat, OpenCode adapter fix, and clearer engine handoff
+
+- **OpenCode adapter no longer passes `--system-prompt`.** `opencode run` (v1.18+)
+  has no such flag, so the previous invocation printed the CLI usage and failed
+  every task. The agent persona (`agent.rawBody`) is now inlined into the prompt,
+  matching the copilot and openai adapters. Docs (SKILL.md, deep-dive) updated.
+- **Shell-safe child invocation.** The `opencode` and `copilot` adapters now use
+  asynchronous `spawn` (via a shared `harness/run.ts`) instead of `spawnSync`
+  with a shell string. This fixes `/bin/sh` interpolation errors from backticks
+  and `$` in agent bodies, and keeps the event loop free for the heartbeat.
+- **Engine heartbeat.** While a task is executing, the engine prints
+  `…still working on task <id> (@<agent>, Ns elapsed)` every
+  `--heartbeat-ms <ms>` (default 15s; `0` disables, `FORGE_ENGINE_HEARTBEAT_MS`
+  env override) so a quiet terminal doesn't look hung.
+- **`--yes` actually skips the pre-run gate.** The boolean flag was parsed with a
+  value-expecting helper, so it never matched; added a proper `hasFlag` check
+  (alongside `FORGE_ENGINE_YES=1`).
+- **Clearer engine handoff in the launcher.** Choosing "Run the workflow-engine
+  build now (detached)" now sets an engine-started flag, skips the subsequent
+  interactive CLI launch prompt, prints `tail -f` / `Get-Content -Wait` monitor
+  commands, and makes the Step 9 summary reflect the running engine instead of
+  the manual `@workspace /forge-auto-build` steps. Fixed the `Skip -I will…`
+  menu typo. (Bash + PowerShell.)
+- **Artifact store on by default.** `forge-execution-adapter compile` now
+  auto-declares `produces` (and wires `inputs` to the previous task) for every
+  task it emits, so `docs/artifacts/` is populated on every successful run
+  without hand-editing the manifest. Semantic types are still available as a
+  manual override.
+- **New user guide.** Added `docs/workflow-engine.md`, a `forge-launcher.md`-style
+  reference for running, resuming, and troubleshooting the workflow engine.
+- **Skipped tasks no longer deadlock.** The DAG readiness checks now treat a
+  `skipped` task as done (matching `isComplete`), so a skipped task no longer
+  blocks the next phase and aborts the run with "Dependency deadlock detected".
+- **Every compiled task has an owner.** `forge-execution-adapter compile` now
+  falls back to an `*orchestrator`-named agent (else the first agent) when no
+  agent confidently matches a task, instead of leaving it `unassigned`.
+- **Engine unit tests.** Added `forge-workflow-engine/scripts/engine.test.ts`
+  (`node:test`) covering the DAG readiness, deadlock, and completion logic.
+
+---
+
 ## August 2026 - v3.10
 
 ### Forge launcher: auto-draft flow and friendlier path input
@@ -39,6 +82,12 @@ for getting from an idea to a reviewable PRD/team to an engine run.
   `Get-HeadlessCommandFor` / `Invoke-SkillHeadless` (PowerShell), so `--headless`,
   `--draft`, and `FORGE_AUTO_DRAFT=1` all print the same `opencode run --auto` /
   `copilot -p --yolo` command shape under `--dry-run`.
+- **"Still running" indicator.** Long-running steps (bootstrap, headless/auto-draft
+  skill runs, GitHub repo creation, push) show a periodic `still running… Ns`
+  heartbeat (Bash: `run_with_heartbeat`, TTY-only and zombie-safe; PowerShell:
+  indeterminate `Write-Progress`) so users don't think the launcher is hung.
+  Output stays visible, and the interval is configurable via
+  `FORGE_HEARTBEAT_INTERVAL` (default `15`s). Skipped for piped/CI output.
 
 Related architecture decision:
 

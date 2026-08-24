@@ -193,6 +193,51 @@ shell_quote() {
   printf '%q' "$1"
 }
 
+proc_alive() {
+  # True while $1 is a running (non-zombie) process. Zombie-safe: a finished
+  # background child shows as 'Z' until reaped, which would otherwise stall the
+  # heartbeat loop below. Falls back to kill -0 when ps is unavailable.
+  if command -v ps &>/dev/null; then
+    local stat
+    stat="$(ps -o stat= -p "$1" 2>/dev/null)" || return 1
+    [[ "$stat" != *Z* ]]
+  else
+    kill -0 "$1" 2>/dev/null
+  fi
+}
+
+run_in_repo() {
+  ( cd "$REPO_DIR" && "$@" )
+}
+
+run_with_heartbeat() {
+  # Runs a long-running command with its output left visible (it streams
+  # normally) plus a periodic "still running… Ns" line so users don't think the
+  # launcher is hung. Disabled (runs the command directly) when stdout is not a
+  # terminal or --dry-run is set, so CI/piped output stays clean.
+  local label="$1"; shift
+  if [[ ! -t 1 || "$DRY_RUN" == true ]]; then
+    "$@"
+    return $?
+  fi
+  local interval="${FORGE_HEARTBEAT_INTERVAL:-15}"
+  local start; start="$(date +%s)"
+  "$@" &
+  local pid=$!
+  local last=0
+  while proc_alive "$pid"; do
+    sleep 1
+    local now; now="$(date +%s)"
+    local elapsed=$((now - start))
+    if (( elapsed >= interval && elapsed - last >= interval )); then
+      last=$elapsed
+      printf '  %s (still running… %ss)\n' "$label" "$elapsed"
+    fi
+  done
+  wait "$pid"
+  return $?
+}
+
 launch_cli_in_terminal() {
   local cli_name="$1"
   local repo_dir="$2"
@@ -290,7 +335,7 @@ run_skill_headless() {
     copilot) cmd=(copilot -p "$skill_msg" --yolo) ;;
     *) cmd=(opencode run --auto "$skill_msg") ;;
   esac
-  ( cd "$REPO_DIR" && "${cmd[@]}" )
+  run_with_heartbeat "Running the skill (may take a while)" run_in_repo "${cmd[@]}"
 }
 
 # Executes the queued headless build (used by --headless mode).
@@ -425,7 +470,7 @@ engine_decision() {
   fi
   echo "    1) Run the workflow-engine build now (detached)"
   echo "    2) Print the engine command to run later"
-  echo "    3) Skip -I will launch the CLI / build manually"
+  echo "    3) Skip - I will launch the CLI / build manually"
   echo ""
   local engine_choice
   prompt engine_choice "Select [1-3]" "2"
@@ -454,7 +499,13 @@ run_engine_detached() {
   fi
   ( nohup "$engine_script" --repo "$REPO_DIR" --harness "$harness" --yes \
       >> "$REPO_DIR/docs/engine-run.log" 2>&1 & )
+  ENGINE_STARTED=true
   ok "Engine started detached. Log: $REPO_DIR/docs/engine-run.log"
+  echo ""
+  info "The engine runs in the background, even after this launcher exits."
+  info "Monitor progress from another terminal with:"
+  echo "    ${BOLD}tail -f $REPO_DIR/docs/engine-run.log${RESET}"
+  echo "    ${BOLD}tail -f $REPO_DIR/docs/PROGRESS.md${RESET}"
 }
 
 auto_draft_menu() {
@@ -598,7 +649,7 @@ create_repo() {
     info "Creating GitHub repository '$repo_name' ($repo_visibility) …"
     local gh_args=(repo create "$repo_name" "--${repo_visibility}" --clone)
     [[ -n "$repo_description" ]] && gh_args+=(--description "$repo_description")
-    gh "${gh_args[@]}"
+    run_with_heartbeat "Creating GitHub repository…" gh "${gh_args[@]}"
     # gh clones into a subdirectory named after the repo
     REPO_DIR="$(pwd)/$repo_name"
     ok "GitHub repo created and cloned to: $REPO_DIR"
@@ -640,7 +691,7 @@ bootstrap_forge() {
   step "Step 4 of 9: Bootstrap Agent Forge"
 
   info "Running bootstrap.sh → $REPO_DIR (--harness $HARNESS) …"
-  "$BOOTSTRAP_SH" "$REPO_DIR" --harness "$HARNESS" --force
+  run_with_heartbeat "Bootstrapping Agent Forge (copying templates)…" "$BOOTSTRAP_SH" "$REPO_DIR" --harness "$HARNESS" --force
   ok "Agent Forge templates bootstrapped."
 }
 
@@ -830,8 +881,8 @@ commit_bootstrap() {
 
   if [[ "$REMOTE_CREATED" == true ]]; then
     info "Pushing to remote …"
-    git -C "$REPO_DIR" push -u origin HEAD 2>/dev/null || \
-      git -C "$REPO_DIR" push -u origin "$(git -C "$REPO_DIR" rev-parse --abbrev-ref HEAD)"
+    run_with_heartbeat "Pushing to remote…" git -C "$REPO_DIR" push -u origin HEAD 2>/dev/null || \
+      run_with_heartbeat "Pushing to remote…" git -C "$REPO_DIR" push -u origin "$(git -C "$REPO_DIR" rev-parse --abbrev-ref HEAD)"
     ok "Pushed to remote."
   else
     warn "No remote configured -skipping push. Add a remote and run 'git push -u origin HEAD' manually."
@@ -868,6 +919,13 @@ launch_autobuild() {
   # Optional auto-draft flow: generate the PRD and/or agent team non-interactively
   # (with review boundaries), then decide how to run the workflow engine.
   auto_draft_menu
+
+  if [[ "$ENGINE_STARTED" == true ]]; then
+    echo ""
+    info "The workflow engine is already running this build in the background."
+    info "Skipping the interactive CLI launch prompt - no need to run forge-auto-build."
+    return 0
+  fi
 
   case "$HARNESS" in
     github)
@@ -978,14 +1036,28 @@ completion_summary() {
   echo ""
   echo "  Next steps:"
   echo ""
-  echo "  1. Open the project in your agent harness."
-  echo "  2. Run the queued pipeline command:"
-  echo ""
-  echo "       ${BOLD}@workspace $(autobuild_command)${RESET}"
-  echo ""
-  echo "  3. Review the pre-flight summary that the skill presents."
-  echo "  4. Type ${BOLD}GO${RESET} to start the autonomous pipeline (add ${BOLD}--workflow-engine${RESET} to"
-  echo "     run the build through the workflow engine once the agent team is generated)."
+  if [[ "$ENGINE_STARTED" == true ]]; then
+    local engine_harness="${FORGE_ENGINE_HARNESS:-opencode}"
+    echo "  1. The workflow engine is building the project in the background"
+    echo "     (it keeps running after this launcher exits)."
+    echo "  2. Monitor progress from another terminal:"
+    echo ""
+    echo "       ${BOLD}tail -f $REPO_DIR/docs/engine-run.log${RESET}"
+    echo "       ${BOLD}tail -f $REPO_DIR/docs/PROGRESS.md${RESET}"
+    echo ""
+    echo "  3. Re-run or resume the engine later if needed:"
+    echo ""
+    echo "       ${BOLD}$SCRIPT_DIR/forge-engine-run.sh --repo \"$REPO_DIR\" --harness $engine_harness --yes${RESET}"
+  else
+    echo "  1. Open the project in your agent harness."
+    echo "  2. Run the queued pipeline command:"
+    echo ""
+    echo "       ${BOLD}@workspace $(autobuild_command)${RESET}"
+    echo ""
+    echo "  3. Review the pre-flight summary that the skill presents."
+    echo "  4. Type ${BOLD}GO${RESET} to start the autonomous pipeline (add ${BOLD}--workflow-engine${RESET} to"
+    echo "     run the build through the workflow engine once the agent team is generated)."
+  fi
   echo ""
   echo "  References:"
   echo "   • Prompt playbook : $REPO_DIR/docs/prompt-playbook.md"
@@ -1022,6 +1094,7 @@ main() {
   FORGE_RUN_WITH="${FORGE_RUN_WITH:-}"
   FORGE_WORKFLOW_ENGINE="${FORGE_WORKFLOW_ENGINE:-0}"
   FORGE_AUTO_DRAFT="${FORGE_AUTO_DRAFT:-0}"
+  ENGINE_STARTED=false
 
   preflight_check
   select_harness

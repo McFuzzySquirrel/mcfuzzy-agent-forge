@@ -1,6 +1,6 @@
-import { execSync } from "node:child_process";
 import { existsSync, readFileSync } from "node:fs";
 
+import { runCommand } from "./run.ts";
 import type { AgentDescriptor, HarnessAdapter, ManifestTask, TaskResult, WorkflowState } from "../types.ts";
 
 /**
@@ -44,45 +44,50 @@ export class CopilotAdapter implements HarnessAdapter {
     const start = Date.now();
 
     const prompt = this.buildPrompt(agent, task, contextBlock);
-    const args = [
-      this.bin,
-      "-p",
-      prompt,
-      ...this.extraFlags,
-    ];
+    const args = ["-p", prompt, ...this.extraFlags];
 
-    const cmd = args.map((arg) => (arg.includes(" ") ? `"${arg}"` : arg)).join(" ");
+    const result = await runCommand(this.bin, args, {
+      cwd: repoRoot,
+      timeoutMs: 10 * 60 * 1000,
+      maxBufferBytes: 10 * 1024 * 1024,
+    });
 
-    try {
-      const stdout = execSync(cmd, {
-        cwd: repoRoot,
-        encoding: "utf8",
-        timeout: 10 * 60 * 1000,
-        maxBuffer: 10 * 1024 * 1024,
-      });
+    const stdout = result.stdout;
+    const stderr = result.stderr;
 
-      const outputFiles = task.expectedOutputs.filter((path) =>
-        existsSync(path.startsWith("/") ? path : `${repoRoot}/${path}`),
-      );
-
-      return {
-        success: true,
-        outputFiles,
-        stdout,
-        stderr: "",
-        durationMs: Date.now() - start,
-      };
-    } catch (error) {
-      const execError = error as { stdout?: string; stderr?: string; message?: string };
+    if (result.error) {
       return {
         success: false,
         outputFiles: [],
-        stdout: execError.stdout ?? "",
-        stderr: execError.stderr ?? execError.message ?? String(error),
+        stdout,
+        stderr,
         durationMs: Date.now() - start,
-        errorMessage: execError.stderr ?? execError.message ?? String(error),
+        errorMessage: result.error,
       };
     }
+
+    if (result.status !== 0) {
+      return {
+        success: false,
+        outputFiles: [],
+        stdout,
+        stderr,
+        durationMs: Date.now() - start,
+        errorMessage: stderr || `${this.bin} exited with status ${result.status}`,
+      };
+    }
+
+    const outputFiles = task.expectedOutputs.filter((path) =>
+      existsSync(path.startsWith("/") ? path : `${repoRoot}/${path}`),
+    );
+
+    return {
+      success: true,
+      outputFiles,
+      stdout,
+      stderr: "",
+      durationMs: Date.now() - start,
+    };
   }
 
   private buildPrompt(agent: AgentDescriptor, task: ManifestTask, contextBlock?: string): string {

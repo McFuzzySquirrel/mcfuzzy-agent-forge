@@ -85,6 +85,66 @@ test("compileExecutionManifest builds phases, tasks, and owners", () => {
   assert.deepEqual(manifest.phases[1]?.dependencies, ["1"]);
 });
 
+test("compileExecutionManifest auto-declares artifact produces/inputs", () => {
+  const root = createFixture();
+  const repo = discoverForgeRepo(root);
+  const manifest = compileExecutionManifest(repo);
+
+  const tasks = manifest.phases.flatMap((phase) => phase.tasks);
+  for (const task of tasks) {
+    assert.ok(task.produces, `task ${task.id} should declare a produces type`);
+    assert.ok(Array.isArray(task.inputs), `task ${task.id} should declare inputs`);
+  }
+  // Linear dependency chain within a phase: each task consumes the previous
+  // task's artifact type. Cross-phase ordering is handled by phase dependencies,
+  // so the first task of a phase starts with no in-phase input artifacts.
+  assert.equal(manifest.phases[0]?.tasks[0]?.produces, "work.1.1");
+  assert.deepEqual(manifest.phases[0]?.tasks[0]?.inputs, []);
+  assert.equal(manifest.phases[0]?.tasks[1]?.produces, "work.1.2");
+  assert.deepEqual(manifest.phases[0]?.tasks[1]?.inputs, ["work.1.1"]);
+  assert.equal(manifest.phases[1]?.tasks[0]?.produces, "work.2.1");
+  assert.deepEqual(manifest.phases[1]?.tasks[0]?.inputs, []);
+});
+
+test("compileExecutionManifest falls back to first agent when no owner matches", () => {
+  const root = createFixture();
+  writeFileSync(join(root, "docs", "PRD.md"), `# PRD
+
+## Phase 1: Foundation
+- Task 1.1: Zygomorphic flux calibration
+`, "utf8");
+
+  const repo = discoverForgeRepo(root);
+  const manifest = compileExecutionManifest(repo);
+
+  const task = manifest.phases[0]?.tasks[0];
+  assert.ok(task);
+  assert.equal(task.ownerAgent, "api-engineer"); // first agent (no orchestrator in fixture)
+  assert.match(manifest.warnings.join("\n"), /defaulting to 'api-engineer'/);
+});
+
+test("compileExecutionManifest prefers an orchestrator fallback owner", () => {
+  const root = createFixture();
+  writeFileSync(join(root, ".agents", "agents", "workflow-orchestrator.md"), `---
+name: workflow-orchestrator
+description: Coordinates the build and handles cross-cutting polish.
+---
+`, "utf8");
+  writeFileSync(join(root, "docs", "PRD.md"), `# PRD
+
+## Phase 1: Foundation
+- Task 1.1: Zygomorphic flux calibration
+`, "utf8");
+
+  const repo = discoverForgeRepo(root);
+  const manifest = compileExecutionManifest(repo);
+
+  const task = manifest.phases[0]?.tasks[0];
+  assert.ok(task);
+  assert.equal(task.ownerAgent, "workflow-orchestrator");
+  assert.match(manifest.warnings.join("\n"), /defaulting to 'workflow-orchestrator'/);
+});
+
 test("checkpointTask updates PROGRESS.md and audit state", () => {
   const root = createFixture();
   const repo = discoverForgeRepo(root);

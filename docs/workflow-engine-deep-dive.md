@@ -153,6 +153,16 @@ Once a task is ready, `executeTask` takes over:
 
 The retry loop is the engine's resilience mechanism. If a model call fails transiently — network timeout, rate limit, model error — the task is retried up to `--max-retries` times (default: 2) with a configurable delay (default 5 seconds). Only if all attempts fail does the task enter the `failed` state, which halts the phase.
 
+### Heartbeat
+
+A long harness call (e.g. a multi-minute `opencode run` or `copilot -p`) is silent, which can look like a hang. While `harness.invoke` is in flight, the engine prints a heartbeat line at a fixed interval:
+
+```
+[engine] …still working on task 1.1 (@project-architect, 45s elapsed)
+```
+
+The interval defaults to 15 seconds and is controlled with `--heartbeat-ms <ms>` (or `FORGE_ENGINE_HEARTBEAT_MS`); `0` disables it. This only works because the CLI adapters (`opencode`, `copilot`) spawn their child process **asynchronously** (`spawn`, not the blocking `spawnSync`) — the event loop stays free for the heartbeat timer to fire. The OpenAI adapter is already async, so it benefits automatically.
+
 ### State is always saved before the next loop iteration
 
 After every `executeTask` call, the engine calls both `saveState` and `syncProgressMd`. This means:
@@ -180,10 +190,11 @@ Each adapter translates a `(agent, task)` pair into a real execution call:
 Shells out to the `opencode` CLI:
 
 ```
-opencode run --model <agent.model> --system-prompt <agent.path> "<task title + description>"
+opencode run --model <agent.model> "<agent body + task title + description>"
 ```
 
-The agent's `.agent.md` file becomes the system prompt. The task's title and description become the user prompt. Outputs are verified by checking whether the `expectedOutputs` files exist on disk after the call.
+The agent's `.agent.md` body is inlined into the prompt (`opencode run` has no
+`--system-prompt` flag). The task's title and description complete the user prompt. Outputs are verified by checking whether the `expectedOutputs` files exist on disk after the call.
 
 ### `CopilotAdapter`
 
@@ -311,7 +322,7 @@ workflow-engine run --harness opencode
                ├─ for each ready task:                       │
                │     markTaskStarted() → save state          │
                │     harness.invoke(agent, task)             │
-               │       ↳ opencode run --system-prompt ...    │
+               │       ↳ opencode run "<agent body + task>"  │
                │     on success:                             │
                │       markTaskComplete() → save → syncMd    │
                │     on failure (retries exhausted):         │

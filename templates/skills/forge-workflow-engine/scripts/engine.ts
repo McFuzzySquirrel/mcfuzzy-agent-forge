@@ -6,6 +6,8 @@ import type {
   EngineOptions,
   ExecutionManifest,
   ManifestTask,
+  TaskResult,
+  TaskStatus,
   WorkflowState,
 } from "./types.ts";
 
@@ -39,12 +41,16 @@ function loadManifest(path: string): ExecutionManifest {
   return JSON.parse(readFileSync(path, "utf8")) as ExecutionManifest;
 }
 
-function allDepsComplete(
+export function isTaskDone(status: TaskStatus | undefined): boolean {
+  return status === "complete" || status === "skipped";
+}
+
+export function allDepsComplete(
   taskId: string,
   deps: string[],
   state: WorkflowState,
 ): boolean {
-  return deps.every((depId) => state.tasks[depId]?.status === "complete");
+  return deps.every((depId) => isTaskDone(state.tasks[depId]?.status));
 }
 
 function findAgentForTask(agents: AgentDescriptor[], ownerName: string | undefined): AgentDescriptor | undefined {
@@ -59,7 +65,7 @@ function emit(event: AuditEvent, opts: EngineOptions): WorkflowState {
 
 // ─── DAG ordering ─────────────────────────────────────────────────────────────
 
-interface FlatTask {
+export interface FlatTask {
   phaseId: string;
   phaseIndex: number;
   task: ManifestTask;
@@ -71,7 +77,7 @@ function flattenManifest(manifest: ExecutionManifest): FlatTask[] {
   );
 }
 
-function nextReadyTasks(manifest: ExecutionManifest, state: WorkflowState): FlatTask[] {
+export function nextReadyTasks(manifest: ExecutionManifest, state: WorkflowState): FlatTask[] {
   const flat = flattenManifest(manifest);
   const ready: FlatTask[] = [];
 
@@ -82,7 +88,7 @@ function nextReadyTasks(manifest: ExecutionManifest, state: WorkflowState): Flat
     const phaseDepsOk = manifest.phases[entry.phaseIndex]?.dependencies.every(
       (depPhaseId) => {
         const depPhase = manifest.phases.find((p) => p.id === depPhaseId);
-        return depPhase?.tasks.every((t) => state.tasks[t.id]?.status === "complete") ?? true;
+        return depPhase?.tasks.every((t) => isTaskDone(state.tasks[t.id]?.status)) ?? true;
       },
     ) ?? true;
 
@@ -96,9 +102,9 @@ function nextReadyTasks(manifest: ExecutionManifest, state: WorkflowState): Flat
   return ready;
 }
 
-function isComplete(manifest: ExecutionManifest, state: WorkflowState): boolean {
+export function isComplete(manifest: ExecutionManifest, state: WorkflowState): boolean {
   return flattenManifest(manifest).every(
-    ({ task }) => state.tasks[task.id]?.status === "complete" || state.tasks[task.id]?.status === "skipped",
+    ({ task }) => isTaskDone(state.tasks[task.id]?.status),
   );
 }
 
@@ -194,7 +200,22 @@ async function executeTask(
       await sleep(opts.retryDelayMs);
     }
 
-    const result = await opts.harness.invoke(agent, task, currentState, opts.repoRoot, contextBlock);
+    const invokeStart = Date.now();
+    let heartbeat: ReturnType<typeof setInterval> | undefined;
+    if (opts.heartbeatMs > 0) {
+      heartbeat = setInterval(() => {
+        const elapsed = Math.round((Date.now() - invokeStart) / 1000);
+        console.log(`[engine] …still working on task ${task.id} (@${agent.name}, ${elapsed}s elapsed)`);
+      }, opts.heartbeatMs);
+      heartbeat.unref?.();
+    }
+
+    let result: TaskResult;
+    try {
+      result = await opts.harness.invoke(agent, task, currentState, opts.repoRoot, contextBlock);
+    } finally {
+      if (heartbeat) clearInterval(heartbeat);
+    }
 
     if (result.success) {
       // ── Artifact creation ─────────────────────────────────────────────────

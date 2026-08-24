@@ -181,6 +181,12 @@ set `FORGE_AUTO_DRAFT=1` in non-interactive runs. The workflow-engine run later:
 > `copilot` via `FORGE_RUN_WITH=copilot`). It commits each generated artifact so
 > your repo stays reviewable at every boundary.
 >
+> Long-running steps (bootstrap, headless/auto-draft skill runs, GitHub repo
+> creation, push) print a periodic `still running… Ns` heartbeat when run from a
+> terminal, so you can tell the launcher is working rather than hung. The
+> heartbeat is skipped for piped/CI output. Set `FORGE_HEARTBEAT_INTERVAL` to
+> change how often it ticks (default `15` seconds).
+>
 > Want a quick way to try it? The [testing guide Part 8](testing-guide.md#part-8--launcher-auto-draft-smoke-test-reusable-test-idea)
 > ships a copy-paste test idea (a small expense-tracker CLI) that exercises the
 > whole auto-draft → decompose → team → engine flow.
@@ -362,9 +368,30 @@ Generate the agent team from the PRD automatically now (headless)? [y/N]: y
   workflow engine, run it later, or build manually.
     1) Run the workflow-engine build now (detached)
     2) Print the engine command to run later
-    3) Skip -I will launch the CLI / build manually
+    3) Skip - I will launch the CLI / build manually
 Select [1-3] [2]: 2
     /home/user/mcfuzzysquirrel/Projects/experiments/mcfuzzy-agent-forge/scripts/forge-engine-run.sh --repo "/home/user/projects/my-cool-app" --harness opencode --yes
+```
+
+Choosing **1) Run the workflow-engine build now (detached)** starts the engine in the
+background and skips the rest of the interactive launch prompt — the build is
+already running, so the launcher no longer offers to open a CLI or re-run
+`forge-auto-build`:
+
+```
+    1) Run the workflow-engine build now (detached)
+    2) Print the engine command to run later
+    3) Skip - I will launch the CLI / build manually
+Select [1-3] [2]: 1
+  ✔  Engine started detached. Log: /home/user/projects/my-cool-app/docs/engine-run.log
+
+  The engine runs in the background, even after this launcher exits.
+  Monitor progress from another terminal with:
+    tail -f /home/user/projects/my-cool-app/docs/engine-run.log
+    tail -f /home/user/projects/my-cool-app/docs/PROGRESS.md
+
+  The workflow engine is already running this build in the background.
+  Skipping the interactive CLI launch prompt - no need to run forge-auto-build.
 ```
 
 Then, for harnesses with a spawnable CLI (`copilot`, `opencode`, `claude`):
@@ -429,6 +456,25 @@ When a PRD **was** captured in Step 6, the queued command is instead:
      the build through the workflow engine once the agent team is generated).
      On the engine path the engine runs detached (docs/engine-run.log); run or
      resume it standalone with scripts/forge-engine-run.sh.
+```
+
+When the engine was started in Step 8, the summary's **Next steps** instead
+reflect the running build (monitor + resume) rather than the manual
+`@workspace /forge-auto-build` path:
+
+```
+  Next steps:
+
+  1. The workflow engine is building the project in the background
+     (it keeps running after this launcher exits).
+  2. Monitor progress from another terminal:
+
+      tail -f /home/user/projects/my-cool-app/docs/engine-run.log
+      tail -f /home/user/projects/my-cool-app/docs/PROGRESS.md
+
+  3. Re-run or resume the engine later if needed:
+
+      /home/user/mcfuzzysquirrel/Projects/experiments/mcfuzzy-agent-forge/scripts/forge-engine-run.sh --repo "/home/user/projects/my-cool-app" --harness opencode --yes
 ```
 
 ---
