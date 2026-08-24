@@ -1,9 +1,6 @@
 ---
 name: forge-build-feature-prd
-description: >
-  Build a Feature PRD that captures a feature - either as a new addition to an existing project,
-  or as part of initial project decomposition from a Product Vision. Use this skill when you need
-  a self-contained feature document with user stories, requirements, and implementation tasks.
+description: Build a Feature PRD that captures a feature - either as a new addition to an existing project, or as part of initial project decomposition from a Product Vision. Use this skill when you need a self-contained feature document with user stories, requirements, and implementation tasks.
 ---
 
 # Skill: Build a Feature PRD

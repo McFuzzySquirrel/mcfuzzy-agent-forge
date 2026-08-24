@@ -1,9 +1,6 @@
 ---
 name: forge-decompose-prd
-description: >
-  Decompose an existing monolithic Product Requirements Document (PRD) into a Product Vision
-  document and individual Feature documents. Use this skill when you want to break a large PRD
-  into independent, self-contained features that can be prioritized, built, and delivered separately.
+description: Decompose an existing monolithic Product Requirements Document (PRD) into a Product Vision document and individual Feature documents. Use this skill when you want to break a large PRD into independent, self-contained features that can be prioritized, built, and delivered separately.
 ---
 
 # Skill: Decompose a PRD into Product Vision and Features

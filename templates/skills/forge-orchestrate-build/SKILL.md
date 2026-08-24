@@ -1,11 +1,6 @@
 ---
 name: forge-orchestrate-build
-description: >
-  Coordinate specialist agents through PRD implementation phases. Provides the
-  full execution process for PRD full builds, Feature PRD executions, and
-  feature-based builds from decomposed documents. Use this skill when the
-  project-orchestrator agent invokes it, or when you need to drive a build
-  step by step.
+description: Coordinate specialist agents through PRD implementation phases. Provides the full execution process for PRD full builds, Feature PRD executions, and feature-based builds from decomposed documents. Use this skill when the project-orchestrator agent invokes it, or when you need to drive a build step by step.
 ---
 
 # Skill: Orchestrate Project Build

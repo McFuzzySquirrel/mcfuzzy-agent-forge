@@ -1,9 +1,6 @@
 ---
 name: forge-build-prd
-description: >
-  Build a comprehensive Product Requirements Document (PRD) or Technical Specification
-  from a user's idea, concept, or research document. Use this skill when asked to create,
-  draft, or formalize a PRD, spec, or requirements document.
+description: Build a comprehensive Product Requirements Document (PRD) or Technical Specification from a user's idea, concept, or research document. Use this skill when asked to create, draft, or formalize a PRD, spec, or requirements document.
 ---
 
 # Skill: Build a PRD or Spec from an Idea or Research

@@ -1,10 +1,6 @@
 ---
 name: forge-optimize-skills
-description: >
-  Audit existing skills in .agents/skills/ against agentskills.io best practices.
-  Scores each skill on context economy, gotchas coverage, procedural clarity,
-  progressive disclosure, calibration, and validation. Produces a reviewable audit
-  report and can optionally apply targeted improvements.
+description: Audit existing skills in .agents/skills/ against agentskills.io best practices. Scores each skill on context economy, gotchas coverage, procedural clarity, progressive disclosure, calibration, and validation. Produces a reviewable audit report and can optionally apply targeted improvements.
 ---
 
 # Skill: Optimize Existing Skills Against Best Practices
