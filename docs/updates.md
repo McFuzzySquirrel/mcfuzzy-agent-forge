@@ -4,6 +4,23 @@ Detailed release and change notes for McFuzzy Agent Forge.
 
 ---
 
+## August 2026 - v3.9
+
+### Authoring/execution split, detached engine, and GitHub Copilot harness
+
+The workflow engine no longer runs *inside* the CLI session. Authoring (PRD → team → manifest) stays in the chat; **execution runs detached**, as a standalone process that outlives the terminal and resumes with `run`.
+
+- **Detached engine handoff.** `forge-auto-build`'s engine path (`GO --workflow-engine`) now compiles the manifest, starts the engine with `nohup … >> docs/engine-run.log 2>&1 &`, and polls `docs/WORKFLOW-STATE.json` to completion instead of blocking the session. The build survives the chat and never dies with it.
+- **Standalone runner.** New `scripts/forge-engine-run.sh` / `forge-engine-run.ps1` run the engine from outside any CLI (second terminal, CI, or `nohup`): install deps, compile the manifest if missing, then `npm run workflow-engine -- run --harness <h> --yes`. `--dry-run` prints the sequence.
+- **GitHub Copilot per-task harness.** New `--harness copilot` adapter invokes `copilot -p "<agent context + task prompt>" --yolo` per task (agent contents inlined -`copilot -p` has no `--system-prompt` flag). Env vars: `COPILOT_BIN`, `COPILOT_EXTRA_FLAGS`. Per-task harness selected with `FORGE_ENGINE_HARNESS` (default `opencode`).
+- **Engine dependencies are explicit and never committed.** `bootstrap.sh` / `bootstrap.ps1` ensure the target repo's `.gitignore` excludes `node_modules/` and `docs/engine-run.log`; `forge-auto-build`'s final commit skips `**/node_modules/**`. Docs state the engine needs `node >= 18` + npm at build time.
+
+Related architecture decision:
+
+- [ADR-019](adr/019-authoring-execution-split-and-copilot-harness.md): authoring/execution split, detached engine, Copilot adapter, dependency hygiene.
+
+---
+
 ## August 2026 - v3.8
 
 ### Automatic PRD quality gates and PRD-prerequisite build execution

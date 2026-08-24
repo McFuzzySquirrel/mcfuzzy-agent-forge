@@ -63,6 +63,29 @@ fi
 # Helpers
 # ---------------------------------------------------------------------------
 
+# Ensure the target repo's .gitignore excludes engine dependencies (node_modules
+# installed at engine-prep time) and the detached engine log.
+ensure_gitignore() {
+  local gi="$TARGET_DIR/.gitignore"
+  local -a entries=("node_modules/" "docs/engine-run.log")
+  local added=false
+
+  if [[ -f "$gi" ]] && [[ -s "$gi" ]] && [[ "$(tail -c1 "$gi")" != "" ]]; then
+    printf "\n" >> "$gi"
+  fi
+  for e in "${entries[@]}"; do
+    if ! grep -qF "$e" "$gi" 2>/dev/null; then
+      printf "%s\n" "$e" >> "$gi"
+      added=true
+    fi
+  done
+  if [[ "$added" == true ]]; then
+    echo "  Updated:  $gi (node_modules/, docs/engine-run.log)"
+  else
+    echo "  OK:       $gi already ignores node_modules/ and engine-run.log"
+  fi
+}
+
 # Prompt before overwrite unless --force is set
 confirm_overwrite() {
   local path="$1"
@@ -150,6 +173,11 @@ fi
 if [[ "$HARNESS" != "agents" ]]; then
   find "$AGENTS_DIR" -name '*.md' -exec sed -i "s|\.agents/|${ROOT}/|g" {} +
 fi
+
+# --- Gitignore hygiene (engine node_modules + detached run log) ---
+echo ""
+echo "Gitignore ($TARGET_DIR/.gitignore):"
+ensure_gitignore
 
 echo ""
 echo "Bootstrap complete."

@@ -74,9 +74,20 @@ By default Step 8 opens an interactive CLI (`opencode`, `claude`, `copilot`) in 
 separate terminal and prints the skill command to run there. With `--headless`
 the launcher instead drives the queued skill directly from the terminal via
 `opencode run --auto` or `copilot -p --yolo`, so you never enter a chat session.
-The workflow engine already executes headlessly (it shells out to `opencode run`
-per task), so a `--headless` launcher run can go from idea to finished build
-without opening any interactive CLI.
+
+The workflow engine executes **outside** any CLI session: `forge-auto-build`'s
+engine path starts it **detached** (`nohup`, log: `docs/engine-run.log`) and
+polls `docs/WORKFLOW-STATE.json` to completion, so the build survives the
+session and resumes with `run`. Once the manifest exists you can also run the
+engine directly as a standalone process:
+
+```bash
+./scripts/forge-engine-run.sh --harness opencode --yes   # per-task: opencode run --auto
+./scripts/forge-engine-run.sh --harness copilot --yes    # per-task: copilot -p --yolo
+```
+
+A `--headless` launcher run can therefore go from idea to finished build without
+opening any interactive CLI.
 
 ```bash
 # Drive the queued skill now (prints and runs the command)
@@ -104,7 +115,9 @@ default assumption in the PRD). Use `FORGE_RUN_WITH=copilot` to emit
 `copilot -p "..." --yolo` instead of `opencode run --auto` (defaults to
 `copilot` for the GitHub Copilot harness, `opencode` otherwise), and
 `FORGE_WORKFLOW_ENGINE=1` to append `GO --workflow-engine` so the build executes
-through the workflow engine.
+through the workflow engine. On that path the engine runs **detached** (not as a
+blocking child of the session) and the per-task harness is selected with
+`FORGE_ENGINE_HARNESS=opencode|copilot|openai|stub|flowforge-kernel`.
 
 > **Headless + engine:** the engine's own pre-run gate is interactive-only. It
 > auto-skips when stdin is not a TTY, and `--yes` (or `FORGE_ENGINE_YES=1`)
@@ -278,7 +291,7 @@ When a PRD **was** captured in Step 6, the queued command is instead:
   @workspace /forge-auto-build Use docs/PRD.md as the project PRD
 ```
 
-`forge-auto-build` requires the PRD to already exist. It generates the agent team, optionally assigns models, then executes the build - type `GO` at its pre-flight gate, or `GO --workflow-engine` to run the build through the workflow engine instead of the prompt-driven orchestrator.
+`forge-auto-build` requires the PRD to already exist. It generates the agent team, optionally assigns models, then executes the build - type `GO` at its pre-flight gate, or `GO --workflow-engine` to run the build through the workflow engine instead of the prompt-driven orchestrator. On the engine path the engine starts detached (`docs/engine-run.log`), `forge-auto-build` polls `docs/WORKFLOW-STATE.json` until the run is `complete` or `failed`, and you can run or resume it standalone with `scripts/forge-engine-run.sh`.
 
 ### Step 9 -Summary
 
@@ -306,6 +319,8 @@ When a PRD **was** captured in Step 6, the queued command is instead:
   3. Review the pre-flight summary that the skill presents.
   4. Type GO to start the autonomous pipeline (add --workflow-engine to run
      the build through the workflow engine once the agent team is generated).
+     On the engine path the engine runs detached (docs/engine-run.log); run or
+     resume it standalone with scripts/forge-engine-run.sh.
 ```
 
 ---
@@ -336,6 +351,7 @@ When a PRD **was** captured in Step 6, the queued command is instead:
 | `FORGE_YN_DEFAULT` | 3, 7 | Default answer for yes/no prompts (`y` or `n`) |
 | `FORGE_RUN_WITH` | 8 | Headless runner: `opencode` or `copilot` (default: `copilot` for the GitHub harness, `opencode` otherwise) |
 | `FORGE_WORKFLOW_ENGINE` | 8 | `1` to append `GO --workflow-engine` to the queued headless command (build executes via the workflow engine) |
+| `FORGE_ENGINE_HARNESS` | 8 | Per-task harness for the workflow engine: `opencode` (default), `copilot`, `openai`, `stub`, or `flowforge-kernel` |
 
 All other step inputs (repo name, description, visibility, parent directory) use their defaults in non-interactive mode. Override them by setting the variables before running:
 

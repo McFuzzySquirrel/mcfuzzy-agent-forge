@@ -34,7 +34,7 @@ Answer the prompts, then open the repo in your agent harness and run the queued 
 | **Guided onboarding, zero setup** | `./scripts/forge-launcher.sh` | Creates repo, bootstraps templates, captures your idea, queues the PRD stage or the build |
 | **Turn an idea into a reviewed PRD** | `@workspace /forge-auto-build-prd I want to build [idea]` | Confirms idea → builds and reviews `docs/PRD.md` → auto-decomposes qualifying PRDs → stops before the team |
 | **Build from an existing PRD, hands-free** | `@workspace /forge-auto-build docs/PRD.md` | PRD → agent team → (optional models) → build, with validation + commit after every phase |
-| **…using dark orchestration** | add `GO --workflow-engine` at the pre-flight gate | Compiles `EXECUTION-MANIFEST.json` and runs `forge-workflow-engine` unattended |
+| **…using dark orchestration** | add `GO --workflow-engine` at the pre-flight gate | Compiles `EXECUTION-MANIFEST.json` and runs `forge-workflow-engine` unattended (detached process, log: `docs/engine-run.log`) |
 | **Manual, phase-by-phase control** | `forge-build-prd` → `forge-build-agent-team` → `@project-orchestrator` | A human reviews each phase before the next starts |
 | **Fully autonomous engine agent** | `@workspace @workflow-orchestrator Run the workflow` | One pre-run gate, then the engine dispatches every task unattended |
 | **Add a feature to a finished project** | `@workspace /forge-build-feature-prd I want to add [feature]` | Feature PRD → targeted team update → execute feature phases |
@@ -149,7 +149,7 @@ Dark orchestration means one pre-run gate, then unattended dispatch - no approva
 
 ### Path D - Fully terminal-driven (no chat session)
 
-You never need to open an interactive CLI. The engine already shells out to `opencode run` per task, and the launcher can drive the whole pipeline headlessly:
+You never need to open an interactive CLI. Authoring (PRD → team → manifest) happens in a chat session; **execution runs detached**, outside it. The workflow engine is a standalone Node process that shells out to `opencode run` / `copilot -p` per task, and the launcher can drive the whole pipeline headlessly:
 
 ```bash
 # Fastest: launcher does repo → bootstrap → idea → headless skill run
@@ -158,11 +158,17 @@ You never need to open an interactive CLI. The engine already shells out to `ope
 # Or drive the queued skill directly:
 opencode run --auto "/forge-auto-build Use docs/PRD.md as the project PRD. GO --workflow-engine"
 copilot -p "/forge-auto-build Use docs/PRD.md as the project PRD. GO --workflow-engine" --yolo
+
+# Once the manifest exists, run the engine itself as a standalone process
+# (from a second terminal, CI, or nohup) - it never needs a chat session:
+./scripts/forge-engine-run.sh --harness opencode --yes          # per-task: opencode run
+./scripts/forge-engine-run.sh --harness copilot --yes           # per-task: copilot -p --yolo
 ```
 
 - `opencode run` / `copilot -p` are non-interactive; `--auto` / `--yolo` auto-approve tool permissions.
+- `forge-auto-build`'s engine path (`GO --workflow-engine`) starts the engine **detached** (log: `docs/engine-run.log`) and polls `docs/WORKFLOW-STATE.json` to completion - the build survives the chat session and resumes with `run`.
 - With no PRD yet, the launcher queues `forge-auto-build-prd` in headless mode (auto-proceeds with default assumptions recorded in the PRD's Open Questions).
-- `--dry-run` prints the exact command instead of running it. Configure the runner with `FORGE_RUN_WITH=opencode|copilot` and the engine path with `FORGE_WORKFLOW_ENGINE=1`.
+- `--dry-run` prints the exact command instead of running it. Configure the runner with `FORGE_RUN_WITH=opencode|copilot`, the engine path with `FORGE_WORKFLOW_ENGINE=1`, and the per-task engine harness with `FORGE_ENGINE_HARNESS=opencode|copilot|openai|stub`.
 - The workflow engine's `--yes` (or `FORGE_ENGINE_YES=1`) skips its interactive pre-run gate for CI/headless runs.
 
 ---
@@ -191,6 +197,7 @@ mcfuzzy-agent-forge/
 │                                # forge-workforce-compiler, skill-creator, skill-review, …
 ├── scripts/
 │   ├── forge-launcher.sh/.ps1   # interactive onboarding (repo → bootstrap → idea → queue)
+│   ├── forge-engine-run.sh/.ps1 # standalone dark-orchestration runner (engine, outside the CLI)
 │   └── bootstrap.sh/.ps1        # copy templates into any target repo
 └── docs/                        # prompt-playbook, forge-launcher, testing-guide, ADRs, updates
 ```

@@ -1018,6 +1018,42 @@ npm run workflow-engine -- run --harness opencode --yes
 
 ---
 
+**Step 4b – Engine harness adapters resolve (opencode, copilot, stub)**
+
+Verify every registered harness is accepted by the CLI (no "Unknown harness" error) without spending tokens - the stub returns synthetic success and the copilot/opencode adapters gracefully capture a missing-binary error as a task failure:
+
+```bash
+cd .agents/skills/forge-workflow-engine
+npm run workflow-engine -- run --harness stub --yes      # completes all tasks
+npm run workflow-engine -- run --harness copilot --yes   # pre-run summary shows "Harness : copilot"
+npm run workflow-engine -- run --harness openai --yes    # fails with OPENAI_API_KEY missing, no crash
+```
+
+**Check ✓** The pre-run summary prints `Harness : stub|copilot|openai` for each; `stub` reaches `status: complete`; `openai` fails gracefully with the API-key error; a bad harness name (`--harness bogus`) exits with the "Unknown harness" message.
+
+---
+
+**Step 4c – Standalone engine runner (`forge-engine-run.sh`)**
+
+The engine must be runnable as a standalone process from outside any CLI session. After the manifest is compiled (Step 4), run it via the external runner with `--dry-run` first, then for real with the stub harness:
+
+```bash
+./scripts/forge-engine-run.sh --repo . --harness stub --yes --dry-run
+./scripts/forge-engine-run.sh --repo . --harness stub --yes
+```
+
+**Check ✓** The dry-run prints the adapter compile (if needed), the engine `npm install`, and the `workflow-engine -- run --harness stub --yes` command without executing them; the real run reaches `status: complete` in `docs/WORKFLOW-STATE.json`. Delete `docs/WORKFLOW-STATE.json` between runs to start fresh.
+
+---
+
+**Step 4d – Engine starts detached on the auto-build engine path**
+
+In `templates/skills/forge-auto-build/SKILL.md`, the `--workflow-engine` path must start the engine with `nohup … &`, log to `docs/engine-run.log`, and poll `docs/WORKFLOW-STATE.json` rather than blocking the session:
+
+**Check ✓** The SKILL Path B Step 3b uses `nohup npm run workflow-engine -- run --harness "$FORGE_ENGINE_HARNESS" --yes >> docs/engine-run.log 2>&1 &` and Step 3c polls to completion; `FORGE_ENGINE_HARNESS` (default `opencode`) selects the per-task harness.
+
+---
+
 **Step 5 – Full terminal pipeline via the launcher headless mode**
 
 Run the launcher with `--headless` (not `--dry-run`) in a fresh repository, with a PRD captured so the build stage is queued:
@@ -1046,6 +1082,9 @@ export FORGE_YN_DEFAULT="n"
 | `opencode run --auto` invokes the skill non-interactively and produces `docs/PRD.md` | ✅ |
 | Headless team build produces agent + skill files with no pauses | ✅ |
 | Engine `--yes` skips the pre-run gate and starts immediately | ✅ |
+| All harness adapters resolve (stub completes; copilot accepted; openai fails gracefully) | ✅ |
+| `forge-engine-run.sh` dry-run prints commands; real stub run reaches `complete` | ✅ |
+| auto-build engine path starts the engine detached (nohup + log) and polls state | ✅ |
 | Launcher `--headless` runs the queued skill end-to-end from the terminal | ✅ |
 
 ---

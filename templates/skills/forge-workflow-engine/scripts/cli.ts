@@ -6,6 +6,7 @@ import * as readline from "node:readline";
 import { runEngine, replayTask } from "./engine.ts";
 import { loadState, statePath, auditPath } from "./state.ts";
 import { OpenCodeAdapter } from "./harness/opencode-adapter.ts";
+import { CopilotAdapter } from "./harness/copilot-adapter.ts";
 import { OpenAIAdapter } from "./harness/openai-adapter.ts";
 import { StubAdapter } from "./harness/stub-adapter.ts";
 import { FlowForgeKernelAdapter } from "./harness/flowforge-kernel-adapter.ts";
@@ -17,16 +18,18 @@ function usage(): never {
   console.log(`forge-workflow-engine
 
 Usage:
-  npm run workflow-engine -- run     [--repo <path>] [--harness opencode|openai|stub|flowforge-kernel]
+  npm run workflow-engine -- run     [--repo <path>] [--harness opencode|copilot|openai|stub|flowforge-kernel]
                                      [--max-retries <n>] [--retry-delay-ms <ms>] [--yes]
   npm run workflow-engine -- status  [--repo <path>]
-  npm run workflow-engine -- replay  <task-id> [--repo <path>] [--harness opencode|openai|stub|flowforge-kernel]
+  npm run workflow-engine -- replay  <task-id> [--repo <path>] [--harness opencode|copilot|openai|stub|flowforge-kernel]
   npm run workflow-engine -- pause   [--repo <path>]
 
 Environment variables:
   FORGE_ENGINE_YES      Skip the pre-run confirmation gate (same as --yes)
   OPENCODE_BIN           Path to opencode binary (default: opencode)
   OPENCODE_EXTRA_FLAGS   Extra flags passed to opencode run
+  COPILOT_BIN            Path to copilot binary (default: copilot)
+  COPILOT_EXTRA_FLAGS    Extra flags passed to copilot -p (e.g. "--model gpt-4o")
   OPENAI_API_KEY         Required for --harness openai
   OPENAI_BASE_URL        OpenAI API base URL (default: https://api.openai.com/v1)
   OPENAI_MODEL           Model override for OpenAI adapter (default: gpt-4o)
@@ -66,11 +69,12 @@ function detectRepoRoot(start = process.cwd()): string {
 function resolveHarness(name: string | undefined): HarnessAdapter {
   switch (name ?? "opencode") {
     case "opencode": return new OpenCodeAdapter();
+    case "copilot": return new CopilotAdapter();
     case "openai": return new OpenAIAdapter();
     case "stub": return new StubAdapter();
     case "flowforge-kernel": return new FlowForgeKernelAdapter();
     default:
-      console.error(`Unknown harness: '${name}'. Choose opencode, openai, stub, or flowforge-kernel.`);
+      console.error(`Unknown harness: '${name}'. Choose opencode, copilot, openai, stub, or flowforge-kernel.`);
       process.exit(1);
   }
 }

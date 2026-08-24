@@ -200,7 +200,9 @@ If any validation check fails, do **not** commit and do **not** proceed. Stop an
 
 Run this path only if the user included `--workflow-engine` in their `GO` command.
 
-This path uses the workflow engine as the build executor instead of `forge-orchestrate-build`. The manifest is the execution plan; the engine performs the actual autonomous run through the selected harness (OpenCode CLI by default). As part of this path, run the required `npm install` steps for both `forge-execution-adapter` and `forge-workflow-engine`, then compile the manifest and start the engine.
+This path uses the workflow engine as the build executor instead of `forge-orchestrate-build`. The manifest is the execution plan; the engine performs the actual autonomous run through the selected harness. The engine is a **detached, standalone process** - it is never run as a blocking child of this session. You author in the chat; the engine executes on its own (dark orchestration), survives this session ending, and can be resumed with `run`.
+
+Select the per-task harness with the `FORGE_ENGINE_HARNESS` environment variable (`opencode` default, `copilot`, `openai`, `stub`, or `flowforge-kernel`).
 
 **Step 3a: Compile the execution manifest**
 
@@ -212,24 +214,33 @@ npm run forge-execution-adapter -- compile
 
 Verify that `docs/EXECUTION-MANIFEST.json` was written and contains at least one phase with tasks. If the adapter reports warnings, surface them to the user before continuing.
 
-**Step 3b: Run the workflow engine**
+**Step 3b: Install the engine and start it detached**
 
 ```bash
 cd .agents/skills/forge-workflow-engine
 npm install
-npm run workflow-engine -- run --harness opencode
+FORGE_ENGINE_HARNESS="${FORGE_ENGINE_HARNESS:-opencode}" \
+  nohup npm run workflow-engine -- run --harness "$FORGE_ENGINE_HARNESS" --yes \
+  >> docs/engine-run.log 2>&1 &
+echo "Engine started detached. Log: docs/engine-run.log"
 ```
 
-Monitor the engine until it reports `status: "complete"` or stops with `status: "failed"`.
+- `nohup ... &` detaches the engine from this session: the build keeps running even if the chat session ends.
+- `--yes` skips the engine's pre-run gate (required here because the engine has no TTY).
+- `FORGE_ENGINE_HARNESS` picks the per-task harness; default `opencode`, or set it to `copilot` to drive per-task `copilot -p --yolo` calls.
 
-**Step 3c: Verify completion**
+**Step 3c: Poll to completion**
+
+Poll `docs/WORKFLOW-STATE.json` until its `status` is `"complete"` or `"failed"` (suggested: check every 30s). You may also tail `docs/engine-run.log` and `docs/PROGRESS.md` while the build runs. Do not start the engine a second time while one is already running.
+
+**Step 3d: Verify completion**
 
 - [ ] `docs/WORKFLOW-STATE.json` exists and `status` is `"complete"`
 - [ ] All tasks in the manifest are `"complete"` or `"skipped"`
 - [ ] `docs/PROGRESS.md` reflects the completed state
 - [ ] `docs/EXECUTION-AUDIT.jsonl` contains a `run.complete` event
 
-If the engine reports failures, surface the failing task IDs and error messages. Do not mark Stage 3 complete until the run status is `"complete"`.
+If the engine reports failures, surface the failing task IDs and error messages (from `docs/WORKFLOW-STATE.json` or the log tail) and suggest `npm run workflow-engine -- replay <task-id>`. Do not mark Stage 3 complete until the run status is `"complete"`.
 
 When it finishes:
 - Report: "Stage 3 complete - workflow-engine path finished. All tasks complete."
@@ -242,9 +253,9 @@ If `--workflow-engine` was not requested, skip this path and note: "Workflow-eng
 
 After the selected Stage 3 build path is complete:
 
-1. Commit any remaining uncommitted work:
+1. Commit any remaining uncommitted work. **Never commit engine dependencies**: skip the `node_modules/` directories under the skill packages and the engine log:
    ```
-   git add .
+   git add . ':(exclude)**/node_modules/**' ':(exclude)docs/engine-run.log'
    git commit -m "chore: auto-build complete -all phases delivered"
    ```
 2. Produce a **Final Summary** report in the terminal:
@@ -267,7 +278,7 @@ Next steps:
   - Add a new feature: @workspace /forge-build-feature-prd I want to add [feature]...
   - Audit generated skills (automated): cd .agents/skills/skill-review && npm install && npm run skill-review -- --provider stdout --min-score 1.5
   - Audit generated skills (manual): @workspace /forge-optimize-skills Audit all skills...
-  - Run the alternate build path later if desired: cd .agents/skills/forge-workflow-engine && npm run workflow-engine -- run --harness opencode
+   - Run the alternate build path later if desired: cd .agents/skills/forge-workflow-engine && npm run workflow-engine -- run --harness opencode --yes
 ```
 
 ---
@@ -281,7 +292,7 @@ If this skill is invoked in a repo that has an incomplete auto-build (detected b
    - If interrupted mid-Stage 1: re-invoke `forge-build-agent-team`.
    - If interrupted mid-Stage 2: re-run the affected stage from the beginning.
    - If interrupted mid-Stage 3 on the prompt-driven path: invoke `forge-orchestrate-build` with `resume from last checkpoint`.
-   - If interrupted mid-Stage 3 on the workflow-engine path: run `npm run workflow-engine -- run` in the `forge-workflow-engine` skill directory; the engine resumes from `docs/WORKFLOW-STATE.json`.
+   - If interrupted mid-Stage 3 on the workflow-engine path: run `npm run workflow-engine -- run --harness opencode --yes` in the `forge-workflow-engine` skill directory (pass the same harness that was used before; the engine resumes from `docs/WORKFLOW-STATE.json`).
 3. Report to the user: "Resuming auto-build from Stage N, last completed: [task description]."
 4. Do not re-run stages whose outputs are already committed and verified.
 

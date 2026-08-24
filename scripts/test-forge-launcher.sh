@@ -327,6 +327,67 @@ fi
 rm -rf "$REPO_PARENT" 2>/dev/null || true
 
 # ---------------------------------------------------------------------------
+# Test: detached engine execution (ADR-019)
+# ---------------------------------------------------------------------------
+echo ""
+echo "=== Detached engine execution (ADR-019) ==="
+
+ENGINE_RUN="$ROOT_DIR/scripts/forge-engine-run.sh"
+AUTO_BUILD_SKILL="$ROOT_DIR/templates/skills/forge-auto-build/SKILL.md"
+ENGINE_CLI="$ROOT_DIR/templates/skills/forge-workflow-engine/scripts/cli.ts"
+
+assert_file "$ENGINE_RUN" "forge-engine-run.sh exists"
+
+# forge-auto-build Path B must start the engine detached and poll, never block the session.
+assert_contains "$AUTO_BUILD_SKILL" 'nohup npm run workflow-engine -- run --harness "\$FORGE_ENGINE_HARNESS"' \
+  'forge-auto-build engine path starts the engine detached (nohup + --yes)'
+assert_contains "$AUTO_BUILD_SKILL" '>> docs/engine-run.log 2>&1 &' \
+  'forge-auto-build engine path logs to docs/engine-run.log and backgrounds the process'
+assert_contains "$AUTO_BUILD_SKILL" 'FORGE_ENGINE_HARNESS' \
+  'forge-auto-build engine path selects the per-task harness via FORGE_ENGINE_HARNESS'
+assert_contains "$AUTO_BUILD_SKILL" '**Step 3c: Poll to completion**' \
+  'forge-auto-build engine path polls WORKFLOW-STATE.json to completion'
+
+# The engine CLI registers the GitHub Copilot harness.
+assert_contains "$ENGINE_CLI" 'case "copilot": return new CopilotAdapter();' \
+  'workflow-engine CLI registers the copilot harness'
+assert_file "$ROOT_DIR/templates/skills/forge-workflow-engine/scripts/harness/copilot-adapter.ts" \
+  'copilot-adapter.ts exists'
+
+# Bootstrap ensures the target repo's .gitignore excludes engine deps + log.
+assert_contains "$ROOT_DIR/scripts/bootstrap.sh" 'node_modules/' \
+  'bootstrap.sh ensures .gitignore ignores node_modules/'
+assert_contains "$ROOT_DIR/scripts/bootstrap.sh" 'docs/engine-run.log' \
+  'bootstrap.sh ensures .gitignore ignores the engine run log'
+
+# Functional: forge-engine-run.sh dry-run prints the full prepare+run sequence.
+REPO_PARENT="$(mktemp -d)"
+REPO_NAME="test-engine-run-$$"
+git -C "$REPO_PARENT" init -q "$REPO_NAME"
+ENGINE_REPO="$REPO_PARENT/$REPO_NAME"
+mkdir -p "$ENGINE_REPO/docs" "$ENGINE_REPO/.agents/skills/forge-workflow-engine"
+printf '{\n  "version": "1.0",\n  "generatedAt": "2026-08-24T00:00:00Z",\n  "repoRoot": "%s",\n  "harnessRoot": ".agents",\n  "prdPath": "docs/PRD.md",\n  "progressPath": "docs/PROGRESS.md",\n  "auditPath": "docs/EXECUTION-AUDIT.jsonl",\n  "validationCommands": [],\n  "approvalGates": { "preflight": true, "betweenPhases": false },\n  "phases": [],\n  "warnings": []\n}\n' "$ENGINE_REPO" > "$ENGINE_REPO/docs/EXECUTION-MANIFEST.json"
+
+EXIT_CODE=0
+bash "$ENGINE_RUN" --repo "$ENGINE_REPO" --harness opencode --yes --dry-run \
+  >/tmp/forge-engine-run-test.txt 2>&1 || EXIT_CODE=$?
+
+if [[ $EXIT_CODE -ne 0 ]]; then
+  fail "forge-engine-run: dry-run exited with code $EXIT_CODE"
+  cat /tmp/forge-engine-run-test.txt >&2 || true
+else
+  pass "forge-engine-run: dry-run completed successfully"
+  assert_contains /tmp/forge-engine-run-test.txt 'forge-engine-run: repo=' \
+    'forge-engine-run: resolves the repo root'
+  assert_contains /tmp/forge-engine-run-test.txt 'npm run workflow-engine -- run --harness opencode --yes' \
+    'forge-engine-run: dry-run prints the engine run command'
+  assert_contains /tmp/forge-engine-run-test.txt '\[dry-run\]' \
+    'forge-engine-run: dry-run prints commands without executing'
+fi
+
+rm -rf "$REPO_PARENT" 2>/dev/null || true
+
+# ---------------------------------------------------------------------------
 # Summary
 # ---------------------------------------------------------------------------
 echo ""

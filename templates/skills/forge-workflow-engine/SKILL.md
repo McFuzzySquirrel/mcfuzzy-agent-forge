@@ -40,6 +40,13 @@ npm run forge-execution-adapter -- compile
 
 ## Install & Run
 
+> **Runtime requirement:** this skill is a Node package and requires `node >= 18`
+> and `npm` at *build time*. `npm install` (the "node module bootstrap") is not
+> run by `bootstrap.sh` - it is deferred to engine prep time (when
+> `forge-auto-build` compiles and starts the engine, or when you run the engine
+> manually via `scripts/forge-engine-run.sh`). The installed `node_modules/` is
+> gitignored in target repos and must never be committed.
+
 ```bash
 cd .agents/skills/forge-workflow-engine
 npm install
@@ -92,6 +99,7 @@ The engine is harness-agnostic. Select the backend with `--harness`:
 | Adapter | Flag | How it invokes agents |
 |---|---|---|
 | **OpenCode CLI** (default) | `--harness opencode` | `opencode run --model <m> --system-prompt <agent.md> "<prompt>"` |
+| **GitHub Copilot CLI** | `--harness copilot` | `copilot -p "<agent context + task prompt>" --yolo` |
 | **OpenAI API** | `--harness openai` | `POST /v1/chat/completions` with agent rawBody as system prompt |
 | **Stub** | `--harness stub` | Returns synthetic success; no real calls (for testing) |
 | **FlowForge Kernel CLI** | `--harness flowforge-kernel` | Hands off task execution to `flowforge run` against a compiled `.workforce` package |
@@ -102,6 +110,17 @@ The engine is harness-agnostic. Select the backend with `--harness`:
 |---|---|---|
 | `OPENCODE_BIN` | `opencode` | Path to the opencode binary |
 | `OPENCODE_EXTRA_FLAGS` | *(empty)* | Extra flags appended to every `opencode run` call |
+
+### Copilot adapter environment variables
+
+| Variable | Default | Purpose |
+|---|---|---|
+| `COPILOT_BIN` | `copilot` | Path to the GitHub Copilot CLI binary |
+| `COPILOT_EXTRA_FLAGS` | *(empty)* | Extra flags appended to every `copilot -p` call (e.g. `--model gpt-4o`) |
+
+The copilot adapter inlines the agent file contents into the prompt (there is no
+`--system-prompt` flag on `copilot -p`) and auto-approves tool permissions with
+`--yolo`, mirroring the opencode adapter's `--auto`.
 
 ### OpenAI adapter environment variables
 

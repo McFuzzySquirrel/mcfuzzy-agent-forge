@@ -469,9 +469,11 @@ Only modify skills I've approved in the audit report.
 | Compile execution manifest | `cd .agents/skills/forge-execution-adapter && npm install && npm run forge-execution-adapter -- compile` |
 | Compile workforce package | `cd .agents/skills/forge-workforce-compiler && npm install && npm run forge-workforce-compiler -- compile` |
 | Dark run (OpenCode harness) | `cd .agents/skills/forge-workflow-engine && npm install && npm run workflow-engine -- run --harness opencode` |
+| Dark run (GitHub Copilot harness) | `cd .agents/skills/forge-workflow-engine && npm run workflow-engine -- run --harness copilot` |
 | Dark run (OpenAI harness) | `cd .agents/skills/forge-workflow-engine && npm run workflow-engine -- run --harness openai` |
 | Dark run (stub / dry-run) | `cd .agents/skills/forge-workflow-engine && npm run workflow-engine -- run --harness stub` |
 | Dark run (FlowForge kernel) | `cd .agents/skills/forge-workflow-engine && npm run workflow-engine -- run --harness flowforge-kernel` |
+| Standalone engine run (outside CLI) | `./scripts/forge-engine-run.sh --harness opencode --yes` (PowerShell: `.\scripts\forge-engine-run.ps1 -Harness copilot -Yes`; add `--dry-run`/`-DryRun` to print) |
 | Workflow status | `cd .agents/skills/forge-workflow-engine && npm run workflow-engine -- status` |
 | Replay failed task | `cd .agents/skills/forge-workflow-engine && npm run workflow-engine -- replay <task-id>` |
 | Dark run (via agent) | `@workspace @workflow-orchestrator Run the workflow using OpenCode.` |
