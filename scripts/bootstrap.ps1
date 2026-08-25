@@ -154,6 +154,13 @@ function Copy-SkillDirectory {
 
     Copy-Item -Path $SrcDir -Destination $DestDir -Recurse -Force
 
+    # Prune build/dependency artifacts (installed on demand at engine-prep time
+    # via `npm install`), so bootstrapped repos never receive node_modules/ or
+    # dist/.
+    Get-ChildItem -Path $DestDir -Directory -Recurse -Force | Where-Object { $_.Name -in @("node_modules", "dist") } | ForEach-Object {
+        Remove-Item -Path $_.FullName -Recurse -Force
+    }
+
     # Apply harness path rewrite to all .md files
     if ($Harness -ne "agents") {
         Get-ChildItem -Path $DestDir -Filter "*.md" -Recurse | ForEach-Object {

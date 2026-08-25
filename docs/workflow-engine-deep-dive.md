@@ -123,6 +123,8 @@ Two levels of dependency checking happen here:
 This is a simplified but correct DAG walk. Because tasks always move from `pending → running → complete/failed/skipped` and never backwards (except on explicit `replay`), `nextReadyTasks` can be called repeatedly as the loop iterates and will always produce the correct frontier.
 
 > **Why sequential in the MVP?** The ready list could theoretically contain multiple tasks that could run in parallel. The engine runs them one at a time for now. True parallelism would require each harness backend to guarantee isolation between concurrent invocations — something that can't be assumed of all backends (e.g. a CLI tool writing to shared files). It's a conscious tradeoff: correctness over speed.
+>
+> **As of ADR-021 this is no longer strictly sequential.** The engine now drains the ready frontier in bounded *waves* (`--concurrency <n>`, default `1`). Harness adapters declare a `supportsConcurrency` capability; only opt-in adapters are parallelized, and repo-editing harnesses still rely on the dependency graph for file isolation.
 
 ---
 
@@ -371,7 +373,7 @@ Every state transition returns a new object. This makes the flow of state throug
 
 ### For this system specifically
 
-- **True parallel dispatch**: The ready-task list already contains all concurrently runnable tasks. Adding a `Promise.all` wrapper around the ready set (with a configurable concurrency limit) would significantly reduce wall-clock time on large projects. The main constraint is ensuring each harness adapter handles concurrent invocations safely.
+- **True parallel dispatch**: The ready-task list already contains all concurrently runnable tasks. Adding a `Promise.all` wrapper around the ready set (with a configurable concurrency limit) would significantly reduce wall-clock time on large projects. The main constraint is ensuring each harness adapter handles concurrent invocations safely. *(Implemented in ADR-021: bounded wave dispatch with a per-harness `supportsConcurrency` flag.)*
 
 - **Approval gates between phases**: The manifest already has `approvalGates.betweenPhases`. The engine could pause after each phase, surface a diff of what was produced, and wait for a human `continue` signal before proceeding to the next phase.
 

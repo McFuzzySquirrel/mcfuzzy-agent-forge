@@ -16,6 +16,7 @@ import type { AgentDescriptor, HarnessAdapter, ManifestTask, TaskResult, Workflo
  */
 export class StubAdapter implements HarnessAdapter {
   readonly name = "stub";
+  readonly supportsConcurrency = true;
 
   private readonly failIds: Set<string>;
   private readonly delayMs: number;

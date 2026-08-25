@@ -1,6 +1,6 @@
 # McFuzzy Agent Forge – Manual Testing Guide
 
-This guide walks you through a concrete end-to-end scenario you can run by hand to verify that the forge pipeline works as expected.  It covers eight capabilities in sequence:
+This guide walks you through a concrete end-to-end scenario you can run by hand to verify that the forge pipeline works as expected.  It covers nine capabilities in sequence:
 
 1. **Skill creation from the team builder** – confirming `forge-build-agent-team` invokes `skill-creator` and enforces the `skill-review` quality gate.
 2. **Workflow engine (dark orchestration)** – verifying that `forge-workflow-engine` can execute a compiled manifest autonomously.
@@ -10,6 +10,7 @@ This guide walks you through a concrete end-to-end scenario you can run by hand 
 6. **Artifact store and context projection** – verifying that the engine writes typed JSON artifacts to `docs/artifacts/`, projects a minimal context block per task, and emits the expected audit events.
 7. **Headless / terminal-driven execution** – driving skills via `opencode run --auto` / `copilot -p --yolo` and the launcher's `--headless` mode, with no interactive CLI.
 8. **Launcher auto-draft smoke test (reusable test idea)** – a copy-paste project idea that exercises the auto-draft flow, automatic decomposition, vision + features → team, and the engine hand-off.
+9. **Parallel task dispatch (ADR-021)** – verifying wave-based `--concurrency <n>` parallel execution and the `supportsConcurrency` gate.
 
 ---
 
@@ -26,6 +27,7 @@ Agent Forge has several deliberately different paths. Which one you exercise in 
 | Manual decomposition of any PRD | `forge-decompose-prd` | decomposed layout | — |
 | PRD → team → build, hands-free | `forge-auto-build` (default: `forge-orchestrate-build`) | agent files, skills, built project | Parts 2, 3 |
 | Same, but harness-driven (dark orchestration) | `forge-auto-build` + `GO --workflow-engine`, or `workflow-orchestrator` directly | compiled manifest + engine-driven build | Parts 2, 3, 4, 6 |
+| Same, but with parallel dispatch | engine `--concurrency <n>` / `FORGE_ENGINE_CONCURRENCY` (harness-gated) | ready tasks run in bounded waves; wall-clock = critical path | Part 9 |
 | Manual, phase-by-phase control | `forge-build-agent-team` → `project-orchestrator` | incremental phases reviewed one at a time | Part 1 |
 | Add a feature to a finished project | `forge-build-feature-prd` → `forge-build-agent-team` (Feature Increment) | feature PRD + targeted team update | — |
 | Per-agent model selection | `forge-assign-models` | `docs/MODEL-PLAN.md`, `model:`/`modelFallback:` frontmatter | — |
@@ -1224,6 +1226,68 @@ decomposed one - both stay monolithic (2 implementation phases):
 
 - **cli-notes** – *"A Node.js CLI markdown note manager: create, backlink, tag, and search notes stored as .md files in a local notes/ directory. Phases: (1) core create/list/search commands, (2) backlinks and tagging."*
 - **cli-todo** – *"A Node.js CLI task manager: projects, priorities, due dates, and filters stored in a local JSON file. Phases: (1) add/list/complete commands, (2) filtering and priorities."*
+
+---
+
+## Part 9 – Parallel Task Dispatch (ADR-021)
+
+This part verifies the workflow engine's opt-in **parallel dispatch**: the ready
+task frontier runs in bounded waves (`--concurrency <n>`), with state merged in
+manifest order and only harnesses that declare `supportsConcurrency`
+parallelized.
+
+### Prerequisites for Part 9
+
+- A bootstrapped repo with a compiled `docs/EXECUTION-MANIFEST.json` containing
+  a wave of **independent** tasks (e.g. the task-manager PRD from Part 1, or the
+  expense-tracker idea from Part 8).
+- `npm` available for the engine package.
+
+### Test Steps
+
+**Step 1 – Sequential baseline (`--concurrency 1`)**
+
+```bash
+cd .agents/skills/forge-workflow-engine && npm install
+npm run workflow-engine -- run --harness stub --concurrency 1 --yes
+```
+
+**Check ✓** Independent tasks run **one at a time** (completion order matches
+manifest order), the run reaches `complete`, and `docs/EXECUTION-AUDIT.jsonl`
+has no overlapping `task.started` events.
+
+**Step 2 – Parallel wave (`--concurrency 3`)**
+
+```bash
+npm run workflow-engine -- run --harness stub --concurrency 3 --yes
+```
+
+**Check ✓** The same run completes in less wall-clock time than Step 1, the
+final state is identical (all tasks `complete`), and the audit log shows
+**overlapping** `task.started` events with distinct `taskId`s.
+
+**Step 3 – Env default and runner passthrough**
+
+```bash
+FORGE_ENGINE_CONCURRENCY=3 npm run workflow-engine -- run --harness stub --yes
+./scripts/forge-engine-run.sh --repo <repo> --harness stub --concurrency 3 --yes --dry-run
+```
+
+**Check ✓** `FORGE_ENGINE_CONCURRENCY=3` behaves like `--concurrency 3`, and
+`forge-engine-run.sh --dry-run` prints a command containing
+`--concurrency 3`. With a non-concurrent harness (none today), parallelism would
+be forced off — the engine always falls back to `1` when
+`supportsConcurrency` is false.
+
+### Part 9 Pass/Fail Summary
+
+| Check | Expected |
+|---|---|
+| `--concurrency 1` runs tasks sequentially, in manifest order | ✅ |
+| `--concurrency 3` overlaps independent tasks and cuts wall-clock time | ✅ |
+| Final state identical regardless of concurrency | ✅ |
+| `FORGE_ENGINE_CONCURRENCY` env matches `--concurrency` | ✅ |
+| `forge-engine-run.sh --concurrency <n>` passes the flag through | ✅ |
 
 ---
 

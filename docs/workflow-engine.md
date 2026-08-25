@@ -80,7 +80,8 @@ asynchronously, so the engine's heartbeat stays responsive.
 
 ```
 npm run workflow-engine -- run     [--repo <path>] [--harness <name>] [--max-retries <n>]
-                                   [--retry-delay-ms <ms>] [--heartbeat-ms <ms>] [--yes]
+                                   [--retry-delay-ms <ms>] [--heartbeat-ms <ms>]
+                                   [--concurrency <n>] [--yes]
 npm run workflow-engine -- status  [--repo <path>]
 npm run workflow-engine -- replay  <task-id> [--repo <path>] [--harness <name>]
 npm run workflow-engine -- pause   [--repo <path>]
@@ -93,6 +94,7 @@ npm run workflow-engine -- pause   [--repo <path>]
 | `--max-retries <n>` | `2` | Attempts per task before it is marked `failed` |
 | `--retry-delay-ms <ms>` | `5000` | Delay between retries |
 | `--heartbeat-ms <ms>` | `15000` | Heartbeat interval while a task runs; `0` disables |
+| `--concurrency <n>` | `1` | Max ready tasks to run in parallel (see *Parallel dispatch* below) |
 | `--yes` | *(off)* | Skip the interactive pre-run gate |
 
 ### Pre-run gate
@@ -110,6 +112,24 @@ the engine prints a heartbeat line every `--heartbeat-ms`:
 ```
 [engine] …still working on task 1.1 (@project-architect, 45s elapsed)
 ```
+
+### Parallel dispatch (opt-in)
+
+By default the engine runs tasks **sequentially** (concurrency `1`). With
+`--concurrency <n>` it drains each wave of ready tasks (all tasks whose
+dependencies are satisfied) through a bounded worker pool of at most `n` in
+flight, merging results in manifest order and saving state once per wave:
+
+```
+npm run workflow-engine -- run --harness stub --concurrency 3 --yes
+```
+
+Parallelism only applies when the selected harness declares
+`supportsConcurrency` (all current adapters do). Repo-editing harnesses rely on
+the manifest dependency graph for file isolation - so declare dependencies
+correctly before raising `n`. `FORGE_ENGINE_CONCURRENCY` sets the default, and
+`scripts/forge-engine-run.sh` / `.ps1` accept `--concurrency <n>` /
+`-Concurrency <n>` to pass it through. See [ADR-021](adr/021-parallel-task-dispatch.md).
 
 ---
 
@@ -183,6 +203,7 @@ To start fresh (e.g. after recompiling the manifest), delete `docs/WORKFLOW-STAT
 |---|---|---|
 | `FORGE_ENGINE_YES` | *(unset)* | `1` skips the pre-run gate (same as `--yes`) |
 | `FORGE_ENGINE_HEARTBEAT_MS` | `15000` | Heartbeat interval in ms |
+| `FORGE_ENGINE_CONCURRENCY` | `1` | Max ready tasks to run in parallel (same as `--concurrency`; only for harnesses that declare `supportsConcurrency`) |
 | `FORGE_ENGINE_HARNESS` | `opencode` | Default harness for the standalone runner |
 | `OPENCODE_BIN` | `opencode` | Path to the opencode binary |
 | `OPENCODE_EXTRA_FLAGS` | *(empty)* | Extra flags appended to every `opencode run` |

@@ -13,6 +13,7 @@ import type { AgentDescriptor, HarnessAdapter, ManifestTask, TaskResult, Workflo
  */
 export class OpenAIAdapter implements HarnessAdapter {
   readonly name = "openai";
+  readonly supportsConcurrency = true;
 
   private readonly apiKey: string;
   private readonly baseUrl: string;

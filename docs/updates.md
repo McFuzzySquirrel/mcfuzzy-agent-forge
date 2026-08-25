@@ -4,6 +4,56 @@ Detailed release and change notes for McFuzzy Agent Forge.
 
 ---
 
+## August 2026 - v3.12
+
+### Parallel task dispatch in the workflow engine
+
+The engine previously drained its ready-task frontier **sequentially** (a
+documented MVP tradeoff, ADR-014). It now executes that frontier in bounded
+**waves**, cutting wall-clock time on multi-agent builds from sum-of-durations to
+the critical path.
+
+- **Wave-based dispatch.** Each wave computes `nextReadyTasks` (unchanged), runs
+  the ready set through a bounded worker pool, and merges the terminal
+  transitions back into state in **manifest order** (deterministic regardless of
+  completion order). State is saved once per wave; newly-unblocked tasks are
+  picked up on the next wave.
+- **Opt-in concurrency.** `--concurrency <n>` (or `FORGE_ENGINE_CONCURRENCY`)
+  caps how many ready tasks run in parallel. Default `1` reproduces the previous
+  sequential behavior exactly. `<= 1` is treated as sequential.
+- **Per-harness safety valve.** `HarnessAdapter` gains a
+  `supportsConcurrency` capability flag; the engine only parallelizes harnesses
+  that opt in. All current adapters do (`openai`, `stub`, `opencode`, `copilot`,
+  `flowforge-kernel`). Repo-editing harnesses still rely on the manifest
+  dependency graph for file isolation.
+- **`flowforge-kernel` de-synchronized.** Converted from blocking `execFileSync`
+  to async `runCommand` (unblocks the event loop, fixes the streaming gap, and
+  promise-caches the `validatePackage` preflight).
+- **Race-safe artifacts.** `ArtifactStore` ID allocation moved to an in-memory
+  reservation counter (seeded from disk), eliminating duplicate artifact IDs
+  under concurrency.
+- **Drain-on-failure.** In-flight tasks in a wave run to completion; failed
+  tasks' dependents never enter a later wave, and the run is marked `failed`
+  exactly as before.
+- **Runner passthrough.** `scripts/forge-engine-run.sh` / `.ps1` accept
+  `--concurrency <n>` / `-Concurrency <n>` (and `FORGE_ENGINE_CONCURRENCY`), so
+  the standalone/launcher engine path can opt into parallelism.
+- **Bootstrap never ships `node_modules`.** The engine `node_modules` directories
+  were accidentally committed to the forge repo and copied into every
+  bootstrapped target by `cp -r` (~88MB each). They are now untracked (ignored),
+  and `bootstrap.sh` / `bootstrap.ps1` exclude `node_modules/` and `dist/` when
+  copying skill templates - the target repo installs engine dependencies on
+  demand via `npm install` at engine-prep time. Only `package.json` /
+  `package-lock.json` / `scripts/` / `SKILL.md` / `tsconfig.json` ship.
+
+Related architecture decision:
+
+- [ADR-021](adr/021-parallel-task-dispatch.md): wave-based parallel dispatch,
+  `supportsConcurrency`, `flowforge-kernel` async conversion, and race-safe
+  artifact IDs.
+
+---
+
 ## August 2026 - v3.11
 
 ### Workflow-engine heartbeat, OpenCode adapter fix, and clearer engine handoff

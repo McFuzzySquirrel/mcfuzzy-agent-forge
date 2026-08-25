@@ -120,10 +120,15 @@ copy_skill_dir() {
     fi
   fi
 
-  # Remove existing so cp -r doesn't merge
+  # Remove existing so the copy doesn't merge
   [[ -d "$dest_dir" ]] && rm -rf "$dest_dir"
-  mkdir -p "$(dirname "$dest_dir")"
-  cp -r "$src_dir" "$dest_dir"
+  mkdir -p "$dest_dir"
+
+  # Copy the skill tree, excluding build/dependency artifacts (installed on
+  # demand at engine-prep time via `npm install`), so bootstrapped repos never
+  # receive node_modules/ or dist/.
+  ( cd "$src_dir" && tar --exclude='node_modules' --exclude='dist' -cf - . ) \
+    | ( cd "$dest_dir" && tar -xf - )
 
   # Apply harness path rewrite to all .md files in the copied skill
   if [[ "$HARNESS" != "agents" ]]; then

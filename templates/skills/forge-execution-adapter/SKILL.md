@@ -84,7 +84,7 @@ The checkpoint flow should make "resume from last checkpoint" possible even when
 
 ### Step 4: Hand Off to the Runner
 
-Once the manifest exists and progress is synchronized, hand the structured contract to the execution backend. For MVP mode, keep execution sequential and phase-ordered. Do not attempt speculative parallelism unless the backend explicitly guarantees dependency-safe execution.
+Once the manifest exists and progress is synchronized, hand the structured contract to the execution backend. Execution is phase-ordered by default. Parallel dispatch is supported via `--concurrency <n>` but only for harness backends that declare `supportsConcurrency` (see ADR-021); do not assume speculative parallelism for a backend that has not opted in.
 
 ---
 

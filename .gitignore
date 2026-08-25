@@ -1,3 +1,5 @@
 node_modules/
+dist/
+*.tsbuildinfo
 docs/engine-run.log
 .codegraph/

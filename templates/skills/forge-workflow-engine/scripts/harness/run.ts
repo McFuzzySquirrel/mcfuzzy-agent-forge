@@ -4,6 +4,8 @@ export interface RunCommandOptions {
   cwd: string;
   timeoutMs: number;
   maxBufferBytes: number;
+  /** Extra environment variables merged over `process.env`. */
+  env?: NodeJS.ProcessEnv;
 }
 
 export interface RunCommandResult {
@@ -27,7 +29,7 @@ export function runCommand(
   opts: RunCommandOptions,
 ): Promise<RunCommandResult> {
   return new Promise((resolve) => {
-    const child = spawn(bin, args, { cwd: opts.cwd, stdio: ["ignore", "pipe", "pipe"] });
+    const child = spawn(bin, args, { cwd: opts.cwd, env: opts.env, stdio: ["ignore", "pipe", "pipe"] });
 
     let stdout = "";
     let stderr = "";

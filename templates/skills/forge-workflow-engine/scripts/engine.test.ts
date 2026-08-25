@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { allDepsComplete, isComplete, isTaskDone, nextReadyTasks } from "./engine.ts";
+import { allDepsComplete, isComplete, isTaskDone, mapLimit, nextReadyTasks } from "./engine.ts";
 import type { ExecutionManifest, ManifestTask, TaskStatus, WorkflowState } from "./types.ts";
 
 type ManifestPhase = ExecutionManifest["phases"][number];
@@ -111,4 +111,34 @@ test("isComplete is true when every task is complete or skipped", () => {
 
   assert.equal(isComplete(manifest, makeState({ "1.1": "complete", "1.2": "skipped", "2.1": "complete" })), true);
   assert.equal(isComplete(manifest, makeState({ "1.1": "complete", "1.2": "pending", "2.1": "complete" })), false);
+});
+
+test("mapLimit preserves result order despite varying completion times", async () => {
+  const delays = [30, 5, 10];
+  const results = await mapLimit([0, 1, 2], 3, async (i) => {
+    await new Promise((resolve) => setTimeout(resolve, delays[i]!));
+    return i * 10;
+  });
+  assert.deepEqual(results, [0, 10, 20]);
+});
+
+test("mapLimit never exceeds the concurrency limit but still overlaps", async () => {
+  let active = 0;
+  let peak = 0;
+  const items = Array.from({ length: 8 }, (_, i) => i);
+
+  await mapLimit(items, 3, async (i) => {
+    active += 1;
+    peak = Math.max(peak, active);
+    await new Promise((resolve) => setTimeout(resolve, 5));
+    active -= 1;
+    return i;
+  });
+
+  assert.ok(peak <= 3, `peak concurrency ${peak} exceeded limit 3`);
+  assert.ok(peak >= 2, `expected overlap, saw peak concurrency ${peak}`);
+});
+
+test("mapLimit handles an empty array", async () => {
+  assert.deepEqual(await mapLimit([], 3, async (x) => x), []);
 });
