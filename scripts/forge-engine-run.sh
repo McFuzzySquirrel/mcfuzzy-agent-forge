@@ -8,17 +8,20 @@
 #
 # Usage:
 #   ./scripts/forge-engine-run.sh [--repo <path>] [--harness opencode|copilot|openai|stub|flowforge-kernel]
-#                                 [--yes] [--dry-run]
+#                                 [--concurrency <n>] [--yes] [--dry-run]
 #
 # Options:
-#   --repo <path>   Repo root (default: detected by walking up for .git)
-#   --harness <h>   Per-task harness (default: $FORGE_ENGINE_HARNESS or "opencode")
-#   --yes           Skip the engine's pre-run gate (same as FORGE_ENGINE_YES=1)
-#   --dry-run       Print the commands without executing them
+#   --repo <path>     Repo root (default: detected by walking up for .git)
+#   --harness <h>     Per-task harness (default: $FORGE_ENGINE_HARNESS or "opencode")
+#   --concurrency <n> Max ready tasks to run in parallel (default: $FORGE_ENGINE_CONCURRENCY or "1").
+#                     Only harnesses that declare supportsConcurrency parallelize (see ADR-021).
+#   --yes             Skip the engine's pre-run gate (same as FORGE_ENGINE_YES=1)
+#   --dry-run         Print the commands without executing them
 #
 # Environment:
-#   FORGE_ENGINE_HARNESS   Default harness when --harness is not passed
-#   FORGE_ENGINE_YES       Skip the pre-run gate (same as --yes)
+#   FORGE_ENGINE_HARNESS       Default harness when --harness is not passed
+#   FORGE_ENGINE_CONCURRENCY   Default concurrency when --concurrency is not passed
+#   FORGE_ENGINE_YES           Skip the pre-run gate (same as --yes)
 
 set -euo pipefail
 
@@ -26,6 +29,7 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
 REPO=""
 HARNESS="${FORGE_ENGINE_HARNESS:-opencode}"
+CONCURRENCY="${FORGE_ENGINE_CONCURRENCY:-}"
 YES=false
 DRY_RUN=false
 
@@ -33,6 +37,7 @@ while [[ $# -gt 0 ]]; do
   case "$1" in
     --repo) REPO="$2"; shift 2 ;;
     --harness) HARNESS="$2"; shift 2 ;;
+    --concurrency) CONCURRENCY="$2"; shift 2 ;;
     --yes) YES=true; shift ;;
     --dry-run) DRY_RUN=true; shift ;;
     *) echo "Unknown option: $1" >&2; exit 1 ;;
@@ -78,7 +83,7 @@ fi
 
 MANIFEST="$REPO/docs/EXECUTION-MANIFEST.json"
 
-echo "forge-engine-run: repo=$REPO harness=$HARNESS"
+echo "forge-engine-run: repo=$REPO harness=$HARNESS${CONCURRENCY:+ concurrency=$CONCURRENCY}"
 echo "  engine : $ENGINE_DIR"
 echo "  adapter: ${ADAPTER_DIR:-<not bootstrapped; manifest must already exist>}"
 
@@ -115,8 +120,12 @@ run "(cd '$ENGINE_DIR' && npm install)"
 YES_FLAG=""
 [[ "$YES" == true || "${FORGE_ENGINE_YES:-0}" == "1" ]] && YES_FLAG="--yes"
 
+ENGINE_FLAGS=(--harness "$HARNESS")
+[[ -n "$CONCURRENCY" ]] && ENGINE_FLAGS+=(--concurrency "$CONCURRENCY")
+[[ -n "$YES_FLAG" ]] && ENGINE_FLAGS+=("$YES_FLAG")
+
 if [[ "$DRY_RUN" == true ]]; then
-  echo "  [dry-run] (cd '$ENGINE_DIR' && npm run workflow-engine -- run --harness $HARNESS $YES_FLAG)"
+  echo "  [dry-run] (cd '$ENGINE_DIR' && npm run workflow-engine -- run ${ENGINE_FLAGS[*]})"
 else
-  (cd "$ENGINE_DIR" && npm run workflow-engine -- run --harness "$HARNESS" $YES_FLAG)
+  (cd "$ENGINE_DIR" && npm run workflow-engine -- run "${ENGINE_FLAGS[@]}")
 fi

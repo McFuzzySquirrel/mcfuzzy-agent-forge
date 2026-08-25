@@ -66,7 +66,7 @@ assert_contains "$LAUNCHER" '/forge-auto-build Use docs/PRD.md as the project PR
   'forge-launcher.sh queues forge-auto-build against an existing PRD'
 
 # Headless (terminal-driven) mode must be wired up with the right CLI invocations.
-assert_contains "$LAUNCHER" -- '--headless' \
+assert_contains "$LAUNCHER" '--headless' \
   'forge-launcher.sh accepts --headless/--run'
 assert_contains "$LAUNCHER" 'HEADLESS=true' \
   'forge-launcher.sh enables headless mode'
@@ -610,11 +610,32 @@ assert_contains "$ENGINE_CLI" 'case "copilot": return new CopilotAdapter();' \
 assert_file "$ROOT_DIR/templates/skills/forge-workflow-engine/scripts/harness/copilot-adapter.ts" \
   'copilot-adapter.ts exists'
 
+# Parallel task dispatch (ADR-021): --concurrency flag + env, and the standalone
+# runner must pass it through to the engine.
+assert_contains "$ENGINE_CLI" '--concurrency' \
+  'workflow-engine CLI exposes --concurrency for parallel dispatch'
+assert_contains "$ENGINE_CLI" 'FORGE_ENGINE_CONCURRENCY' \
+  'workflow-engine CLI honours FORGE_ENGINE_CONCURRENCY'
+assert_contains "$ENGINE_RUN" '--concurrency' \
+  'forge-engine-run.sh accepts --concurrency'
+assert_contains "$ENGINE_RUN" 'FORGE_ENGINE_CONCURRENCY' \
+  'forge-engine-run.sh honours FORGE_ENGINE_CONCURRENCY'
+assert_contains "$ROOT_DIR/scripts/forge-engine-run.ps1" '\[int]\$Concurrency' \
+  'forge-engine-run.ps1 accepts -Concurrency'
+assert_contains "$ROOT_DIR/scripts/forge-engine-run.ps1" 'FORGE_ENGINE_CONCURRENCY' \
+  'forge-engine-run.ps1 honours FORGE_ENGINE_CONCURRENCY'
+
 # Bootstrap ensures the target repo's .gitignore excludes engine deps + log.
 assert_contains "$ROOT_DIR/scripts/bootstrap.sh" 'node_modules/' \
   'bootstrap.sh ensures .gitignore ignores node_modules/'
 assert_contains "$ROOT_DIR/scripts/bootstrap.sh" 'docs/engine-run.log' \
   'bootstrap.sh ensures .gitignore ignores the engine run log'
+
+# Bootstrap must NOT copy build/dependency artifacts into the target repo.
+assert_contains "$ROOT_DIR/scripts/bootstrap.sh" "tar --exclude='node_modules' --exclude='dist'" \
+  'bootstrap.sh excludes node_modules/dist when copying skills'
+assert_contains "$ROOT_DIR/scripts/bootstrap.ps1" '"node_modules", "dist"' \
+  'bootstrap.ps1 prunes node_modules/dist after copying skills'
 
 # Functional: forge-engine-run.sh dry-run prints the full prepare+run sequence.
 REPO_PARENT="$(mktemp -d)"
@@ -639,6 +660,31 @@ else
     'forge-engine-run: dry-run prints the engine run command'
   assert_contains /tmp/forge-engine-run-test.txt '\[dry-run\]' \
     'forge-engine-run: dry-run prints commands without executing'
+fi
+
+rm -rf "$REPO_PARENT" 2>/dev/null || true
+
+# Functional: --concurrency passes through to the engine (ADR-021).
+REPO_PARENT="$(mktemp -d)"
+REPO_NAME="test-engine-run-conc-$$"
+git -C "$REPO_PARENT" init -q "$REPO_NAME"
+ENGINE_REPO="$REPO_PARENT/$REPO_NAME"
+mkdir -p "$ENGINE_REPO/docs" "$ENGINE_REPO/.agents/skills/forge-workflow-engine"
+printf '{\n  "version": "1.0",\n  "generatedAt": "2026-08-24T00:00:00Z",\n  "repoRoot": "%s",\n  "harnessRoot": ".agents",\n  "prdPath": "docs/PRD.md",\n  "progressPath": "docs/PROGRESS.md",\n  "auditPath": "docs/EXECUTION-AUDIT.jsonl",\n  "validationCommands": [],\n  "approvalGates": { "preflight": true, "betweenPhases": false },\n  "phases": [],\n  "warnings": []\n}\n' "$ENGINE_REPO" > "$ENGINE_REPO/docs/EXECUTION-MANIFEST.json"
+
+EXIT_CODE=0
+bash "$ENGINE_RUN" --repo "$ENGINE_REPO" --harness stub --concurrency 3 --yes --dry-run \
+  >/tmp/forge-engine-run-conc-test.txt 2>&1 || EXIT_CODE=$?
+
+if [[ $EXIT_CODE -ne 0 ]]; then
+  fail "forge-engine-run (concurrency): dry-run exited with code $EXIT_CODE"
+  cat /tmp/forge-engine-run-conc-test.txt >&2 || true
+else
+  pass "forge-engine-run (concurrency): dry-run completed successfully"
+  assert_contains /tmp/forge-engine-run-conc-test.txt 'concurrency=3' \
+    'forge-engine-run (concurrency): --concurrency is resolved'
+  assert_contains /tmp/forge-engine-run-conc-test.txt 'npm run workflow-engine -- run --harness stub --concurrency 3 --yes' \
+    'forge-engine-run (concurrency): --concurrency passes through to the engine'
 fi
 
 rm -rf "$REPO_PARENT" 2>/dev/null || true

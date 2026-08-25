@@ -9,7 +9,7 @@
 
 **McFuzzy Agent Forge** turns your requirements into a team of specialist agents that plan, implement, and validate a project. The PRD is the quality gate: you deliberately review it, then the pipeline generates the team and drives the build - either interactively or fully autonomously ("dark orchestration").
 
-**Latest: v3.11** - workflow-engine heartbeat, OpenCode adapter fix, artifact store on by default, and a clearer engine handoff in the launcher. See [docs/updates.md](docs/updates.md) and [docs/workflow-engine.md](docs/workflow-engine.md).
+**Latest: v3.12** - parallel task dispatch in the workflow engine (wave-based, opt-in `--concurrency`, per-harness `supportsConcurrency`). See [docs/updates.md](docs/updates.md) and [docs/adr/021-parallel-task-dispatch.md](docs/adr/021-parallel-task-dispatch.md).
 
 ---
 
@@ -138,6 +138,8 @@ For fully autonomous execution through a real harness (OpenCode CLI, OpenAI API,
 ```bash
 cd .agents/skills/forge-execution-adapter && npm install && npm run forge-execution-adapter -- compile
 cd ../forge-workflow-engine && npm install && npm run workflow-engine -- run --harness opencode --yes
+# Parallel dispatch (opt-in, harness-gated): run up to N ready tasks concurrently
+npm run workflow-engine -- run --harness opencode --concurrency 3 --yes
 ```
 
 Or drive it conversationally via the companion agent:
@@ -168,6 +170,7 @@ copilot -p "/forge-auto-build Use docs/PRD.md as the project PRD. GO --workflow-
 # (from a second terminal, CI, or nohup) - it never needs a chat session:
 ./scripts/forge-engine-run.sh --harness opencode --yes          # per-task: opencode run
 ./scripts/forge-engine-run.sh --harness copilot --yes           # per-task: copilot -p --yolo
+./scripts/forge-engine-run.sh --harness opencode --concurrency 3 --yes  # parallel dispatch
 ```
 
 - `opencode run` / `copilot -p` are non-interactive; `--auto` / `--yolo` auto-approve tool permissions.

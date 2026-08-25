@@ -16,6 +16,11 @@
     Per-task harness: opencode (default), copilot, openai, stub, flowforge-kernel.
     Defaults to the FORGE_ENGINE_HARNESS environment variable, else "opencode".
 
+.PARAMETER Concurrency
+    Max ready tasks to run in parallel. Defaults to FORGE_ENGINE_CONCURRENCY, else
+    "1" (sequential). Only harnesses that declare supportsConcurrency parallelize
+    (see ADR-021).
+
 .PARAMETER Yes
     Skip the engine's pre-run gate (same as FORGE_ENGINE_YES=1).
 
@@ -24,12 +29,14 @@
 
 .EXAMPLE
     .\scripts\forge-engine-run.ps1 -Harness copilot -Yes
+    .\scripts\forge-engine-run.ps1 -Harness stub -Concurrency 3 -Yes
 #>
 [CmdletBinding()]
 param (
     [string]$Repo = "",
     [ValidateSet("opencode", "copilot", "openai", "stub", "flowforge-kernel")]
     [string]$Harness = "",
+    [int]$Concurrency = 0,
     [switch]$Yes,
     [switch]$DryRun
 )
@@ -39,6 +46,10 @@ $ErrorActionPreference = "Stop"
 
 if (-not $Harness) {
     $Harness = if ($env:FORGE_ENGINE_HARNESS) { $env:FORGE_ENGINE_HARNESS } else { "opencode" }
+}
+
+if ($Concurrency -eq 0 -and $env:FORGE_ENGINE_CONCURRENCY) {
+    $Concurrency = [int]$env:FORGE_ENGINE_CONCURRENCY
 }
 
 # Resolve repo root: --Repo, or walk up from cwd looking for .git.
@@ -80,7 +91,7 @@ if (-not $engineDir) {
 
 $manifest = Join-Path $Repo "docs\EXECUTION-MANIFEST.json"
 
-Write-Host "forge-engine-run: repo=$Repo harness=$Harness"
+Write-Host "forge-engine-run: repo=$Repo harness=$Harness$(if ($Concurrency -gt 1) { " concurrency=$Concurrency" })"
 Write-Host "  engine : $engineDir"
 Write-Host "  adapter: $(if ($adapterDir) { $adapterDir } else { '<not bootstrapped; manifest must already exist>' })"
 
@@ -116,16 +127,17 @@ else {
 Invoke-Run "(cd '$engineDir'; npm install)"
 
 # 3. Run the engine as a foreground, standalone process.
-$yesFlag = ""
-if ($Yes -or $env:FORGE_ENGINE_YES -eq "1") { $yesFlag = "--yes" }
+$engineArgs = @("run", "--harness", $Harness)
+if ($Concurrency -gt 1) { $engineArgs += @("--concurrency", "$Concurrency") }
+if ($Yes -or $env:FORGE_ENGINE_YES -eq "1") { $engineArgs += "--yes" }
 
 if ($DryRun) {
-    Write-Host "  [dry-run] (cd '$engineDir'; npm run workflow-engine -- run --harness $Harness $yesFlag)"
+    Write-Host "  [dry-run] (cd '$engineDir'; npm run workflow-engine -- $($engineArgs -join ' '))"
 }
 else {
     Push-Location $engineDir
     try {
-        npm run workflow-engine -- run --harness $Harness $yesFlag
+        npm run workflow-engine -- @engineArgs
         if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
     }
     finally {

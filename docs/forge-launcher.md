@@ -177,6 +177,11 @@ set `FORGE_AUTO_DRAFT=1` in non-interactive runs. The workflow-engine run later:
 ./scripts/forge-engine-run.sh --repo "<repo-dir>" --harness opencode --yes
 ```
 
+The engine run honours parallel dispatch too: set `FORGE_ENGINE_CONCURRENCY=<n>`
+(or pass `--concurrency <n>` to `forge-engine-run.sh`) to run ready tasks in
+bounded waves (harness-gated via `supportsConcurrency`, default `1` = sequential;
+see [ADR-021](adr/021-parallel-task-dispatch.md)).
+
 > Auto-draft drives the harness CLI directly, so it needs `opencode` (or
 > `copilot` via `FORGE_RUN_WITH=copilot`). It commits each generated artifact so
 > your repo stays reviewable at every boundary.
@@ -505,6 +510,7 @@ reflect the running build (monitor + resume) rather than the manual
 | `FORGE_YN_DEFAULT` | 3, 7 | Default answer for yes/no prompts (`y` or `n`) |
 | `FORGE_AUTO_DRAFT` | 8 | `1` to run the applicable auto-draft stages (PRD and/or agent team) non-interactively |
 | `FORGE_RUN_WITH` | 8 | Headless runner: `opencode` or `copilot` (default: `copilot` for the GitHub harness, `opencode` otherwise) |
+| `FORGE_ENGINE_CONCURRENCY` | 8 | Max ready tasks the workflow engine runs in parallel (default `1` = sequential; harness-gated, see ADR-021) |
 | `FORGE_WORKFLOW_ENGINE` | 8 | `1` to append `GO --workflow-engine` to the queued headless command (build executes via the workflow engine) |
 | `FORGE_ENGINE_HARNESS` | 8 | Per-task harness for the workflow engine: `opencode` (default), `copilot`, `openai`, `stub`, or `flowforge-kernel` |
 

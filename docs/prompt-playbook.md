@@ -369,6 +369,9 @@ npm run workflow-engine -- run --harness openai
 # Stub / dry-run - no real calls, verifies engine setup
 npm run workflow-engine -- run --harness stub
 
+# Parallel dispatch (opt-in, harness-gated) - up to 3 ready tasks at once
+npm run workflow-engine -- run --harness opencode --concurrency 3
+
 # FlowForge kernel handoff - requires compiled .workforce package + flowforge CLI
 npm run workflow-engine -- run --harness flowforge-kernel
 ```
