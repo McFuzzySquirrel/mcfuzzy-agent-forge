@@ -50,6 +50,8 @@ EXECUTION-MANIFEST.json (produced by forge-execution-adapter)
 
 Key insight: **the engine never re-reads the PRD**. It only ever looks at the compiled manifest. This is a deliberate firewall — if the PRD changes mid-run, you must re-compile and start a fresh run. This prevents partial builds from running against a stale plan.
 
+Task decomposition is decided at compile time by `forge-execution-adapter`. With the default **fine** granularity, an indented sub-bullet becomes its own task and an oversized bullet is split at sentence boundaries — so the manifest carries many small, chained tasks rather than a few big ones. This is what makes per-task progress visible in `PROGRESS.md`/`WORKFLOW-STATE.json` and keeps individual harness calls short. Recompile with `--granularity coarse` for the legacy one-bullet-per-task behavior (see ADR-022).
+
 ---
 
 ## Booting Up: `initState`
@@ -164,6 +166,10 @@ A long harness call (e.g. a multi-minute `opencode run` or `copilot -p`) is sile
 ```
 
 The interval defaults to 15 seconds and is controlled with `--heartbeat-ms <ms>` (or `FORGE_ENGINE_HEARTBEAT_MS`); `0` disables it. This only works because the CLI adapters (`opencode`, `copilot`) spawn their child process **asynchronously** (`spawn`, not the blocking `spawnSync`) — the event loop stays free for the heartbeat timer to fire. The OpenAI adapter is already async, so it benefits automatically.
+
+### Per-task timeout
+
+Every harness call also runs under a per-task timeout (default **10 minutes**, configurable via `--task-timeout-ms` / `FORGE_ENGINE_TASK_TIMEOUT_MS`). If the call exceeds it, the adapter kills the child process (`runCommand` sends `SIGKILL`) or aborts the HTTP request (`openai`), and the task fails subject to the retry loop. A task can declare its own longer budget with a `timeoutMs` field in the manifest, which overrides the engine-wide default. Because `runCommand` is async, the timeout does not block the heartbeat. See ADR-022.
 
 ### State is always saved before the next loop iteration
 

@@ -2,7 +2,7 @@ import { existsSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 
 import { runCommand } from "./run.ts";
-import type { AgentDescriptor, HarnessAdapter, ManifestTask, TaskResult, WorkflowState } from "../types.ts";
+import { DEFAULT_TASK_TIMEOUT_MS, type AgentDescriptor, type HarnessAdapter, type ManifestTask, type TaskResult, type WorkflowState } from "../types.ts";
 
 function resolveCompilerDir(repoRoot: string): string | null {
   const candidates = [
@@ -42,6 +42,7 @@ export class FlowForgeKernelAdapter implements HarnessAdapter {
     _context: WorkflowState,
     repoRoot: string,
     _contextBlock?: string,
+    timeoutMs?: number,
   ): Promise<TaskResult> {
     const start = Date.now();
 
@@ -53,7 +54,7 @@ export class FlowForgeKernelAdapter implements HarnessAdapter {
       const args = this.buildArgs(repoRoot, workforcePath, task, agent);
       const result = await runCommand(this.bin, args, {
         cwd: repoRoot,
-        timeoutMs: 10 * 60 * 1000,
+        timeoutMs: timeoutMs ?? DEFAULT_TASK_TIMEOUT_MS,
         maxBufferBytes: 10 * 1024 * 1024,
         env: {
           ...process.env,

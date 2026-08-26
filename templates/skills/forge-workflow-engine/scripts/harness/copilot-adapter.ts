@@ -1,7 +1,7 @@
 import { existsSync, readFileSync } from "node:fs";
 
 import { runCommand } from "./run.ts";
-import type { AgentDescriptor, HarnessAdapter, ManifestTask, TaskResult, WorkflowState } from "../types.ts";
+import { DEFAULT_TASK_TIMEOUT_MS, type AgentDescriptor, type HarnessAdapter, type ManifestTask, type TaskResult, type WorkflowState } from "../types.ts";
 
 /**
  * GitHub Copilot CLI harness adapter.
@@ -41,6 +41,7 @@ export class CopilotAdapter implements HarnessAdapter {
     _context: WorkflowState,
     repoRoot: string,
     contextBlock?: string,
+    timeoutMs?: number,
   ): Promise<TaskResult> {
     const start = Date.now();
 
@@ -49,7 +50,7 @@ export class CopilotAdapter implements HarnessAdapter {
 
     const result = await runCommand(this.bin, args, {
       cwd: repoRoot,
-      timeoutMs: 10 * 60 * 1000,
+      timeoutMs: timeoutMs ?? DEFAULT_TASK_TIMEOUT_MS,
       maxBufferBytes: 10 * 1024 * 1024,
     });
 

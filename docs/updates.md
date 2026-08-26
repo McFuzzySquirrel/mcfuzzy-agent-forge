@@ -4,6 +4,155 @@ Detailed release and change notes for McFuzzy Agent Forge.
 
 ---
 
+## August 2026 - v3.15
+
+### Feature-based manifest compilation, team validation, and the responsibility matrix
+
+The workflow-engine path previously compiled `docs/EXECUTION-MANIFEST.json`
+**only** from the monolithic `docs/PRD.md`, ignoring the decomposed layout and
+skipping the team-validation / responsibility-matrix steps that the
+prompt-driven path (`forge-orchestrate-build` + `forge-build-agent-team`)
+performs. It now matches the original flow:
+
+- **Feature-based compile mode (auto-detected).** When
+  `docs/product-vision.md` + `docs/features/*.md` exist, the adapter reads the
+  vision's `## 14. Features` dependency table, orders features topologically
+  (dependencies first; cycles or a missing table fall back to document order
+  with a warning), and compiles each feature's `## 5. Implementation Tasks` /
+  `### Phase N:` blocks into manifest phases. Phase ids are feature-tagged
+  (e.g. `BUDGETS-2`) so task ids stay globally unique across features. The
+  manifest records `sourceLayout: "features"` and `featureOrder`. Features with
+  no phase headings get a single phase synthesized from their Functional
+  Requirements bullets (warned). Monolithic repos compile exactly as before.
+- **Team-validation gate (always at compile).** Every `compile` checks for
+  unassigned tasks, output files owned by more than one agent, and orphan
+  agents (generated agents that own no task) — mirroring
+  `forge-build-agent-team` Step 7 — surfacing any findings as manifest warnings.
+- **Responsibility matrix restored.** `compile` writes
+  `docs/agent-responsibility-matrix.md` (validation results + an
+  agent × phase × task × outputs table + phase execution order) and records its
+  path on the manifest (`responsibilityMatrixPath`). The workflow engine's
+  pre-run summary prints the source layout, feature order, and matrix path.
+- **TUI engine configuration.** Choosing *run the build now (detached)* or
+  *print the engine command* in the launcher now opens an engine-configuration
+  step (defaults preselected, Esc keeps them): per-task harness, task
+  granularity, parallel-agent count, per-task timeout, and max retries. The
+  `engine-run` command gained `--granularity`, `--max-retries`,
+  `--retry-delay-ms`, and `--heartbeat-ms` (with `FORGE_ENGINE_GRANULARITY`,
+  `FORGE_ENGINE_MAX_RETRIES`, `FORGE_ENGINE_RETRY_DELAY_MS`,
+  `FORGE_ENGINE_HEARTBEAT_MS` env equivalents). Setting `--granularity`
+  recompiles the manifest at that granularity even when one already exists, with
+  a note to clear `docs/WORKFLOW-STATE.json` if a previous run is in progress.
+- **Tests.** Launcher suite is now 16 `node --test` cases (including the
+  engine-config command regression); the execution adapter covers the
+  feature-based compile, ordering, feature-tagged ids, team validation, and
+  responsibility matrix at 17 cases. All packages typecheck clean.
+
+Related architecture decision:
+
+- [ADR-024](adr/024-feature-based-compilation-and-responsibility-matrix.md):
+  feature-based manifest compilation, the deterministic team-validation gate,
+  and the generated responsibility matrix.
+
+---
+
+## August 2026 - v3.14
+
+### Forge launcher as a Node npm package with a TUI
+
+The CLI layer (`forge-launcher`, `bootstrap`, `forge-engine-run`) is now a
+single cross-platform **`forge-launcher` npm package** at
+`scripts/forge-launcher/`, replacing the six dual bash/PowerShell scripts
+(which remain as thin delegating wrappers during the transition, then are
+removed).
+
+- **One codebase, three subcommands.** `forge-launcher` (9-step onboarding),
+  `forge-launcher bootstrap`, and `forge-launcher engine-run` mirror the legacy
+  entry points with an unchanged flags/env-var contract. Run it from anywhere
+  with `npx forge-launcher` — no forge clone needed (templates are bundled as
+  resources).
+- **Interactive TUI.** All prompts use `@clack/prompts` — `select` menus
+  (harness, PRD, engine decision), `confirm`, `text`, `multiline` (Enter-twice
+  submits), and an autocomplete path picker — with a readline fallback for
+  piped/CI input and a clean Ctrl+C exit (code 130).
+- **Spinners instead of heartbeats.** Long-running steps (repo create,
+  bootstrap, push, headless skill runs) show a clack spinner with their output
+  tee'd to a per-run log (`/tmp/forge-launcher-<pid>.log`), printed on failure.
+  The old "still running… Ns" heartbeat and the bash/PSReadLine Tab-completion
+  hacks are gone.
+- **Drift fixed.** The "Launch CLI now?" prompts default to `no` everywhere
+  (the PowerShell variant had drifted to `yes`).
+- **Auto-draft reliability.** Headless skill runs now set `FORGE_HEADLESS=1`
+  for the spawned harness CLI so the forge skills' headless gate fires
+  deterministically, and pass `--dir "<repo>"` to `opencode run` so the skill
+  runs in the **target repository** — `opencode run` resolves its project
+  directory from its parent process, not the child's spawn `cwd`, so without
+  `--dir` the skill ran in the launcher's own directory and reported its input
+  (`docs/IDEA.md`) as missing. The workflow-engine `opencode` adapter passes the
+  same `--dir` for the same reason. If an auto-draft stage finishes without its
+  artifact, the launcher prints the run-log tail, `git status`, and whether the
+  skill file resolved, then offers to run the skill manually. `--debug` /
+  `FORGE_LAUNCHER_DEBUG=1` always shows the log tail, and
+  `FORGE_RUN_WITH=stub` (with `FORGE_STUB_NOOP=1`) runs the auto-draft stages
+  offline against canned artifacts for testing.
+- **Detached engine start fixed.** Choosing "Run the workflow-engine build now
+  (detached)" re-invoked the CLI via `new URL("./cli.ts")`, which resolves to
+  `dist/cli.ts` — a file that does not exist when running the compiled package —
+  so the detached child failed to start with ENOENT and no manifest or
+  `docs/engine-run.log` ever appeared. The entry now resolves to `dist/cli.js`
+  when compiled (and preloads the tsx loader when running from source), and
+  `spawnDetached` writes a "failed to start" line to the log if the spawn fails
+  instead of failing silently.
+- **Tests.** 15 `node --test` cases (bootstrap harness mapping/rewrite/
+  gitignore, path expansion, non-interactive E2E layout + queued-command
+  selection, the `--dir` pinning of headless skill commands, detached engine
+  command resolution, and stub-runner coverage of the auto-draft success and
+  failure paths). `scripts/test-forge-launcher.sh` now delegates to the package
+  suite. Interactive TUI verified end-to-end under a pty.
+
+Related architecture decisions:
+
+- [ADR-023](adr/023-forge-launcher-npm-package.md): the launcher as a Node npm
+  package (supersedes ADR-010's script-first/no-dependency decision).
+
+---
+
+## August 2026 - v3.13
+
+### Finer-grained tasks and a configurable task timeout
+
+Workflow-engine tasks were failing because each harness adapter hardcoded a
+per-task timeout (`10 * 60 * 1000`ms); when a task exceeded it, the child was
+killed and the task failed after retries. Task granularity was also locked to
+one PRD bullet per task, so a large bullet became one long, opaque task. Two
+changes fix this.
+
+- **Fine-grained task decomposition (now the default).** `forge-execution-adapter
+  compile` expands indented sub-bullets into their own chained tasks and splits
+  oversized (multi-sentence) bullets at sentence boundaries. Every task keeps
+  owner matching, the linear dependency chain, and artifact `inputs`/`produces`
+  wiring. Split tasks are reported as compile warnings. `--granularity coarse`
+  reproduces the legacy one-bullet-per-task output exactly, and the manifest
+  records `granularity: "coarse" | "fine"`.
+- **Configurable per-task timeout.** `--task-timeout-ms <ms>` (or
+  `FORGE_ENGINE_TASK_TIMEOUT_MS`) sets the engine-wide budget (default 10 min,
+  unchanged). A task's own `timeoutMs` field in the manifest overrides it. The
+  `opencode`, `copilot`, and `flowforge-kernel` adapters use the effective
+  timeout instead of a hardcoded constant; the `openai` adapter now enforces it
+  with an `AbortController` (previously unbounded). The pre-run summary prints
+  the effective timeout, and `scripts/forge-engine-run.sh` / `.ps1` pass
+  `--task-timeout-ms` / `-TaskTimeoutMs` through.
+- **Tests.** Coverage for sub-bullet expansion, long-bullet splitting, `coarse`
+  regression equivalence, timeout precedence (per-task beats global), and
+  `runCommand` enforcing a custom timeout.
+
+Related architecture decision:
+
+- [ADR-022](adr/022-task-granularity-and-configurable-timeout.md): fine-grained
+  task decomposition and the configurable task timeout.
+
+---
+
 ## August 2026 - v3.12
 
 ### Parallel task dispatch in the workflow engine

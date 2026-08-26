@@ -1,6 +1,6 @@
 # McFuzzy Agent Forge – Manual Testing Guide
 
-This guide walks you through a concrete end-to-end scenario you can run by hand to verify that the forge pipeline works as expected.  It covers nine capabilities in sequence:
+This guide walks you through a concrete end-to-end scenario you can run by hand to verify that the forge pipeline works as expected.  It covers ten capabilities in sequence:
 
 1. **Skill creation from the team builder** – confirming `forge-build-agent-team` invokes `skill-creator` and enforces the `skill-review` quality gate.
 2. **Workflow engine (dark orchestration)** – verifying that `forge-workflow-engine` can execute a compiled manifest autonomously.
@@ -11,6 +11,7 @@ This guide walks you through a concrete end-to-end scenario you can run by hand 
 7. **Headless / terminal-driven execution** – driving skills via `opencode run --auto` / `copilot -p --yolo` and the launcher's `--headless` mode, with no interactive CLI.
 8. **Launcher auto-draft smoke test (reusable test idea)** – a copy-paste project idea that exercises the auto-draft flow, automatic decomposition, vision + features → team, and the engine hand-off.
 9. **Parallel task dispatch (ADR-021)** – verifying wave-based `--concurrency <n>` parallel execution and the `supportsConcurrency` gate.
+10. **Task granularity & configurable timeout (ADR-022)** – verifying fine-grained task decomposition in the compiled manifest and that `--task-timeout-ms` / a per-task `timeoutMs` controls the harness timeout.
 
 ---
 
@@ -330,7 +331,7 @@ This part tests the full journey from zero to autonomous execution using `forge-
 ### Prerequisites for Part 3
 
 - All prerequisites from Parts 1 and 2
-- `forge-launcher.sh` (Linux / macOS) or `forge-launcher.ps1` (Windows) in `scripts/`
+- The `forge-launcher` npm package (`scripts/forge-launcher/`) or the legacy `forge-launcher.sh` / `forge-launcher.ps1` wrappers in `scripts/`
 - `gh` CLI installed and authenticated, **or** a parent directory writable for a local `git init`
 
 ---
@@ -469,7 +470,9 @@ export FORGE_YN_DEFAULT="n"
 Then run the functional test script to assert the expected layout:
 
 ```bash
-./scripts/test-forge-launcher.sh
+./scripts/test-forge-launcher.sh      # legacy bash acceptance test
+# or the npm package test suite (equivalent coverage, cross-platform):
+npm test --prefix scripts/forge-launcher
 ```
 
 **Check ✓** All assertions pass (`0 failed`). Proceed to Steps 3–7 above in the newly created repository.
@@ -973,11 +976,11 @@ export FORGE_YN_DEFAULT="n"
 ./scripts/forge-launcher.sh --non-interactive --headless --dry-run
 ```
 
-**Check ✓** The output includes `opencode run --auto "/forge-auto-build-prd Use docs/IDEA.md as the project idea. Headless mode: auto-proceed with default assumptions and approve the PRD."` and a `Dry-run: command printed, not executed.` line.
+**Check ✓** The output includes `opencode run --auto --dir "/tmp/forge-headless-ci" "/forge-auto-build-prd Use docs/IDEA.md as the project idea. Headless mode: auto-proceed with default assumptions and approve the PRD."` and a `Dry-run: command printed, not executed.` line.
 
 Repeat with a PRD added (`FORGE_PRD_FILE=/path/to/prd.md` and `FORGE_WORKFLOW_ENGINE=1`):
 
-**Check ✓** The printed command becomes `opencode run --auto "/forge-auto-build Use docs/PRD.md as the project PRD. GO --workflow-engine"` - the engine build path is embedded in the skill invocation.
+**Check ✓** The printed command becomes `opencode run --auto --dir "/tmp/forge-headless-ci" "/forge-auto-build Use docs/PRD.md as the project PRD. GO --workflow-engine"` - the engine build path is embedded in the skill invocation.
 
 Set `FORGE_RUN_WITH=copilot`:
 
@@ -1103,7 +1106,7 @@ export FORGE_YN_DEFAULT="n"
 ./scripts/forge-launcher.sh --non-interactive --headless
 ```
 
-**Check ✓** The launcher executes `opencode run --auto "/forge-auto-build Use docs/PRD.md as the project PRD. GO --workflow-engine"` directly from the terminal, and the build proceeds to completion without opening an interactive CLI.
+**Check ✓** The launcher executes `opencode run --auto --dir "/tmp/forge-headless-full" "/forge-auto-build Use docs/PRD.md as the project PRD. GO --workflow-engine"` directly from the terminal, and the build proceeds to completion without opening an interactive CLI.
 
 ---
 
@@ -1353,3 +1356,96 @@ The value of `OPENAI_MODEL` (or an agent's `model:` frontmatter field) does not 
 
 **Azure endpoint returns `404` or `ResourceNotFound`**
 `OPENAI_BASE_URL` for Azure must include the deployment name and end with a trailing slash, e.g. `https://<resource>.openai.azure.com/openai/deployments/<deployment>/`. Also ensure `OPENAI_MODEL` matches the deployment name exactly.
+
+---
+
+## Part 10 – Task Granularity & Configurable Timeout (ADR-022)
+
+This part verifies two things: the execution-adapter compiles **fine-grained**
+tasks (sub-bullets expanded, oversized bullets split) by default, and the
+workflow engine honours a **configurable per-task timeout**
+(`--task-timeout-ms` / `FORGE_ENGINE_TASK_TIMEOUT_MS`, with a per-task
+`timeoutMs` override in the manifest).
+
+### Prerequisites for Part 10
+
+- A bootstrapped repo with a PRD that contains at least one phase whose bullets
+  have **indented sub-bullets** and at least one **long multi-sentence bullet**
+  (a real PRD usually has both).
+- `npm` available for the adapter and engine packages.
+
+### Test Steps
+
+**Step 1 – Compile with fine granularity (default)**
+
+```bash
+cd .agents/skills/forge-execution-adapter && npm install
+npm run forge-execution-adapter -- compile
+```
+
+**Check ✓**
+
+- `docs/EXECUTION-MANIFEST.json` contains `"granularity": "fine"`.
+- A bullet with sub-bullets produced **one task per sub-bullet** (the parent
+  bullet is a container, not a task).
+- A long multi-sentence bullet was **split into multiple chained tasks**.
+- The adapter printed warnings naming tasks that were split.
+- Each emitted task still has `ownerAgent`, a linear `dependencies` chain, and
+  `inputs`/`produces` artifact wiring.
+
+**Step 2 – `coarse` reproduces legacy output**
+
+```bash
+npm run forge-execution-adapter -- compile --granularity coarse
+```
+
+**Check ✓** The manifest now has exactly one task per bullet line (any
+indentation), no splitting, and `"granularity": "coarse"`. Recompile back to
+fine before continuing.
+
+**Step 3 – Default timeout**
+
+```bash
+cd .agents/skills/forge-workflow-engine && npm install
+npm run workflow-engine -- run --harness stub --yes
+```
+
+**Check ✓** The pre-run summary prints a `Timeout` line showing the default
+`600000ms` per task, and the run completes.
+
+**Step 4 – Raise the timeout globally**
+
+```bash
+npm run workflow-engine -- run --harness stub --task-timeout-ms 900000 --yes
+```
+
+**Check ✓** The pre-run summary now shows `900000ms`. (With the stub harness
+there is nothing to time out; this confirms the value flows through.)
+
+**Step 5 – Per-task override in the manifest**
+
+Edit `docs/EXECUTION-MANIFEST.json` and add `"timeoutMs": 3600000` to one task:
+
+```json
+{
+  "id": "1.2",
+  "title": "Migrate the monolith",
+  "timeoutMs": 3600000
+}
+```
+
+Re-run with `--task-timeout-ms 600000`. If a task has no `timeoutMs`, the global
+value applies; the edited task's longer value overrides it. (Verified directly
+by the engine unit tests; optionally attach a debugger or check
+`docs/EXECUTION-AUDIT.jsonl` if you want to observe it in a real run.)
+
+### Troubleshooting for Part 10
+
+**Manifest changed between runs and the engine complains about stale state**
+Recompiling at a different granularity produces a new task set. Delete
+`docs/WORKFLOW-STATE.json` and start a fresh run.
+
+**A task fails with `timed out after <N>ms`**
+The harness call exceeded the effective timeout. Either split the task into
+smaller ones (recompile with fine granularity — the default) or raise the budget
+with `--task-timeout-ms` / a per-task `timeoutMs`.

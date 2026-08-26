@@ -1,7 +1,7 @@
 import { existsSync, readFileSync } from "node:fs";
 
 import { runCommand } from "./run.ts";
-import type { AgentDescriptor, HarnessAdapter, ManifestTask, TaskResult, WorkflowState } from "../types.ts";
+import { DEFAULT_TASK_TIMEOUT_MS, type AgentDescriptor, type HarnessAdapter, type ManifestTask, type TaskResult, type WorkflowState } from "../types.ts";
 
 /**
  * OpenCode CLI harness adapter.
@@ -39,17 +39,22 @@ export class OpenCodeAdapter implements HarnessAdapter {
     _context: WorkflowState,
     repoRoot: string,
     contextBlock?: string,
+    timeoutMs?: number,
   ): Promise<TaskResult> {
     const start = Date.now();
 
     const modelFlag = agent.model ? ["--model", agent.model] : [];
 
     const prompt = this.buildPrompt(agent, task, contextBlock);
-    const args = ["run", ...modelFlag, ...this.extraFlags, prompt];
+    // `--dir` pins the project directory explicitly: `opencode run` resolves its
+    // working directory from its parent process, not the child's spawn `cwd`, so
+    // relying on `cwd: repoRoot` alone runs tasks in the wrong project when the
+    // engine process lives in a subdirectory (e.g. the engine's own package dir).
+    const args = ["run", ...modelFlag, "--dir", repoRoot, ...this.extraFlags, prompt];
 
     const result = await runCommand(this.bin, args, {
       cwd: repoRoot,
-      timeoutMs: 10 * 60 * 1000,
+      timeoutMs: timeoutMs ?? DEFAULT_TASK_TIMEOUT_MS,
       maxBufferBytes: 10 * 1024 * 1024,
     });
 

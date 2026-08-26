@@ -1,7 +1,15 @@
 # ADR-010: Forge Launcher -Interactive CLI for the Full Agent Forge Lifecycle
 
 **Date:** 2026-08-05
-**Status:** Accepted
+**Status:** Superseded (implementation layer) by [ADR-023](023-forge-launcher-npm-package.md)
+
+> **Update (2026-08-26):** The implementation decision in §1 — a pair of pure
+> shell scripts with zero new dependencies — is superseded. The launcher is now
+> a Node npm package (`forge-launcher`) with a `@clack/prompts` TUI, replacing
+> the `.sh` / `.ps1` pair (which remain as delegating wrappers during the
+> transition). The flow decisions in this ADR (harness selection order,
+> `IDEA.md` hand-off, delegated bootstrap) still apply. See
+> [ADR-023](023-forge-launcher-npm-package.md).
 
 ---
 

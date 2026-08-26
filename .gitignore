@@ -3,3 +3,6 @@ dist/
 *.tsbuildinfo
 docs/engine-run.log
 .codegraph/
+scripts/forge-launcher/*.tgz
+scripts/forge-launcher/resources/templates/
+scripts/forge-launcher/resources/prompt-playbook.md

@@ -1,234 +1,30 @@
 #Requires -Version 5.1
-<#
-.SYNOPSIS
-    Deploy mcfuzzy-agent-forge templates into a target repository.
+# Legacy delegating wrapper for bootstrap.
+# The canonical implementation is the Node npm package at scripts/forge-launcher/.
+# This wrapper keeps existing invocations working during the transition and is
+# scheduled for removal (see ADR-023).
 
-.DESCRIPTION
-    Copies agent and skill template files from this repository into a target
-    repository so agent harnesses can use them.
+$PkgDir = Join-Path $PSScriptRoot "forge-launcher"
+$Subcommand = @("bootstrap") + $args
 
-    What it copies:
-      templates/agents/*.md            -> TARGET/<root>/agents/*.md
-      templates/skills/<skill>/*       -> TARGET/<root>/skills/<skill>/** (recursive)
-      docs/prompt-playbook.md          -> TARGET/docs/prompt-playbook.md
-
-    Adapts internal path references when a non-default harness is selected.
-
-.PARAMETER Target
-    Path to the target repository root. Prompted if not supplied.
-
-.PARAMETER Harness
-    Target harness: agents (default), github, claude.
-
-.PARAMETER Force
-    Overwrite existing files without prompting.
-
-.EXAMPLE
-    .\scripts\bootstrap.ps1 -Target C:\Projects\my-app
-    .\scripts\bootstrap.ps1 -Target ..\my-app -Harness github -Force
-#>
-[CmdletBinding()]
-param (
-    [string]$Target = "",
-    [ValidateSet("agents", "github", "claude", "opencode")]
-    [string]$Harness = "agents",
-    [switch]$Force
-)
-
-Set-StrictMode -Version Latest
-$ErrorActionPreference = "Stop"
-
-$ScriptDir   = Split-Path -Parent $MyInvocation.MyCommand.Path
-$TemplatesDir = Join-Path $ScriptDir "..\templates" | Resolve-Path
-$DocsDir     = Join-Path $ScriptDir "..\docs" | Resolve-Path
-
-# Map harness to root directory
-$RootDir = switch ($Harness) {
-    "agents"   { ".agents" }
-    "github"   { ".github" }
-    "claude"   { ".claude" }
-    "opencode" { ".opencode" }
-}
-
-# ---------------------------------------------------------------------------
-# Resolve target directory
-# ---------------------------------------------------------------------------
-if (-not $Target) {
-    $Target = Read-Host "Target repository path [.]"
-    if (-not $Target) { $Target = "." }
-}
-
-$Target = Convert-Path $Target -ErrorAction SilentlyContinue
-if (-not $Target -or -not (Test-Path $Target -PathType Container)) {
-    Write-Error "Target directory does not exist: $Target"
+function Invoke-Forge {
+    $distCli = Join-Path $PkgDir "dist\cli.js"
+    if (Test-Path $distCli -PathType Leaf) {
+        & node $distCli $Subcommand
+        exit $LASTEXITCODE
+    }
+    $tsxLocal = Join-Path $PkgDir "node_modules\.bin\tsx"
+    $tsxGlobal = Get-Command tsx -ErrorAction SilentlyContinue
+    if (Test-Path $tsxLocal) {
+        & $tsxLocal (Join-Path $PkgDir "scripts\cli.ts") $Subcommand
+        exit $LASTEXITCODE
+    }
+    if ($tsxGlobal) {
+        & $tsxGlobal.Source (Join-Path $PkgDir "scripts\cli.ts") $Subcommand
+        exit $LASTEXITCODE
+    }
+    Write-Error "bootstrap: package not built. Run in scripts\forge-launcher\: npm install; npm run build"
     exit 1
 }
 
-# ---------------------------------------------------------------------------
-# Helpers
-# ---------------------------------------------------------------------------
-
-# Ensure the target repo's .gitignore excludes engine dependencies (node_modules
-# installed at engine-prep time) and the detached engine log.
-function Ensure-Gitignore {
-    $gi = Join-Path $Target ".gitignore"
-    $entries = @("node_modules/", "docs/engine-run.log")
-    $added = $false
-
-    # .gitignore is a dotfile (hidden on Unix); use .NET file APIs so reads and
-    # appends work regardless of the hidden attribute.
-    $existing = ""
-    if (Test-Path -LiteralPath $gi) {
-        $existing = [System.IO.File]::ReadAllText($gi)
-    }
-
-    if ($existing.Length -gt 0 -and -not $existing.EndsWith("`n")) {
-        [System.IO.File]::AppendAllText($gi, "`n")
-        $existing += "`n"
-    }
-
-    foreach ($e in $entries) {
-        if ($existing.Contains($e)) {
-            continue
-        }
-        [System.IO.File]::AppendAllText($gi, "$e`n")
-        $existing += "$e`n"
-        $added = $true
-    }
-
-    if ($added) {
-        Write-Host "  Updated:  $gi (node_modules/, docs/engine-run.log)"
-    }
-    else {
-        Write-Host "  OK:       $gi already ignores node_modules/ and engine-run.log"
-    }
-}
-
-function Copy-File {
-    param ([string]$Src, [string]$Dest)
-
-    if ((Test-Path $Dest -PathType Leaf) -and -not $Force) {
-        $answer = Read-Host "  Overwrite existing $(Split-Path -Leaf $Dest)? [y/N]"
-        if ($answer -notin @('y', 'Y')) {
-            Write-Host "  Skipped:  $Dest"
-            return
-        }
-    }
-
-    $destDir = Split-Path -Parent $Dest
-    if (-not (Test-Path $destDir)) {
-        New-Item -ItemType Directory -Path $destDir -Force | Out-Null
-    }
-
-    Copy-Item -Path $Src -Destination $Dest -Force
-
-    # For non-default harness, adapt path references
-    if ($Harness -ne "agents") {
-        $content = Get-Content -Path $Dest -Raw
-        $content = $content -replace '\.agents/', "$RootDir/"
-        Set-Content -Path $Dest -Value $content -NoNewline
-    }
-
-    Write-Host "  Copied:   $Dest"
-}
-
-function Copy-SkillDirectory {
-    param ([string]$SrcDir, [string]$DestDir, [string]$SkillName)
-
-    if ((Test-Path $DestDir) -and -not $Force) {
-        $answer = Read-Host "  Overwrite existing skill directory '$SkillName'? [y/N]"
-        if ($answer -notin @('y', 'Y')) {
-            Write-Host "  Skipped:  $SkillName/"
-            return
-        }
-    }
-
-    if (Test-Path $DestDir) {
-        Remove-Item -Path $DestDir -Recurse -Force
-    }
-
-    $parent = Split-Path -Parent $DestDir
-    if (-not (Test-Path $parent)) {
-        New-Item -ItemType Directory -Path $parent -Force | Out-Null
-    }
-
-    Copy-Item -Path $SrcDir -Destination $DestDir -Recurse -Force
-
-    # Prune build/dependency artifacts (installed on demand at engine-prep time
-    # via `npm install`), so bootstrapped repos never receive node_modules/ or
-    # dist/.
-    Get-ChildItem -Path $DestDir -Directory -Recurse -Force | Where-Object { $_.Name -in @("node_modules", "dist") } | ForEach-Object {
-        Remove-Item -Path $_.FullName -Recurse -Force
-    }
-
-    # Apply harness path rewrite to all .md files
-    if ($Harness -ne "agents") {
-        Get-ChildItem -Path $DestDir -Filter "*.md" -Recurse | ForEach-Object {
-            $content = Get-Content -Path $_.FullName -Raw
-            $content = $content -replace '\.agents/', "$RootDir/"
-            Set-Content -Path $_.FullName -Value $content -NoNewline
-        }
-    }
-
-    Write-Host "  Copied:   $SkillName/"
-}
-
-# ---------------------------------------------------------------------------
-# Bootstrap
-# ---------------------------------------------------------------------------
-Write-Host ""
-Write-Host "Target:  $Target"
-Write-Host "Harness: $Harness ($RootDir)"
-Write-Host ""
-
-$agentsDest = Join-Path $Target "$RootDir\agents"
-$skillsDest = Join-Path $Target "$RootDir\skills"
-$docsDest   = Join-Path $Target "docs"
-
-# --- Agents ---
-Write-Host "Agents ($agentsDest):"
-$agentsSource = Join-Path $TemplatesDir "agents"
-if (Test-Path $agentsSource) {
-    Get-ChildItem -Path $agentsSource -Filter "*.md" -File | ForEach-Object {
-        $dest = Join-Path $agentsDest "$($_.Name)"
-        Copy-File -Src $_.FullName -Dest $dest
-    }
-}
-
-# --- Skills (full directory) ---
-Write-Host ""
-Write-Host "Skills ($skillsDest):"
-$skillsSource = Join-Path $TemplatesDir "skills"
-if (Test-Path $skillsSource) {
-    Get-ChildItem -Path $skillsSource -Directory | ForEach-Object {
-        $skillName = $_.Name
-        $destDir = Join-Path $skillsDest $skillName
-        Copy-SkillDirectory -SrcDir $_.FullName -DestDir $destDir -SkillName $skillName
-    }
-}
-
-# --- Prompt playbook ---
-Write-Host ""
-Write-Host "Docs ($docsDest):"
-$playbookSrc = Join-Path $DocsDir "prompt-playbook.md"
-if (Test-Path $playbookSrc -PathType Leaf) {
-    Copy-File -Src $playbookSrc -Dest (Join-Path $docsDest "prompt-playbook.md")
-}
-
-# --- Apply harness path rewrite to copied agent files ---
-if ($Harness -ne "agents") {
-    Get-ChildItem -Path $agentsDest -Filter "*.md" | ForEach-Object {
-        $content = Get-Content -Path $_.FullName -Raw
-        $content = $content -replace '\.agents/', "$RootDir/"
-        Set-Content -Path $_.FullName -Value $content -NoNewline
-    }
-}
-
-# --- Gitignore hygiene (engine node_modules + detached run log) ---
-Write-Host ""
-Write-Host "Gitignore ($(Join-Path $Target '.gitignore')):"
-Ensure-Gitignore
-
-Write-Host ""
-Write-Host "Bootstrap complete."
-Write-Host "Commit $RootDir\agents\ (.md), $RootDir\skills\, and docs\ to your repository."
+Invoke-Forge

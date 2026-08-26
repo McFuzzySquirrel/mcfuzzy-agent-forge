@@ -32,6 +32,14 @@ npm install
 npm run forge-execution-adapter -- compile
 ```
 
+`compile` auto-detects the PRD representation: monolithic `docs/PRD.md`, or the
+**decomposed layout** (`docs/product-vision.md` + `docs/features/*.md`), which
+compiles the features in dependency-graph order into feature-tagged phases
+(e.g. `BUDGETS-2`). It also runs a team-validation gate (unassigned tasks,
+duplicate file owners, orphan agents) and writes
+`docs/agent-responsibility-matrix.md` — the engine's pre-run summary prints the
+source layout, feature order, and matrix path.
+
 ---
 
 ## Getting started
@@ -47,7 +55,8 @@ npm run workflow-engine -- run --harness opencode --yes
 ### Standalone runner (any terminal, CI, or `nohup`)
 
 ```bash
-./scripts/forge-engine-run.sh --repo <repo-dir> --harness opencode --yes
+forge-launcher engine-run --repo <repo-dir> --harness opencode --yes
+# or the legacy wrapper: ./scripts/forge-engine-run.sh --repo <repo-dir> --harness opencode --yes
 ```
 
 This installs the adapter and engine dependencies, compiles the manifest if missing, then runs the engine in the foreground. Add `--dry-run` to print the command sequence without executing it.
@@ -64,7 +73,7 @@ The engine is harness-agnostic. Select the backend with `--harness`:
 
 | Adapter | Flag | How it invokes agents |
 |---|---|---|
-| **OpenCode CLI** (default) | `--harness opencode` | `opencode run --auto "<agent body + task prompt>"` |
+| **OpenCode CLI** (default) | `--harness opencode` | `opencode run --auto --dir <repo> "<agent body + task prompt>"` |
 | **GitHub Copilot CLI** | `--harness copilot` | `copilot -p "<agent body + task prompt>" --yolo` |
 | **OpenAI API** | `--harness openai` | `POST /v1/chat/completions` with the agent `rawBody` as the system prompt |
 | **Stub** | `--harness stub` | Returns synthetic success; no real calls (for testing) |
@@ -81,7 +90,7 @@ asynchronously, so the engine's heartbeat stays responsive.
 ```
 npm run workflow-engine -- run     [--repo <path>] [--harness <name>] [--max-retries <n>]
                                    [--retry-delay-ms <ms>] [--heartbeat-ms <ms>]
-                                   [--concurrency <n>] [--yes]
+                                   [--concurrency <n>] [--task-timeout-ms <ms>] [--yes]
 npm run workflow-engine -- status  [--repo <path>]
 npm run workflow-engine -- replay  <task-id> [--repo <path>] [--harness <name>]
 npm run workflow-engine -- pause   [--repo <path>]
@@ -95,6 +104,7 @@ npm run workflow-engine -- pause   [--repo <path>]
 | `--retry-delay-ms <ms>` | `5000` | Delay between retries |
 | `--heartbeat-ms <ms>` | `15000` | Heartbeat interval while a task runs; `0` disables |
 | `--concurrency <n>` | `1` | Max ready tasks to run in parallel (see *Parallel dispatch* below) |
+| `--task-timeout-ms <ms>` | `600000` (10 min) | Per-task timeout before the harness call is killed; a task's own `timeoutMs` in the manifest overrides this |
 | `--yes` | *(off)* | Skip the interactive pre-run gate |
 
 ### Pre-run gate
@@ -113,8 +123,24 @@ the engine prints a heartbeat line every `--heartbeat-ms`:
 [engine] …still working on task 1.1 (@project-architect, 45s elapsed)
 ```
 
-### Parallel dispatch (opt-in)
+### Task timeout
 
+Each task runs against the harness with a per-task timeout (default **10
+minutes**). If the harness call does not finish in time, the child is killed and
+the task fails (subject to `--max-retries`). Raise it before running:
+
+```
+npm run workflow-engine -- run --task-timeout-ms 1500000
+FORGE_ENGINE_TASK_TIMEOUT_MS=1500000 npm run workflow-engine -- run
+```
+
+Precedence: a task's `timeoutMs` field in `docs/EXECUTION-MANIFEST.json`
+overrides the engine-wide value, so one heavy task can get a longer budget
+without affecting the rest. Adapters that shell out (`opencode`, `copilot`,
+`flowforge-kernel`) enforce it on the child process; `openai` enforces it on the
+API call via `AbortController`. See [ADR-022](adr/022-task-granularity-and-configurable-timeout.md).
+
+### Parallel dispatch (opt-in)
 By default the engine runs tasks **sequentially** (concurrency `1`). With
 `--concurrency <n>` it drains each wave of ready tasks (all tasks whose
 dependencies are satisfied) through a bounded worker pool of at most `n` in
@@ -128,7 +154,8 @@ Parallelism only applies when the selected harness declares
 `supportsConcurrency` (all current adapters do). Repo-editing harnesses rely on
 the manifest dependency graph for file isolation - so declare dependencies
 correctly before raising `n`. `FORGE_ENGINE_CONCURRENCY` sets the default, and
-`scripts/forge-engine-run.sh` / `.ps1` accept `--concurrency <n>` /
+`forge-launcher engine-run` (or the legacy
+`scripts/forge-engine-run.sh` / `.ps1`) accepts `--concurrency <n>` /
 `-Concurrency <n>` to pass it through. See [ADR-021](adr/021-parallel-task-dispatch.md).
 
 ---
@@ -204,6 +231,7 @@ To start fresh (e.g. after recompiling the manifest), delete `docs/WORKFLOW-STAT
 | `FORGE_ENGINE_YES` | *(unset)* | `1` skips the pre-run gate (same as `--yes`) |
 | `FORGE_ENGINE_HEARTBEAT_MS` | `15000` | Heartbeat interval in ms |
 | `FORGE_ENGINE_CONCURRENCY` | `1` | Max ready tasks to run in parallel (same as `--concurrency`; only for harnesses that declare `supportsConcurrency`) |
+| `FORGE_ENGINE_TASK_TIMEOUT_MS` | `600000` | Per-task timeout in ms (same as `--task-timeout-ms`; per-task manifest `timeoutMs` overrides) |
 | `FORGE_ENGINE_HARNESS` | `opencode` | Default harness for the standalone runner |
 | `OPENCODE_BIN` | `opencode` | Path to the opencode binary |
 | `OPENCODE_EXTRA_FLAGS` | *(empty)* | Extra flags appended to every `opencode run` |
@@ -221,9 +249,10 @@ To start fresh (e.g. after recompiling the manifest), delete `docs/WORKFLOW-STAT
 ## Troubleshooting
 
 | Symptom | Fix |
-|---|---|
+|---|---|---|
 | `Execution manifest not found` | Compile it first: `npm run forge-execution-adapter -- compile` |
 | Task failed after N attempts | Inspect `docs/EXECUTION-AUDIT.jsonl` / the task's `errorMessage`, fix the cause, then `replay <task-id>` |
+| Task failed: `timed out after <N>ms` | The task exceeded its timeout. Either split it into smaller tasks (recompile with fine granularity — the default) or raise the budget with `--task-timeout-ms` / a per-task `timeoutMs` |
 | No artifact files written | Recompile the manifest (the compiler auto-declares `produces`); hand-written manifests must declare `produces` |
 | Run seems hung | It isn't — watch the heartbeat lines; lower `--heartbeat-ms` for more frequent updates |
 | `OpenCode must be in $PATH` | Set `OPENCODE_BIN` to the binary path |
@@ -237,3 +266,4 @@ To start fresh (e.g. after recompiling the manifest), delete `docs/WORKFLOW-STAT
 - Artifact store: [`docs/artifact-store-deep-dive.md`](artifact-store-deep-dive.md)
 - Launcher: [`docs/forge-launcher.md`](forge-launcher.md)
 - Choosing prompt-driven vs engine-driven: [`docs/prompt-playbook.md`](prompt-playbook.md)
+- ADR-022: [`task granularity and configurable timeout`](adr/022-task-granularity-and-configurable-timeout.md)

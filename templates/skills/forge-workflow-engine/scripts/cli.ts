@@ -5,12 +5,12 @@ import * as readline from "node:readline";
 
 import { runEngine, replayTask } from "./engine.ts";
 import { loadState, statePath, auditPath } from "./state.ts";
+import { DEFAULT_TASK_TIMEOUT_MS, type ExecutionManifest, type HarnessAdapter, type EngineOptions } from "./types.ts";
 import { OpenCodeAdapter } from "./harness/opencode-adapter.ts";
 import { CopilotAdapter } from "./harness/copilot-adapter.ts";
 import { OpenAIAdapter } from "./harness/openai-adapter.ts";
 import { StubAdapter } from "./harness/stub-adapter.ts";
 import { FlowForgeKernelAdapter } from "./harness/flowforge-kernel-adapter.ts";
-import type { ExecutionManifest, HarnessAdapter, EngineOptions } from "./types.ts";
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -19,7 +19,7 @@ function usage(): never {
 
 Usage:
   npm run workflow-engine -- run     [--repo <path>] [--harness opencode|copilot|openai|stub|flowforge-kernel]
-                                     [--max-retries <n>] [--retry-delay-ms <ms>] [--heartbeat-ms <ms>] [--concurrency <n>] [--yes]
+                                     [--max-retries <n>] [--retry-delay-ms <ms>] [--heartbeat-ms <ms>] [--concurrency <n>] [--task-timeout-ms <ms>] [--yes]
   npm run workflow-engine -- status  [--repo <path>]
   npm run workflow-engine -- replay  <task-id> [--repo <path>] [--harness opencode|copilot|openai|stub|flowforge-kernel]
   npm run workflow-engine -- pause   [--repo <path>]
@@ -28,6 +28,7 @@ Environment variables:
   FORGE_ENGINE_YES      Skip the pre-run confirmation gate (same as --yes)
   FORGE_ENGINE_HEARTBEAT_MS  Heartbeat interval in ms while a task runs (default: 15000)
   FORGE_ENGINE_CONCURRENCY   Max ready tasks to run in parallel (default: 1; ignored unless harness supports concurrency)
+  FORGE_ENGINE_TASK_TIMEOUT_MS   Per-task timeout in ms (default: 600000 / 10 min; per-task manifest timeoutMs overrides)
   OPENCODE_BIN           Path to opencode binary (default: opencode)
   OPENCODE_EXTRA_FLAGS   Extra flags passed to opencode run
   COPILOT_BIN            Path to copilot binary (default: copilot)
@@ -108,6 +109,7 @@ function buildOptions(args: string[], harnessName?: string): EngineOptions {
     retryDelayMs: Number(flag(args, "--retry-delay-ms") ?? "5000"),
     heartbeatMs: Number(flag(args, "--heartbeat-ms") ?? process.env["FORGE_ENGINE_HEARTBEAT_MS"] ?? "15000"),
     maxConcurrency: Number(flag(args, "--concurrency") ?? process.env["FORGE_ENGINE_CONCURRENCY"] ?? "1"),
+    taskTimeoutMs: Number(flag(args, "--task-timeout-ms") ?? process.env["FORGE_ENGINE_TASK_TIMEOUT_MS"] ?? String(DEFAULT_TASK_TIMEOUT_MS)),
     pauseRequested: false,
   };
 }
@@ -123,9 +125,13 @@ async function confirmPreRun(opts: EngineOptions, args: string[]): Promise<void>
 
   console.log("Forge Workflow Engine - Pre-run Summary");
   console.log(`  Harness : ${opts.harness.name}`);
+  console.log(`  Layout  : ${manifest.sourceLayout ?? "monolithic"}`);
   console.log(`  Phases  : ${manifest.phases.length}`);
   console.log(`  Tasks   : ${taskCount}`);
+  console.log(`  Timeout : ${opts.taskTimeoutMs}ms per task (--task-timeout-ms / per-task timeoutMs overrides)`);
   console.log(`  Manifest: ${opts.manifestPath}`);
+  if (manifest.featureOrder) console.log(`  Features: ${manifest.featureOrder.join(" → ")}`);
+  if (manifest.responsibilityMatrixPath) console.log(`  Matrix  : ${manifest.responsibilityMatrixPath}`);
 
   if (skip) {
     console.log("Confirmation skipped (--yes / FORGE_ENGINE_YES=1).");

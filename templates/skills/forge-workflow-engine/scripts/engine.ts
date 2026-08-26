@@ -239,7 +239,14 @@ async function executeTask(
 
     let result: TaskResult;
     try {
-      result = await opts.harness.invoke(agent, task, currentState, opts.repoRoot, contextBlock);
+      result = await opts.harness.invoke(
+        agent,
+        task,
+        currentState,
+        opts.repoRoot,
+        contextBlock,
+        task.timeoutMs ?? opts.taskTimeoutMs,
+      );
     } finally {
       if (heartbeat) clearInterval(heartbeat);
     }
