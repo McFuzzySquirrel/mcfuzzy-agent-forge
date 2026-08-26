@@ -3,6 +3,7 @@
  * Stages the live forge templates/docs into resources/ so the published
  * package bootstraps standalone. Runs as part of `npm pack` (prepack).
  * Excludes node_modules/dist, matching bootstrap's copy behaviour.
+ * Clears only the paths it manages, preserving tracked files (resources/.gitkeep).
  */
 import { mkdirSync, readdirSync, rmSync, copyFileSync } from "node:fs";
 import path from "node:path";
@@ -23,8 +24,11 @@ function copyTree(srcDir, destDir) {
   }
 }
 
-rmSync(resourcesDir, { recursive: true, force: true });
 mkdirSync(resourcesDir, { recursive: true });
+
+// Clear only the generated paths; leave .gitkeep (and anything else tracked) alone.
+rmSync(path.join(resourcesDir, "templates"), { recursive: true, force: true });
+rmSync(path.join(resourcesDir, "prompt-playbook.md"), { force: true });
 
 copyTree(path.join(repoRoot, "templates"), path.join(resourcesDir, "templates"));
 copyFileSync(

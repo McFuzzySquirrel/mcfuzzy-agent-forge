@@ -44,7 +44,7 @@
 ### npm package (recommended, cross-platform)
 
 ```bash
-npx forge-launcher                 # interactive onboarding
+npx forge-launcher [--non-interactive] [--headless] [--draft] [--dry-run] [--debug]
 npx forge-launcher bootstrap [TARGET_DIR] [--harness agents|github|claude|opencode] [--force]
 npx forge-launcher engine-run [--repo <path>] [--harness <h>] [--concurrency <n>]
                              [--task-timeout-ms <ms>] [--yes] [--dry-run]
@@ -161,6 +161,15 @@ blocking child of the session) and the per-task harness is selected with
 > **Headless + engine:** the engine's own pre-run gate is interactive-only. It
 > auto-skips when stdin is not a TTY, and `--yes` (or `FORGE_ENGINE_YES=1`)
 > skips it explicitly for CI/headless runs.
+
+> **Headless skill runs set `FORGE_HEADLESS=1`** for the spawned harness CLI, so
+> the forge skills' headless gate fires deterministically (they also detect the
+> embedded "headless / auto-proceed" text). If an auto-draft stage finishes
+> without its expected artifact (`docs/PRD.md` / the decomposed layout, or
+> generated agents), the launcher prints the run-log tail, the repo's `git
+> status`, and whether the skill file resolved, then offers (interactive) to
+> open the harness CLI to run the skill manually. Use `--debug` /
+> `FORGE_LAUNCHER_DEBUG=1` to always see the log tail.
 
 ### Auto-draft (optional): idea → PRD → team, with review boundaries
 
@@ -534,7 +543,9 @@ reflect the running build (monitor + resume) rather than the manual
 | `FORGE_RESEARCH_FILES` | 6 | Comma-separated list of paths to research/seed documents copied to `docs/research/`. Each path accepts relative, `~`/`~/...`, and `$VAR`/`${VAR}` forms |
 | `FORGE_YN_DEFAULT` | 3, 7 | Default answer for yes/no prompts (`y` or `n`) |
 | `FORGE_AUTO_DRAFT` | 8 | `1` to run the applicable auto-draft stages (PRD and/or agent team) non-interactively |
-| `FORGE_RUN_WITH` | 8 | Headless runner: `opencode` or `copilot` (default: `copilot` for the GitHub harness, `opencode` otherwise) |
+| `FORGE_RUN_WITH` | 8 | Headless runner: `opencode`, `copilot`, or `stub` (default: `copilot` for the GitHub harness, `opencode` otherwise). `stub` runs the auto-draft stages offline against canned artifacts - combine with `FORGE_STUB_NOOP=1` to test the failure path |
+| `FORGE_STUB_NOOP` | 8 | `1` makes the stub skill runner (`FORGE_RUN_WITH=stub`) write nothing, exercising the auto-draft failure diagnostics |
+| `FORGE_LAUNCHER_DEBUG` | 8 | `1` (or the `--debug` flag) prints the skill-run log tail after every headless skill run; also passes `--print-logs` to `opencode` |
 | `FORGE_ENGINE_CONCURRENCY` | 8 | Max ready tasks the workflow engine runs in parallel (default `1` = sequential; harness-gated, see ADR-021) |
 | `FORGE_ENGINE_TASK_TIMEOUT_MS` | 8 | Per-task timeout for the workflow engine in ms (default `600000` / 10 min; a task's manifest `timeoutMs` overrides it, see ADR-022) |
 | `FORGE_WORKFLOW_ENGINE` | 8 | `1` to append `GO --workflow-engine` to the queued headless command (build executes via the workflow engine) |

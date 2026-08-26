@@ -19,7 +19,12 @@ Launcher options:
                       'opencode run --auto' or 'copilot -p --yolo' instead of opening a CLI.
   --draft             Pre-answer "yes" to the optional auto-draft stages (PRD and/or agent team).
   --dry-run           Print commands without executing them.
+  --debug             Print the skill-run log tail after headless runs (also FORGE_LAUNCHER_DEBUG=1).
   -h, --help          Show this help.
+
+Forge skills run with FORGE_HEADLESS=1 so their headless gate fires
+deterministically. Set FORGE_RUN_WITH=stub (plus FORGE_STUB_NOOP=1) to run the
+auto-draft stages offline against canned artifacts.
 `;
 
 async function main(): Promise<number> {
@@ -41,6 +46,7 @@ async function main(): Promise<number> {
       case "--run": opts.headless = true; break;
       case "--draft": opts.draft = true; break;
       case "--dry-run": opts.dryRun = true; break;
+      case "--debug": process.env.FORGE_LAUNCHER_DEBUG = "1"; break;
       default:
         fail(`Unknown option: ${a}`);
         process.stdout.write("\n" + USAGE);

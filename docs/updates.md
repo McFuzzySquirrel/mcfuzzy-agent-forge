@@ -30,10 +30,19 @@ removed).
   hacks are gone.
 - **Drift fixed.** The "Launch CLI now?" prompts default to `no` everywhere
   (the PowerShell variant had drifted to `yes`).
-- **Tests.** 11 `node --test` cases (bootstrap harness mapping/rewrite/
+- **Auto-draft reliability.** Headless skill runs now set `FORGE_HEADLESS=1`
+  for the spawned harness CLI so the forge skills' headless gate fires
+  deterministically. If an auto-draft stage finishes without its artifact, the
+  launcher prints the run-log tail, `git status`, and whether the skill file
+  resolved, then offers to run the skill manually. `--debug` /
+  `FORGE_LAUNCHER_DEBUG=1` always shows the log tail, and
+  `FORGE_RUN_WITH=stub` (with `FORGE_STUB_NOOP=1`) runs the auto-draft stages
+  offline against canned artifacts for testing.
+- **Tests.** 13 `node --test` cases (bootstrap harness mapping/rewrite/
   gitignore, path expansion, non-interactive E2E layout + queued-command
-  selection). `scripts/test-forge-launcher.sh` now delegates to the package
-  suite. Interactive TUI verified end-to-end under a pty.
+  selection, and stub-runner coverage of the auto-draft success and failure
+  paths). `scripts/test-forge-launcher.sh` now delegates to the package suite.
+  Interactive TUI verified end-to-end under a pty.
 
 Related architecture decisions:
 

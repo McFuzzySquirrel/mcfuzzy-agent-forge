@@ -110,3 +110,52 @@ test("openCode harness bootstrap rewrites paths to .opencode", async () => {
   assert.ok(skill.includes(".opencode/"));
   assert.ok(!skill.includes(".agents/"));
 });
+
+test("auto-draft PRD succeeds via the stub skill runner", async () => {
+  const parent = tmpDir();
+  const { code, out } = await runCli(["--non-interactive"], {
+    FORGE_HARNESS_CHOICE: "4",
+    FORGE_REPO_NAME: "draft-app",
+    FORGE_REPO_PARENT_DIR: parent,
+    FORGE_IDEA: "A todo list app",
+    FORGE_YN_DEFAULT: "n",
+    FORGE_AUTO_DRAFT: "1",
+    FORGE_RUN_WITH: "stub",
+  });
+
+  assert.equal(code, 0, out);
+  const repo = path.join(parent, "draft-app");
+  assert.ok(fs.existsSync(path.join(repo, "docs", "PRD.md")), "PRD should exist");
+  assert.ok(out.includes("PRD generated."));
+  assert.ok(out.includes("docs: add auto-drafted PRD"));
+  // the team stage ran too
+  assert.ok(fs.existsSync(path.join(repo, ".agents", "agents", "stub-project-agent.md")));
+  assert.ok(out.includes("Agent team generated."));
+  const log = execFileSync("git", ["-C", repo, "log", "--oneline"], { encoding: "utf8" });
+  assert.ok(log.includes("docs: add auto-drafted PRD"));
+  assert.ok(log.includes("feat: generate auto-drafted agent team"));
+});
+
+test("auto-draft PRD failure is diagnosed with log tail and no commit", async () => {
+  const parent = tmpDir();
+  const { code, out } = await runCli(["--non-interactive"], {
+    FORGE_HARNESS_CHOICE: "4",
+    FORGE_REPO_NAME: "draft-fail-app",
+    FORGE_REPO_PARENT_DIR: parent,
+    FORGE_IDEA: "A todo list app",
+    FORGE_YN_DEFAULT: "n",
+    FORGE_AUTO_DRAFT: "1",
+    FORGE_RUN_WITH: "stub",
+    FORGE_STUB_NOOP: "1",
+  });
+
+  assert.equal(code, 0, out);
+  const repo = path.join(parent, "draft-fail-app");
+  assert.ok(!fs.existsSync(path.join(repo, "docs", "PRD.md")), "no PRD should exist");
+  assert.ok(out.includes("did not produce the expected artifact"));
+  assert.ok(out.includes("Run it manually in the repo"));
+  assert.ok(out.includes("[stub] invoking forge-auto-build-prd"));
+  // nothing was committed beyond the bootstrap commit
+  const log = execFileSync("git", ["-C", repo, "log", "--oneline"], { encoding: "utf8" });
+  assert.ok(!log.includes("docs: add auto-drafted PRD"));
+});

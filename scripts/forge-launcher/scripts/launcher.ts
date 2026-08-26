@@ -56,13 +56,13 @@ function runLoggedStep(
   label: string,
   cmd: string,
   args: string[],
-  opts: { cwd?: string; dryRun?: boolean } = {},
+  opts: { cwd?: string; dryRun?: boolean; env?: NodeJS.ProcessEnv } = {},
 ): Promise<number> {
   const logFile = runLogFile();
   return runWithHeartbeat(
     label,
     async () => {
-      const res = await runLogged(cmd, args, { cwd: opts.cwd, logFile });
+      const res = await runLogged(cmd, args, { cwd: opts.cwd, logFile, env: opts.env });
       if (res.code !== 0) printLogTail(logFile);
       return res.code;
     },
@@ -83,12 +83,24 @@ function hasPrd(): boolean {
 }
 
 function harnessAgentsDir(): string {
+  return path.join(state.repoDir, harnessRootDir(), "agents");
+}
+
+function harnessRootDir(): string {
   switch (state.harness) {
-    case "github": return path.join(state.repoDir, ".github", "agents");
-    case "claude": return path.join(state.repoDir, ".claude", "agents");
-    case "opencode": return path.join(state.repoDir, ".opencode", "agents");
-    default: return path.join(state.repoDir, ".agents", "agents");
+    case "github": return ".github";
+    case "claude": return ".claude";
+    case "opencode": return ".opencode";
+    default: return ".agents";
   }
+}
+
+function skillPathFor(skillName: string): string {
+  return path.join(state.repoDir, harnessRootDir(), "skills", skillName, "SKILL.md");
+}
+
+function debugMode(): boolean {
+  return process.env.FORGE_LAUNCHER_DEBUG === "1";
 }
 
 function hasGeneratedTeam(): boolean {
@@ -138,25 +150,123 @@ function headlessRunner(): string {
 }
 
 function headlessCmdFor(msg: string): string {
-  return headlessRunner() === "copilot"
-    ? `copilot -p "${msg}" --yolo`
-    : `opencode run --auto "${msg}"`;
+  const runner = headlessRunner();
+  if (runner === "copilot") return `copilot -p "${msg}" --yolo`;
+  if (runner === "stub") return `stub (writes canned artifacts)`;
+  return `opencode run --auto "${msg}"`;
 }
 
-async function runSkillHeadless(msg: string, opts: LauncherOptions): Promise<void> {
+/** Extracts the skill name from a skill invocation message ("/name rest…"). */
+function skillNameFromMsg(msg: string): string {
+  const first = msg.trim().split(/\s+/)[0] ?? "";
+  return first.replace(/^\/+/, "");
+}
+
+/**
+ * Runs a skill invocation headlessly. Returns true when the skill was found and
+ * executed (exit 0), false when the skill file is missing from the harness dir.
+ * Sets FORGE_HEADLESS=1 for the child so the forge skills' headless gate fires
+ * deterministically. Honors FORGE_RUN_WITH=stub for offline testing.
+ */
+async function runSkillHeadless(msg: string, opts: LauncherOptions): Promise<boolean> {
   const cmdStr = headlessCmdFor(msg);
   command(cmdStr);
   if (opts.dryRun) {
     warn("Dry-run: command printed, not executed.");
-    return;
+    return true;
   }
+
+  const skillName = skillNameFromMsg(msg);
+  if (skillName && !fs.existsSync(skillPathFor(skillName))) {
+    warn(`Skill not found: ${skillPathFor(skillName)}`);
+    warn("The repo may not have been bootstrapped for this harness, or the skill was renamed.");
+    out(`    Run it manually instead: ${cmdStr}`);
+    return false;
+  }
+
   const runner = headlessRunner();
-  const args = runner === "copilot" ? ["-p", msg, "--yolo"] : ["run", "--auto", msg];
+  if (runner === "stub") {
+    return runStubSkill(msg, opts);
+  }
+
+  const args = runner === "copilot"
+    ? ["-p", msg, "--yolo"]
+    : debugMode()
+      ? ["run", "--auto", "--print-logs", msg]
+      : ["run", "--auto", msg];
   const code = await runLoggedStep("Running the skill (may take a while)", runner, args, {
     cwd: state.repoDir,
     dryRun: opts.dryRun,
+    env: { FORGE_HEADLESS: "1" },
   });
   if (code !== 0) throw new Error(`Skill runner exited with code ${code}`);
+  if (debugMode()) printLogTail(runLogFile(), 40);
+  return true;
+}
+
+/**
+ * Offline skill runner used by tests (FORGE_RUN_WITH=stub). Writes the artifact
+ * a real skill would produce so the auto-draft success/failure paths are
+ * testable without a model. FORGE_STUB_NOOP=1 writes nothing (failure path).
+ */
+async function runStubSkill(msg: string, opts: LauncherOptions): Promise<boolean> {
+  if (opts.dryRun) {
+    warn("Dry-run: stub would write its canned artifact.");
+    return true;
+  }
+  const logFile = runLogFile();
+  fs.mkdirSync(path.dirname(logFile), { recursive: true });
+  const noop = process.env.FORGE_STUB_NOOP === "1";
+  const skillName = skillNameFromMsg(msg);
+
+  fs.appendFileSync(logFile, `[stub] invoking ${skillName}${noop ? " (noop)" : ""}\n`);
+
+  if (noop) return true;
+
+  if (skillName.includes("forge-auto-build-prd") || skillName.includes("forge-build-prd")) {
+    const prd = path.join(state.repoDir, "docs", "PRD.md");
+    fs.mkdirSync(path.dirname(prd), { recursive: true });
+    fs.writeFileSync(prd, [
+      "# PRD",
+      "",
+      "> Auto-drafted by the forge-launcher stub skill runner (FORGE_RUN_WITH=stub).",
+      "",
+      "## Overview",
+      "Stub PRD for testing the auto-draft flow.",
+      "",
+      "## Functional Requirements",
+      "- FR-1: stub requirement",
+      "",
+      "## Implementation Phases",
+      "- Phase 1: stub",
+      "",
+      "## Acceptance Criteria",
+      "- AC-1: stub",
+      "",
+    ].join("\n"));
+    fs.appendFileSync(logFile, "[stub] wrote docs/PRD.md\n");
+    return true;
+  }
+
+  if (skillName.includes("forge-build-agent-team")) {
+    const agentFile = path.join(harnessAgentsDir(), "stub-project-agent.md");
+    fs.mkdirSync(path.dirname(agentFile), { recursive: true });
+    fs.writeFileSync(agentFile, [
+      "---",
+      "name: stub-project-agent",
+      "description: Stub project agent generated by the forge-launcher stub skill runner.",
+      "---",
+      "# Stub Project Agent",
+      "",
+      "Generated for testing the auto-draft team flow.",
+      "",
+    ].join("\n"));
+    fs.appendFileSync(logFile, `[stub] wrote ${agentFile}\n`);
+    return true;
+  }
+
+  fs.appendFileSync(logFile, `[stub] no canned artifact for ${skillName}\n`);
+  return true;
 }
 
 // --- auto-draft flow -------------------------------------------------------
@@ -170,6 +280,50 @@ async function draftCommit(message: string): Promise<void> {
   }
   await runCommand("git", ["-C", state.repoDir, "commit", "-m", message]);
   ok(`Committed: '${message}'`);
+}
+
+/** Prints diagnostics when an auto-draft stage finishes without its artifact. */
+async function diagnoseAutoDraftFail(skillName: string): Promise<void> {
+  warn(`The auto-draft did not produce the expected artifact for '${skillName}'.`);
+  out("");
+  printLogTail(runLogFile(), 30);
+  out("");
+  info("What the repo contains right now:");
+  const st = await runCommand("git", ["-C", state.repoDir, "status", "--short"], { capture: true });
+  if (st.code === 0 && st.stdout.trim()) {
+    out("  " + st.stdout.trim().replace(/\n/g, "\n  "));
+  } else {
+    out("  (no changes)");
+  }
+  const skillPath = skillPathFor(skillName);
+  out("");
+  if (fs.existsSync(skillPath)) {
+    info(`Skill present: ${skillPath}`);
+  } else {
+    warn(`Skill NOT found: ${skillPath}`);
+  }
+}
+
+/** Offers to run the failed skill interactively (or prints the command). */
+async function offerManualRun(skillName: string, opts: LauncherOptions): Promise<void> {
+  if (opts.nonInteractive) {
+    out(`    Run it manually in the repo: /${skillName} Use docs/IDEA.md as the project idea`);
+    return;
+  }
+  const answer = await promptYesNo(`Open the harness CLI now to run /${skillName} manually?`, "n");
+  if (answer === "n") {
+    info("To run it manually:");
+    out(`    cd "${state.repoDir}"`);
+    out(`    Then run: /${skillName} Use docs/IDEA.md as the project idea`);
+    return;
+  }
+  const cli = state.harness === "github" ? "copilot" : state.harness === "claude" ? "claude" : "opencode";
+  const launched = await launchCliInTerminal(cli, state.repoDir, state.harness === "github" ? [] : ["."]);
+  if (launched) ok(`${cli} launched. Run /${skillName} in the session.`);
+  else {
+    warn(`${cli} did not open automatically. Run:`);
+    out(`    cd "${state.repoDir}" && ${cli} .`);
+  }
 }
 
 async function autoDraftPrd(opts: LauncherOptions): Promise<void> {
@@ -187,10 +341,12 @@ async function autoDraftPrd(opts: LauncherOptions): Promise<void> {
 
   out("");
   info("Auto-drafting the PRD from docs/IDEA.md (headless) …");
-  await runSkillHeadless(
-    "/forge-auto-build-prd Use docs/IDEA.md as the project idea. Headless mode: auto-proceed with default assumptions and approve the PRD.",
+  const skill = "forge-auto-build-prd";
+  const ran = await runSkillHeadless(
+    `/${skill} Use docs/IDEA.md as the project idea. Headless mode: auto-proceed with default assumptions and approve the PRD.`,
     opts,
   );
+  if (!ran) return;
   await draftCommit("docs: add auto-drafted PRD");
 
   if (hasPrd()) {
@@ -205,7 +361,8 @@ async function autoDraftPrd(opts: LauncherOptions): Promise<void> {
       out("    - docs/PRD.md is monolithic (no decomposition)");
     }
   } else {
-    warn("The auto-draft did not produce docs/PRD.md or the decomposed layout. Review the run output and re-run manually if needed.");
+    await diagnoseAutoDraftFail(skill);
+    await offerManualRun(skill, opts);
   }
 }
 
@@ -285,10 +442,12 @@ async function autoDraftTeam(opts: LauncherOptions): Promise<void> {
   out("");
   info("Auto-drafting the agent team from the PRD (headless) …");
   const prdSource = prdSourceForTeam();
-  await runSkillHeadless(
-    `/forge-build-agent-team Use ${prdSource} to build the agent team. Auto-proceed with default assumptions and no questions.`,
+  const skill = "forge-build-agent-team";
+  const ran = await runSkillHeadless(
+    `/${skill} Use ${prdSource} to build the agent team. Auto-proceed with default assumptions and no questions.`,
     opts,
   );
+  if (!ran) return;
   await draftCommit("feat: generate auto-drafted agent team");
 
   if (hasGeneratedTeam()) {
@@ -298,7 +457,7 @@ async function autoDraftTeam(opts: LauncherOptions): Promise<void> {
     out(`    - Agents : ${harnessAgentsDir()}/`);
     out(`    - Skills : ${path.dirname(harnessAgentsDir())}/skills/`);
   } else {
-    warn(`The auto-draft did not produce project-specific agent files under ${harnessAgentsDir()}/.`);
+    await diagnoseAutoDraftFail(skill);
   }
   await engineDecision(opts);
 }
