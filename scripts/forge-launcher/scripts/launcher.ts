@@ -153,7 +153,7 @@ function headlessCmdFor(msg: string): string {
   const runner = headlessRunner();
   if (runner === "copilot") return `copilot -p "${msg}" --yolo`;
   if (runner === "stub") return `stub (writes canned artifacts)`;
-  return `opencode run --auto "${msg}"`;
+  return `opencode run --auto --dir "${state.repoDir}" "${msg}"`;
 }
 
 /** Extracts the skill name from a skill invocation message ("/name rest…"). */
@@ -192,8 +192,8 @@ async function runSkillHeadless(msg: string, opts: LauncherOptions): Promise<boo
   const args = runner === "copilot"
     ? ["-p", msg, "--yolo"]
     : debugMode()
-      ? ["run", "--auto", "--print-logs", msg]
-      : ["run", "--auto", msg];
+      ? ["run", "--auto", "--dir", state.repoDir, "--print-logs", msg]
+      : ["run", "--auto", "--dir", state.repoDir, msg];
   const code = await runLoggedStep("Running the skill (may take a while)", runner, args, {
     cwd: state.repoDir,
     dryRun: opts.dryRun,

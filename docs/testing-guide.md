@@ -976,11 +976,11 @@ export FORGE_YN_DEFAULT="n"
 ./scripts/forge-launcher.sh --non-interactive --headless --dry-run
 ```
 
-**Check ✓** The output includes `opencode run --auto "/forge-auto-build-prd Use docs/IDEA.md as the project idea. Headless mode: auto-proceed with default assumptions and approve the PRD."` and a `Dry-run: command printed, not executed.` line.
+**Check ✓** The output includes `opencode run --auto --dir "/tmp/forge-headless-ci" "/forge-auto-build-prd Use docs/IDEA.md as the project idea. Headless mode: auto-proceed with default assumptions and approve the PRD."` and a `Dry-run: command printed, not executed.` line.
 
 Repeat with a PRD added (`FORGE_PRD_FILE=/path/to/prd.md` and `FORGE_WORKFLOW_ENGINE=1`):
 
-**Check ✓** The printed command becomes `opencode run --auto "/forge-auto-build Use docs/PRD.md as the project PRD. GO --workflow-engine"` - the engine build path is embedded in the skill invocation.
+**Check ✓** The printed command becomes `opencode run --auto --dir "/tmp/forge-headless-ci" "/forge-auto-build Use docs/PRD.md as the project PRD. GO --workflow-engine"` - the engine build path is embedded in the skill invocation.
 
 Set `FORGE_RUN_WITH=copilot`:
 
@@ -1106,7 +1106,7 @@ export FORGE_YN_DEFAULT="n"
 ./scripts/forge-launcher.sh --non-interactive --headless
 ```
 
-**Check ✓** The launcher executes `opencode run --auto "/forge-auto-build Use docs/PRD.md as the project PRD. GO --workflow-engine"` directly from the terminal, and the build proceeds to completion without opening an interactive CLI.
+**Check ✓** The launcher executes `opencode run --auto --dir "/tmp/forge-headless-full" "/forge-auto-build Use docs/PRD.md as the project PRD. GO --workflow-engine"` directly from the terminal, and the build proceeds to completion without opening an interactive CLI.
 
 ---
 

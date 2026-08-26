@@ -58,6 +58,26 @@ test("non-interactive run with no PRD bootstraps and queues forge-auto-build-prd
   assert.ok(!out.includes("/forge-auto-build Use docs/PRD.md as the project PRD"));
 });
 
+test("headless skill command pins the repo dir with --dir", async () => {
+  const parent = tmpDir();
+  const { code, out } = await runCli(["--non-interactive", "--dry-run"], {
+    FORGE_HARNESS_CHOICE: "4",
+    FORGE_REPO_NAME: "dir-app",
+    FORGE_REPO_PARENT_DIR: parent,
+    FORGE_IDEA: "A thing",
+    FORGE_YN_DEFAULT: "n",
+    FORGE_AUTO_DRAFT: "1",
+    FORGE_RUN_WITH: "opencode",
+  });
+
+  assert.equal(code, 0, out);
+  const repo = path.join(parent, "dir-app");
+  // opencode resolves its project dir from its parent process, not the child's
+  // spawn cwd, so the launcher must pass --dir explicitly or the skill runs in
+  // the wrong repository and its input (docs/IDEA.md) is reported missing.
+  assert.ok(out.includes(`opencode run --auto --dir "${repo}"`), out);
+});
+
 test("non-interactive run with a PRD queues forge-auto-build", async () => {
   const parent = tmpDir();
   const prd = path.join(parent, "prd.md");

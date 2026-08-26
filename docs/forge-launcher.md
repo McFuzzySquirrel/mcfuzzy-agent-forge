@@ -144,8 +144,8 @@ What gets queued:
 
 | Repo state | Queued command |
 |---|---|
-| PRD captured in Step 6 (or a decomposed PRD exists) | `opencode run --auto "/forge-auto-build Use docs/PRD.md as the project PRD. GO [--workflow-engine]"` |
-| No PRD captured | `opencode run --auto "/forge-auto-build-prd Use docs/IDEA.md as the project idea. Headless mode: auto-proceed with default assumptions and approve the PRD."` |
+| PRD captured in Step 6 (or a decomposed PRD exists) | `opencode run --auto --dir "<repo>" "/forge-auto-build Use docs/PRD.md as the project PRD. GO [--workflow-engine]"` |
+| No PRD captured | `opencode run --auto --dir "<repo>" "/forge-auto-build-prd Use docs/IDEA.md as the project idea. Headless mode: auto-proceed with default assumptions and approve the PRD."` |
 
 The embedded `GO` satisfies `forge-auto-build`'s pre-flight gate, and the
 headless `forge-auto-build-prd` invocation skips its interactive confirmation
@@ -164,7 +164,11 @@ blocking child of the session) and the per-task harness is selected with
 
 > **Headless skill runs set `FORGE_HEADLESS=1`** for the spawned harness CLI, so
 > the forge skills' headless gate fires deterministically (they also detect the
-> embedded "headless / auto-proceed" text). If an auto-draft stage finishes
+> embedded "headless / auto-proceed" text). Headless `opencode run` calls also
+> pass `--dir "<repo>"`: `opencode run` resolves its project directory from its
+> **parent process**, not the child's spawn `cwd`, so without `--dir` the skill
+> would run in the launcher's own directory (where `docs/IDEA.md` does not
+> exist) and its input would be reported missing. If an auto-draft stage finishes
 > without its expected artifact (`docs/PRD.md` / the decomposed layout, or
 > generated agents), the launcher prints the run-log tail, the repo's `git
 > status`, and whether the skill file resolved, then offers (interactive) to
@@ -390,14 +394,14 @@ the workflow engine - now (detached), later (prints the command), or manually:
 ```
 Generate the PRD from docs/IDEA.md automatically now (headless, auto-proceed with best answers)? [y/N]: y
   Auto-drafting the PRD from docs/IDEA.md (headless) …
-    opencode run --auto "/forge-auto-build-prd Use docs/IDEA.md as the project idea. Headless mode: auto-proceed with default assumptions and approve the PRD."
+    opencode run --auto --dir "/home/user/projects/my-cool-app" "/forge-auto-build-prd Use docs/IDEA.md as the project idea. Headless mode: auto-proceed with default assumptions and approve the PRD."
   ✔  Committed: 'docs: add auto-drafted PRD'
   ✔  PRD generated.
   Review it before continuing:
     - /home/user/projects/my-cool-app/docs/PRD.md
 Generate the agent team from the PRD automatically now (headless)? [y/N]: y
   Auto-drafting the agent team from the PRD (headless) …
-    opencode run --auto "/forge-build-agent-team Use docs/PRD.md to build the agent team. Auto-proceed with default assumptions and no questions."
+    opencode run --auto --dir "/home/user/projects/my-cool-app" "/forge-build-agent-team Use docs/PRD.md to build the agent team. Auto-proceed with default assumptions and no questions."
   ✔  Committed: 'feat: generate auto-drafted agent team'
   ✔  Agent team generated.
   Review the generated team before building:

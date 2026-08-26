@@ -32,16 +32,22 @@ removed).
   (the PowerShell variant had drifted to `yes`).
 - **Auto-draft reliability.** Headless skill runs now set `FORGE_HEADLESS=1`
   for the spawned harness CLI so the forge skills' headless gate fires
-  deterministically. If an auto-draft stage finishes without its artifact, the
-  launcher prints the run-log tail, `git status`, and whether the skill file
-  resolved, then offers to run the skill manually. `--debug` /
+  deterministically, and pass `--dir "<repo>"` to `opencode run` so the skill
+  runs in the **target repository** — `opencode run` resolves its project
+  directory from its parent process, not the child's spawn `cwd`, so without
+  `--dir` the skill ran in the launcher's own directory and reported its input
+  (`docs/IDEA.md`) as missing. The workflow-engine `opencode` adapter passes the
+  same `--dir` for the same reason. If an auto-draft stage finishes without its
+  artifact, the launcher prints the run-log tail, `git status`, and whether the
+  skill file resolved, then offers to run the skill manually. `--debug` /
   `FORGE_LAUNCHER_DEBUG=1` always shows the log tail, and
   `FORGE_RUN_WITH=stub` (with `FORGE_STUB_NOOP=1`) runs the auto-draft stages
   offline against canned artifacts for testing.
-- **Tests.** 13 `node --test` cases (bootstrap harness mapping/rewrite/
+- **Tests.** 14 `node --test` cases (bootstrap harness mapping/rewrite/
   gitignore, path expansion, non-interactive E2E layout + queued-command
-  selection, and stub-runner coverage of the auto-draft success and failure
-  paths). `scripts/test-forge-launcher.sh` now delegates to the package suite.
+  selection, the `--dir` pinning of headless skill commands, and stub-runner
+  coverage of the auto-draft success and failure paths).
+  `scripts/test-forge-launcher.sh` now delegates to the package suite.
   Interactive TUI verified end-to-end under a pty.
 
 Related architecture decisions:

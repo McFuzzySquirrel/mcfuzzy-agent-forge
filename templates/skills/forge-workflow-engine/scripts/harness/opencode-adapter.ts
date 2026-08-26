@@ -46,7 +46,11 @@ export class OpenCodeAdapter implements HarnessAdapter {
     const modelFlag = agent.model ? ["--model", agent.model] : [];
 
     const prompt = this.buildPrompt(agent, task, contextBlock);
-    const args = ["run", ...modelFlag, ...this.extraFlags, prompt];
+    // `--dir` pins the project directory explicitly: `opencode run` resolves its
+    // working directory from its parent process, not the child's spawn `cwd`, so
+    // relying on `cwd: repoRoot` alone runs tasks in the wrong project when the
+    // engine process lives in a subdirectory (e.g. the engine's own package dir).
+    const args = ["run", ...modelFlag, "--dir", repoRoot, ...this.extraFlags, prompt];
 
     const result = await runCommand(this.bin, args, {
       cwd: repoRoot,
