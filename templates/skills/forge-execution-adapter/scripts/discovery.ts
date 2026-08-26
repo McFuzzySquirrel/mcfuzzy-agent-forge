@@ -117,20 +117,28 @@ export function discoverForgeRepo(start = process.cwd()): ForgeRepo {
   const agentRoot = join(repoRoot, harnessRoot, "agents");
   const skillRoot = join(repoRoot, harnessRoot, "skills");
   const prdPath = join(repoRoot, "docs", "PRD.md");
+  const visionPath = join(repoRoot, "docs", "product-vision.md");
+  const featuresDir = join(repoRoot, "docs", "features");
   const progressPath = join(repoRoot, "docs", "PROGRESS.md");
   const auditPath = join(repoRoot, "docs", "EXECUTION-AUDIT.jsonl");
   const manifestPath = join(repoRoot, "docs", "EXECUTION-MANIFEST.json");
 
-  if (!existsSync(prdPath)) {
-    throw new Error(`PRD not found at ${prdPath}`);
+  const featurePaths = isDir(featuresDir)
+    ? readdirSync(featuresDir).filter((entry) => entry.endsWith(".md")).sort().map((entry) => join(featuresDir, entry))
+    : [];
+  const decomposed = existsSync(visionPath) && featurePaths.length > 0;
+  const sourceLayout: ForgeRepo["sourceLayout"] = decomposed ? "features" : "monolithic";
+
+  if (!existsSync(prdPath) && !decomposed) {
+    throw new Error(`No PRD representation found under ${repoRoot}. Expected docs/PRD.md, or docs/product-vision.md + docs/features/`);
   }
 
   const warnings = [...harness.warnings];
-  if (existsSync(join(repoRoot, "docs", "product-vision.md"))) {
-    warnings.push("Detected docs/product-vision.md. Feature/decomposition mode is not compiled by this MVP.");
+  if (!existsSync(prdPath) && decomposed) {
+    warnings.push("No docs/PRD.md; compiling from docs/product-vision.md + docs/features/ only.");
   }
-  if (isDir(join(repoRoot, "docs", "features"))) {
-    warnings.push("Detected docs/features/. This adapter currently compiles only the monolithic PRD flow.");
+  if (existsSync(visionPath) && featurePaths.length === 0) {
+    warnings.push("docs/product-vision.md present but docs/features/ has no .md files; compiling from docs/PRD.md.");
   }
 
   const agents = walk(agentRoot, (entry) => entry.endsWith(".md") && !entry.endsWith("SKILL.md")).map((path) => parseAgent(path, repoRoot));
@@ -148,7 +156,10 @@ export function discoverForgeRepo(start = process.cwd()): ForgeRepo {
     harnessRoot,
     agentRoot,
     skillRoot,
+    sourceLayout,
     prdPath,
+    visionPath,
+    featurePaths,
     progressPath,
     auditPath,
     manifestPath,

@@ -203,6 +203,12 @@ npm install
 npm run forge-execution-adapter -- compile
 ```
 
+The adapter auto-detects the PRD representation: monolithic `docs/PRD.md`, or
+the **decomposed layout** (`docs/product-vision.md` + `docs/features/*.md`)
+compiled from the features in dependency-graph order. It also runs a
+team-validation gate and writes `docs/agent-responsibility-matrix.md`
+(owner × phase × task × outputs).
+
 Verify that `docs/EXECUTION-MANIFEST.json` was written and contains at least one phase with tasks. If the adapter reports warnings, surface them to the user before continuing.
 
 **Step 3b: Install the engine and start it detached**
@@ -261,7 +267,7 @@ Stages completed:
 
 Commits made: <N>
 Files produced: <list key output files>
-Docs updated: docs/PROGRESS.md, docs/PRD.md, docs/agent-responsibility-matrix.md
+Docs updated: docs/PROGRESS.md, docs/PRD.md, docs/agent-responsibility-matrix.md, docs/EXECUTION-MANIFEST.json
 
 Next steps:
   - Review docs/PROGRESS.md for the full task history

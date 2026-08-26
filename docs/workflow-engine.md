@@ -32,6 +32,14 @@ npm install
 npm run forge-execution-adapter -- compile
 ```
 
+`compile` auto-detects the PRD representation: monolithic `docs/PRD.md`, or the
+**decomposed layout** (`docs/product-vision.md` + `docs/features/*.md`), which
+compiles the features in dependency-graph order into feature-tagged phases
+(e.g. `BUDGETS-2`). It also runs a team-validation gate (unassigned tasks,
+duplicate file owners, orphan agents) and writes
+`docs/agent-responsibility-matrix.md` — the engine's pre-run summary prints the
+source layout, feature order, and matrix path.
+
 ---
 
 ## Getting started

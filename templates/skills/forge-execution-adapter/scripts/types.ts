@@ -26,7 +26,13 @@ export interface ForgeRepo {
   harnessRoot: HarnessRoot;
   agentRoot: string;
   skillRoot: string;
+  /** Compile source layout: monolithic `docs/PRD.md`, or decomposed vision + features. */
+  sourceLayout: "monolithic" | "features";
   prdPath: string;
+  /** `docs/product-vision.md` when the repo is decomposed. */
+  visionPath: string;
+  /** `docs/features/*.md` in lexical order when the repo is decomposed. */
+  featurePaths: string[];
   progressPath: string;
   auditPath: string;
   manifestPath: string;
@@ -66,6 +72,8 @@ export interface ManifestPhase {
   id: string;
   title: string;
   description: string;
+  /** Owning feature name in feature mode (e.g. "Budgets"); absent for monolithic. */
+  feature?: string;
   ownerAgents: string[];
   dependencies: string[];
   approvalRequired: boolean;
@@ -77,9 +85,18 @@ export interface ExecutionManifest {
   generatedAt: string;
   /** Task decomposition granularity used when compiling the manifest. */
   granularity?: "coarse" | "fine";
+  /** Compile source: monolithic `docs/PRD.md` or decomposed vision + features. */
+  sourceLayout?: "monolithic" | "features";
   repoRoot: string;
   harnessRoot: HarnessRoot;
+  /** The document the build is compiled from (PRD, or vision when decomposed). */
   prdPath: string;
+  /** `docs/product-vision.md` in feature mode. */
+  visionPath?: string;
+  /** Feature names in dependency (execution) order, feature mode only. */
+  featureOrder?: string[];
+  /** Where the deterministic agent-responsibility matrix was written. */
+  responsibilityMatrixPath?: string;
   progressPath: string;
   auditPath: string;
   validationCommands: string[];

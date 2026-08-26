@@ -4,6 +4,44 @@ Detailed release and change notes for McFuzzy Agent Forge.
 
 ---
 
+## August 2026 - v3.15
+
+### Feature-based manifest compilation, team validation, and the responsibility matrix
+
+The workflow-engine path previously compiled `docs/EXECUTION-MANIFEST.json`
+**only** from the monolithic `docs/PRD.md`, ignoring the decomposed layout and
+skipping the team-validation / responsibility-matrix steps that the
+prompt-driven path (`forge-orchestrate-build` + `forge-build-agent-team`)
+performs. It now matches the original flow:
+
+- **Feature-based compile mode (auto-detected).** When
+  `docs/product-vision.md` + `docs/features/*.md` exist, the adapter reads the
+  vision's `## 14. Features` dependency table, orders features topologically
+  (dependencies first; cycles or a missing table fall back to document order
+  with a warning), and compiles each feature's `## 5. Implementation Tasks` /
+  `### Phase N:` blocks into manifest phases. Phase ids are feature-tagged
+  (e.g. `BUDGETS-2`) so task ids stay globally unique across features. The
+  manifest records `sourceLayout: "features"` and `featureOrder`. Features with
+  no phase headings get a single phase synthesized from their Functional
+  Requirements bullets (warned). Monolithic repos compile exactly as before.
+- **Team-validation gate (always at compile).** Every `compile` checks for
+  unassigned tasks, output files owned by more than one agent, and orphan
+  agents (generated agents that own no task) — mirroring
+  `forge-build-agent-team` Step 7 — surfacing any findings as manifest warnings.
+- **Responsibility matrix restored.** `compile` writes
+  `docs/agent-responsibility-matrix.md` (validation results + an
+  agent × phase × task × outputs table + phase execution order) and records its
+  path on the manifest (`responsibilityMatrixPath`). The workflow engine's
+  pre-run summary prints the source layout, feature order, and matrix path.
+
+Related architecture decision:
+
+- [ADR-024](adr/024-feature-based-compilation-and-responsibility-matrix.md):
+  feature-based manifest compilation, the deterministic team-validation gate,
+  and the generated responsibility matrix.
+
+---
+
 ## August 2026 - v3.14
 
 ### Forge launcher as a Node npm package with a TUI

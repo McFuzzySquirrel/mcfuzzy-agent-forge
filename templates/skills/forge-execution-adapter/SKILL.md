@@ -62,6 +62,43 @@ The chosen granularity is recorded on the manifest as `granularity: "coarse" |
 different granularity produces a new task set — start a fresh engine run
 (`rm docs/WORKFLOW-STATE.json`) rather than mixing with an in-progress run.
 
+### Compile source: monolithic vs decomposed features
+
+`compile` auto-detects the repo's PRD representation:
+
+- **Monolithic** — `docs/PRD.md` with `## Phase N:` headings (the default).
+- **Decomposed (features)** — `docs/product-vision.md` + `docs/features/*.md`.
+  The compiler reads the vision's `## 14. Features` dependency table, orders the
+  features topologically (dependencies first), and compiles each feature's
+  `## 5. Implementation Tasks` / `### Phase N:` blocks into manifest phases.
+  Phase ids are feature-tagged (e.g. `BUDGETS-2`) so task ids stay globally
+  unique across features; the manifest records `sourceLayout: "features"` and
+  `featureOrder`. If a feature has no phase headings, a single phase is
+  synthesized from its `## 3. Functional Requirements` bullets (warned). If the
+  vision has no dependency table, features compile in lexical order (warned).
+
+### Team validation + responsibility matrix (always at compile)
+
+Every `compile` run performs a deterministic **team-validation gate** (mirroring
+`forge-build-agent-team` Step 7) and writes
+`docs/agent-responsibility-matrix.md`:
+
+- **Unassigned tasks** — any task without an `ownerAgent` (flagged as a warning).
+- **Duplicate file owners** — an expected output file claimed by more than one
+  agent (flagged as a warning).
+- **Orphan agents** — generated agents that own no task (flagged as a warning).
+
+The matrix records the validation results plus an ownership table
+(agent × phase × task × outputs) and the phase execution order. Its path is
+recorded on the manifest as `responsibilityMatrixPath` and surfaced in the
+workflow engine's pre-run summary.
+
+```bash
+npm run forge-execution-adapter -- compile
+# → docs/EXECUTION-MANIFEST.json
+# → docs/agent-responsibility-matrix.md
+```
+
 ## Process
 
 ### Step 1: Discover the Forge Repo
@@ -148,7 +185,9 @@ By default the embedded tooling writes:
 - **Do not re-author the PRD.** If the PRD is ambiguous, preserve that ambiguity as manifest warnings. The adapter compiles; it does not redesign.
 - **Do not assume `.agents/` only.** Normalize `.github/` and `.claude/` roots the same way bootstrap does.
 - **Do not invent ownership when the match is weak.** Leave `ownerAgent` empty and emit a warning rather than assigning the wrong specialist.
-- **Do not hide unsupported modes.** This MVP targets monolithic `docs/PRD.md` full-build flows first. If feature or decomposition signals are present, flag them explicitly.
+- **Do not hide unsupported modes.** The adapter compiles monolithic `docs/PRD.md`
+  full-build flows and decomposed vision + features flows. If a feature doc has no
+  compilable phases or the vision lacks a dependency table, surface a warning.
 - **Keep checkpoints append-only in the audit log.** `docs/PROGRESS.md` is mutable state; the audit log is the immutable record.
 
 ---
@@ -159,7 +198,8 @@ Before reporting success:
 
 - [ ] Harness root was detected and reported
 - [ ] At least one agent file and one skill file were discovered
-- [ ] `docs/PRD.md` was parsed into at least one phase
+- [ ] The PRD representation was parsed into at least one phase (monolithic `docs/PRD.md`, or vision + features in decomposed mode)
 - [ ] `docs/EXECUTION-MANIFEST.json` was written with warnings for ambiguities
+- [ ] `docs/agent-responsibility-matrix.md` was written with the team-validation results
 - [ ] `docs/PROGRESS.md` stayed consistent with the manifest checkpoint state
 - [ ] `docs/EXECUTION-AUDIT.jsonl` contains the latest checkpoint mutation

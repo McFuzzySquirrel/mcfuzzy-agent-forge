@@ -1,8 +1,8 @@
 #!/usr/bin/env node
 import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
-import { dirname, resolve } from "node:path";
+import { dirname, join, resolve } from "node:path";
 
-import { compileExecutionManifest } from "./compiler.ts";
+import { compileExecutionManifestDetailed } from "./compiler.ts";
 import { detectRepoRoot, discoverForgeRepo } from "./discovery.ts";
 import { appendAuditEvent, checkpointTask, parseProgress, writeProgress } from "./progress.ts";
 import type { ExecutionManifest } from "./types.ts";
@@ -67,12 +67,21 @@ function main() {
       const repo = discoverForgeRepo(repoRoot);
       const granularityArg = flag(args, "--granularity");
       const granularity = granularityArg === "coarse" ? "coarse" : "fine";
-      const manifest = compileExecutionManifest(repo, { granularity });
+      const { manifest, matrix, validation } = compileExecutionManifestDetailed(repo, { granularity });
+
+      const matrixPath = join(repo.repoRoot, "docs", "agent-responsibility-matrix.md");
+      mkdirSync(dirname(matrixPath), { recursive: true });
+      writeFileSync(matrixPath, matrix, "utf8");
+      manifest.responsibilityMatrixPath = matrixPath;
+
       const output = resolve(flag(args, "--output") ?? repo.manifestPath);
       mkdirSync(dirname(output), { recursive: true });
       writeFileSync(output, `${JSON.stringify(manifest, null, 2)}\n`, "utf8");
       appendAuditEvent(repo.auditPath, { timestamp: new Date().toISOString(), action: "manifest.compiled", note: output });
       console.log(`Wrote execution manifest to ${output}`);
+      console.log(`Wrote responsibility matrix to ${matrixPath}`);
+
+      console.log(`Team validation: ${validation.unassignedTasks.length} unassigned, ${validation.duplicateFileOwners.length} duplicate file owners, ${validation.orphanAgents.length} orphan agents`);
       if (manifest.warnings.length > 0) {
         console.log(`Warnings (${manifest.warnings.length}):`);
         for (const warning of manifest.warnings) console.log(`- ${warning}`);

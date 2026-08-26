@@ -125,10 +125,13 @@ async function confirmPreRun(opts: EngineOptions, args: string[]): Promise<void>
 
   console.log("Forge Workflow Engine - Pre-run Summary");
   console.log(`  Harness : ${opts.harness.name}`);
+  console.log(`  Layout  : ${manifest.sourceLayout ?? "monolithic"}`);
   console.log(`  Phases  : ${manifest.phases.length}`);
   console.log(`  Tasks   : ${taskCount}`);
   console.log(`  Timeout : ${opts.taskTimeoutMs}ms per task (--task-timeout-ms / per-task timeoutMs overrides)`);
   console.log(`  Manifest: ${opts.manifestPath}`);
+  if (manifest.featureOrder) console.log(`  Features: ${manifest.featureOrder.join(" → ")}`);
+  if (manifest.responsibilityMatrixPath) console.log(`  Matrix  : ${manifest.responsibilityMatrixPath}`);
 
   if (skip) {
     console.log("Confirmation skipped (--yes / FORGE_ENGINE_YES=1).");

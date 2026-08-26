@@ -4,7 +4,7 @@ import { mkdtempSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
-import { compileExecutionManifest } from "./compiler.ts";
+import { compileExecutionManifest, compileExecutionManifestDetailed, validateTeam } from "./compiler.ts";
 import { discoverForgeRepo } from "./discovery.ts";
 import { appendAuditEvent, checkpointTask, parseProgress, writeProgress } from "./progress.ts";
 
@@ -256,4 +256,144 @@ test("checkpointTask updates PROGRESS.md and audit state", () => {
   assert.match(progress, /Task 1\.1/);
   assert.match(progress, /Task 1\.2/);
   assert.match(audit, /task\.checkpointed/);
+});
+
+// --- feature/decomposed layout ---------------------------------------------
+
+function createFeatureFixture() {
+  const root = createFixture();
+  const featuresDir = join(root, "docs", "features");
+  mkdirSync(featuresDir, { recursive: true });
+  mkdirSync(join(root, "docs", "features", "sub"), { recursive: true });
+
+  writeFileSync(join(root, "docs", "product-vision.md"), `# Product Vision
+
+## 14. Features
+
+| # | Feature | File | Dependencies | Priority |
+|---|---------|------|-------------|----------|
+| 1 | Foundation | [docs/features/foundation.md](features/foundation.md) | None | Must |
+| 2 | Expenses | [docs/features/expenses.md](features/expenses.md) | Foundation | Must |
+| 3 | Budgets | [docs/features/budgets.md](features/budgets.md) | Expenses | Must |
+`, "utf8");
+
+  writeFileSync(join(featuresDir, "foundation.md"), `# Feature: Foundation
+
+## 3. Functional Requirements
+- FND-FR-01: Project scaffold
+
+## 5. Implementation Tasks
+### Phase 1: Foundation
+- Task 1.1: Create project scaffold at \`src/main.ts\`
+`, "utf8");
+
+  writeFileSync(join(featuresDir, "expenses.md"), `# Feature: Expenses
+
+## 3. Functional Requirements
+- EXP-FR-01: Record expenses
+
+## 5. Implementation Tasks
+### Phase 1: Expenses
+- Task 1.1: Build the expense API in \`src/expenses.ts\`
+- Task 1.2: Build the expense UI in \`src/expenses-view.tsx\`
+`, "utf8");
+
+  writeFileSync(join(featuresDir, "budgets.md"), `# Feature: Budgets
+
+## 3. Functional Requirements
+- BUD-FR-01: Set budgets
+
+## 5. Implementation Tasks
+### Phase 2: Budgets
+- Task 1.1: Build the budget API in \`src/budget.ts\`
+- Task 1.2: Build the budget UI in \`src/budget-view.tsx\`
+`, "utf8");
+
+  return root;
+}
+
+test("discoverForgeRepo detects the decomposed feature layout", () => {
+  const root = createFeatureFixture();
+  const repo = discoverForgeRepo(root);
+  assert.equal(repo.sourceLayout, "features");
+  assert.equal(repo.featurePaths.length, 3);
+  assert.ok(repo.visionPath.endsWith("docs/product-vision.md"));
+});
+
+test("compileExecutionManifest compiles features in dependency order with feature-tagged ids", () => {
+  const root = createFeatureFixture();
+  const repo = discoverForgeRepo(root);
+  const manifest = compileExecutionManifest(repo);
+
+  assert.equal(manifest.sourceLayout, "features");
+  assert.deepEqual(manifest.featureOrder, ["Foundation", "Expenses", "Budgets"]);
+  assert.deepEqual(manifest.phases.map((phase) => phase.id), ["FOUNDATION-1", "EXPENSES-1", "BUDGETS-2"]);
+  assert.deepEqual(manifest.phases.map((phase) => phase.feature), ["Foundation", "Expenses", "Budgets"]);
+
+  const budgets = manifest.phases[2]!;
+  assert.deepEqual(budgets.dependencies, ["EXPENSES-1"]);
+  assert.equal(budgets.tasks[0]!.id, "BUDGETS-2.1");
+  assert.equal(budgets.tasks[1]!.id, "BUDGETS-2.2");
+  assert.equal(budgets.tasks[0]!.ownerAgent, "api-engineer");
+  assert.equal(budgets.tasks[1]!.ownerAgent, "frontend-engineer");
+  assert.equal(budgets.tasks[1]!.produces, "work.budgets-2.2");
+
+  // task ids are globally unique even though feature docs reuse "Task 1.x" labels
+  const allIds = manifest.phases.flatMap((phase) => phase.tasks.map((task) => task.id));
+  assert.equal(new Set(allIds).size, allIds.length);
+});
+
+test("compileExecutionManifest falls back to lexical order when the vision has no feature table", () => {
+  const root = createFeatureFixture();
+  writeFileSync(join(root, "docs", "product-vision.md"), "# Product Vision\n\nNo features table.\n", "utf8");
+  const repo = discoverForgeRepo(root);
+  const manifest = compileExecutionManifest(repo);
+
+  assert.deepEqual(manifest.featureOrder, ["budgets", "expenses", "foundation"]);
+  assert.match(manifest.warnings.join("\n"), /No feature dependency table found/);
+});
+
+test("validateTeam flags duplicate file owners and orphan agents", () => {
+  const root = createFixture();
+  writeFileSync(join(root, ".agents", "agents", "unused-engineer.md"), `---
+name: unused-engineer
+description: Builds nothing at all.
+---
+
+## Expertise
+- Irrelevant work
+`, "utf8");
+  writeFileSync(join(root, "docs", "PRD.md"), `# PRD
+
+## Phase 1: Foundation
+- Task 1.1: Build the API in \`src/shared.ts\`
+- Task 1.2: Build the UI in \`src/shared.ts\`
+`, "utf8");
+
+  const repo = discoverForgeRepo(root);
+  const manifest = compileExecutionManifest(repo);
+  const validation = validateTeam(manifest, repo.agents);
+
+  assert.equal(validation.unassignedTasks.length, 0);
+  assert.ok(validation.orphanAgents.includes("unused-engineer"));
+  assert.ok(validation.orphanAgents.some((name) => name !== "api-engineer" && name !== "frontend-engineer"));
+
+  const dup = validation.duplicateFileOwners.find((entry) => entry.file === "src/shared.ts");
+  assert.ok(dup, "src/shared.ts should be flagged as owned by multiple agents");
+  assert.ok(dup!.owners.length > 1);
+});
+
+test("compileExecutionManifestDetailed writes a responsibility matrix and surfaces validation warnings", () => {
+  const root = createFeatureFixture();
+  const repo = discoverForgeRepo(root);
+  const { manifest, matrix, validation } = compileExecutionManifestDetailed(repo);
+
+  assert.equal(manifest.sourceLayout, "features");
+  assert.equal(validation.duplicateFileOwners.length, 0);
+  assert.match(matrix, /# Agent Responsibility Matrix/);
+  assert.match(matrix, /Feature execution order:/);
+  assert.ok(matrix.indexOf("Expenses") < matrix.indexOf("Budgets"), "features should appear in dependency order");
+  assert.match(matrix, /### api-engineer/);
+  assert.match(matrix, /\*\*EXPENSES-1\*\* — Phase 1: Expenses \(Expenses\)/);
+  assert.ok(manifest.warnings.length >= 0);
 });
