@@ -43,14 +43,19 @@
 
 ### npm package (recommended, cross-platform)
 
+> The npm package is a **pre-release** (`forge-launcher@beta`, v1.0.0-beta.0).
+> Until it is published, install the packed tarball from
+> `scripts/forge-launcher/` (see the README "Try the npm launcher locally"
+> section) or use the legacy wrappers below.
+
 ```bash
-npx forge-launcher [--non-interactive] [--headless] [--draft] [--dry-run] [--debug]
-npx forge-launcher bootstrap [TARGET_DIR] [--harness agents|github|claude|opencode] [--force]
-npx forge-launcher engine-run [--repo <path>] [--harness <h>] [--concurrency <n>]
-                             [--task-timeout-ms <ms>] [--yes] [--dry-run]
+npx forge-launcher@beta [--non-interactive] [--headless] [--draft] [--dry-run] [--debug]
+npx forge-launcher@beta bootstrap [TARGET_DIR] [--harness agents|github|claude|opencode] [--force]
+npx forge-launcher@beta engine-run [--repo <path>] [--harness <h>] [--concurrency <n>]
+                              [--task-timeout-ms <ms>] [--yes] [--dry-run]
 ```
 
-When installed globally (`npm install -g forge-launcher`), drop the `npx`.
+When installed globally (`npm install -g forge-launcher@beta`), drop the `npx`.
 
 ### Linux / macOS (legacy script)
 
@@ -443,7 +448,7 @@ Generate the agent team from the PRD automatically now (headless)? [y/N]: y
     2) Print the engine command to run later
     3) Skip - I will launch the CLI / build manually
 Select [1-3] [2]: 2
-    npx forge-launcher engine-run --repo "/home/user/projects/my-cool-app" --harness opencode --yes
+    npx forge-launcher@beta engine-run --repo "/home/user/projects/my-cool-app" --harness opencode --yes
 ```
 
 Choosing **1) Run the workflow-engine build now (detached)** starts the engine in the
@@ -547,7 +552,7 @@ reflect the running build (monitor + resume) rather than the manual
 
   3. Re-run or resume the engine later if needed:
 
-      npx forge-launcher engine-run --repo "/home/user/projects/my-cool-app" --harness opencode --yes
+      npx forge-launcher@beta engine-run --repo "/home/user/projects/my-cool-app" --harness opencode --yes
 ```
 
 ---
