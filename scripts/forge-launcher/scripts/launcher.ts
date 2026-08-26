@@ -1,4 +1,5 @@
 import fs from "node:fs";
+import { createRequire } from "node:module";
 import os from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
@@ -8,7 +9,25 @@ import { expandPath, resolveInputFile } from "./paths.ts";
 import { prompt, promptMultiline, promptPath, promptPathLoop, promptSelect, promptYesNo, prompts } from "./prompts.ts";
 import { launchCliInTerminal } from "./terminal.ts";
 
-const CLI_ENTRY = fileURLToPath(new URL("./cli.ts", import.meta.url));
+const nodeRequire = createRequire(import.meta.url);
+
+/**
+ * Entry point for re-invoking the CLI (detached engine start). Resolves to the
+ * compiled `cli.js` when running from `dist/` and the TypeScript source when
+ * running via tsx, so the detached child always starts.
+ */
+const IS_SOURCE = import.meta.url.endsWith(".ts");
+const CLI_ENTRY = fileURLToPath(new URL(IS_SOURCE ? "./cli.ts" : "./cli.js", import.meta.url));
+
+/** Node preload args that bootstrap the tsx loader for a TypeScript CLI entry. */
+function cliNodePrefix(): string[] {
+  return IS_SOURCE ? ["--import", nodeRequire.resolve("tsx")] : [];
+}
+
+/** Builds the detached `forge-launcher engine-run` invocation for the given engine args. */
+export function engineDetachedCommand(engineArgs: string[]): { cmd: string; args: string[] } {
+  return { cmd: process.execPath, args: [...cliNodePrefix(), CLI_ENTRY, ...engineArgs] };
+}
 
 export interface LauncherOptions {
   nonInteractive?: boolean;
@@ -386,7 +405,8 @@ async function runEngineDetached(opts: LauncherOptions): Promise<void> {
   const logDir = path.join(state.repoDir, "docs");
   fs.mkdirSync(logDir, { recursive: true });
   const logFile = path.join(logDir, "engine-run.log");
-  spawnDetached(process.execPath, [CLI_ENTRY, ...engineRunArgs()], {
+  const { cmd, args } = engineDetachedCommand(engineRunArgs());
+  spawnDetached(cmd, args, {
     cwd: state.repoDir,
     logFile,
   });

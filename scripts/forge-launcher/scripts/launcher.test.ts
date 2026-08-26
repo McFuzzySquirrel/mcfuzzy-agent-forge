@@ -5,6 +5,7 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import { engineDetachedCommand } from "./launcher.ts";
 
 const CLI = fileURLToPath(new URL("./cli.ts", import.meta.url));
 
@@ -56,6 +57,30 @@ test("non-interactive run with no PRD bootstraps and queues forge-auto-build-prd
   // CR-001 lifecycle: no PRD -> queue forge-auto-build-prd
   assert.ok(out.includes("/forge-auto-build-prd Use docs/IDEA.md as the project idea"));
   assert.ok(!out.includes("/forge-auto-build Use docs/PRD.md as the project PRD"));
+});
+
+test("detached engine command resolves a runnable CLI entry", () => {
+  const repo = "/tmp/example-repo";
+  const { cmd, args } = engineDetachedCommand(["engine-run", "--repo", repo, "--harness", "opencode", "--yes"]);
+
+  assert.equal(cmd, process.execPath);
+  // The CLI entry must resolve to a real file: dist/cli.js when compiled, or
+  // scripts/cli.ts when running from source (the detached child would otherwise
+  // fail to start with ENOENT and produce no manifest or logs).
+  const entryIdx = args.findIndex((a) => a.endsWith("cli.js") || a.endsWith("cli.ts"));
+  assert.ok(entryIdx >= 0, args.join(" "));
+  assert.ok(fs.existsSync(args[entryIdx]), `entry exists: ${args[entryIdx]}`);
+
+  const runIdx = args.indexOf("engine-run");
+  assert.ok(runIdx > entryIdx, "engine-run subcommand must follow the CLI entry");
+  assert.ok(args.includes("--repo") && args.includes(repo));
+  assert.ok(args.includes("--harness") && args.includes("opencode"));
+  assert.ok(args.includes("--yes"));
+
+  // Running from source (tsx) preloads the tsx loader so plain `node` can run the .ts entry.
+  if (import.meta.url.endsWith(".ts")) {
+    assert.equal(args[0], "--import");
+  }
 });
 
 test("headless skill command pins the repo dir with --dir", async () => {

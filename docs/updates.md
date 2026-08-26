@@ -43,12 +43,20 @@ removed).
   `FORGE_LAUNCHER_DEBUG=1` always shows the log tail, and
   `FORGE_RUN_WITH=stub` (with `FORGE_STUB_NOOP=1`) runs the auto-draft stages
   offline against canned artifacts for testing.
-- **Tests.** 14 `node --test` cases (bootstrap harness mapping/rewrite/
+- **Detached engine start fixed.** Choosing "Run the workflow-engine build now
+  (detached)" re-invoked the CLI via `new URL("./cli.ts")`, which resolves to
+  `dist/cli.ts` — a file that does not exist when running the compiled package —
+  so the detached child failed to start with ENOENT and no manifest or
+  `docs/engine-run.log` ever appeared. The entry now resolves to `dist/cli.js`
+  when compiled (and preloads the tsx loader when running from source), and
+  `spawnDetached` writes a "failed to start" line to the log if the spawn fails
+  instead of failing silently.
+- **Tests.** 15 `node --test` cases (bootstrap harness mapping/rewrite/
   gitignore, path expansion, non-interactive E2E layout + queued-command
-  selection, the `--dir` pinning of headless skill commands, and stub-runner
-  coverage of the auto-draft success and failure paths).
-  `scripts/test-forge-launcher.sh` now delegates to the package suite.
-  Interactive TUI verified end-to-end under a pty.
+  selection, the `--dir` pinning of headless skill commands, detached engine
+  command resolution, and stub-runner coverage of the auto-draft success and
+  failure paths). `scripts/test-forge-launcher.sh` now delegates to the package
+  suite. Interactive TUI verified end-to-end under a pty.
 
 Related architecture decisions:
 

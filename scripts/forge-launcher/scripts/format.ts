@@ -173,6 +173,16 @@ export function spawnDetached(
     extra.push("ignore", "ignore");
   }
   const child = spawn(cmd, args, { cwd: opts.cwd, detached: true, stdio: extra as never });
+  child.on("error", (err) => {
+    try {
+      const logFile = opts.logFile ?? opts.outFile;
+      const msg = `[forge-launcher] failed to start detached process: ${cmd} ${args.join(" ")} → ${err.message}`;
+      if (logFile) fs.appendFileSync(logFile, msg + "\n");
+      else console.error(msg);
+    } catch {
+      /* never throw from an error handler */
+    }
+  });
   child.unref();
   return { pid: child.pid };
 }
