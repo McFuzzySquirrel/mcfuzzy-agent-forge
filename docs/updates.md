@@ -33,6 +33,16 @@ performs. It now matches the original flow:
   agent × phase × task × outputs table + phase execution order) and records its
   path on the manifest (`responsibilityMatrixPath`). The workflow engine's
   pre-run summary prints the source layout, feature order, and matrix path.
+- **TUI engine configuration.** Choosing *run the build now (detached)* or
+  *print the engine command* in the launcher now opens an engine-configuration
+  step (defaults preselected, Esc keeps them): per-task harness, task
+  granularity, parallel-agent count, per-task timeout, and max retries. The
+  `engine-run` command gained `--granularity`, `--max-retries`,
+  `--retry-delay-ms`, and `--heartbeat-ms` (with `FORGE_ENGINE_GRANULARITY`,
+  `FORGE_ENGINE_MAX_RETRIES`, `FORGE_ENGINE_RETRY_DELAY_MS`,
+  `FORGE_ENGINE_HEARTBEAT_MS` env equivalents). Setting `--granularity`
+  recompiles the manifest at that granularity even when one already exists, with
+  a note to clear `docs/WORKFLOW-STATE.json` if a previous run is in progress.
 
 Related architecture decision:
 

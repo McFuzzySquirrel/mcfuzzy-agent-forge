@@ -59,6 +59,34 @@ test("non-interactive run with no PRD bootstraps and queues forge-auto-build-prd
   assert.ok(!out.includes("/forge-auto-build Use docs/PRD.md as the project PRD"));
 });
 
+test("auto-draft engine command carries configured granularity/concurrency/timeout/retries", async () => {
+  const parent = tmpDir();
+  const { code, out } = await runCli(["--non-interactive"], {
+    FORGE_HARNESS_CHOICE: "4",
+    FORGE_REPO_NAME: "engine-opts-app",
+    FORGE_REPO_PARENT_DIR: parent,
+    FORGE_IDEA: "A todo list app",
+    FORGE_YN_DEFAULT: "n",
+    FORGE_AUTO_DRAFT: "1",
+    FORGE_RUN_WITH: "stub",
+    FORGE_ENGINE_HARNESS: "copilot",
+    FORGE_ENGINE_GRANULARITY: "coarse",
+    FORGE_ENGINE_CONCURRENCY: "3",
+    FORGE_ENGINE_TASK_TIMEOUT_MS: "300000",
+    FORGE_ENGINE_MAX_RETRIES: "4",
+  });
+
+  assert.equal(code, 0, out);
+  const repo = path.join(parent, "engine-opts-app");
+  assert.ok(out.includes(`engine-run --repo ${repo}`), out);
+  assert.ok(out.includes("--harness copilot"), out);
+  assert.ok(out.includes("--granularity coarse"), out);
+  assert.ok(out.includes("--concurrency 3"), out);
+  assert.ok(out.includes("--task-timeout-ms 300000"), out);
+  assert.ok(out.includes("--max-retries 4"), out);
+  assert.ok(out.includes("--yes"), out);
+});
+
 test("detached engine command resolves a runnable CLI entry", () => {
   const repo = "/tmp/example-repo";
   const { cmd, args } = engineDetachedCommand(["engine-run", "--repo", repo, "--harness", "opencode", "--yes"]);

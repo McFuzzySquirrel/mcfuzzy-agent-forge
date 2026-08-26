@@ -192,13 +192,34 @@ default assumption) and still keep human review between stages:
    from the PRD automatically now?"*. Answering yes runs `forge-build-agent-team`
    headless, producing the agent + skill files under the harness directory,
    committed as `feat: generate auto-drafted agent team`. When a decomposed
-   layout exists (`docs/product-vision.md` + `docs/features/*.md`), the team is
-   built **from the feature documents** (Vision + Features mode); otherwise it is
-   built from the monolithic `docs/PRD.md`. Review them, then:
-   - run the workflow-engine build **now** (detached via
-     `forge-launcher engine-run`),
-   - **print the engine command** to run later, or
-   - launch the CLI for a manual build.
+    layout exists (`docs/product-vision.md` + `docs/features/*.md`), the team is
+    built **from the feature documents** (Vision + Features mode); otherwise it is
+    built from the monolithic `docs/PRD.md`. Review them, then:
+    - run the workflow-engine build **now** (detached via
+      `forge-launcher engine-run`),
+    - **print the engine command** to run later, or
+    - launch the CLI for a manual build.
+
+Choosing *run now* or *print the command* opens the **engine configuration**
+step — a set of defaults you can press Enter through:
+
+- **Per-task harness** — `opencode` (default), `copilot`, `openai`, `stub`
+  (offline testing), or `flowforge-kernel`.
+- **Task granularity** — `fine` (default: sub-bullets + oversized-bullet
+  splits) or `coarse` (one task per PRD bullet). Choosing a granularity
+  recompiles `docs/EXECUTION-MANIFEST.json` at that granularity.
+- **Max agents to run in parallel** — `1` (sequential, default) or higher for
+  bounded waves (harness-gated via `supportsConcurrency`, see
+  [ADR-021](adr/021-parallel-task-dispatch.md)).
+- **Per-task timeout (ms)** — default `600000`.
+- **Max retries per task** — default `2`.
+
+Esc/Ctrl+C keeps the current defaults. The configured values are written into
+both the detached run and the printed command, and all have env-var equivalents
+(`FORGE_ENGINE_HARNESS`, `FORGE_ENGINE_GRANULARITY`,
+`FORGE_ENGINE_CONCURRENCY`, `FORGE_ENGINE_TASK_TIMEOUT_MS`,
+`FORGE_ENGINE_MAX_RETRIES`, `FORGE_ENGINE_RETRY_DELAY_MS`,
+`FORGE_ENGINE_HEARTBEAT_MS`).
 
 Use `--draft` to pre-answer "yes" to both auto-draft prompts (interactive), or
 set `FORGE_AUTO_DRAFT=1` in non-interactive runs. The workflow-engine run later:
@@ -550,10 +571,14 @@ reflect the running build (monitor + resume) rather than the manual
 | `FORGE_RUN_WITH` | 8 | Headless runner: `opencode`, `copilot`, or `stub` (default: `copilot` for the GitHub harness, `opencode` otherwise). `stub` runs the auto-draft stages offline against canned artifacts - combine with `FORGE_STUB_NOOP=1` to test the failure path |
 | `FORGE_STUB_NOOP` | 8 | `1` makes the stub skill runner (`FORGE_RUN_WITH=stub`) write nothing, exercising the auto-draft failure diagnostics |
 | `FORGE_LAUNCHER_DEBUG` | 8 | `1` (or the `--debug` flag) prints the skill-run log tail after every headless skill run; also passes `--print-logs` to `opencode` |
-| `FORGE_ENGINE_CONCURRENCY` | 8 | Max ready tasks the workflow engine runs in parallel (default `1` = sequential; harness-gated, see ADR-021) |
-| `FORGE_ENGINE_TASK_TIMEOUT_MS` | 8 | Per-task timeout for the workflow engine in ms (default `600000` / 10 min; a task's manifest `timeoutMs` overrides it, see ADR-022) |
-| `FORGE_WORKFLOW_ENGINE` | 8 | `1` to append `GO --workflow-engine` to the queued headless command (build executes via the workflow engine) |
-| `FORGE_ENGINE_HARNESS` | 8 | Per-task harness for the workflow engine: `opencode` (default), `copilot`, `openai`, `stub`, or `flowforge-kernel` |
+ | `FORGE_ENGINE_CONCURRENCY` | 8 | Max ready tasks the workflow engine runs in parallel (default `1` = sequential; harness-gated, see ADR-021) |
+ | `FORGE_ENGINE_TASK_TIMEOUT_MS` | 8 | Per-task timeout for the workflow engine in ms (default `600000` / 10 min; a task's manifest `timeoutMs` overrides it, see ADR-022) |
+ | `FORGE_ENGINE_GRANULARITY` | 8 | Task granularity for the adapter compile: `fine` (default) or `coarse`. Setting it recompiles the manifest at that granularity |
+ | `FORGE_ENGINE_MAX_RETRIES` | 8 | Max retries per engine task (default `2`) |
+ | `FORGE_ENGINE_RETRY_DELAY_MS` | 8 | Delay between task retries in ms (default `5000`) |
+ | `FORGE_ENGINE_HEARTBEAT_MS` | 8 | Engine heartbeat interval in ms while a task runs (default `15000`; `0` disables) |
+ | `FORGE_WORKFLOW_ENGINE` | 8 | `1` to append `GO --workflow-engine` to the queued headless command (build executes via the workflow engine) |
+ | `FORGE_ENGINE_HARNESS` | 8 | Per-task harness for the workflow engine: `opencode` (default), `copilot`, `openai`, `stub`, or `flowforge-kernel` |
 
 All other step inputs (repo name, description, visibility, parent directory) use their defaults in non-interactive mode. Override them by setting the variables before running:
 

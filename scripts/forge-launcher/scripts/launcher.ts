@@ -50,6 +50,13 @@ interface LauncherState {
   prdAdded: boolean;
   researchAdded: boolean;
   engineStarted: boolean;
+  engineConfig: {
+    harness: string;
+    granularity: string;
+    concurrency: string;
+    taskTimeoutMs: string;
+    maxRetries: string;
+  };
 }
 
 const state: LauncherState = {
@@ -64,6 +71,13 @@ const state: LauncherState = {
   prdAdded: false,
   researchAdded: false,
   engineStarted: false,
+  engineConfig: {
+    harness: process.env.FORGE_ENGINE_HARNESS ?? "opencode",
+    granularity: process.env.FORGE_ENGINE_GRANULARITY ?? "",
+    concurrency: process.env.FORGE_ENGINE_CONCURRENCY ?? "",
+    taskTimeoutMs: process.env.FORGE_ENGINE_TASK_TIMEOUT_MS ?? "",
+    maxRetries: process.env.FORGE_ENGINE_MAX_RETRIES ?? "",
+  },
 };
 
 /** Single tee-log for all long-running step output during this launcher run. */
@@ -386,14 +400,77 @@ async function autoDraftPrd(opts: LauncherOptions): Promise<void> {
 }
 
 function engineRunArgs(): string[] {
-  const harness = process.env.FORGE_ENGINE_HARNESS ?? "opencode";
-  return ["engine-run", "--repo", state.repoDir, "--harness", harness, "--yes"];
+  const args = ["engine-run", "--repo", state.repoDir];
+  const cfg = state.engineConfig;
+  if (cfg.harness) args.push("--harness", cfg.harness);
+  if (cfg.granularity) args.push("--granularity", cfg.granularity);
+  if (cfg.concurrency) args.push("--concurrency", cfg.concurrency);
+  if (cfg.taskTimeoutMs) args.push("--task-timeout-ms", cfg.taskTimeoutMs);
+  if (cfg.maxRetries) args.push("--max-retries", cfg.maxRetries);
+  args.push("--yes");
+  return args;
 }
 
 function printEngineCommand(): void {
   command(`npx forge-launcher ${engineRunArgs().join(" ")}`);
   out("");
   info("Run it from anywhere later to execute the build through the workflow engine.");
+}
+
+/** Coerce a numeric prompt to a positive integer, falling back on garbage/empty. */
+function cleanPositiveInt(value: string, fallback: string): string {
+  const n = Number(value);
+  return Number.isInteger(n) && n > 0 ? String(n) : fallback;
+}
+
+/**
+ * Interactive engine configuration (task granularity, parallelism, timeout,
+ * retries, harness). Always shown after choosing run/print; Esc/Ctrl+C keeps
+ * the current defaults. Non-interactive runs use env vars only.
+ */
+async function configureEngineOptions(opts: LauncherOptions): Promise<void> {
+  if (opts.nonInteractive) return;
+  out("");
+  step("Configure the workflow engine");
+  info("Press Enter to accept the default for each option (Esc/Ctrl+C keeps defaults).");
+  const cfg = state.engineConfig;
+  try {
+    cfg.harness = await promptSelect(
+      "Per-task harness",
+      [
+        { value: "opencode", label: "opencode", hint: "default" },
+        { value: "copilot", label: "copilot" },
+        { value: "openai", label: "openai" },
+        { value: "stub", label: "stub (offline testing)" },
+        { value: "flowforge-kernel", label: "flowforge-kernel" },
+      ],
+      { initial: cfg.harness || "opencode" },
+    );
+
+    cfg.granularity = await promptSelect(
+      "Task granularity",
+      [
+        { value: "fine", label: "fine", hint: "default: sub-bullets + oversized-bullet splits" },
+        { value: "coarse", label: "coarse: one task per PRD bullet" },
+      ],
+      { initial: cfg.granularity || "fine" },
+    );
+
+    cfg.concurrency = cleanPositiveInt(
+      await prompt("Max agents to run in parallel (1 = sequential)", cfg.concurrency || "1"),
+      cfg.concurrency || "1",
+    );
+    cfg.taskTimeoutMs = cleanPositiveInt(
+      await prompt("Per-task timeout (ms)", cfg.taskTimeoutMs || "600000"),
+      cfg.taskTimeoutMs || "600000",
+    );
+    cfg.maxRetries = cleanPositiveInt(
+      await prompt("Max retries per task", cfg.maxRetries || "2"),
+      cfg.maxRetries || "2",
+    );
+  } catch {
+    info("Engine options cancelled; using the current defaults.");
+  }
 }
 
 async function runEngineDetached(opts: LauncherOptions): Promise<void> {
@@ -440,8 +517,8 @@ async function engineDecision(opts: LauncherOptions): Promise<void> {
     { initial: "2", nonInteractiveValue: "2" },
   );
   switch (choice) {
-    case "1": await runEngineDetached(opts); break;
-    case "2": printEngineCommand(); break;
+    case "1": await configureEngineOptions(opts); await runEngineDetached(opts); break;
+    case "2": await configureEngineOptions(opts); printEngineCommand(); break;
     default: info("Skipping the engine for now. Run the build manually or use the printed command later.");
   }
 }
