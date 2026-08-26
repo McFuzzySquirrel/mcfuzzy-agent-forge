@@ -40,6 +40,14 @@ function rand(a, b) { return a + Math.random() * (b - a); }
 
 function $id(id) { return document.getElementById(id); }
 
+/** Updates the HUD status line so connection state is always visible. */
+function setStatus(text, kind) {
+  const meta = $id("meta");
+  if (!meta) return;
+  meta.textContent = text;
+  meta.className = kind || "";
+}
+
 // The renderer is set once the Pixi app initializes; texture factories below
 // use it to bake procedural Graphics into reusable textures.
 let RENDERER = null;
@@ -283,10 +291,8 @@ function createBurstLayer() {
   const sky = new P.Graphics();
   const moon = new P.Container();
   const cloudLayer = new P.Container();
-  const fireflyContainer = new P.ParticleContainer({});
-  const leafContainer = new P.ParticleContainer({});
   const backgroundLayer = new P.Container();
-  backgroundLayer.addChild(sky, moon, cloudLayer, fireflyContainer, leafContainer);
+  backgroundLayer.addChild(sky, moon, cloudLayer);
 
   const trunk = new P.Graphics();
   const branches = new P.Container();
@@ -613,6 +619,17 @@ function createBurstLayer() {
     state.manifest = manifest;
     state.layout = layout;
 
+    // Idempotent: clear any previous scene so a reconnect/restart rebuilds cleanly.
+    for (const node of state.nodes.values()) {
+      squirrelLayer.removeChild(node.actor.root);
+      node.actor.root.destroy();
+    }
+    state.nodes.clear();
+    state.phases.clear();
+    state.edges.length = 0;
+    branches.removeChildren().forEach((g) => g.destroy());
+    leafBloom.removeChildren().forEach((s) => s.destroy());
+
     trunkGrowth.current = layout.trunkBottom;
     trunkGrowth.target = layout.trunkTop;
 
@@ -812,6 +829,11 @@ function createBurstLayer() {
   function applySnapshot(snapshot) {
     if (!state.manifest && snapshot.manifest) buildScene(snapshot.manifest, snapshot.layout);
     if (snapshot.state) applyState(snapshot.state);
+    const st = snapshot.state;
+    setStatus(
+      `connected · run ${st?.runId ?? "—"} · ${st?.status ?? "preparing…"}`,
+      st ? "live" : "warn",
+    );
   }
 
   function applyState(ws) {
@@ -834,6 +856,7 @@ function createBurstLayer() {
       updateHud();
       drawEdges();
     }
+    setStatus(`connected · run ${ws.runId ?? "—"} · ${ws.status ?? state.status}`, ws.status === "failed" ? "warn" : "live");
     if (ws.status === "complete") showFinale();
     if (ws.status === "failed") showFailure();
     if (ws.status === "paused") showBanner("Paused", "Run is paused. Resume with `workflow-engine -- run`.", "paused");
@@ -1146,21 +1169,39 @@ function createBurstLayer() {
       stateData = s;
       applySnapshot({ manifest: m, state: s, layout: l });
     } catch {
-      // server not ready yet; retry
+      // Server may not be ready yet; the EventSource snapshot will re-sync.
+      setStatus("waiting for the engine server…", "warn");
     }
   }
 
   const es = new EventSource("/api/events");
   es.onmessage = () => {};
+  es.onopen = () => setStatus("connected · waiting for engine events…", "live");
+  es.onerror = () => {
+    if (es.readyState === EventSource.CLOSED) {
+      setStatus("disconnected · run finished or server stopped", "dead");
+    } else {
+      setStatus("connection lost · retrying…", "warn");
+    }
+  };
   es.addEventListener("snapshot", (e) => {
-    applySnapshot(JSON.parse(e.data));
+    try {
+      applySnapshot(JSON.parse(e.data));
+    } catch (err) {
+      setStatus(`render error: ${err.message}`, "warn");
+    }
   });
   es.addEventListener("audit", (e) => {
-    applyAuditEvent(JSON.parse(e.data));
+    try {
+      applyAuditEvent(JSON.parse(e.data));
+    } catch (err) {
+      setStatus(`render error: ${err.message}`, "warn");
+    }
   });
   es.addEventListener("done", () => {
     es.close();
     document.body.classList.add("ended");
+    setStatus("run finished · dashboard closing", "dead");
   });
 
   fetchSnapshot();

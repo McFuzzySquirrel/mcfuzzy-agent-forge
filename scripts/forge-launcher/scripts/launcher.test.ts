@@ -6,6 +6,7 @@ import os from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { engineDetachedCommand } from "./launcher.ts";
+import { spawnDetached } from "./format.ts";
 
 const CLI = fileURLToPath(new URL("./cli.ts", import.meta.url));
 
@@ -85,6 +86,51 @@ test("auto-draft engine command carries configured granularity/concurrency/timeo
   assert.ok(out.includes("--task-timeout-ms 300000"), out);
   assert.ok(out.includes("--max-retries 4"), out);
   assert.ok(out.includes("--yes"), out);
+});
+
+test("auto-draft engine command enables the live dashboard from env", async () => {
+  const parent = tmpDir();
+  const { code, out } = await runCli(["--non-interactive"], {
+    FORGE_HARNESS_CHOICE: "4",
+    FORGE_REPO_NAME: "engine-viz-app",
+    FORGE_REPO_PARENT_DIR: parent,
+    FORGE_IDEA: "A todo list app",
+    FORGE_YN_DEFAULT: "n",
+    FORGE_AUTO_DRAFT: "1",
+    FORGE_RUN_WITH: "stub",
+    FORGE_ENGINE_VIZ: "1",
+    FORGE_ENGINE_VIZ_PORT: "5500",
+  });
+
+  assert.equal(code, 0, out);
+  const repo = path.join(parent, "engine-viz-app");
+  assert.ok(out.includes(`engine-run --repo ${repo}`), out);
+  assert.ok(out.includes("--viz"), out);
+  assert.ok(out.includes("--viz-port 5500"), out);
+  assert.ok(out.includes("--yes"), out);
+});
+
+test("spawnDetached tees child output to the log even with only logFile", async () => {
+  const dir = tmpDir();
+  const logFile = path.join(dir, "detached.log");
+  spawnDetached(process.execPath, ["-e", 'console.log("viz-stdout"); console.error("viz-stderr");'], {
+    cwd: dir,
+    logFile,
+  });
+
+  const deadline = Date.now() + 5000;
+  let text = "";
+  while (Date.now() < deadline) {
+    try {
+      text = fs.readFileSync(logFile, "utf8");
+      if (text.includes("viz-stdout") && text.includes("viz-stderr")) break;
+    } catch {
+      /* not written yet */
+    }
+    await new Promise((r) => setTimeout(r, 50));
+  }
+  assert.ok(text.includes("viz-stdout"), `stdout captured: ${text}`);
+  assert.ok(text.includes("viz-stderr"), `stderr captured: ${text}`);
 });
 
 test("detached engine command resolves a runnable CLI entry", () => {

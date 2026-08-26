@@ -163,16 +163,20 @@ export function spawnDetached(
   args: string[],
   opts: { cwd?: string; outFile?: string; errFile?: string; logFile?: string },
 ): { pid: number | undefined } {
-  const stdio = ["ignore"] as const;
-  const extra: Array<"ignore" | "inherit" | number> = [...stdio];
-  if (opts.outFile) {
-    const outStream = fs.openSync(opts.outFile, "a");
-    const errStream = opts.logFile ? fs.openSync(opts.logFile, "a") : outStream;
-    extra.push(outStream, errStream);
+  // Capture stdout+stderr into a log when one is supplied. `logFile` alone is
+  // sufficient (it opens the same file for both streams); `outFile`/`errFile`
+  // allow splitting them. Without any file, both streams go to /dev/null.
+  const outTarget = opts.logFile ?? opts.outFile;
+  const stdio: Array<"ignore" | number> = ["ignore"];
+  if (outTarget) {
+    const outStream = fs.openSync(outTarget, "a");
+    const errStream = opts.logFile ? fs.openSync(opts.logFile, "a")
+      : (opts.errFile ? fs.openSync(opts.errFile, "a") : outStream);
+    stdio.push(outStream, errStream);
   } else {
-    extra.push("ignore", "ignore");
+    stdio.push("ignore", "ignore");
   }
-  const child = spawn(cmd, args, { cwd: opts.cwd, detached: true, stdio: extra as never });
+  const child = spawn(cmd, args, { cwd: opts.cwd, detached: true, stdio: stdio as never });
   child.on("error", (err) => {
     try {
       const logFile = opts.logFile ?? opts.outFile;

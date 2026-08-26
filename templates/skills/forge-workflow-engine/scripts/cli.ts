@@ -188,7 +188,6 @@ async function confirmPreRun(opts: EngineOptions, args: string[]): Promise<void>
 
 async function cmdRun(args: string[]): Promise<void> {
   const opts = buildOptions(args);
-  await confirmPreRun(opts, args);
 
   let viz: VizServer | undefined;
   if (hasVizFlag(args)) {
@@ -202,6 +201,8 @@ async function cmdRun(args: string[]): Promise<void> {
       source: "in-process",
     });
   }
+
+  await confirmPreRun(opts, args);
 
   try {
     const state = await runEngine(opts);

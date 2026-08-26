@@ -67,6 +67,10 @@ html, body {
   line-height: 1.5;
 }
 
+#meta.live { color: var(--green); }
+#meta.warn { color: var(--accent); }
+#meta.dead { color: #ff8f8f; }
+
 #hud-right {
   text-align: right;
   min-width: 170px;

@@ -67,7 +67,6 @@ const STATIC_FILES: Record<string, { path: string; type: string }> = {
   "/style.css": { path: join(DASHBOARD_DIR, "style.css"), type: "text/css; charset=utf-8" },
   "/app.js": { path: join(DASHBOARD_DIR, "app.js"), type: "application/javascript; charset=utf-8" },
   "/vendor/pixi.min.js": { path: join(DASHBOARD_DIR, "vendor", "pixi.min.js"), type: "application/javascript; charset=utf-8" },
-  "/vendor/pixi.min.js.map": { path: join(DASHBOARD_DIR, "vendor", "pixi.min.js.map"), type: "application/json" },
 };
 
 const DEFAULT_PORT = 4299;

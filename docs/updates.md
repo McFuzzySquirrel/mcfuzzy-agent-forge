@@ -47,6 +47,27 @@ tree which **grows over the course of the run**:
   source, `done`-on-shutdown, and port binding). Launcher suite stays at 16.
   All packages typecheck clean.
 
+### Live dashboard: TUI toggle, detached-run logging, and connection feedback
+
+- **Viz option in the engine decision.** The launcher's engine configuration
+  now asks whether to **launch the live Squirrel Forge dashboard** during the
+  run (default on, optional port), and the detached run / printed command carry
+  `--viz` / `--viz-port` (`FORGE_ENGINE_VIZ`, `FORGE_ENGINE_VIZ_PORT`).
+- **Detached runs are actually observable.** `spawnDetached` now tees the
+  detached child's stdout+stderr into `docs/engine-run.log` even when only a
+  log file is configured (previously the streams went to `/dev/null`, so a
+  silent failure looked like "it never started"). A no-PRD warning appears
+  before starting detached, since the engine can't compile a manifest without
+  one. The dashboard starts once the engine starts (after manifest prep) and
+  its URL is printed to the log.
+- **The dashboard can't look "unconnected" anymore.** The HUD status line is
+  now driven by the live connection: `connected · run <id> · <status>` on
+  snapshot/state, "connection lost · retrying…" / "disconnected" via an
+  `onerror` handler, and "run finished" on shutdown. Render errors are caught
+  and surfaced instead of silently killing the event handlers, and the scene
+  rebuilds cleanly on reconnect. The engine also starts the dashboard before
+  the pre-run gate so the URL is available while you review the summary.
+
 Related architecture decision:
 
 - [ADR-025](adr/025-squirrel-forge-live-workflow-viz.md): the Squirrel Forge

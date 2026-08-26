@@ -218,13 +218,17 @@ step — a set of defaults you can press Enter through:
   [ADR-021](adr/021-parallel-task-dispatch.md)).
 - **Per-task timeout (ms)** — default `600000`.
 - **Max retries per task** — default `2`.
+- **Live Squirrel Forge dashboard** — launch the visualization during the run
+  (default on). A port prompt follows (blank = `4299`). The dashboard starts
+  when the engine starts — after the manifest is prepared — and its URL is
+  printed in `docs/engine-run.log`.
 
 Esc/Ctrl+C keeps the current defaults. The configured values are written into
 both the detached run and the printed command, and all have env-var equivalents
 (`FORGE_ENGINE_HARNESS`, `FORGE_ENGINE_GRANULARITY`,
 `FORGE_ENGINE_CONCURRENCY`, `FORGE_ENGINE_TASK_TIMEOUT_MS`,
 `FORGE_ENGINE_MAX_RETRIES`, `FORGE_ENGINE_RETRY_DELAY_MS`,
-`FORGE_ENGINE_HEARTBEAT_MS`).
+`FORGE_ENGINE_HEARTBEAT_MS`, `FORGE_ENGINE_VIZ`, `FORGE_ENGINE_VIZ_PORT`).
 
 Use `--draft` to pre-answer "yes" to both auto-draft prompts (interactive), or
 set `FORGE_AUTO_DRAFT=1` in non-interactive runs. The workflow-engine run later:
@@ -592,7 +596,9 @@ reflect the running build (monitor + resume) rather than the manual
  | `FORGE_ENGINE_RETRY_DELAY_MS` | 8 | Delay between task retries in ms (default `5000`) |
  | `FORGE_ENGINE_HEARTBEAT_MS` | 8 | Engine heartbeat interval in ms while a task runs (default `15000`; `0` disables) |
  | `FORGE_WORKFLOW_ENGINE` | 8 | `1` to append `GO --workflow-engine` to the queued headless command (build executes via the workflow engine) |
- | `FORGE_ENGINE_HARNESS` | 8 | Per-task harness for the workflow engine: `opencode` (default), `copilot`, `openai`, `stub`, or `flowforge-kernel` |
+  | `FORGE_ENGINE_HARNESS` | 8 | Per-task harness for the workflow engine: `opencode` (default), `copilot`, `openai`, `stub`, or `flowforge-kernel` |
+  | `FORGE_ENGINE_VIZ` | 8 | `1` to launch the live Squirrel Forge dashboard with the engine run |
+  | `FORGE_ENGINE_VIZ_PORT` | 8 | Dashboard port when `FORGE_ENGINE_VIZ=1` (default `4299`) |
 
 All other step inputs (repo name, description, visibility, parent directory) use their defaults in non-interactive mode. Override them by setting the variables before running:
 
