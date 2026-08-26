@@ -15,6 +15,9 @@ export interface EngineRunOptions {
   heartbeatMs?: string;
   yes?: boolean;
   dryRun?: boolean;
+  viz?: boolean;
+  vizPort?: string;
+  noOpen?: boolean;
 }
 
 const HARNESS_ROOTS = [".agents", ".opencode", ".claude", ".github"];
@@ -37,6 +40,9 @@ export async function engineRun(opts: EngineRunOptions = {}): Promise<number> {
   const heartbeatMs = opts.heartbeatMs ?? process.env.FORGE_ENGINE_HEARTBEAT_MS ?? "";
   const yes = opts.yes ?? process.env.FORGE_ENGINE_YES === "1";
   const dryRun = opts.dryRun ?? false;
+  const viz = opts.viz ?? process.env.FORGE_ENGINE_VIZ === "1";
+  const vizPort = opts.vizPort ?? process.env.FORGE_ENGINE_VIZ_PORT ?? "";
+  const noOpen = opts.noOpen ?? false;
 
   if (granularity && granularity !== "fine" && granularity !== "coarse") {
     throw new Error(`Invalid --granularity '${granularity}'. Choose 'fine' or 'coarse'.`);
@@ -69,7 +75,7 @@ export async function engineRun(opts: EngineRunOptions = {}): Promise<number> {
 
   const manifest = path.join(repo, "docs", "EXECUTION-MANIFEST.json");
 
-  out(`forge-engine-run: repo=${repo} harness=${harness}${granularity ? ` granularity=${granularity}` : ""}${concurrency ? ` concurrency=${concurrency}` : ""}${taskTimeoutMs ? ` task-timeout=${taskTimeoutMs}` : ""}${maxRetries ? ` max-retries=${maxRetries}` : ""}`);
+  out(`forge-engine-run: repo=${repo} harness=${harness}${granularity ? ` granularity=${granularity}` : ""}${concurrency ? ` concurrency=${concurrency}` : ""}${taskTimeoutMs ? ` task-timeout=${taskTimeoutMs}` : ""}${maxRetries ? ` max-retries=${maxRetries}` : ""}${viz ? ` viz=${vizPort || "default"}` : ""}`);
   out(`  engine : ${engineDir}`);
   out(`  adapter: ${adapterDir || "<not bootstrapped; manifest must already exist>"}`);
 
@@ -112,6 +118,8 @@ export async function engineRun(opts: EngineRunOptions = {}): Promise<number> {
   if (retryDelayMs) engineFlags.push("--retry-delay-ms", retryDelayMs);
   if (heartbeatMs) engineFlags.push("--heartbeat-ms", heartbeatMs);
   if (yes) engineFlags.push("--yes");
+  if (viz) engineFlags.push(vizPort ? `--viz=${vizPort}` : "--viz");
+  if (noOpen) engineFlags.push("--no-open");
 
   if (dryRun) {
     out(`  [dry-run] (cd '${engineDir}' && npm run workflow-engine -- run ${engineFlags.join(" ")})`);
@@ -136,6 +144,9 @@ export function engineRunCli(args: string[]): Promise<number> {
       case "--heartbeat-ms": opts.heartbeatMs = args[++i]; break;
       case "--yes": opts.yes = true; break;
       case "--dry-run": opts.dryRun = true; break;
+      case "--viz": opts.viz = true; break;
+      case "--viz-port": opts.vizPort = args[++i]; break;
+      case "--no-open": opts.noOpen = true; break;
       default: throw new Error(`Unknown option: ${a}`);
     }
   }

@@ -13,6 +13,7 @@ Usage:
   forge-launcher engine-run [--repo <path>] [--harness <h>] [--granularity <fine|coarse>]
                             [--concurrency <n>] [--task-timeout-ms <ms>] [--max-retries <n>]
                             [--retry-delay-ms <ms>] [--heartbeat-ms <ms>] [--yes] [--dry-run]
+                            [--viz [--viz-port <n>]] [--no-open]
 
 Launcher options:
   --non-interactive   Skip all interactive prompts (requires env vars; see docs/forge-launcher.md).

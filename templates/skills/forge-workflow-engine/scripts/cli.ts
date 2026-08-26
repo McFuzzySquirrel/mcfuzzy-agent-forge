@@ -5,6 +5,7 @@ import * as readline from "node:readline";
 
 import { runEngine, replayTask } from "./engine.ts";
 import { loadState, statePath, auditPath } from "./state.ts";
+import { startVizServer, type VizServer } from "./viz/server.ts";
 import { DEFAULT_TASK_TIMEOUT_MS, type ExecutionManifest, type HarnessAdapter, type EngineOptions } from "./types.ts";
 import { OpenCodeAdapter } from "./harness/opencode-adapter.ts";
 import { CopilotAdapter } from "./harness/copilot-adapter.ts";
@@ -20,9 +21,11 @@ function usage(): never {
 Usage:
   npm run workflow-engine -- run     [--repo <path>] [--harness opencode|copilot|openai|stub|flowforge-kernel]
                                      [--max-retries <n>] [--retry-delay-ms <ms>] [--heartbeat-ms <ms>] [--concurrency <n>] [--task-timeout-ms <ms>] [--yes]
+                                     [--viz [port]] [--no-open]
   npm run workflow-engine -- status  [--repo <path>]
   npm run workflow-engine -- replay  <task-id> [--repo <path>] [--harness opencode|copilot|openai|stub|flowforge-kernel]
   npm run workflow-engine -- pause   [--repo <path>]
+  npm run workflow-engine -- viz     [--repo <path>] [--port <port>] [--no-open]
 
 Environment variables:
   FORGE_ENGINE_YES      Skip the pre-run confirmation gate (same as --yes)
@@ -60,6 +63,34 @@ function flag(args: string[], name: string): string | undefined {
 
 function hasFlag(args: string[], name: string): boolean {
   return args.includes(name);
+}
+
+/**
+ * Parse the optional `--viz [port]` flag (also `--viz=<port>`). Returns the
+ * requested port, or `undefined` when `--viz` is absent. `undefined` means
+ * "use the server default"; pass a sentinel to distinguish "absent" from
+ * "present without a value", which both default to the server's default port.
+ */
+function vizPortFor(args: string[]): number | undefined {
+  for (let i = 0; i < args.length; i += 1) {
+    const arg = args[i]!;
+    if (arg === "--viz") {
+      const next = args[i + 1];
+      if (next && /^\d+$/.test(next)) return Number(next);
+      return undefined;
+    }
+    if (arg.startsWith("--viz=")) {
+      const value = arg.slice("--viz=".length);
+      if (/^\d+$/.test(value)) return Number(value);
+      return undefined;
+    }
+  }
+  return undefined;
+}
+
+/** True when the user explicitly disabled auto-opening the browser. */
+function hasVizFlag(args: string[]): boolean {
+  return args.includes("--viz") || args.some((a) => a.startsWith("--viz="));
 }
 
 function detectRepoRoot(start = process.cwd()): string {
@@ -158,16 +189,34 @@ async function confirmPreRun(opts: EngineOptions, args: string[]): Promise<void>
 async function cmdRun(args: string[]): Promise<void> {
   const opts = buildOptions(args);
   await confirmPreRun(opts, args);
-  const state = await runEngine(opts);
 
-  console.log(`\nRun ${state.runId} finished with status: ${state.status}`);
-  const completed = Object.values(state.tasks).filter((t) => t.status === "complete").length;
-  const total = Object.keys(state.tasks).length;
-  console.log(`Tasks: ${completed}/${total} complete`);
+  let viz: VizServer | undefined;
+  if (hasVizFlag(args)) {
+    viz = await startVizServer({
+      repoRoot: opts.repoRoot,
+      manifestPath: opts.manifestPath,
+      statePath: opts.statePath,
+      auditPath: opts.auditPath,
+      port: vizPortFor(args),
+      open: !hasFlag(args, "--no-open"),
+      source: "in-process",
+    });
+  }
 
-  if (state.blockers.length > 0) {
-    console.log(`Blockers:`);
-    for (const b of state.blockers) console.log(`  - ${b}`);
+  try {
+    const state = await runEngine(opts);
+
+    console.log(`\nRun ${state.runId} finished with status: ${state.status}`);
+    const completed = Object.values(state.tasks).filter((t) => t.status === "complete").length;
+    const total = Object.keys(state.tasks).length;
+    console.log(`Tasks: ${completed}/${total} complete`);
+
+    if (state.blockers.length > 0) {
+      console.log(`Blockers:`);
+      for (const b of state.blockers) console.log(`  - ${b}`);
+    }
+  } finally {
+    if (viz) await viz.stop();
   }
 }
 
@@ -222,6 +271,35 @@ async function cmdReplay(args: string[]): Promise<void> {
   if (record?.errorMessage) console.error(`Error: ${record.errorMessage}`);
 }
 
+async function cmdViz(args: string[]): Promise<void> {
+  const repoArg = flag(args, "--repo");
+  const repoRoot = repoArg ? resolve(repoArg) : detectRepoRoot();
+  const manifestPath = join(repoRoot, "docs", "EXECUTION-MANIFEST.json");
+
+  if (!existsSync(manifestPath)) {
+    console.error(`Execution manifest not found at ${manifestPath}`);
+    console.error(`Run the forge-execution-adapter first: npm run forge-execution-adapter -- compile`);
+    process.exit(1);
+  }
+
+  const viz = await startVizServer({
+    repoRoot,
+    manifestPath,
+    statePath: statePath(repoRoot),
+    auditPath: auditPath(repoRoot),
+    port: vizPortFor(args),
+    open: !hasFlag(args, "--no-open"),
+    source: "tail",
+  });
+
+  console.log(`Attached to workflow-engine run in ${repoRoot}. Press Ctrl+C to stop.`);
+  await new Promise<void>(() => {
+    process.on("SIGINT", () => {
+      viz.stop().then(() => process.exit(0));
+    });
+  });
+}
+
 async function cmdPause(args: string[]): Promise<void> {
   const repoArg = flag(args, "--repo");
   const repoRoot = repoArg ? resolve(repoArg) : detectRepoRoot();
@@ -260,6 +338,7 @@ async function main(): Promise<void> {
     case "status": await cmdStatus(args); break;
     case "replay": await cmdReplay(args); break;
     case "pause": await cmdPause(args); break;
+    case "viz": await cmdViz(args); break;
     default: usage();
   }
 }

@@ -226,7 +226,16 @@ set `FORGE_AUTO_DRAFT=1` in non-interactive runs. The workflow-engine run later:
 
 ```bash
 forge-launcher engine-run --repo "<repo-dir>" --harness opencode --yes
+forge-launcher engine-run --repo "<repo-dir>" --harness opencode --yes --viz  # live dashboard
 ```
+
+Pass `--viz` (or `--viz-port <n>`) to `forge-launcher engine-run` to launch the
+**live Squirrel Forge dashboard** (a growing oak tree of named-squirrel agents
+performing the build) alongside the engine run. Add `--no-open` to skip
+auto-opening the browser. `FORGE_ENGINE_VIZ=1` and `FORGE_ENGINE_VIZ_PORT` set
+the same defaults. To attach the dashboard to an already-running or detached
+engine run instead, use `npm run workflow-engine -- viz --repo "<repo-dir>"`
+inside the repo's engine package.
 
 The engine run honours parallel dispatch too: set `FORGE_ENGINE_CONCURRENCY=<n>`
 (or pass `--concurrency <n>` to `forge-launcher engine-run`) to run ready tasks in

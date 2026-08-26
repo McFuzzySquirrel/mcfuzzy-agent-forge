@@ -91,9 +91,11 @@ asynchronously, so the engine's heartbeat stays responsive.
 npm run workflow-engine -- run     [--repo <path>] [--harness <name>] [--max-retries <n>]
                                    [--retry-delay-ms <ms>] [--heartbeat-ms <ms>]
                                    [--concurrency <n>] [--task-timeout-ms <ms>] [--yes]
+                                   [--viz [port]] [--no-open]
 npm run workflow-engine -- status  [--repo <path>]
 npm run workflow-engine -- replay  <task-id> [--repo <path>] [--harness <name>]
 npm run workflow-engine -- pause   [--repo <path>]
+npm run workflow-engine -- viz     [--repo <path>] [--port <n>] [--no-open]
 ```
 
 | Flag | Default | Purpose |
@@ -106,6 +108,8 @@ npm run workflow-engine -- pause   [--repo <path>]
 | `--concurrency <n>` | `1` | Max ready tasks to run in parallel (see *Parallel dispatch* below) |
 | `--task-timeout-ms <ms>` | `600000` (10 min) | Per-task timeout before the harness call is killed; a task's own `timeoutMs` in the manifest overrides this |
 | `--yes` | *(off)* | Skip the interactive pre-run gate |
+| `--viz [port]` | *(off)* | Launch the live Squirrel Forge dashboard (default port `4299`, next free port if busy) |
+| `--no-open` | *(off)* | Do not auto-open the browser (the URL is still printed) |
 
 ### Pre-run gate
 
@@ -122,6 +126,43 @@ the engine prints a heartbeat line every `--heartbeat-ms`:
 ```
 [engine] …still working on task 1.1 (@project-architect, 45s elapsed)
 ```
+
+### Live visualization (The Squirrel Forge)
+
+Pass `--viz` to run (or `forge-launcher engine-run --viz`) to launch a live
+dashboard in your browser at `http://127.0.0.1:4299`:
+
+```
+npm run workflow-engine -- run --harness stub --viz --yes
+```
+
+The dashboard renders the build DAG as a single oak tree that **grows over the
+course of the run**. Each agent is a **named squirrel** (deterministic names,
+e.g. `api-engineer` → "Tailor", `qa-engineer` → "Nutsy"). Phases are whorls up
+the trunk, tasks hang from each whorl's branches, and statuses become poses:
+dozing = pending, scurrying = running, celebration bounce = complete, tumble =
+failed. Artifacts are **acorns** that roll up the trunk to the consuming
+squirrel on `artifact.created`, and `context.projected` shows a knapsack-arc
+gauge of token reduction on a busy squirrel. The canopy fills with leaves as
+tasks complete, browns on failure, and blooms when all squirrels hoist the
+golden acorn at the end.
+
+Interactions: hover a squirrel for a tooltip, click for the task detail panel
+(title, owner, status, duration, files, artifact), drag to pan, scroll to zoom.
+Events stream over Server-Sent Events; a snapshot is replayed on every
+(re)connect.
+
+To **attach to an already-running (or detached) engine run**, use the `viz`
+subcommand from any terminal — it tails the audit log and serves the same
+dashboard:
+
+```
+npm run workflow-engine -- viz --repo <repo-dir>
+```
+
+Both modes bind to `127.0.0.1` only. Pass `--no-open` to skip auto-opening the
+browser (the URL is printed instead). See
+[ADR-025](adr/025-squirrel-forge-live-workflow-viz.md) for the full design.
 
 ### Task timeout
 
@@ -233,6 +274,8 @@ To start fresh (e.g. after recompiling the manifest), delete `docs/WORKFLOW-STAT
 | `FORGE_ENGINE_CONCURRENCY` | `1` | Max ready tasks to run in parallel (same as `--concurrency`; only for harnesses that declare `supportsConcurrency`) |
 | `FORGE_ENGINE_TASK_TIMEOUT_MS` | `600000` | Per-task timeout in ms (same as `--task-timeout-ms`; per-task manifest `timeoutMs` overrides) |
 | `FORGE_ENGINE_HARNESS` | `opencode` | Default harness for the standalone runner |
+| `FORGE_ENGINE_VIZ` | *(unset)* | `1` enables `--viz` on the standalone runner |
+| `FORGE_ENGINE_VIZ_PORT` | `4299` | Dashboard port when `--viz` is enabled |
 | `OPENCODE_BIN` | `opencode` | Path to the opencode binary |
 | `OPENCODE_EXTRA_FLAGS` | *(empty)* | Extra flags appended to every `opencode run` |
 | `COPILOT_BIN` | `copilot` | Path to the copilot binary |
