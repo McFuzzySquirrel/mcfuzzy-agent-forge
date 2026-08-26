@@ -1,0 +1,30 @@
+{
+  "name": "forge-launcher",
+  "version": "1.0.0",
+  "type": "module",
+  "description": "One command from zero to auto-build: creates a repo, bootstraps Agent Forge, captures your idea, and launches the full pipeline. Cross-platform replacement for the forge-launcher/bootstrap/forge-engine-run shell scripts.",
+  "bin": {
+    "forge-launcher": "./dist/cli.js"
+  },
+  "files": [
+    "dist",
+    "resources"
+  ],
+  "scripts": {
+    "build": "tsc",
+    "test": "node --import tsx --test scripts/*.test.ts",
+    "typecheck": "tsc --noEmit",
+    "prepack": "npm run build && node scripts/stage-resources.mjs"
+  },
+  "engines": {
+    "node": ">=18"
+  },
+  "dependencies": {
+    "@clack/prompts": "^1.7.0"
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.0",
+    "tsx": "^4.19.0",
+    "typescript": "^5.7.0"
+  }
+}

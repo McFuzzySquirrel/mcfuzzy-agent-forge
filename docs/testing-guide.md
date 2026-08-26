@@ -331,7 +331,7 @@ This part tests the full journey from zero to autonomous execution using `forge-
 ### Prerequisites for Part 3
 
 - All prerequisites from Parts 1 and 2
-- `forge-launcher.sh` (Linux / macOS) or `forge-launcher.ps1` (Windows) in `scripts/`
+- The `forge-launcher` npm package (`scripts/forge-launcher/`) or the legacy `forge-launcher.sh` / `forge-launcher.ps1` wrappers in `scripts/`
 - `gh` CLI installed and authenticated, **or** a parent directory writable for a local `git init`
 
 ---
@@ -470,7 +470,9 @@ export FORGE_YN_DEFAULT="n"
 Then run the functional test script to assert the expected layout:
 
 ```bash
-./scripts/test-forge-launcher.sh
+./scripts/test-forge-launcher.sh      # legacy bash acceptance test
+# or the npm package test suite (equivalent coverage, cross-platform):
+npm test --prefix scripts/forge-launcher
 ```
 
 **Check ✓** All assertions pass (`0 failed`). Proceed to Steps 3–7 above in the newly created repository.

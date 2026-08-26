@@ -11,7 +11,7 @@
 1. **Pre-flight** -checks that `git` and optional tools (`gh`, `copilot`, `opencode`, `claude`) are installed.
 2. **Harness selection** -choose GitHub Copilot, opencode, Claude Code, or generic `.agents`.
 3. **Repo creation** -creates a GitHub repository (via `gh`) or initialises a local `git init`.
-4. **Bootstrap** -runs the existing `bootstrap.sh` / `bootstrap.ps1` into the new repo.
+4. **Bootstrap** -runs the bundled bootstrap into the new repo.
 5. **Idea capture** -prompts for your project idea and saves it to `docs/IDEA.md`.
 6. **PRD & research** *(optional, recommended)* -add an existing PRD (`docs/PRD.md`) and/or research / seed documents (`docs/research/`). If skipped, the pipeline queues `forge-auto-build-prd` to build a reviewed PRD from the idea first.
 7. **Commit + push** -commits the bootstrapped forge, idea file, PRD, and any research docs.
@@ -24,24 +24,41 @@
 
 | Tool | Required | Purpose |
 |------|----------|---------|
+| `node` (18+) | For the npm package | Runs the `forge-launcher` package (canonical implementation) |
 | `git` | **Yes** | All harnesses |
 | `gh` (GitHub CLI) | For GitHub harness | Creates and clones the GitHub repo |
 | `opencode` | For opencode harness auto-launch | Spawns the opencode session |
 | `claude` | For Claude Code harness auto-launch | Spawns the Claude Code session |
-| Bash 4+ | For `forge-launcher.sh` | Linux / macOS |
-| PowerShell 5.1+ | For `forge-launcher.ps1` | Windows |
+| Bash 4+ | For legacy `forge-launcher.sh` | Linux / macOS |
+| PowerShell 5.1+ | For legacy `forge-launcher.ps1` | Windows |
+
+> The launcher is implemented as the cross-platform **`forge-launcher` npm
+> package** (see [ADR-023](adr/023-forge-launcher-npm-package.md)). The
+> `.sh` / `.ps1` scripts in `scripts/` are thin delegating wrappers kept for
+> compatibility and are scheduled for removal.
 
 ---
 
 ## Usage
 
-### Linux / macOS
+### npm package (recommended, cross-platform)
+
+```bash
+npx forge-launcher                 # interactive onboarding
+npx forge-launcher bootstrap [TARGET_DIR] [--harness agents|github|claude|opencode] [--force]
+npx forge-launcher engine-run [--repo <path>] [--harness <h>] [--concurrency <n>]
+                             [--task-timeout-ms <ms>] [--yes] [--dry-run]
+```
+
+When installed globally (`npm install -g forge-launcher`), drop the `npx`.
+
+### Linux / macOS (legacy script)
 
 ```bash
 ./scripts/forge-launcher.sh
 ```
 
-### Windows (PowerShell)
+### Windows (PowerShell, legacy script)
 
 ```powershell
 .\scripts\forge-launcher.ps1
@@ -55,15 +72,14 @@ stopping at review boundaries before any build execution. Use `--draft` to
 pre-answer "yes" to both auto-draft prompts interactively:
 
 ```bash
-./scripts/forge-launcher.sh --draft
-.\scripts\forge-launcher.ps1 -Draft
+forge-launcher --draft
 ```
 
 In non-interactive runs, set `FORGE_AUTO_DRAFT=1` instead:
 
 ```bash
 export FORGE_AUTO_DRAFT="1"
-./scripts/forge-launcher.sh --non-interactive
+forge-launcher --non-interactive
 ```
 
 See the [Auto-draft (optional)](#auto-draft-optional-idea--prd--team-with-review-boundaries)
@@ -80,7 +96,7 @@ export FORGE_PRD_FILE="/path/to/my-prd.md"          # optional
 export FORGE_RESEARCH_FILES="/path/to/research.md,/path/to/notes.md"  # optional
 export FORGE_AUTO_DRAFT="1"                        # optional: run the auto-draft stages headlessly
 export FORGE_YN_DEFAULT="y"
-./scripts/forge-launcher.sh --non-interactive
+forge-launcher --non-interactive
 ```
 
 ```powershell
@@ -98,15 +114,15 @@ separate terminal and prints the skill command to run there. With `--headless`
 the launcher instead drives the queued skill directly from the terminal via
 `opencode run --auto` or `copilot -p --yolo`, so you never enter a chat session.
 
-The workflow engine executes **outside** any CLI session: `forge-auto-build`'s
-engine path starts it **detached** (`nohup`, log: `docs/engine-run.log`) and
-polls `docs/WORKFLOW-STATE.json` to completion, so the build survives the
-session and resumes with `run`. Once the manifest exists you can also run the
-engine directly as a standalone process:
+The workflow engine executes **outside** any CLI session: the auto-build
+engine path starts it **detached** (`child_process.spawn`, log:
+`docs/engine-run.log`) and polls `docs/WORKFLOW-STATE.json` to completion, so
+the build survives the session and resumes with `run`. Once the manifest exists
+you can also run the engine directly as a standalone process:
 
 ```bash
-./scripts/forge-engine-run.sh --harness opencode --yes   # per-task: opencode run --auto
-./scripts/forge-engine-run.sh --harness copilot --yes    # per-task: copilot -p --yolo
+forge-launcher engine-run --harness opencode --yes   # per-task: opencode run --auto
+forge-launcher engine-run --harness copilot --yes    # per-task: copilot -p --yolo
 ```
 
 A `--headless` launcher run can therefore go from idea to finished build without
@@ -114,10 +130,10 @@ opening any interactive CLI.
 
 ```bash
 # Drive the queued skill now (prints and runs the command)
-./scripts/forge-launcher.sh --headless
+forge-launcher --headless
 
 # Print the exact command without running it (CI / testing)
-./scripts/forge-launcher.sh --headless --dry-run
+forge-launcher --headless --dry-run
 
 # PowerShell
 .\scripts\forge-launcher.ps1 -Headless
@@ -166,7 +182,8 @@ default assumption) and still keep human review between stages:
    layout exists (`docs/product-vision.md` + `docs/features/*.md`), the team is
    built **from the feature documents** (Vision + Features mode); otherwise it is
    built from the monolithic `docs/PRD.md`. Review them, then:
-   - run the workflow-engine build **now** (detached via `forge-engine-run.sh`),
+   - run the workflow-engine build **now** (detached via
+     `forge-launcher engine-run`),
    - **print the engine command** to run later, or
    - launch the CLI for a manual build.
 
@@ -174,11 +191,11 @@ Use `--draft` to pre-answer "yes" to both auto-draft prompts (interactive), or
 set `FORGE_AUTO_DRAFT=1` in non-interactive runs. The workflow-engine run later:
 
 ```bash
-./scripts/forge-engine-run.sh --repo "<repo-dir>" --harness opencode --yes
+forge-launcher engine-run --repo "<repo-dir>" --harness opencode --yes
 ```
 
 The engine run honours parallel dispatch too: set `FORGE_ENGINE_CONCURRENCY=<n>`
-(or pass `--concurrency <n>` to `forge-engine-run.sh`) to run ready tasks in
+(or pass `--concurrency <n>` to `forge-launcher engine-run`) to run ready tasks in
 bounded waves (harness-gated via `supportsConcurrency`, default `1` = sequential;
 see [ADR-021](adr/021-parallel-task-dispatch.md)).
 
@@ -187,10 +204,11 @@ see [ADR-021](adr/021-parallel-task-dispatch.md)).
 > your repo stays reviewable at every boundary.
 >
 > Long-running steps (bootstrap, headless/auto-draft skill runs, GitHub repo
-> creation, push) print a periodic `still running… Ns` heartbeat when run from a
-> terminal, so you can tell the launcher is working rather than hung. The
-> heartbeat is skipped for piped/CI output. Set `FORGE_HEARTBEAT_INTERVAL` to
-> change how often it ticks (default `15` seconds).
+> creation, push) show a spinner in a terminal, so you can tell the launcher is
+> working rather than hung. Their output is tee'd to a per-run log
+> (`/tmp/forge-launcher-<pid>.log`) and the log tail is printed on failure.
+> The spinner is skipped for piped/CI output. The elapsed message honours
+> `FORGE_HEARTBEAT_INTERVAL` (default `15` seconds).
 >
 > Want a quick way to try it? The [testing guide Part 8](testing-guide.md#part-8--launcher-auto-draft-smoke-test-reusable-test-idea)
 > ships a copy-paste test idea (a small expense-tracker CLI) that exercises the
@@ -210,10 +228,15 @@ The launcher checks each required and optional tool and reports its version or a
   ✔  gh 2.47.0
   ⚠  opencode not found -opencode harness auto-launch will be unavailable.
   ✔  claude (installed)
-  ✔  bootstrap.sh found
 ```
 
+The launcher bundles its own bootstrap logic (the `forge-launcher bootstrap`
+module), so there is no separate bootstrap script to check.
+
 ### Step 2 -Select harness
+
+In a terminal the harness choice renders as an interactive **menu** (clack
+`select`); the layout below shows the options in plain form:
 
 ```
 ▶ Step 2 of 9: Select agent harness
@@ -224,12 +247,10 @@ The launcher checks each required and optional tool and reports its version or a
     2) opencode         (harness: opencode,  dir: .opencode/)
     3) Claude Code      (harness: claude,    dir: .claude/)
     4) Generic .agents  (harness: agents,    dir: .agents/)  [default]
-
-Select [1-4] [4]:
 ```
 
 Your choice determines:
-- The `--harness` flag passed to `bootstrap.sh` / `bootstrap.ps1`.
+- The `--harness` flag passed to the bundled bootstrap.
 - The directory where agent and skill templates are placed.
 - How the auto-build launch is handled (CLI spawn vs. printed instructions).
 
@@ -245,11 +266,11 @@ Visibility -public or private [private]:
 Parent directory for the new repo [/home/user/projects]:
 ```
 
-Path prompts (like the parent directory) support **Tab completion** to existing
-file/directory locations (via bash readline on Bash and PSReadLine on
-PowerShell), so you can autocomplete rather than hand-typing paths. Typed paths
-also accept shell-style shorthand: `~`/`~/...` and `$VAR`/`${VAR}` (e.g.
-`$HOME/projects`) are expanded before the path is checked.
+Path prompts use a clack autocomplete **path picker** (Tab-complete to
+existing file/directory locations), so you can navigate rather than hand-typing
+paths. Typed paths also accept shell-style shorthand: `~`/`~/...` and
+`$VAR`/`${VAR}` (e.g. `$HOME/projects`) are expanded before the path is
+checked.
 
 ```
   Creating GitHub repository 'my-cool-app' (private) …
@@ -268,17 +289,21 @@ Remote URL (e.g. https://github.com/user/repo.git): https://github.com/user/my-c
 
 ### Step 4 -Bootstrap Agent Forge
 
-Runs `bootstrap.sh` (or `bootstrap.ps1`) with `--force` into the new repository, copying all agent and skill templates into the harness directory.
+Runs the bundled bootstrap with `--force` into the new repository, copying all
+agent and skill templates into the harness directory (shown here with a
+spinner in a terminal; output is also tee'd to a per-run log).
 
 ```
 ▶ Step 4 of 9: Bootstrap Agent Forge
-  Running bootstrap.sh → /home/user/projects/my-cool-app (--harness github) …
+  Running bootstrap → /home/user/projects/my-cool-app (--harness github) …
   ✔  Agent Forge templates bootstrapped.
 ```
 
 ### Step 5 -Capture your idea
 
-Enter your project idea in the terminal (press `Ctrl+D` or a blank line when done on Bash; press Enter twice on PowerShell). The text is saved to `docs/IDEA.md` (with a compatibility copy at repo root `IDEA.md`).
+Enter your project idea in the terminal (interactive TUI: press **Enter twice**
+on a blank line to finish; piped/CI input uses a blank line). The text is saved
+to `docs/IDEA.md` (with a compatibility copy at repo root `IDEA.md`).
 
 ```
 ▶ Step 5 of 9: Capture your project idea
@@ -328,10 +353,10 @@ Do you have research or seed documents to add (design specs, market research, te
 ```
 
 The PRD path and the research/seed paths accept **Tab completion** to existing
-files and folders (bash readline on Bash, PSReadLine on PowerShell), plus
-`~`/`~/...` and `$VAR`/`${VAR}` (e.g. `$HOME/...`) expansion - so you can point
-at external PRD or seed documents with their usual shorthand instead of typing a
-full absolute path.
+files and folders (a clack autocomplete path picker when interactive, with a
+readline fallback for piped input), plus `~`/`~/...` and `$VAR`/`${VAR}`
+(e.g. `$HOME/...`) expansion - so you can point at external PRD or seed
+documents with their usual shorthand instead of typing a full absolute path.
 
 If you skip this step, the pipeline queues `forge-auto-build-prd`, which builds a reviewed PRD from `docs/IDEA.md` (including the automatic decomposition check) before the build pipeline runs. For the best results, spend extra time on the PRD or spec first: you can run `/forge-build-prd` as a separate skill, then feed that PRD into the launcher or into `/forge-auto-build` as the initial spec. Adding research or seed documents in `docs/research/` also improves downstream quality.
 
@@ -375,7 +400,7 @@ Generate the agent team from the PRD automatically now (headless)? [y/N]: y
     2) Print the engine command to run later
     3) Skip - I will launch the CLI / build manually
 Select [1-3] [2]: 2
-    /home/user/mcfuzzysquirrel/Projects/experiments/mcfuzzy-agent-forge/scripts/forge-engine-run.sh --repo "/home/user/projects/my-cool-app" --harness opencode --yes
+    npx forge-launcher engine-run --repo "/home/user/projects/my-cool-app" --harness opencode --yes
 ```
 
 Choosing **1) Run the workflow-engine build now (detached)** starts the engine in the
@@ -431,7 +456,7 @@ When a PRD **was** captured in Step 6, the queued command is instead:
   @workspace /forge-auto-build Use docs/PRD.md as the project PRD
 ```
 
-`forge-auto-build` requires the PRD to already exist. It generates the agent team, optionally assigns models, then executes the build - type `GO` at its pre-flight gate, or `GO --workflow-engine` to run the build through the workflow engine instead of the prompt-driven orchestrator. On the engine path the engine starts detached (`docs/engine-run.log`), `forge-auto-build` polls `docs/WORKFLOW-STATE.json` until the run is `complete` or `failed`, and you can run or resume it standalone with `scripts/forge-engine-run.sh`.
+`forge-auto-build` requires the PRD to already exist. It generates the agent team, optionally assigns models, then executes the build - type `GO` at its pre-flight gate, or `GO --workflow-engine` to run the build through the workflow engine instead of the prompt-driven orchestrator. On the engine path the engine starts detached (`docs/engine-run.log`), `forge-auto-build` polls `docs/WORKFLOW-STATE.json` until the run is `complete` or `failed`, and you can run or resume it standalone with `forge-launcher engine-run`.
 
 ### Step 9 -Summary
 
@@ -460,7 +485,7 @@ When a PRD **was** captured in Step 6, the queued command is instead:
   4. Type GO to start the autonomous pipeline (add --workflow-engine to run
      the build through the workflow engine once the agent team is generated).
      On the engine path the engine runs detached (docs/engine-run.log); run or
-     resume it standalone with scripts/forge-engine-run.sh.
+     resume it standalone with forge-launcher engine-run.
 ```
 
 When the engine was started in Step 8, the summary's **Next steps** instead
@@ -479,7 +504,7 @@ reflect the running build (monitor + resume) rather than the manual
 
   3. Re-run or resume the engine later if needed:
 
-      /home/user/mcfuzzysquirrel/Projects/experiments/mcfuzzy-agent-forge/scripts/forge-engine-run.sh --repo "/home/user/projects/my-cool-app" --harness opencode --yes
+      npx forge-launcher engine-run --repo "/home/user/projects/my-cool-app" --harness opencode --yes
 ```
 
 ---
@@ -566,7 +591,11 @@ When invoked without arguments, the skill uses an explicit PRD path if one was s
 
 ### "bootstrap.sh not found or not executable"
 
-The launcher expects to be run from within the `mcfuzzy-agent-forge` clone. Make sure you run it as `./scripts/forge-launcher.sh` from the repo root, or that the script's relative path to `bootstrap.sh` resolves correctly.
+The launcher no longer shells out to a `bootstrap.sh` — bootstrap logic is
+bundled in the package (`forge-launcher bootstrap`), so this error should not
+occur. If you are running the package from a source checkout, make sure the
+package dependencies are installed first (`npm install` in
+`scripts/forge-launcher/`).
 
 ### "gh not found" on GitHub harness
 
@@ -577,6 +606,8 @@ Install the GitHub CLI: <https://cli.github.com/>. Authenticate with `gh auth lo
 The repository directory was created before bootstrap ran. You can re-run bootstrap manually:
 
 ```bash
+forge-launcher bootstrap /path/to/your/repo --harness <harness>
+# or the legacy wrapper:
 ./scripts/bootstrap.sh /path/to/your/repo --harness <harness>
 ```
 
@@ -602,4 +633,9 @@ Then in the chat or terminal, run `/forge-auto-build-prd <your idea>` to build t
 
 ## Design decisions
 
-See [ADR-010: Forge Launcher](adr/010-forge-launcher.md) for the full rationale, including why a script-first (Tier 1) approach was chosen, why harness selection is step 2, and why `IDEA.md` is the hand-off artifact.
+See [ADR-010: Forge Launcher](adr/010-forge-launcher.md) for the original
+rationale (now **superseded** for the implementation layer by
+[ADR-023](adr/023-forge-launcher-npm-package.md): the launcher is a Node npm
+package with a clack TUI rather than dual shell scripts). The flow-level
+decisions still stand — harness selection is step 2, `IDEA.md` is the hand-off
+artifact, and bootstrap is delegated rather than reimplemented.

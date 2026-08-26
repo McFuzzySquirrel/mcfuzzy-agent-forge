@@ -4,6 +4,44 @@ Detailed release and change notes for McFuzzy Agent Forge.
 
 ---
 
+## August 2026 - v3.14
+
+### Forge launcher as a Node npm package with a TUI
+
+The CLI layer (`forge-launcher`, `bootstrap`, `forge-engine-run`) is now a
+single cross-platform **`forge-launcher` npm package** at
+`scripts/forge-launcher/`, replacing the six dual bash/PowerShell scripts
+(which remain as thin delegating wrappers during the transition, then are
+removed).
+
+- **One codebase, three subcommands.** `forge-launcher` (9-step onboarding),
+  `forge-launcher bootstrap`, and `forge-launcher engine-run` mirror the legacy
+  entry points with an unchanged flags/env-var contract. Run it from anywhere
+  with `npx forge-launcher` — no forge clone needed (templates are bundled as
+  resources).
+- **Interactive TUI.** All prompts use `@clack/prompts` — `select` menus
+  (harness, PRD, engine decision), `confirm`, `text`, `multiline` (Enter-twice
+  submits), and an autocomplete path picker — with a readline fallback for
+  piped/CI input and a clean Ctrl+C exit (code 130).
+- **Spinners instead of heartbeats.** Long-running steps (repo create,
+  bootstrap, push, headless skill runs) show a clack spinner with their output
+  tee'd to a per-run log (`/tmp/forge-launcher-<pid>.log`), printed on failure.
+  The old "still running… Ns" heartbeat and the bash/PSReadLine Tab-completion
+  hacks are gone.
+- **Drift fixed.** The "Launch CLI now?" prompts default to `no` everywhere
+  (the PowerShell variant had drifted to `yes`).
+- **Tests.** 11 `node --test` cases (bootstrap harness mapping/rewrite/
+  gitignore, path expansion, non-interactive E2E layout + queued-command
+  selection). `scripts/test-forge-launcher.sh` now delegates to the package
+  suite. Interactive TUI verified end-to-end under a pty.
+
+Related architecture decisions:
+
+- [ADR-023](adr/023-forge-launcher-npm-package.md): the launcher as a Node npm
+  package (supersedes ADR-010's script-first/no-dependency decision).
+
+---
+
 ## August 2026 - v3.13
 
 ### Finer-grained tasks and a configurable task timeout

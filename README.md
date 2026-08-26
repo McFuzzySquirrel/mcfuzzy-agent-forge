@@ -9,7 +9,7 @@
 
 **McFuzzy Agent Forge** turns your requirements into a team of specialist agents that plan, implement, and validate a project. The PRD is the quality gate: you deliberately review it, then the pipeline generates the team and drives the build - either interactively or fully autonomously ("dark orchestration").
 
-**Latest: v3.13** - finer-grained tasks in the execution plan (sub-bullets expanded and oversized bullets split by default) and a configurable per-task timeout (`--task-timeout-ms` / `FORGE_ENGINE_TASK_TIMEOUT_MS`, with a per-task manifest `timeoutMs` override). See [docs/updates.md](docs/updates.md) and [docs/adr/022-task-granularity-and-configurable-timeout.md](docs/adr/022-task-granularity-and-configurable-timeout.md).
+**Latest: v3.14** - the launcher is now a cross-platform **`forge-launcher` npm package** with an interactive TUI (`@clack/prompts`): `npx forge-launcher`, plus `bootstrap` / `engine-run` subcommands, replacing the six shell scripts. See [docs/updates.md](docs/updates.md) and [docs/adr/023-forge-launcher-npm-package.md](docs/adr/023-forge-launcher-npm-package.md).
 
 ---
 
@@ -18,6 +18,10 @@
 One command, zero to running - no PRD needed. The launcher creates your repo, bootstraps Agent Forge, captures your idea, and queues the right pipeline stage:
 
 ```bash
+# Anywhere (npm package - requires Node.js 18+):
+npx forge-launcher
+
+# Or from a clone (legacy shell wrappers, no install):
 git clone https://github.com/McFuzzySquirrel/mcfuzzy-agent-forge.git
 cd mcfuzzy-agent-forge
 ./scripts/forge-launcher.sh          # PowerShell: .\scripts\forge-launcher.ps1
@@ -25,14 +29,16 @@ cd mcfuzzy-agent-forge
 
 Answer the prompts, then open the repo in your agent harness and run the queued command it prints. Full reference: [docs/forge-launcher.md](docs/forge-launcher.md).
 
+> The launcher is implemented as the cross-platform **`forge-launcher` npm package** (`scripts/forge-launcher/`). The `.sh` / `.ps1` scripts are thin delegating wrappers kept for compatibility (see [ADR-023](docs/adr/023-forge-launcher-npm-package.md)).
+
 ---
 
 ## Choose Your Path
 
 | You want… | Run this | What happens |
 |---|---|---|
-| **Guided onboarding, zero setup** | `./scripts/forge-launcher.sh` | Creates repo, bootstraps templates, captures your idea, queues the PRD stage or the build |
-| **Idea → PRD → team, auto-drafted** | `./scripts/forge-launcher.sh --draft` | Generates the PRD and/or agent team non-interactively (best answers, review boundaries), then offers the workflow-engine run now/later |
+| **Guided onboarding, zero setup** | `forge-launcher` | Creates repo, bootstraps templates, captures your idea, queues the PRD stage or the build |
+| **Idea → PRD → team, auto-drafted** | `forge-launcher --draft` | Generates the PRD and/or agent team non-interactively (best answers, review boundaries), then offers the workflow-engine run now/later |
 | **Turn an idea into a reviewed PRD** | `@workspace /forge-auto-build-prd I want to build [idea]` | Confirms idea → builds and reviews `docs/PRD.md` → auto-decomposes qualifying PRDs → stops before the team |
 | **Build from an existing PRD, hands-free** | `@workspace /forge-auto-build docs/PRD.md` | PRD → agent team → (optional models) → build, with validation + commit after every phase |
 | **…using dark orchestration** | add `GO --workflow-engine` at the pre-flight gate | Compiles `EXECUTION-MANIFEST.json` and runs `forge-workflow-engine` unattended (detached process, log: `docs/engine-run.log`) |
@@ -40,7 +46,7 @@ Answer the prompts, then open the repo in your agent harness and run the queued 
 | **Fully autonomous engine agent** | `@workspace @workflow-orchestrator Run the workflow` | One pre-run gate, then the engine dispatches every task unattended |
 | **Add a feature to a finished project** | `@workspace /forge-build-feature-prd I want to add [feature]` | Feature PRD → targeted team update → execute feature phases |
 | **Per-agent model selection** | `@workspace /forge-assign-models …` | Discover → recommend (`docs/MODEL-PLAN.md`) → apply `model:` frontmatter |
-| **Fully terminal-driven (no chat)** | `./scripts/forge-launcher.sh --headless` | Kicks off the queued skill via `opencode run --auto` or `copilot -p --yolo` - never opens an interactive CLI |
+| **Fully terminal-driven (no chat)** | `forge-launcher --headless` | Kicks off the queued skill via `opencode run --auto` or `copilot -p --yolo` - never opens an interactive CLI |
 
 > **`forge-auto-build` requires an existing PRD** (`docs/PRD.md`, or the decomposed `docs/product-vision.md` + `docs/features/*.md`). It never generates one - if no PRD exists it stops and directs you to `forge-auto-build-prd` or `forge-build-prd`. PRD creation is a deliberate stage; execution is a separate, deliberate stage.
 
@@ -89,6 +95,9 @@ Copies agent and skill templates into your project's harness directory (default 
 ./scripts/bootstrap.sh /path/to/your/project --harness github   # GitHub Copilot
 ./scripts/bootstrap.sh /path/to/your/project --harness claude   # Claude Code
 ./scripts/bootstrap.sh /path/to/your/project --harness opencode # opencode
+
+# npm package (same subcommand)
+forge-launcher bootstrap /path/to/your/project --harness github
 
 # PowerShell
 .\scripts\bootstrap.ps1 -Target C:\path\to\project
@@ -156,11 +165,11 @@ You never need to open an interactive CLI. Authoring (PRD → team → manifest)
 
 ```bash
 # Fastest: launcher does repo → bootstrap → idea → headless skill run
-./scripts/forge-launcher.sh --headless
+forge-launcher --headless
 
 # Or auto-draft the PRD and/or agent team non-interactively, with review
 # boundaries, then run the engine now (detached) or later:
-./scripts/forge-launcher.sh --draft
+forge-launcher --draft
 
 # Or drive the queued skill directly:
 opencode run --auto "/forge-auto-build Use docs/PRD.md as the project PRD. GO --workflow-engine"
@@ -168,10 +177,10 @@ copilot -p "/forge-auto-build Use docs/PRD.md as the project PRD. GO --workflow-
 
 # Once the manifest exists, run the engine itself as a standalone process
 # (from a second terminal, CI, or nohup) - it never needs a chat session:
-./scripts/forge-engine-run.sh --harness opencode --yes          # per-task: opencode run
-./scripts/forge-engine-run.sh --harness copilot --yes           # per-task: copilot -p --yolo
-./scripts/forge-engine-run.sh --harness opencode --concurrency 3 --yes  # parallel dispatch
-./scripts/forge-engine-run.sh --harness opencode --task-timeout-ms 900000 --yes  # 15-min task budget
+forge-launcher engine-run --harness opencode --yes          # per-task: opencode run
+forge-launcher engine-run --harness copilot --yes           # per-task: copilot -p --yolo
+forge-launcher engine-run --harness opencode --concurrency 3 --yes  # parallel dispatch
+forge-launcher engine-run --harness opencode --task-timeout-ms 900000 --yes  # 15-min task budget
 ```
 
 - `opencode run` / `copilot -p` are non-interactive; `--auto` / `--yolo` auto-approve tool permissions.
@@ -208,10 +217,12 @@ mcfuzzy-agent-forge/
 │                                # forge-orchestrate-build, forge-workflow-engine, forge-execution-adapter,
 │                                # forge-workforce-compiler, skill-creator, skill-review, …
 ├── scripts/
-│   ├── forge-launcher.sh/.ps1   # interactive onboarding (repo → bootstrap → idea → queue;
-│   │                            #   flags: --headless, --draft, --non-interactive, --dry-run)
-│   ├── forge-engine-run.sh/.ps1 # standalone dark-orchestration runner (engine, outside the CLI)
-│   └── bootstrap.sh/.ps1        # copy templates into any target repo
+│   ├── forge-launcher/           # npm package (Node/TS) - canonical implementation:
+│   │   │                         #   forge-launcher | bootstrap | engine-run subcommands
+│   ├── forge-launcher.sh/.ps1    # legacy delegating wrappers (repo → bootstrap → idea → queue;
+│   │   │                         #   flags: --headless, --draft, --non-interactive, --dry-run)
+│   ├── forge-engine-run.sh/.ps1  # legacy wrapper → `forge-launcher engine-run`
+│   └── bootstrap.sh/.ps1         # legacy wrapper → `forge-launcher bootstrap`
 └── docs/                        # prompt-playbook, forge-launcher, testing-guide, ADRs, updates
 ```
 
