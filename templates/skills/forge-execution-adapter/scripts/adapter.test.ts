@@ -145,6 +145,102 @@ description: Coordinates the build and handles cross-cutting polish.
   assert.match(manifest.warnings.join("\n"), /defaulting to 'workflow-orchestrator'/);
 });
 
+test("compileExecutionManifest defaults to fine granularity and records it", () => {
+  const root = createFixture();
+  const repo = discoverForgeRepo(root);
+  const manifest = compileExecutionManifest(repo);
+
+  assert.equal(manifest.granularity, "fine");
+});
+
+test("fine granularity expands indented sub-bullets into chained tasks", () => {
+  const root = createFixture();
+  writeFileSync(join(root, "docs", "PRD.md"), `# PRD
+
+## Phase 1: Foundation
+- Task 1.1: Build the API layer
+  - Create GET endpoint in \`src/get.ts\`
+  - Create POST endpoint in \`src/post.ts\`
+`, "utf8");
+
+  const repo = discoverForgeRepo(root);
+  const manifest = compileExecutionManifest(repo, { granularity: "fine" });
+
+  const tasks = manifest.phases[0]!.tasks;
+  assert.equal(tasks.length, 2);
+  assert.equal(tasks[0]!.id, "1.1");
+  assert.equal(tasks[1]!.id, "1.2");
+  assert.match(tasks[0]!.description, /Create GET endpoint/);
+  assert.match(tasks[0]!.description, /Build the API layer/);
+  assert.deepEqual(tasks[1]!.dependencies, ["1.1"]);
+  assert.deepEqual(tasks[1]!.inputs, ["work.1.1"]);
+  assert.equal(tasks[1]!.produces, "work.1.2");
+});
+
+test("fine granularity splits oversized bullets into chained tasks with a warning", () => {
+  const root = createFixture();
+  writeFileSync(join(root, "docs", "PRD.md"), `# PRD
+
+## Phase 1: Foundation
+- Task 1.1: Implement the auth system end to end. Add token refresh with rotation handling. Wire up role-based access control in \`src/auth.ts\`.
+`, "utf8");
+
+  const repo = discoverForgeRepo(root);
+  const manifest = compileExecutionManifest(repo, { granularity: "fine" });
+
+  const tasks = manifest.phases[0]!.tasks;
+  assert.equal(tasks.length, 3);
+  assert.match(tasks[0]!.description, /auth system end to end/);
+  assert.match(tasks[1]!.description, /token refresh with rotation handling/);
+  assert.match(tasks[2]!.description, /role-based access control/);
+  assert.deepEqual(tasks[1]!.dependencies, [tasks[0]!.id]);
+  assert.deepEqual(tasks[2]!.dependencies, [tasks[1]!.id]);
+  assert.match(manifest.warnings.join("\n"), /was split into 3 finer-grained tasks/);
+});
+
+test("coarse granularity reproduces the legacy one-bullet-per-task output", () => {
+  const root = createFixture();
+  writeFileSync(join(root, "docs", "PRD.md"), `# PRD
+
+## Phase 1: Foundation
+- Task 1.1: Build the API layer
+  - Create GET endpoint in \`src/get.ts\`
+- Task 1.2: Implement auth end to end. Add token refresh.
+`, "utf8");
+
+  const repo = discoverForgeRepo(root);
+  const manifest = compileExecutionManifest(repo, { granularity: "coarse" });
+
+  const tasks = manifest.phases[0]!.tasks;
+  assert.equal(tasks.length, 3);
+  assert.deepEqual(tasks.map((task) => task.description), [
+    "Task 1.1: Build the API layer",
+    "Create GET endpoint in `src/get.ts`",
+    "Task 1.2: Implement auth end to end. Add token refresh.",
+  ]);
+  assert.equal(manifest.granularity, "coarse");
+  assert.equal(manifest.warnings.some((warning) => /split into/.test(warning)), false);
+});
+
+test("task ids stay unique when a labelled task follows auto-numbered tasks", () => {
+  const root = createFixture();
+  writeFileSync(join(root, "docs", "PRD.md"), `# PRD
+
+## Phase 1: Foundation
+- Task 1.1: Build the API layer
+  - Create GET endpoint in \`src/get.ts\`
+  - Configure the build
+- Task 1.2: Implement auth end to end. Add token refresh with rotation handling. Wire up role-based access control in \`src/auth.ts\`.
+`, "utf8");
+
+  const repo = discoverForgeRepo(root);
+  const manifest = compileExecutionManifest(repo, { granularity: "fine" });
+
+  const ids = manifest.phases[0]!.tasks.map((task) => task.id);
+  assert.equal(new Set(ids).size, ids.length, "task ids must be unique within a phase");
+  assert.deepEqual(ids, ["1.1", "1.2", "1.3", "1.4", "1.5"]);
+});
+
 test("checkpointTask updates PROGRESS.md and audit state", () => {
   const root = createFixture();
   const repo = discoverForgeRepo(root);

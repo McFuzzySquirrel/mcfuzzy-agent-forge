@@ -35,6 +35,33 @@ npm run forge-execution-adapter -- status
 
 The CLI auto-detects the repository root, so it can be run from inside the skill folder.
 
+### Task granularity
+
+`compile` decomposes each PRD phase into tasks at a configurable granularity:
+
+```bash
+npm run forge-execution-adapter -- compile                       # fine (default)
+npm run forge-execution-adapter -- compile --granularity fine    # explicit
+npm run forge-execution-adapter -- compile --granularity coarse  # legacy 1-bullet-per-task
+```
+
+- **`fine` (default)** produces smaller, chained tasks for better progress
+  visibility and fewer long-running tasks:
+  - an indented sub-bullet under a bullet becomes its own task (the parent
+    bullet acts as a container and its text is prefixed as context);
+  - an oversized bullet (multi-sentence / roughly >160 chars) is split at
+    sentence/segment boundaries into chained tasks;
+  - every emitted task keeps owner matching, the linear `dependencies` chain,
+    and artifact `inputs`/`produces` wiring.
+  - Split tasks are reported as compile warnings so the result can be reviewed.
+- **`coarse`** reproduces the legacy behavior exactly: every bullet line (any
+  indentation) becomes one task in source order.
+
+The chosen granularity is recorded on the manifest as `granularity: "coarse" |
+"fine"`, so a run's decomposition is traceable. Recompiling a manifest at a
+different granularity produces a new task set — start a fresh engine run
+(`rm docs/WORKFLOW-STATE.json`) rather than mixing with an in-progress run.
+
 ## Process
 
 ### Step 1: Discover the Forge Repo

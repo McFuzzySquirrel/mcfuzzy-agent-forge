@@ -55,6 +55,11 @@ export interface ManifestTask {
    * Example: "implementation.result"
    */
   produces?: string;
+  /**
+   * Optional per-task timeout in milliseconds. Overrides the workflow engine's
+   * global default (`--task-timeout-ms` / `FORGE_ENGINE_TASK_TIMEOUT_MS`).
+   */
+  timeoutMs?: number;
 }
 
 export interface ManifestPhase {
@@ -70,6 +75,8 @@ export interface ManifestPhase {
 export interface ExecutionManifest {
   version: "1.0";
   generatedAt: string;
+  /** Task decomposition granularity used when compiling the manifest. */
+  granularity?: "coarse" | "fine";
   repoRoot: string;
   harnessRoot: HarnessRoot;
   prdPath: string;

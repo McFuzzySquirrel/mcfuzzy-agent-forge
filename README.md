@@ -9,7 +9,7 @@
 
 **McFuzzy Agent Forge** turns your requirements into a team of specialist agents that plan, implement, and validate a project. The PRD is the quality gate: you deliberately review it, then the pipeline generates the team and drives the build - either interactively or fully autonomously ("dark orchestration").
 
-**Latest: v3.12** - parallel task dispatch in the workflow engine (wave-based, opt-in `--concurrency`, per-harness `supportsConcurrency`). See [docs/updates.md](docs/updates.md) and [docs/adr/021-parallel-task-dispatch.md](docs/adr/021-parallel-task-dispatch.md).
+**Latest: v3.13** - finer-grained tasks in the execution plan (sub-bullets expanded and oversized bullets split by default) and a configurable per-task timeout (`--task-timeout-ms` / `FORGE_ENGINE_TASK_TIMEOUT_MS`, with a per-task manifest `timeoutMs` override). See [docs/updates.md](docs/updates.md) and [docs/adr/022-task-granularity-and-configurable-timeout.md](docs/adr/022-task-granularity-and-configurable-timeout.md).
 
 ---
 
@@ -171,11 +171,13 @@ copilot -p "/forge-auto-build Use docs/PRD.md as the project PRD. GO --workflow-
 ./scripts/forge-engine-run.sh --harness opencode --yes          # per-task: opencode run
 ./scripts/forge-engine-run.sh --harness copilot --yes           # per-task: copilot -p --yolo
 ./scripts/forge-engine-run.sh --harness opencode --concurrency 3 --yes  # parallel dispatch
+./scripts/forge-engine-run.sh --harness opencode --task-timeout-ms 900000 --yes  # 15-min task budget
 ```
 
 - `opencode run` / `copilot -p` are non-interactive; `--auto` / `--yolo` auto-approve tool permissions.
 - `forge-auto-build`'s engine path (`GO --workflow-engine`) starts the engine **detached** (log: `docs/engine-run.log`) and polls `docs/WORKFLOW-STATE.json` to completion - the build survives the chat session and resumes with `run`.
 - While a task runs, the engine prints a heartbeat line (`…still working on task <id> …`) so a quiet terminal doesn't look hung. Tune it with `--heartbeat-ms <ms>` or `FORGE_ENGINE_HEARTBEAT_MS` (default 15s; `0` disables).
+- Each task runs under a per-task timeout (default 10 min). Raise it with `--task-timeout-ms <ms>` / `FORGE_ENGINE_TASK_TIMEOUT_MS`, or give a single heavy task its own budget via `timeoutMs` in `docs/EXECUTION-MANIFEST.json`. Compile with `--granularity fine` (default) to split tasks into smaller units.
 - With no PRD yet, the launcher queues `forge-auto-build-prd` in headless mode (auto-proceeds with default assumptions recorded in the PRD's Open Questions).
 - `--draft` (PowerShell: `-Draft`) pre-answers the Step 8 auto-draft prompts: generate the PRD from `docs/IDEA.md`, then the agent team from the PRD (from the decomposed vision + features when present), committing each stage and pausing for review before offering the engine run. Non-interactive runs use `FORGE_AUTO_DRAFT=1`.
 - `--dry-run` prints the exact command instead of running it. Configure the runner with `FORGE_RUN_WITH=opencode|copilot`, the engine path with `FORGE_WORKFLOW_ENGINE=1`, and the per-task engine harness with `FORGE_ENGINE_HARNESS=opencode|copilot|openai|stub`.

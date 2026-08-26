@@ -153,6 +153,98 @@ function producesFor(taskId: string): string {
   return `work.${taskId.toLowerCase()}`;
 }
 
+interface BulletLine {
+  indent: number;
+  text: string;
+}
+
+interface BulletGroup {
+  /** Top-level bullet text; treated as a container when it has children. */
+  header?: string;
+  /** Indented sub-bullet texts (only meaningful in fine granularity mode). */
+  children: string[];
+}
+
+const bulletRe = /^(\s*)([-*]|\d+[.)])\s+(.*)$/;
+const skipTaskLineRe = /^(acceptance criteria|validation|dependencies)\b/i;
+const SPLIT_LENGTH = 160;
+const MIN_FRAGMENT_LENGTH = 25;
+
+/** Strip a leading task-id label (e.g. "Task 1.1:", "Task 2:") from text. */
+function stripTaskLabel(text: string): string {
+  return text.replace(/^task\s+[a-z]?\d+(?:\.\d+)*[:.]?\s*/i, "").trim();
+}
+
+/**
+ * Conservatively split an oversized bullet into chained task fragments.
+ * Splits at sentence/segment boundaries (`. ` + capital, `; `, em-dash,
+ * numbered markers) only when the bullet is long or multi-sentence.
+ */
+function splitTaskText(text: string): string[] {
+  const sentenceBreaks = (text.match(/[.;]\s+(?=[A-Z0-9`"])/g) ?? []).length;
+  if (text.length <= SPLIT_LENGTH && sentenceBreaks < 2) return [text];
+
+  const parts = text
+    .split(/;\s+|\u2014\s+|\.\s+(?=[A-Z0-9`"])|\)\s+(?=[A-Z])/)
+    .map((part) => part.trim())
+    .filter(Boolean);
+
+  const merged: string[] = [];
+  for (const part of parts) {
+    const previous = merged[merged.length - 1];
+    if (merged.length > 0 && (part.length < MIN_FRAGMENT_LENGTH || previous.length < MIN_FRAGMENT_LENGTH)) {
+      merged[merged.length - 1] = `${previous}; ${part}`;
+    } else {
+      merged.push(part);
+    }
+  }
+  return merged.length > 0 ? merged : [text];
+}
+
+/**
+ * Allocate a task id unique within the phase. Prefers the label parsed from the
+ * task text (e.g. "Task 1.2:"), but falls back to the next sequential index so
+ * a labeled task can never collide with an auto-numbered one.
+ */
+function nextUniqueTaskId(phaseId: string, tasks: ManifestTask[], preferred?: string): string {
+  const taken = new Set(tasks.map((task) => task.id));
+  if (preferred && !taken.has(preferred)) return preferred;
+  let index = tasks.length + 1;
+  let candidate = `${phaseId}.${index}`;
+  while (taken.has(candidate)) {
+    index += 1;
+    candidate = `${phaseId}.${index}`;
+  }
+  return candidate;
+}
+
+function pushTask(
+  tasks: ManifestTask[],
+  text: string,
+  phaseId: string,
+  agents: AgentDescriptor[],
+  validationCommands: string[],
+  warnings: string[],
+): void {
+  const taskId = nextUniqueTaskId(phaseId, tasks, taskIdFromText(text, phaseId, tasks.length));
+  const owner = chooseOwner(text, agents);
+  if (owner.warning) warnings.push(owner.warning);
+  const previous = tasks[tasks.length - 1];
+  tasks.push({
+    id: taskId,
+    title: text.split(/[:.]/)[0]!.trim(),
+    description: text,
+    ownerAgent: owner.owner,
+    dependencies: previous ? [previous.id] : [],
+    expectedOutputs: extractPaths(text),
+    validationCommands,
+    approvalRequired: false,
+    sourceLines: [text],
+    produces: producesFor(taskId),
+    inputs: previous ? [producesFor(previous.id)] : [],
+  });
+}
+
 function extractTasks(
   phaseTitle: string,
   phaseBody: string,
@@ -160,57 +252,99 @@ function extractTasks(
   agents: AgentDescriptor[],
   validationCommands: string[],
   warnings: string[],
+  granularity: "coarse" | "fine",
 ): ManifestTask[] {
   const tasks: ManifestTask[] = [];
-  const lines = phaseBody.split(/\r?\n/).map((line) => line.trim()).filter(Boolean);
 
-  for (const line of lines) {
-    if (!/^(-|\*|\d+\.)\s+/.test(line)) continue;
-    const cleaned = line.replace(/^(-|\*|\d+\.)\s+/, "").trim();
-    if (/^(acceptance criteria|validation|dependencies)\b/i.test(cleaned)) continue;
-    const taskId = taskIdFromText(cleaned, phaseId, tasks.length);
-    const owner = chooseOwner(cleaned, agents);
-    if (owner.warning) warnings.push(owner.warning);
-    const previous = tasks[tasks.length - 1];
-    tasks.push({
-      id: taskId,
-      title: cleaned.split(/[:.]/)[0]!.trim(),
-      description: cleaned,
-      ownerAgent: owner.owner,
-      dependencies: previous ? [previous.id] : [],
-      expectedOutputs: extractPaths(cleaned),
-      validationCommands,
-      approvalRequired: false,
-      sourceLines: [cleaned],
-      produces: producesFor(taskId),
-      inputs: previous ? [producesFor(previous.id)] : [],
-    });
+  if (granularity === "coarse") {
+    // Legacy behavior: every trimmed bullet line (any indentation) becomes one
+    // task, in source order, with no hierarchy and no long-bullet splitting.
+    const lines = phaseBody.split(/\r?\n/).map((line) => line.trim()).filter(Boolean);
+    for (const line of lines) {
+      if (!/^(-|\*|\d+\.)\s+/.test(line)) continue;
+      const cleaned = line.replace(/^(-|\*|\d+\.)\s+/, "").trim();
+      if (skipTaskLineRe.test(cleaned)) continue;
+      pushTask(tasks, cleaned, phaseId, agents, validationCommands, warnings);
+    }
+    if (tasks.length === 0) {
+      const summary = phaseBody.split(/\r?\n/).find((line) => !/^#+\s+/.test(line))?.trim() ?? phaseTitle;
+      pushTask(tasks, summary, phaseId, agents, validationCommands, warnings);
+      warnings.push(`Phase ${phaseId} had no explicit task bullets; created a single synthesized task.`);
+    }
+    return tasks;
   }
 
-  if (tasks.length === 0) {
-    const summary = lines.find((line) => !/^#+\s+/.test(line)) ?? phaseTitle;
-    const owner = chooseOwner(summary, agents);
-    if (owner.warning) warnings.push(owner.warning);
-    tasks.push({
-      id: `${phaseId}.1`,
-      title: summary.slice(0, 80),
-      description: summary,
-      ownerAgent: owner.owner,
-      dependencies: [],
-      expectedOutputs: extractPaths(phaseBody),
-      validationCommands,
-      approvalRequired: false,
-      sourceLines: [summary],
-      produces: producesFor(`${phaseId}.1`),
-      inputs: [],
-    });
+  // Fine granularity: preserve hierarchy so sub-bullets and oversized bullets
+  // become their own smaller, chained tasks.
+  const groups: BulletGroup[] = [];
+  let current: BulletGroup | undefined;
+
+  for (const rawLine of phaseBody.split(/\r?\n/)) {
+    const match = rawLine.match(bulletRe);
+    if (!match) continue;
+    const indent = match[1]!.length;
+    const text = match[3]!.trim();
+    if (skipTaskLineRe.test(text)) continue;
+
+    if (indent === 0) {
+      current = { header: text, children: [] };
+      groups.push(current);
+    } else if (current && current.header !== undefined && groups[groups.length - 1] === current) {
+      current.children.push(text);
+    } else {
+      // Indented bullet with no preceding top-level bullet: standalone task.
+      current = { children: [] };
+      groups.push(current);
+      current.children.push(text);
+    }
+  }
+
+  let emitted = 0;
+  for (const group of groups) {
+    if (group.header !== undefined && group.children.length > 0) {
+      // Container bullet: its sub-bullets are the real work. Prefix each
+      // sub-task with the container text so prompts stay self-contained
+      // (the id label is stripped so taskIdFromText stays unambiguous).
+      const context = stripTaskLabel(group.header);
+      for (const child of group.children) {
+        pushTask(tasks, `${child} (${context})`, phaseId, agents, validationCommands, warnings);
+        emitted += 1;
+      }
+    } else {
+      const source = group.header ?? group.children.join("; ");
+      if (!source) continue;
+      const fragments = splitTaskText(source);
+      for (const fragment of fragments) {
+        pushTask(tasks, fragment, phaseId, agents, validationCommands, warnings);
+        emitted += 1;
+      }
+      if (fragments.length > 1) {
+        const preview = source.length > 60 ? `${source.slice(0, 60)}…` : source;
+        warnings.push(
+          `Phase ${phaseId} task '${preview}' was split into ${fragments.length} finer-grained tasks.`,
+        );
+      }
+    }
+  }
+
+  if (emitted === 0) {
+    const summary = phaseBody.split(/\r?\n/).find((line) => !/^#+\s+/.test(line))?.trim() ?? phaseTitle;
+    pushTask(tasks, summary, phaseId, agents, validationCommands, warnings);
     warnings.push(`Phase ${phaseId} had no explicit task bullets; created a single synthesized task.`);
   }
 
   return tasks;
 }
 
-export function compileExecutionManifest(repo: ForgeRepo): ExecutionManifest {
+export interface CompileOptions {
+  /** Task decomposition granularity. `fine` (default) expands sub-bullets and
+   *  splits oversized bullets into smaller chained tasks. `coarse` reproduces
+   *  the legacy one-bullet-per-task behavior. */
+  granularity?: "coarse" | "fine";
+}
+
+export function compileExecutionManifest(repo: ForgeRepo, options: CompileOptions = {}): ExecutionManifest {
+  const granularity = options.granularity ?? "fine";
   const prd = readFileSync(repo.prdPath, "utf8");
   const validationCommands = extractCommands(prd);
   const warnings = [...repo.warnings];
@@ -223,7 +357,7 @@ export function compileExecutionManifest(repo: ForgeRepo): ExecutionManifest {
 
   const phases: ManifestPhase[] = phaseBlocks.map((block, index) => {
     const phaseId = phaseIdFromTitle(block.title, index);
-    const tasks = extractTasks(block.title, block.body, phaseId, repo.agents, validationCommands, warnings);
+    const tasks = extractTasks(block.title, block.body, phaseId, repo.agents, validationCommands, warnings, granularity);
     const ownerAgents = [...new Set(tasks.map((task) => task.ownerAgent).filter((value): value is string => Boolean(value)))];
 
     return {
@@ -240,6 +374,7 @@ export function compileExecutionManifest(repo: ForgeRepo): ExecutionManifest {
   return {
     version: "1.0",
     generatedAt: new Date().toISOString(),
+    granularity,
     repoRoot: repo.repoRoot,
     harnessRoot: repo.harnessRoot,
     prdPath: repo.prdPath,

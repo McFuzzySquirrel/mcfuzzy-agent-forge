@@ -4,6 +4,42 @@ Detailed release and change notes for McFuzzy Agent Forge.
 
 ---
 
+## August 2026 - v3.13
+
+### Finer-grained tasks and a configurable task timeout
+
+Workflow-engine tasks were failing because each harness adapter hardcoded a
+per-task timeout (`10 * 60 * 1000`ms); when a task exceeded it, the child was
+killed and the task failed after retries. Task granularity was also locked to
+one PRD bullet per task, so a large bullet became one long, opaque task. Two
+changes fix this.
+
+- **Fine-grained task decomposition (now the default).** `forge-execution-adapter
+  compile` expands indented sub-bullets into their own chained tasks and splits
+  oversized (multi-sentence) bullets at sentence boundaries. Every task keeps
+  owner matching, the linear dependency chain, and artifact `inputs`/`produces`
+  wiring. Split tasks are reported as compile warnings. `--granularity coarse`
+  reproduces the legacy one-bullet-per-task output exactly, and the manifest
+  records `granularity: "coarse" | "fine"`.
+- **Configurable per-task timeout.** `--task-timeout-ms <ms>` (or
+  `FORGE_ENGINE_TASK_TIMEOUT_MS`) sets the engine-wide budget (default 10 min,
+  unchanged). A task's own `timeoutMs` field in the manifest overrides it. The
+  `opencode`, `copilot`, and `flowforge-kernel` adapters use the effective
+  timeout instead of a hardcoded constant; the `openai` adapter now enforces it
+  with an `AbortController` (previously unbounded). The pre-run summary prints
+  the effective timeout, and `scripts/forge-engine-run.sh` / `.ps1` pass
+  `--task-timeout-ms` / `-TaskTimeoutMs` through.
+- **Tests.** Coverage for sub-bullet expansion, long-bullet splitting, `coarse`
+  regression equivalence, timeout precedence (per-task beats global), and
+  `runCommand` enforcing a custom timeout.
+
+Related architecture decision:
+
+- [ADR-022](adr/022-task-granularity-and-configurable-timeout.md): fine-grained
+  task decomposition and the configurable task timeout.
+
+---
+
 ## August 2026 - v3.12
 
 ### Parallel task dispatch in the workflow engine

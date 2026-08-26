@@ -78,6 +78,33 @@ npm run workflow-engine -- run --heartbeat-ms 0            # disable
 
 `--heartbeat-ms` overrides the `FORGE_ENGINE_HEARTBEAT_MS` environment variable.
 
+### Task timeout
+
+Each task runs against the harness with a per-task timeout. If the harness call
+does not finish in time, the child process is killed and the task counts as
+failed (subject to `--max-retries`). The default is **10 minutes**.
+
+```bash
+npm run workflow-engine -- run --task-timeout-ms 1500000       # 25 minutes
+FORGE_ENGINE_TASK_TIMEOUT_MS=1500000 npm run workflow-engine -- run
+```
+
+Precedence: a task's `timeoutMs` field in the manifest (if present) overrides
+the engine-wide value. Hand-edit `docs/EXECUTION-MANIFEST.json` to give one
+heavy task a longer budget:
+
+```json
+{
+  "id": "1.2",
+  "title": "Migrate the monolith",
+  "timeoutMs": 3600000
+}
+```
+
+The pre-run summary prints the effective timeout. Adapters that shell out
+(`opencode`, `copilot`, `flowforge-kernel`) enforce it on the child process; the
+`openai` adapter enforces it on the API call via `AbortController`.
+
 ### Check status
 
 ```bash

@@ -2,6 +2,9 @@ import type { AgentDescriptor, ExecutionManifest, ManifestTask } from "../../for
 
 export type { AgentDescriptor, ExecutionManifest, ManifestTask };
 
+/** Default per-task timeout (10 minutes), matching the previous hardcoded value. */
+export const DEFAULT_TASK_TIMEOUT_MS = 10 * 60 * 1000;
+
 // ─── Task execution status ────────────────────────────────────────────────────
 
 export type TaskStatus = "pending" | "running" | "complete" | "failed" | "skipped";
@@ -71,6 +74,12 @@ export interface HarnessAdapter {
      * rather than the full workflow state.
      */
     contextBlock?: string,
+    /**
+     * Effective per-task timeout in milliseconds. Computed by the engine as
+     * `task.timeoutMs ?? opts.taskTimeoutMs`. Adapters should use this instead
+     * of a hardcoded timeout; `undefined` means "use the adapter default".
+     */
+    timeoutMs?: number,
   ): Promise<TaskResult>;
 }
 
@@ -95,6 +104,11 @@ export interface EngineOptions {
    * declare `supportsConcurrency`.
    */
   maxConcurrency: number;
+  /**
+   * Default per-task timeout in milliseconds, used when a task does not declare
+   * its own `timeoutMs`. Defaults to `DEFAULT_TASK_TIMEOUT_MS`.
+   */
+  taskTimeoutMs: number;
   pauseRequested: boolean;
 }
 

@@ -1,4 +1,4 @@
-import type { AgentDescriptor, HarnessAdapter, ManifestTask, TaskResult, WorkflowState } from "../types.ts";
+import { DEFAULT_TASK_TIMEOUT_MS, type AgentDescriptor, type HarnessAdapter, type ManifestTask, type TaskResult, type WorkflowState } from "../types.ts";
 
 /**
  * OpenAI API harness adapter.
@@ -33,11 +33,17 @@ export class OpenAIAdapter implements HarnessAdapter {
     _context: WorkflowState,
     _repoRoot: string,
     contextBlock?: string,
+    timeoutMs?: number,
   ): Promise<TaskResult> {
     const start = Date.now();
     const model = agent.model ?? this.defaultModel;
     const systemPrompt = this.buildSystemPrompt(agent);
     const userPrompt = this.buildUserPrompt(task, contextBlock);
+    const effectiveTimeoutMs = timeoutMs ?? DEFAULT_TASK_TIMEOUT_MS;
+
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), effectiveTimeoutMs);
+    timer.unref?.();
 
     try {
       const response = await fetch(`${this.baseUrl}/chat/completions`, {
@@ -53,6 +59,7 @@ export class OpenAIAdapter implements HarnessAdapter {
             { role: "user", content: userPrompt },
           ],
         }),
+        signal: controller.signal,
       });
 
       if (!response.ok) {
@@ -80,14 +87,19 @@ export class OpenAIAdapter implements HarnessAdapter {
         durationMs: Date.now() - start,
       };
     } catch (error) {
+      const aborted = error instanceof Error && error.name === "AbortError";
       return {
         success: false,
         outputFiles: [],
         stdout: "",
         stderr: String(error),
         durationMs: Date.now() - start,
-        errorMessage: String(error),
+        errorMessage: aborted
+          ? `timed out after ${effectiveTimeoutMs}ms`
+          : String(error),
       };
+    } finally {
+      clearTimeout(timer);
     }
   }
 

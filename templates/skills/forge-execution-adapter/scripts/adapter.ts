@@ -12,9 +12,13 @@ function usage(): never {
 
 Usage:
   npm run forge-execution-adapter -- inspect [--repo <path>]
-  npm run forge-execution-adapter -- compile [--repo <path>] [--output <path>]
+  npm run forge-execution-adapter -- compile [--repo <path>] [--output <path>] [--granularity <coarse|fine>]
   npm run forge-execution-adapter -- status [--repo <path>] [--manifest <path>]
   npm run forge-execution-adapter -- checkpoint --complete <task-id> [--repo <path>] [--manifest <path>] [--files <a,b>] [--note <text>]
+
+--granularity <coarse|fine>   Task decomposition granularity (default: fine).
+                              fine = expand sub-bullets and split oversized bullets
+                              into smaller chained tasks; coarse = one task per bullet.
 `);
   process.exit(1);
 }
@@ -61,7 +65,9 @@ function main() {
 
     case "compile": {
       const repo = discoverForgeRepo(repoRoot);
-      const manifest = compileExecutionManifest(repo);
+      const granularityArg = flag(args, "--granularity");
+      const granularity = granularityArg === "coarse" ? "coarse" : "fine";
+      const manifest = compileExecutionManifest(repo, { granularity });
       const output = resolve(flag(args, "--output") ?? repo.manifestPath);
       mkdirSync(dirname(output), { recursive: true });
       writeFileSync(output, `${JSON.stringify(manifest, null, 2)}\n`, "utf8");

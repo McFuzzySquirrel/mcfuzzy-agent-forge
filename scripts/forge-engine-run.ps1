@@ -21,6 +21,10 @@
     "1" (sequential). Only harnesses that declare supportsConcurrency parallelize
     (see ADR-021).
 
+.PARAMETER TaskTimeoutMs
+    Per-task timeout in milliseconds. Defaults to FORGE_ENGINE_TASK_TIMEOUT_MS, else
+    600000 (10 minutes). A per-task timeoutMs field in the manifest overrides this.
+
 .PARAMETER Yes
     Skip the engine's pre-run gate (same as FORGE_ENGINE_YES=1).
 
@@ -30,6 +34,7 @@
 .EXAMPLE
     .\scripts\forge-engine-run.ps1 -Harness copilot -Yes
     .\scripts\forge-engine-run.ps1 -Harness stub -Concurrency 3 -Yes
+    .\scripts\forge-engine-run.ps1 -Harness opencode -TaskTimeoutMs 900000 -Yes
 #>
 [CmdletBinding()]
 param (
@@ -37,6 +42,7 @@ param (
     [ValidateSet("opencode", "copilot", "openai", "stub", "flowforge-kernel")]
     [string]$Harness = "",
     [int]$Concurrency = 0,
+    [int]$TaskTimeoutMs = 0,
     [switch]$Yes,
     [switch]$DryRun
 )
@@ -50,6 +56,10 @@ if (-not $Harness) {
 
 if ($Concurrency -eq 0 -and $env:FORGE_ENGINE_CONCURRENCY) {
     $Concurrency = [int]$env:FORGE_ENGINE_CONCURRENCY
+}
+
+if ($TaskTimeoutMs -eq 0 -and $env:FORGE_ENGINE_TASK_TIMEOUT_MS) {
+    $TaskTimeoutMs = [int]$env:FORGE_ENGINE_TASK_TIMEOUT_MS
 }
 
 # Resolve repo root: --Repo, or walk up from cwd looking for .git.
@@ -129,6 +139,7 @@ Invoke-Run "(cd '$engineDir'; npm install)"
 # 3. Run the engine as a foreground, standalone process.
 $engineArgs = @("run", "--harness", $Harness)
 if ($Concurrency -gt 1) { $engineArgs += @("--concurrency", "$Concurrency") }
+if ($TaskTimeoutMs -gt 0) { $engineArgs += @("--task-timeout-ms", "$TaskTimeoutMs") }
 if ($Yes -or $env:FORGE_ENGINE_YES -eq "1") { $engineArgs += "--yes" }
 
 if ($DryRun) {
