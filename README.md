@@ -31,6 +31,42 @@ Answer the prompts, then open the repo in your agent harness and run the queued 
 
 > The launcher is implemented as the cross-platform **`forge-launcher` npm package** (`scripts/forge-launcher/`). The `.sh` / `.ps1` scripts are thin delegating wrappers kept for compatibility (see [ADR-023](docs/adr/023-forge-launcher-npm-package.md)).
 
+### Try the npm launcher locally (pre-publish)
+
+`npx forge-launcher` needs the package published to npm. Until then, test the
+exact end-user experience — install the packed package like a normal global
+install and run the interactive TUI from any empty directory:
+
+```bash
+# 1. Build the package (compiles dist/ + stages templates as resources)
+cd scripts/forge-launcher
+npm pack                                   # → forge-launcher-1.0.0.tgz
+
+# 2. Install it like `npm install -g forge-launcher` would (isolated prefix)
+npm install -g --prefix /tmp/forge-user/install ./forge-launcher-1.0.0.tgz
+
+# 3. Be the new user: run the TUI in a fresh, unrelated workspace
+mkdir -p /tmp/forge-user/workspace
+cd /tmp/forge-user/workspace
+/tmp/forge-user/install/bin/forge-launcher  # answer the interactive prompts
+```
+
+Accept the defaults with Enter (harness, visibility, parent directory), type a
+repo name and your idea, and you land in a bootstrapped repo:
+
+```bash
+ls my-todo-app/                      # .agents/, docs/, IDEA.md, README.md
+git -C my-todo-app log --oneline     # chore: bootstrap agent forge
+```
+
+The whole suite can be checked without the TUI too:
+
+```bash
+cd scripts/forge-launcher
+npm test          # 11 node --test cases (typecheck + non-interactive E2E)
+npm run typecheck
+```
+
 ---
 
 ## Choose Your Path
