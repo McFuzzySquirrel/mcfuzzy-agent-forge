@@ -43,6 +43,10 @@ performs. It now matches the original flow:
   `FORGE_ENGINE_HEARTBEAT_MS` env equivalents). Setting `--granularity`
   recompiles the manifest at that granularity even when one already exists, with
   a note to clear `docs/WORKFLOW-STATE.json` if a previous run is in progress.
+- **Tests.** Launcher suite is now 16 `node --test` cases (including the
+  engine-config command regression); the execution adapter covers the
+  feature-based compile, ordering, feature-tagged ids, team validation, and
+  responsibility matrix at 17 cases. All packages typecheck clean.
 
 Related architecture decision:
 

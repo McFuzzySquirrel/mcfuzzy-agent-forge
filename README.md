@@ -9,7 +9,7 @@
 
 **McFuzzy Agent Forge** turns your requirements into a team of specialist agents that plan, implement, and validate a project. The PRD is the quality gate: you deliberately review it, then the pipeline generates the team and drives the build - either interactively or fully autonomously ("dark orchestration").
 
-**Latest: v3.14** - the launcher is now a cross-platform **`forge-launcher` npm package** with an interactive TUI (`@clack/prompts`): `npx forge-launcher`, plus `bootstrap` / `engine-run` subcommands, replacing the six shell scripts. See [docs/updates.md](docs/updates.md) and [docs/adr/023-forge-launcher-npm-package.md](docs/adr/023-forge-launcher-npm-package.md).
+**Latest: v3.15** - the launcher is now a cross-platform **`forge-launcher` npm package** with an interactive TUI (`@clack/prompts`): `npx forge-launcher`, plus `bootstrap` / `engine-run` subcommands, replacing the six shell scripts. v3.15 adds engine configuration in the TUI (harness, task granularity, parallelism, timeout, retries) and feature-based workflow-engine compilation with team validation and a generated `docs/agent-responsibility-matrix.md`. See [docs/updates.md](docs/updates.md) and [docs/adr/023-forge-launcher-npm-package.md](docs/adr/023-forge-launcher-npm-package.md).
 
 ---
 
