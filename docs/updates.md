@@ -4,6 +4,57 @@ Detailed release and change notes for McFuzzy Agent Forge.
 
 ---
 
+## August 2026 - v3.16
+
+### Live visualization: The Squirrel Forge
+
+Watching "dark orchestration" used to mean tailing
+`docs/WORKFLOW-STATE.json` or the audit log. The workflow engine now ships a
+live, localhost **PixiJS dashboard** that renders the build as a single oak
+tree which **grows over the course of the run**:
+
+- **`--viz` on `workflow-engine run`.** Starts a dependency-free `node:http`
+  server before the main loop, broadcasts every audit event in-process over
+  **SSE** (a single hook inside `writeAuditEvent` - no engine rework), auto-opens
+  the browser at `http://127.0.0.1:4299` (next free port if busy), and shuts
+  down shortly after the run so the finale renders. Pass `--no-open` to skip
+  auto-opening.
+- **The scene.** Phases are whorls up the trunk; tasks hang from each whorl's
+  branch line. Every agent is a **named squirrel** (deterministic names -
+  `api-engineer` → Tailor, `qa-engineer` → Nutsy - with a seeded hash fallback
+  for arbitrary agents) whose pose maps to status: dozing = pending, scurrying =
+  running, celebration bounce = complete, tumble = failed, faded = skipped. On
+  `artifact.created` an **acorn rolls up the trunk** to the consuming squirrel,
+  and `context.projected` shows a knapsack-arc gauge of token reduction on a
+  busy squirrel. The canopy fills with leaves as tasks complete, browns on
+  failure, and blooms when all squirrels gather and hoist a golden acorn at the
+  end.
+- **Interactions.** Hover for a tooltip, click a squirrel for the task panel
+  (title, owner, status, duration, output files, artifact), drag to pan, scroll
+  to zoom. A snapshot replays on every (re)connect.
+- **`workflow-engine viz` attach mode.** Tails `docs/EXECUTION-AUDIT.jsonl` and
+  serves the same dashboard, so you can watch an **already-running or detached**
+  engine run (e.g. the `forge-auto-build` path) from any terminal.
+- **Launcher pass-through.** `forge-launcher engine-run --viz` (and
+  `--viz-port <n>` / `--no-open`) forwards to the engine; `FORGE_ENGINE_VIZ=1`
+  and `FORGE_ENGINE_VIZ_PORT` set the same defaults.
+- **Zero new runtime dependencies.** PixiJS v8 is vendored
+  (`viz/dashboard/vendor/pixi.min.js`, ~0.8 MB); events stream over SSE via
+  `node:http`; no WebSocket or npm dependency was added to the engine.
+- **Tests.** The engine suite grew to **26** `node --test` cases (new:
+  whorl-tree layout, deterministic squirrel naming, and the viz server's
+  manifest/state/layout endpoints, SSE snapshot + in-process broadcast, tail
+  source, `done`-on-shutdown, and port binding). Launcher suite stays at 16.
+  All packages typecheck clean.
+
+Related architecture decision:
+
+- [ADR-025](adr/025-squirrel-forge-live-workflow-viz.md): the Squirrel Forge
+  visualization - design, event streaming, the two launch modes, and the
+  zero-dependency PixiJS vendoring.
+
+---
+
 ## August 2026 - v3.15
 
 ### Feature-based manifest compilation, team validation, and the responsibility matrix

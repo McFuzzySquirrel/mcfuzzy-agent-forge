@@ -9,7 +9,7 @@
 
 **McFuzzy Agent Forge** turns your requirements into a team of specialist agents that plan, implement, and validate a project. The PRD is the quality gate: you deliberately review it, then the pipeline generates the team and drives the build - either interactively or fully autonomously ("dark orchestration").
 
-**Latest: v3.15** - the launcher is now a cross-platform **`forge-launcher` npm package** with an interactive TUI (`@clack/prompts`): `npx forge-launcher`, plus `bootstrap` / `engine-run` subcommands, replacing the six shell scripts. v3.15 adds engine configuration in the TUI (harness, task granularity, parallelism, timeout, retries) and feature-based workflow-engine compilation with team validation and a generated `docs/agent-responsibility-matrix.md`. See [docs/updates.md](docs/updates.md) and [docs/adr/023-forge-launcher-npm-package.md](docs/adr/023-forge-launcher-npm-package.md).
+**Latest: v3.16** - the workflow engine now ships a live **Squirrel Forge dashboard**: add `--viz` to `workflow-engine run` (or `forge-launcher engine-run --viz`) and a PixiJS oak tree grows as the build executes - each agent a named squirrel, artifacts rolled as acorns between tasks, hover/click for task detail, pan/zoom - with a standalone `workflow-engine viz` attach mode for watching detached runs. See [docs/updates.md](docs/updates.md) and [ADR-025](docs/adr/025-squirrel-forge-live-workflow-viz.md). (v3.15: the cross-platform `forge-launcher` npm package with its interactive TUI, engine configuration, and feature-based manifest compilation.)
 
 ---
 
@@ -63,7 +63,7 @@ The whole suite can be checked without the TUI too:
 
 ```bash
 cd scripts/forge-launcher
-npm test          # 11 node --test cases (typecheck + non-interactive E2E)
+npm test          # 16 node --test cases (typecheck + non-interactive E2E)
 npm run typecheck
 ```
 
@@ -83,6 +83,7 @@ npm run typecheck
 | **Add a feature to a finished project** | `@workspace /forge-build-feature-prd I want to add [feature]` | Feature PRD → targeted team update → execute feature phases |
 | **Per-agent model selection** | `@workspace /forge-assign-models …` | Discover → recommend (`docs/MODEL-PLAN.md`) → apply `model:` frontmatter |
 | **Fully terminal-driven (no chat)** | `forge-launcher --headless` | Kicks off the queued skill via `opencode run --auto` or `copilot -p --yolo` - never opens an interactive CLI |
+| **Watch a build live** | `workflow-engine run --viz` | The Squirrel Forge dashboard: a growing oak tree of named-squirrel agents performing the build, with live acorn artifact handoffs |
 
 > **`forge-auto-build` requires an existing PRD** (`docs/PRD.md`, or the decomposed `docs/product-vision.md` + `docs/features/*.md`). It never generates one - if no PRD exists it stops and directs you to `forge-auto-build-prd` or `forge-build-prd`. PRD creation is a deliberate stage; execution is a separate, deliberate stage.
 
@@ -185,6 +186,8 @@ cd .agents/skills/forge-execution-adapter && npm install && npm run forge-execut
 cd ../forge-workflow-engine && npm install && npm run workflow-engine -- run --harness opencode --yes
 # Parallel dispatch (opt-in, harness-gated): run up to N ready tasks concurrently
 npm run workflow-engine -- run --harness opencode --concurrency 3 --yes
+# Live dashboard: watch the build as a growing oak tree of squirrel agents
+npm run workflow-engine -- run --harness opencode --viz --yes
 ```
 
 Or drive it conversationally via the companion agent:
@@ -194,6 +197,8 @@ Or drive it conversationally via the companion agent:
 ```
 
 Dark orchestration means one pre-run gate, then unattended dispatch - no approvals between tasks. Resume with `run` after interruption; replay a failed task with `replay <task-id>`. Dry-run first with `--harness stub` to validate setup without spending tokens.
+
+**Watch the build live (The Squirrel Forge).** Add `--viz` to a run (or `forge-launcher engine-run --viz`) and a PixiJS dashboard opens in your browser at `http://127.0.0.1:4299`: the build DAG renders as a single oak tree that **grows** as the run progresses, each agent is a **named squirrel** doing its tasks (dozing = pending, scurrying = running, bounce = complete, tumble = failed), and artifacts roll up the trunk as acorns on every handoff. Hover for a tooltip, click a squirrel for its task detail, drag to pan, scroll to zoom. The tree blooms green on completion and browns on failure. To watch a **detached** run instead, run `npm run workflow-engine -- viz --repo <repo-dir>` from any terminal - it tails the audit log and serves the same dashboard. Pass `--no-open` to skip auto-opening the browser.
 
 ### Path D - Fully terminal-driven (no chat session)
 
@@ -217,6 +222,7 @@ forge-launcher engine-run --harness opencode --yes          # per-task: opencode
 forge-launcher engine-run --harness copilot --yes           # per-task: copilot -p --yolo
 forge-launcher engine-run --harness opencode --concurrency 3 --yes  # parallel dispatch
 forge-launcher engine-run --harness opencode --task-timeout-ms 900000 --yes  # 15-min task budget
+forge-launcher engine-run --harness opencode --viz --yes    # live Squirrel Forge dashboard
 ```
 
 - `opencode run` / `copilot -p` are non-interactive; `--auto` / `--yolo` auto-approve tool permissions.
