@@ -91,6 +91,7 @@ asynchronously, so the engine's heartbeat stays responsive.
 npm run workflow-engine -- run     [--repo <path>] [--harness <name>] [--max-retries <n>]
                                    [--retry-delay-ms <ms>] [--heartbeat-ms <ms>]
                                    [--concurrency <n>] [--task-timeout-ms <ms>] [--yes]
+                                   [--keep-alive] [--keep-alive-port <n>] [--attach <url>]
                                    [--viz [port]] [--no-open]
 npm run workflow-engine -- status  [--repo <path>]
 npm run workflow-engine -- replay  <task-id> [--repo <path>] [--harness <name>]
@@ -108,6 +109,9 @@ npm run workflow-engine -- viz     [--repo <path>] [--port <n>] [--no-open]
 | `--concurrency <n>` | `1` | Max ready tasks to run in parallel (see *Parallel dispatch* below) |
 | `--task-timeout-ms <ms>` | `600000` (10 min) | Per-task timeout before the harness call is killed; a task's own `timeoutMs` in the manifest overrides this |
 | `--yes` | *(off)* | Skip the interactive pre-run gate |
+| `--keep-alive` | *(off)* | OpenCode harness only: boot one `opencode serve` for the run and attach every task to it, avoiding per-task cold boots (see *Keep-alive attach mode* below) |
+| `--keep-alive-port <n>` | free port | Port for the engine-managed `opencode serve` instance |
+| `--attach <url>` | *(off)* | Attach tasks to an already-running `opencode serve` instance (e.g. `http://127.0.0.1:4096`) with no lifecycle management |
 | `--viz [port]` | *(off)* | Launch the live Forge Board dashboard (default port `4299`, next free port if busy) |
 | `--no-open` | *(off)* | Do not auto-open the browser (the URL is still printed) |
 
@@ -126,6 +130,40 @@ the engine prints a heartbeat line every `--heartbeat-ms`:
 ```
 [engine] …still working on task 1.1 (@project-architect, 45s elapsed)
 ```
+
+### Keep-alive attach mode (opencode harness)
+
+By default the opencode adapter cold-starts a fresh `opencode run` process for
+**every task**, and each one re-boots the project instance — config, AGENTS.md,
+skills, agent files, and every MCP server. On multi-task runs that per-task
+overhead can rival the actual model work. Pass `--keep-alive` to attach tasks to
+a single warm `opencode serve` instance instead:
+
+```
+npm run workflow-engine -- run --harness opencode --keep-alive --yes
+npm run workflow-engine -- run --harness opencode --keep-alive --keep-alive-port 4096 --yes
+```
+
+The engine boots one headless `opencode serve` bound to the repo, waits for
+`GET /global/health`, runs every task via `opencode run --attach`, and tears the
+server down when the run finishes (even on error). Each attach invocation still
+creates a **fresh, isolated session** — the server only keeps the shared project
+instance warm, so a task's context never leaks into the next. To reuse a server
+you already keep running (e.g. the TUI or a long-lived `opencode serve`), pass
+`--attach <url>` and skip the lifecycle management:
+
+```
+npm run workflow-engine -- run --harness opencode --attach http://127.0.0.1:4096 --yes
+```
+
+Env equivalents: `FORGE_ENGINE_ATTACH=1` (auto-start) and
+`FORGE_ENGINE_ATTACH_URL=<url>` (reuse an existing server). The engine-spawned
+server is loopback-only and strips ambient `OPENCODE_SERVER_*` auth so the
+engine's own health probe and attach calls aren't 401'd; attaching to a
+user-managed authenticated server still works (the client auto-sends
+credentials). While attaching, the adapter prints a per-task startup split
+(`[opencode] task <id>: boot=… total=…`) so the cold-boot removal is measurable
+against `docs/EXECUTION-AUDIT.jsonl`.
 
 ### Live visualization (The Forge Board)
 
@@ -278,6 +316,8 @@ To start fresh (e.g. after recompiling the manifest), delete `docs/WORKFLOW-STAT
 | `FORGE_ENGINE_HARNESS` | `opencode` | Default harness for the standalone runner |
 | `FORGE_ENGINE_VIZ` | *(unset)* | `1` enables `--viz` on the standalone runner |
 | `FORGE_ENGINE_VIZ_PORT` | `4299` | Dashboard port when `--viz` is enabled |
+| `FORGE_ENGINE_ATTACH` | *(unset)* | `1` auto-starts an `opencode serve` for the run (same as `--keep-alive`) |
+| `FORGE_ENGINE_ATTACH_URL` | *(unset)* | Attach tasks to an existing `opencode serve` URL (same as `--attach`) |
 | `OPENCODE_BIN` | `opencode` | Path to the opencode binary |
 | `OPENCODE_EXTRA_FLAGS` | *(empty)* | Extra flags appended to every `opencode run` |
 | `COPILOT_BIN` | `copilot` | Path to the copilot binary |

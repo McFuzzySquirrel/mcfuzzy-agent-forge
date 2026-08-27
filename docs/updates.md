@@ -4,6 +4,58 @@ Detailed release and change notes for McFuzzy Agent Forge.
 
 ---
 
+## August 2026 - v3.18
+
+### Workflow-engine keep-alive attach mode
+
+The opencode harness cold-starts a fresh `opencode run` process for **every
+task**, and each one re-boots the project instance: config, AGENTS.md, skills,
+agent files, and every MCP server. On multi-task runs that per-task overhead can
+rival the actual model work. The engine now attaches tasks to a single warm
+`opencode serve` instance instead:
+
+- **`--keep-alive`** (`FORGE_ENGINE_ATTACH=1`): the engine boots one headless
+  `opencode serve` for the run, waits for `GET /global/health`, attaches every
+  task via `opencode run --attach`, and tears the server down when the run
+  finishes (even on error). `--keep-alive-port <n>` pins the port; otherwise a
+  free port is chosen.
+- **`--attach <url>`** (`FORGE_ENGINE_ATTACH_URL`): reuse an already-running
+  server (e.g. one started by the TUI or a long-lived `opencode serve`) with no
+  lifecycle management. `--keep-alive` is ignored (with a warning) for
+  non-opencode harnesses.
+- **Tasks stay isolated.** Each `opencode run --attach` invocation creates a
+  fresh session (no `--continue`/`--session`/`--fork`), so one task's context
+  never leaks into the next — the server only keeps the shared project instance
+  warm.
+- **Server hygiene.** The engine-spawned server is loopback-only and strips any
+  ambient `OPENCODE_SERVER_*` auth so the engine's own health probe and attach
+  calls aren't 401'd. Attaching to a user-managed authenticated server still
+  works (the client auto-sends credentials from the environment).
+- **Robust readiness.** `opencode serve` binds its port before it is fully
+  booted, so a health request in that window can connect but hang; each probe
+  now aborts itself (`AbortSignal.timeout`, 2s) so the readiness loop always
+  advances.
+- **Measurable win.** `run.ts` reports `bootMs` (ms to first output) and the
+  adapter prints `[opencode] task <id>: boot=… total=…` when attaching, so
+  per-task durations in `docs/EXECUTION-AUDIT.jsonl` show the cold-boot cost
+  dropping to ~0 on tasks 2..N.
+- **Launcher passthrough.** `forge-launcher engine-run` accepts
+  `--keep-alive`, `--keep-alive-port <n>`, and `--attach <url>` (with
+  `FORGE_ENGINE_ATTACH` / `FORGE_ENGINE_ATTACH_URL` env equivalents), so the
+  engine can run warm via the launcher too.
+- **Tests.** Engine suite is now **25** `node --test` cases (new: attach-server
+  healthy startup + ambient-auth stripping, and the hung-health-attempt abort);
+  the launcher suite is now **39** (new: engine-run flag forwarding + env
+  defaults, and the auto-draft keep-alive/attach command). All packages
+  typecheck clean.
+
+Related architecture decision:
+
+- [ADR-027](adr/027-workflow-engine-keep-alive-attach.md): keep-alive attach
+  mode — server lifecycle, session isolation, and auth/health-probe handling.
+
+---
+
 ## August 2026 - v3.17
 
 ### Cross-platform `forge-launcher` fixes for Windows
