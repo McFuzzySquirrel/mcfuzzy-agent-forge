@@ -52,6 +52,7 @@ npx forge-launcher@beta [--non-interactive] [--headless] [--draft] [--dry-run] [
 npx forge-launcher@beta bootstrap [TARGET_DIR] [--harness agents|github|claude|opencode] [--force]
 npx forge-launcher@beta engine-run [--repo <path>] [--harness <h>] [--concurrency <n>]
                               [--task-timeout-ms <ms>] [--yes] [--dry-run]
+                              [--keep-alive [--keep-alive-port <n>]] [--attach <url>]
 ```
 
 When installed globally (`npm install -g forge-launcher@beta`), drop the `npx`.
@@ -177,7 +178,7 @@ What gets queued:
 | Repo state | Queued command |
 |---|---|
 | PRD captured in Step 6 (or a decomposed PRD exists) | `opencode run --auto --dir "<repo>" "/forge-auto-build Use docs/PRD.md as the project PRD. GO [--workflow-engine]"` |
-| No PRD captured | `opencode run --auto --dir "<repo>" "/forge-auto-build-prd Use docs/IDEA.md as the project idea. Headless mode: auto-proceed with default assumptions and approve the PRD."` |
+| No PRD captured | `opencode run --auto --dir "<repo>" "/forge-auto-build-prd Use docs/IDEA.md as the project idea. Headless mode: auto-proceed with default assumptions and approve the PRD. After drafting, run a PRD gap check: every major component must have clear acceptance criteria, a defined tech stack, non-functional requirements (performance, security, privacy), and implementation phases; fill any gaps before approving."` |
 
 The embedded `GO` satisfies `forge-auto-build`'s pre-flight gate, and the
 headless `forge-auto-build-prd` invocation skips its interactive confirmation
@@ -263,6 +264,7 @@ set `FORGE_AUTO_DRAFT=1` in non-interactive runs. The workflow-engine run later:
 ```bash
 forge-launcher engine-run --repo "<repo-dir>" --harness opencode --yes
 forge-launcher engine-run --repo "<repo-dir>" --harness opencode --yes --viz  # live dashboard
+forge-launcher engine-run --repo "<repo-dir>" --harness opencode --yes --keep-alive  # one warm server
 ```
 
 Pass `--viz` (or `--viz-port <n>`) to `forge-launcher engine-run` to launch the
@@ -273,6 +275,15 @@ to skip auto-opening the browser. `FORGE_ENGINE_VIZ=1` and
 already-running or detached engine run instead, use
 `npm run workflow-engine -- viz --repo "<repo-dir>"`
 inside the repo's engine package.
+
+**Cut per-task cold boots with `--keep-alive`.** By default every `opencode run`
+task cold-starts its own project instance (config, AGENTS.md, skills, and every
+MCP server). Pass `--keep-alive` (or `FORGE_ENGINE_ATTACH=1`) to boot one
+headless `opencode serve` for the run and attach every task to it
+(`--keep-alive-port <n>` pins the port; each task still gets a fresh, isolated
+session). To reuse a server you already keep running, pass `--attach <url>` (or
+`FORGE_ENGINE_ATTACH_URL`). See the workflow-engine
+[keep-alive attach mode](workflow-engine.md#keep-alive-attach-mode-opencode-harness).
 
 The engine run honours parallel dispatch too: set `FORGE_ENGINE_CONCURRENCY=<n>`
 (or pass `--concurrency <n>` to `forge-launcher engine-run`) to run ready tasks in
@@ -461,7 +472,7 @@ the workflow engine - now (detached), later (prints the command), or manually:
 ```
 Generate the PRD from docs/IDEA.md automatically now (headless, auto-proceed with best answers)? [y/N]: y
   Auto-drafting the PRD from docs/IDEA.md (headless) …
-    opencode run --auto --dir "/home/user/projects/my-cool-app" "/forge-auto-build-prd Use docs/IDEA.md as the project idea. Headless mode: auto-proceed with default assumptions and approve the PRD."
+    opencode run --auto --dir "/home/user/projects/my-cool-app" "/forge-auto-build-prd Use docs/IDEA.md as the project idea. Headless mode: auto-proceed with default assumptions and approve the PRD. After drafting, run a PRD gap check: every major component must have clear acceptance criteria, a defined tech stack, non-functional requirements (performance, security, privacy), and implementation phases; fill any gaps before approving."
   ✔  Committed: 'docs: add auto-drafted PRD'
   ✔  PRD generated.
   Review it before continuing:

@@ -4,6 +4,134 @@ Detailed release and change notes for McFuzzy Agent Forge.
 
 ---
 
+## August 2026 - v3.20
+
+### Generated-team frontmatter quoting guard
+
+Auto-drafted teams could break the build: `forge-build-agent-team` generated
+`description:` frontmatter without quotes, and LLM prose routinely contains
+`: ` (colon-space), which YAML treats as a nested mapping. `gray-matter` — used
+by `forge-execution-adapter compile` to parse every agent/skill file — then
+threw, the manifest was never written, and the engine failed with a confusing
+"EXECUTION-MANIFEST.json not found".
+
+- **Always-quoted templates.** `forge-build-agent-team`'s agent and skill
+  templates now mandate double-quoted `description:` values, with a Gotcha
+  explaining the `: ` footgun.
+- **Mechanical gate.** A new dependency-free
+  `forge-build-agent-team/scripts/validate-frontmatter.mjs` scans the harness
+  agents/skills (the same files the adapter parses) and fails deterministically
+  on unquoted `: ` values, `#` inside an unquoted value, missing `name` /
+  `description`, or unterminated frontmatter. Step 7 of the skill now requires
+  it to pass instead of relying on self-report.
+- **Clear compile errors.** `forge-execution-adapter` discovery wraps frontmatter
+  parsing and rethrows `Invalid YAML frontmatter in <path>: <message> — hint:
+  wrap description values in double quotes`, naming the offending file instead
+  of a bare js-yaml error.
+- **Launcher fail-fast.** `forge-launcher engine-run` aborts immediately when the
+  manifest compile exits non-zero (surfacing the compile output) instead of
+  continuing to a misleading "manifest not found".
+- **Tests.** Adapter suite 17, launcher suite 40, engine suite 25 — all green;
+  the validator was exercised against a clean team and a deliberately broken
+  fixture.
+
+---
+
+## August 2026 - v3.19
+
+### Headless PRD quality: the gap check now runs automatically
+
+The manual PRD flow runs a dedicated gap check (Step 2b of the prompt playbook):
+verify every major component has clear acceptance criteria, a defined tech stack,
+non-functional requirements (performance, security, privacy), and implementation
+phases - then fill any gaps. Headless/auto-draft PRD runs skipped that pass:
+
+- **Headless PRD gap check.** `forge-auto-build-prd` (headless) now runs the same
+  gap check on `docs/PRD.md` after drafting and re-invokes `forge-build-prd` in
+  gap-fill mode to fix any gaps, re-verifying before the decomposition check.
+  Direct headless `forge-build-prd` invocations do the same before saving. The
+  launcher's headless PRD command now spells the check out so the printed
+  command documents it.
+- **Decomposition and team validation were already covered.** `forge-decompose-prd`
+  Step 6 (coverage, valid dependency DAG, no cycles) and `forge-build-agent-team`
+  Step 7 (one owner per requirement, no conflicts, naming/frontmatter rules) run
+  unconditionally, headless included - no change needed there.
+- **Responsibility matrix from the team skill.** `forge-build-agent-team` Step 7
+  now writes `docs/agent-responsibility-matrix.md` (ownership by agent, team
+  validation summary, phase execution order) matching the execution-adapter's
+  deterministic matrix, so headless team generation produces the same durable
+  artifact the manual validation prompt and the compile gate do.
+- **Tests.** The launcher suite is now **40** `node --test` cases (new: the
+  headless PRD message documents the gap check). All packages typecheck clean.
+
+### Forge Board: crisp zoom and in-place expanding cards
+
+- **Crisp text at any zoom.** The dashboard bakes all text at **2× resolution**
+  (a shared text-style factory) and bakes the small dot/glow textures at 2×, so
+  zooming in no longer upscales soft rasters. Max zoom is clamped to 2× to match
+  the bake ceiling.
+- **Click a card to expand it in place.** Instead of a side panel, clicking a
+  card expands it on the board (floating above its neighbors) with the task's
+  detail: description, status, owner, phase, duration, timeout, artifact, error,
+  inputs, dependencies, output files, and validation commands. Click the card
+  again, the board, or press Escape to collapse it; it animates open/closed and
+  stays live as the task's status changes mid-run. The DOM side panel was
+  removed.
+
+---
+
+## August 2026 - v3.18
+
+### Workflow-engine keep-alive attach mode
+
+The opencode harness cold-starts a fresh `opencode run` process for **every
+task**, and each one re-boots the project instance: config, AGENTS.md, skills,
+agent files, and every MCP server. On multi-task runs that per-task overhead can
+rival the actual model work. The engine now attaches tasks to a single warm
+`opencode serve` instance instead:
+
+- **`--keep-alive`** (`FORGE_ENGINE_ATTACH=1`): the engine boots one headless
+  `opencode serve` for the run, waits for `GET /global/health`, attaches every
+  task via `opencode run --attach`, and tears the server down when the run
+  finishes (even on error). `--keep-alive-port <n>` pins the port; otherwise a
+  free port is chosen.
+- **`--attach <url>`** (`FORGE_ENGINE_ATTACH_URL`): reuse an already-running
+  server (e.g. one started by the TUI or a long-lived `opencode serve`) with no
+  lifecycle management. `--keep-alive` is ignored (with a warning) for
+  non-opencode harnesses.
+- **Tasks stay isolated.** Each `opencode run --attach` invocation creates a
+  fresh session (no `--continue`/`--session`/`--fork`), so one task's context
+  never leaks into the next — the server only keeps the shared project instance
+  warm.
+- **Server hygiene.** The engine-spawned server is loopback-only and strips any
+  ambient `OPENCODE_SERVER_*` auth so the engine's own health probe and attach
+  calls aren't 401'd. Attaching to a user-managed authenticated server still
+  works (the client auto-sends credentials from the environment).
+- **Robust readiness.** `opencode serve` binds its port before it is fully
+  booted, so a health request in that window can connect but hang; each probe
+  now aborts itself (`AbortSignal.timeout`, 2s) so the readiness loop always
+  advances.
+- **Measurable win.** `run.ts` reports `bootMs` (ms to first output) and the
+  adapter prints `[opencode] task <id>: boot=… total=…` when attaching, so
+  per-task durations in `docs/EXECUTION-AUDIT.jsonl` show the cold-boot cost
+  dropping to ~0 on tasks 2..N.
+- **Launcher passthrough.** `forge-launcher engine-run` accepts
+  `--keep-alive`, `--keep-alive-port <n>`, and `--attach <url>` (with
+  `FORGE_ENGINE_ATTACH` / `FORGE_ENGINE_ATTACH_URL` env equivalents), so the
+  engine can run warm via the launcher too.
+- **Tests.** Engine suite is now **25** `node --test` cases (new: attach-server
+  healthy startup + ambient-auth stripping, and the hung-health-attempt abort);
+  the launcher suite is now **39** (new: engine-run flag forwarding + env
+  defaults, and the auto-draft keep-alive/attach command). All packages
+  typecheck clean.
+
+Related architecture decision:
+
+- [ADR-027](adr/027-workflow-engine-keep-alive-attach.md): keep-alive attach
+  mode — server lifecycle, session isolation, and auth/health-probe handling.
+
+---
+
 ## August 2026 - v3.17
 
 ### Cross-platform `forge-launcher` fixes for Windows

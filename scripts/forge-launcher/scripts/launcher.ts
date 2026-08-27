@@ -58,6 +58,8 @@ interface LauncherState {
     maxRetries: string;
     viz: boolean;
     vizPort: string;
+    keepAlive: boolean;
+    attach: string;
   };
 }
 
@@ -81,6 +83,8 @@ const state: LauncherState = {
     maxRetries: process.env.FORGE_ENGINE_MAX_RETRIES ?? "",
     viz: envFlag("FORGE_ENGINE_VIZ"),
     vizPort: process.env.FORGE_ENGINE_VIZ_PORT ?? "",
+    keepAlive: envFlag("FORGE_ENGINE_ATTACH"),
+    attach: process.env.FORGE_ENGINE_ATTACH_URL ?? "",
   },
 };
 
@@ -164,20 +168,26 @@ function prdSourceForTeam(): string {
 
 // --- auto-build command selection ------------------------------------------
 
+/** Headless PRD-creation invocation: auto-proceed with defaults, then run the
+ * same PRD gap check the manual flow does (acceptance criteria, tech stack,
+ * non-functional requirements, phases) and fill any gaps before approving. */
+const PRD_HEADLESS_MSG =
+  "Use docs/IDEA.md as the project idea. Headless mode: auto-proceed with default assumptions and approve the PRD. After drafting, run a PRD gap check: every major component must have clear acceptance criteria, a defined tech stack, non-functional requirements (performance, security, privacy), and implementation phases; fill any gaps before approving.";
+
 function autobuildCommand(): string {
   return hasPrd()
     ? "/forge-auto-build Use docs/PRD.md as the project PRD"
     : "/forge-auto-build-prd Use docs/IDEA.md as the project idea";
 }
 
-function headlessSkillMsg(): string {
+export function headlessSkillMsg(): string {
   if (hasPrd()) {
     if (envFlag("FORGE_WORKFLOW_ENGINE")) {
       return "/forge-auto-build Use docs/PRD.md as the project PRD. GO --workflow-engine";
     }
     return "/forge-auto-build Use docs/PRD.md as the project PRD. GO";
   }
-  return "/forge-auto-build-prd Use docs/IDEA.md as the project idea. Headless mode: auto-proceed with default assumptions and approve the PRD.";
+  return `/forge-auto-build-prd ${PRD_HEADLESS_MSG}`;
 }
 
 function headlessRunner(): string {
@@ -380,7 +390,7 @@ async function autoDraftPrd(opts: LauncherOptions): Promise<void> {
   info("Auto-drafting the PRD from docs/IDEA.md (headless) …");
   const skill = "forge-auto-build-prd";
   const ran = await runSkillHeadless(
-    `/${skill} Use docs/IDEA.md as the project idea. Headless mode: auto-proceed with default assumptions and approve the PRD.`,
+    `/${skill} ${PRD_HEADLESS_MSG}`,
     opts,
   );
   if (!ran) return;
@@ -415,6 +425,8 @@ function engineRunArgs(): string[] {
     args.push("--viz");
     if (cfg.vizPort) args.push("--viz-port", cfg.vizPort);
   }
+  if (cfg.keepAlive) args.push("--keep-alive");
+  if (cfg.attach) args.push("--attach", cfg.attach);
   args.push("--yes");
   return args;
 }

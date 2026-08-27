@@ -76,10 +76,15 @@ Skills are reusable process templates. Create a skill only when a pattern repeat
 
 Create each agent file at `HARNESS_AGENTS_DIR/{agent-name}.md`:
 
+> **Always double-quote `description:`.** The value is prose and routinely
+> contains `: ` (colon-space); unquoted, YAML treats that as a nested mapping
+> and `forge-execution-adapter compile` (gray-matter) fails the whole build.
+> Wrap every description in double quotes, never a bare scalar.
+
 ````markdown
 ---
 name: {agent-name}
-description: {One-sentence summary of expertise and when to use this agent. Reference the project name and specific technology domains.}
+description: "{One-sentence summary of expertise and when to use this agent. Reference the project name and specific technology domains.}"
 ---
 
 You are a **{Role Title}** responsible for {one-sentence scope description}.
@@ -175,10 +180,13 @@ If `skill-creator` or `skill-review` is not available in the environment, stop a
 
 Only after explicit user approval to proceed without these dependencies, scaffold directly using this template:
 
+> **Always double-quote `description:`** for the same reason as agents: an
+> unquoted colon-space breaks YAML frontmatter parsing at compile time.
+
 ````markdown
 ---
 name: {skill-name}
-description: {One-sentence summary of what this skill does and when to use it. Include specific keywords to help the agent recognize relevant tasks.}
+description: "{One-sentence summary of what this skill does and when to use it. Include specific keywords to help the agent recognize relevant tasks.}"
 ---
 
 # Skill: {Human-Readable Title}
@@ -250,8 +258,9 @@ Before finalizing:
 - [ ] Every PRD functional requirement maps to exactly one agent
 - [ ] Every agent has `## Collaboration` listing agents it depends on
 - [ ] No two agents own the same file or responsibility
-- [ ] Agent files end with `.md` and use valid YAML frontmatter with `name` and `description`; `name:` matches filename (without extension)
-- [ ] Skill directory names match the skill `name` field; valid YAML frontmatter
+- [ ] Agent files end with `.md`; `name:` matches the filename (without extension); every `description:` is double-quoted YAML
+- [ ] Skill directory names match the skill `name` field; every `description:` is double-quoted YAML
+- [ ] **Frontmatter gate passed:** run `node scripts/validate-frontmatter.mjs` (from this skill's directory) and it exits `0` — it flags unquoted `: ` values, missing `name`/`description`, and unterminated frontmatter across the harness agents and skills
 - [ ] All PRD section references are accurate
 - [ ] Agent names are lowercase-hyphenated
 - [ ] Team covers: foundation/scaffolding, core logic, testing, and all major feature areas
@@ -259,6 +268,36 @@ Before finalizing:
 - [ ] Every skill has a `## Validation` section with concrete checks
 - [ ] Generated skills use progressive disclosure for content exceeding ~50 lines of templates
 - [ ] All agent files have been written to `HARNESS_AGENTS_DIR`, not to `.agents/agents/` unless that is the detected harness directory
+
+After the validation passes, **write `docs/agent-responsibility-matrix.md`** so the
+responsibility map is a durable, reviewable artifact (the workflow-engine compile
+gate writes the same file; see the execution-adapter's deterministic matrix).
+Mirror its structure:
+
+```markdown
+# Agent Responsibility Matrix
+
+- **Source layout:** monolithic | features
+- **Source:** docs/PRD.md (or docs/product-vision.md + docs/features/*)
+
+## Team Validation
+- Unassigned tasks: **N**   (list any)
+- Duplicate file owners: **N**   (list any)
+- Orphan agents: **N**   (list any)
+
+## Ownership by Agent
+
+### <agent-name>
+| Phase | Feature | Task | Outputs |
+|---|---|---|---|
+| 1 | - | 1.1 | src/api/routes.ts |
+
+## Phase Execution Order
+1. **<phase-id>** — <title> — owned by <agents>
+```
+
+Fill the tables from the PRD's implementation phases and each agent's ownership
+mapping; this file becomes the source of truth for who owns what.
 
 ### Step 8: Present the Team
 
@@ -288,6 +327,7 @@ After Feature Increment Mode runs, suggest Re-tune mode for targeted refresh.
 ## Gotchas
 
 - **Agent `name:` must match the filename (without extension).** `my-agent.md` → `name: my-agent`. A mismatch silently breaks agent detection.
+- **Unquoted `description:` with `: ` breaks the build.** `description: Owns the Discovery: recursive scanning…` fails YAML parsing in `forge-execution-adapter compile`, which aborts before the manifest is written. Always double-quote `description:` — every generated agent and skill — and run `scripts/validate-frontmatter.mjs` before finalizing (Step 7).
 - **Never generate agents for areas the PRD doesn't cover.** If in doubt, ask the user rather than speculating.
 - **Code block templates must escape nested fenced blocks.** If a generated skill's output template contains markdown code blocks, use ` ``` `` ` syntax or indent differently to avoid breaking the parent template.
 - **Feature Increment Mode must never regenerate untouched agents.** It's the most common source of regressions. Always diff before writing.

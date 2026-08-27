@@ -55,7 +55,15 @@ function sectionBullets(body: string, heading: string): string[] {
 }
 
 function parseAgent(path: string, repoRoot: string): AgentDescriptor {
-  const parsed = matter(readFileSync(path, "utf8"));
+  let parsed: ReturnType<typeof matter>;
+  try {
+    parsed = matter(readFileSync(path, "utf8"));
+  } catch (err) {
+    throw new Error(
+      `Invalid YAML frontmatter in ${path}: ${err instanceof Error ? err.message : String(err)}. ` +
+      "Hint: wrap description values in double quotes (e.g. `description: \"...\"`).",
+    );
+  }
   const data = parsed.data as Record<string, unknown>;
 
   return {
@@ -72,7 +80,15 @@ function parseAgent(path: string, repoRoot: string): AgentDescriptor {
 }
 
 function parseSkill(path: string, repoRoot: string): SkillDescriptor {
-  const parsed = matter(readFileSync(path, "utf8"));
+  let parsed: ReturnType<typeof matter>;
+  try {
+    parsed = matter(readFileSync(path, "utf8"));
+  } catch (err) {
+    throw new Error(
+      `Invalid YAML frontmatter in ${path}: ${err instanceof Error ? err.message : String(err)}. ` +
+      "Hint: wrap description values in double quotes (e.g. `description: \"...\"`).",
+    );
+  }
   const dir = dirname(path);
   const list = (name: string) => {
     const full = join(dir, name);

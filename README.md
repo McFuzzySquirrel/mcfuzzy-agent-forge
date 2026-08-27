@@ -9,7 +9,7 @@
 
 **McFuzzy Agent Forge** turns your requirements into a team of specialist agents that plan, implement, and validate a project. The PRD is the quality gate: you deliberately review it, then the pipeline generates the team and drives the build - either interactively or fully autonomously ("dark orchestration").
 
-**Latest: v3.17** - the `forge-launcher` npm package is now reliable on Windows: the TUI's directory picker works (no more empty "search"), spawned CLIs resolve npm `.cmd` shims (no more `spawn opencode ENOENT`), and pre-publish local install/uninstall is documented. See [docs/updates.md](docs/updates.md). (v3.16: the workflow engine gained a live dashboard - add `--viz` to `workflow-engine run` (or `forge-launcher engine-run --viz`) for a live view of the build, with a standalone `workflow-engine viz` attach mode for watching detached runs. v3.17 rebuilt it as **The Forge Board**: a kanban of agent name-tag cards flowing through To Do / In Progress / Done / Failed. See [docs/updates.md](docs/updates.md). v3.15: the cross-platform `forge-launcher` npm package with its interactive TUI, engine configuration, and feature-based manifest compilation.)
+**Latest: v3.20** - auto-drafted agent teams can no longer break the build with unquoted YAML frontmatter: `forge-build-agent-team` now always double-quotes `description:`, ships a `validate-frontmatter.mjs` mechanical gate, `forge-execution-adapter compile` names the offending file on parse errors, and `forge-launcher engine-run` fails fast on compile failure. See [docs/updates.md](docs/updates.md). (v3.19: headless PRD runs get the same gap check the manual flow does, `forge-build-agent-team` writes `docs/agent-responsibility-matrix.md`, and the Forge Board gained crisp zoom plus in-place expanding cards. v3.18: the workflow engine runs multi-task opencode builds against one warm `opencode serve` (`--keep-alive`/`--attach`). v3.17: the `forge-launcher` npm package is reliable on Windows.)
 
 ---
 
@@ -236,6 +236,8 @@ cd .agents/skills/forge-execution-adapter && npm install && npm run forge-execut
 cd ../forge-workflow-engine && npm install && npm run workflow-engine -- run --harness opencode --yes
 # Parallel dispatch (opt-in, harness-gated): run up to N ready tasks concurrently
 npm run workflow-engine -- run --harness opencode --concurrency 3 --yes
+# Keep-alive: attach tasks to one warm opencode server instead of cold-starting per task
+npm run workflow-engine -- run --harness opencode --keep-alive --yes
 # Live dashboard: watch the build as a kanban of agent name tags
 npm run workflow-engine -- run --harness opencode --viz --yes
 ```
@@ -247,6 +249,8 @@ Or drive it conversationally via the companion agent:
 ```
 
 Dark orchestration means one pre-run gate, then unattended dispatch - no approvals between tasks. Resume with `run` after interruption; replay a failed task with `replay <task-id>`. Dry-run first with `--harness stub` to validate setup without spending tokens.
+
+**Cut per-task startup overhead.** Every `opencode run` task normally cold-starts its own project instance (config, AGENTS.md, skills, and every MCP server) - on multi-task runs that adds up. Pass `--keep-alive` to boot one headless `opencode serve` for the run and attach every task to it (`--keep-alive-port <n>` pins the port); each task still gets a fresh, isolated session. If you already keep an `opencode serve` running, point tasks at it with `--attach <url>` (or the `FORGE_ENGINE_ATTACH` / `FORGE_ENGINE_ATTACH_URL` env vars) and skip the lifecycle management.
 
 **Watch the build live (The Forge Board).** Add `--viz` to a run (or `forge-launcher engine-run --viz`) and a PixiJS dashboard opens in your browser at `http://127.0.0.1:4299`: the build renders as a **kanban board** - one band per phase stacked top-to-bottom, with tasks as **name-tag cards** flowing left-to-right through **To Do · In Progress · Done · Failed**. Each card carries a procedurally-drawn **agent face** (tinted per agent, reacting to status), the agent's name, and the task title; dependency and artifact edges connect the cards and brighten on hover, and artifact hand-offs animate as dots. Hover a card for a tooltip, click it for task detail (outputs, artifact, errors), drag to pan, scroll to zoom. The board auto-sizes its bands so cards never overlap. To watch a **detached** run instead, run `npm run workflow-engine -- viz --repo <repo-dir>` from any terminal - it tails the audit log and serves the same dashboard. Pass `--no-open` to skip auto-opening the browser.
 
@@ -271,6 +275,7 @@ copilot -p "/forge-auto-build Use docs/PRD.md as the project PRD. GO --workflow-
 forge-launcher engine-run --harness opencode --yes          # per-task: opencode run
 forge-launcher engine-run --harness copilot --yes           # per-task: copilot -p --yolo
 forge-launcher engine-run --harness opencode --concurrency 3 --yes  # parallel dispatch
+forge-launcher engine-run --harness opencode --keep-alive --yes      # one warm server, no per-task cold boot
 forge-launcher engine-run --harness opencode --task-timeout-ms 900000 --yes  # 15-min task budget
 forge-launcher engine-run --harness opencode --viz --yes    # live Forge Board dashboard
 ```
@@ -279,7 +284,7 @@ forge-launcher engine-run --harness opencode --viz --yes    # live Forge Board d
 - `forge-auto-build`'s engine path (`GO --workflow-engine`) starts the engine **detached** (log: `docs/engine-run.log`) and polls `docs/WORKFLOW-STATE.json` to completion - the build survives the chat session and resumes with `run`.
 - While a task runs, the engine prints a heartbeat line (`…still working on task <id> …`) so a quiet terminal doesn't look hung. Tune it with `--heartbeat-ms <ms>` or `FORGE_ENGINE_HEARTBEAT_MS` (default 15s; `0` disables).
 - Each task runs under a per-task timeout (default 10 min). Raise it with `--task-timeout-ms <ms>` / `FORGE_ENGINE_TASK_TIMEOUT_MS`, or give a single heavy task its own budget via `timeoutMs` in `docs/EXECUTION-MANIFEST.json`. Compile with `--granularity fine` (default) to split tasks into smaller units.
-- With no PRD yet, the launcher queues `forge-auto-build-prd` in headless mode (auto-proceeds with default assumptions recorded in the PRD's Open Questions).
+- With no PRD yet, the launcher queues `forge-auto-build-prd` in headless mode (auto-proceeds with default assumptions recorded in the PRD's Open Questions, and runs the same PRD gap check the manual flow does - acceptance criteria, tech stack, NFRs, phases - filling gaps before approving).
 - `--draft` (PowerShell: `-Draft`) pre-answers the Step 8 auto-draft prompts: generate the PRD from `docs/IDEA.md`, then the agent team from the PRD (from the decomposed vision + features when present), committing each stage and pausing for review before offering the engine run. Non-interactive runs use `FORGE_AUTO_DRAFT=1`.
 - `--dry-run` prints the exact command instead of running it. Configure the runner with `FORGE_RUN_WITH=opencode|copilot`, the engine path with `FORGE_WORKFLOW_ENGINE=1`, and the per-task engine harness with `FORGE_ENGINE_HARNESS=opencode|copilot|openai|stub`.
 - The workflow engine's `--yes` (or `FORGE_ENGINE_YES=1`) skips its interactive pre-run gate for CI/headless runs.

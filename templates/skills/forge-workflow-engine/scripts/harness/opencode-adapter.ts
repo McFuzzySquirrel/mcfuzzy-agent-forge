@@ -19,18 +19,30 @@ import { DEFAULT_TASK_TIMEOUT_MS, type AgentDescriptor, type HarnessAdapter, typ
  * Set OPENCODE_EXTRA_FLAGS env var to inject extra flags (e.g. "--no-stream").
  * `--auto` is passed by default so per-task tool permissions are auto-approved;
  * this adapter runs non-interactively (no user is present to approve prompts).
+ *
+ * Pass `attachUrl` (e.g. "http://127.0.0.1:4096") to attach every task to a
+ * warm `opencode serve` instance. This skips the per-task cold start (config,
+ * AGENTS.md, skills, MCP server boot) - the server holds that state, and each
+ * `run --attach` still creates a fresh, isolated session per task.
  */
+export interface OpenCodeAdapterOptions {
+  /** URL of a running `opencode serve` instance to attach to. */
+  attachUrl?: string;
+}
+
 export class OpenCodeAdapter implements HarnessAdapter {
   readonly name = "opencode";
   readonly supportsConcurrency = true;
 
   private readonly bin: string;
   private readonly extraFlags: string[];
+  private readonly attachUrl?: string;
 
-  constructor() {
+  constructor(options: OpenCodeAdapterOptions = {}) {
     this.bin = process.env["OPENCODE_BIN"] ?? "opencode";
     const extra = (process.env["OPENCODE_EXTRA_FLAGS"] ?? "").split(/\s+/).filter(Boolean);
     this.extraFlags = ["--auto", ...extra];
+    this.attachUrl = options.attachUrl;
   }
 
   async invoke(
@@ -50,13 +62,24 @@ export class OpenCodeAdapter implements HarnessAdapter {
     // working directory from its parent process, not the child's spawn `cwd`, so
     // relying on `cwd: repoRoot` alone runs tasks in the wrong project when the
     // engine process lives in a subdirectory (e.g. the engine's own package dir).
-    const args = ["run", ...modelFlag, "--dir", repoRoot, ...this.extraFlags, prompt];
+    // With `--attach`, `--dir` names the project root on the remote server.
+    const attachFlags = this.attachUrl ? ["--attach", this.attachUrl] : [];
+    const args = ["run", ...modelFlag, "--dir", repoRoot, ...attachFlags, ...this.extraFlags, prompt];
 
     const result = await runCommand(this.bin, args, {
       cwd: repoRoot,
       timeoutMs: timeoutMs ?? DEFAULT_TASK_TIMEOUT_MS,
       maxBufferBytes: 10 * 1024 * 1024,
     });
+    const durationMs = Date.now() - start;
+
+    if (this.attachUrl) {
+      // When attaching, `bootMs` is the client's startup, not a full harness
+      // cold start - comparing it against a non-attach run quantifies the win.
+      console.log(
+        `[opencode] task ${task.id}: boot=${result.bootMs ?? durationMs}ms total=${durationMs}ms`,
+      );
+    }
 
     const stdout = result.stdout;
     const stderr = result.stderr;
@@ -67,7 +90,7 @@ export class OpenCodeAdapter implements HarnessAdapter {
         outputFiles: [],
         stdout,
         stderr,
-        durationMs: Date.now() - start,
+        durationMs,
         errorMessage: result.error,
       };
     }
@@ -78,7 +101,7 @@ export class OpenCodeAdapter implements HarnessAdapter {
         outputFiles: [],
         stdout,
         stderr,
-        durationMs: Date.now() - start,
+        durationMs,
         errorMessage: stderr || `${this.bin} exited with status ${result.status}`,
       };
     }
@@ -92,7 +115,7 @@ export class OpenCodeAdapter implements HarnessAdapter {
       outputFiles,
       stdout,
       stderr: "",
-      durationMs: Date.now() - start,
+      durationMs,
     };
   }
 

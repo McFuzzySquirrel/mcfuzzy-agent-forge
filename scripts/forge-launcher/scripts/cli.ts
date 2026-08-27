@@ -15,6 +15,7 @@ Usage:
                             [--concurrency <n>] [--task-timeout-ms <ms>] [--max-retries <n>]
                             [--retry-delay-ms <ms>] [--heartbeat-ms <ms>] [--yes] [--dry-run]
                             [--viz [--viz-port <n>]] [--no-open]
+                            [--keep-alive [--keep-alive-port <n>]] [--attach <url>]
 
 Launcher options:
   --non-interactive   Skip all interactive prompts (requires env vars; see docs/forge-launcher.md).

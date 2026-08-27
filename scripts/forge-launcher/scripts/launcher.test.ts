@@ -5,7 +5,7 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import { engineDetachedCommand } from "./launcher.ts";
+import { engineDetachedCommand, headlessSkillMsg } from "./launcher.ts";
 import { spawnDetached } from "./format.ts";
 
 const CLI = fileURLToPath(new URL("./cli.ts", import.meta.url));
@@ -60,6 +60,15 @@ test("non-interactive run with no PRD bootstraps and queues forge-auto-build-prd
   assert.ok(!out.includes("/forge-auto-build Use docs/PRD.md as the project PRD"));
 });
 
+test("headless PRD message includes the gap check the manual flow runs", () => {
+  const msg = headlessSkillMsg();
+  assert.ok(msg.startsWith("/forge-auto-build-prd "), msg);
+  assert.ok(msg.includes("PRD gap check"), msg);
+  assert.ok(msg.includes("acceptance criteria"), msg);
+  assert.ok(msg.includes("non-functional requirements"), msg);
+  assert.ok(msg.includes("implementation phases"), msg);
+});
+
 test("auto-draft engine command carries configured granularity/concurrency/timeout/retries", async () => {
   const parent = tmpDir();
   const { code, out } = await runCli(["--non-interactive"], {
@@ -107,6 +116,28 @@ test("auto-draft engine command enables the live dashboard from env", async () =
   assert.ok(out.includes(`engine-run --repo ${repo}`), out);
   assert.ok(out.includes("--viz"), out);
   assert.ok(out.includes("--viz-port 5500"), out);
+  assert.ok(out.includes("--yes"), out);
+});
+
+test("auto-draft engine command carries keep-alive/attach from env", async () => {
+  const parent = tmpDir();
+  const { code, out } = await runCli(["--non-interactive"], {
+    FORGE_HARNESS_CHOICE: "4",
+    FORGE_REPO_NAME: "engine-keepalive-app",
+    FORGE_REPO_PARENT_DIR: parent,
+    FORGE_IDEA: "A todo list app",
+    FORGE_YN_DEFAULT: "n",
+    FORGE_AUTO_DRAFT: "1",
+    FORGE_RUN_WITH: "stub",
+    FORGE_ENGINE_ATTACH: "1",
+    FORGE_ENGINE_ATTACH_URL: "http://127.0.0.1:4096",
+  });
+
+  assert.equal(code, 0, out);
+  const repo = path.join(parent, "engine-keepalive-app");
+  assert.ok(out.includes(`engine-run --repo ${repo}`), out);
+  assert.ok(out.includes("--keep-alive"), out);
+  assert.ok(out.includes("--attach http://127.0.0.1:4096"), out);
   assert.ok(out.includes("--yes"), out);
 });
 

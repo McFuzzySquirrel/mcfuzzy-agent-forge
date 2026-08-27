@@ -122,8 +122,22 @@ When `forge-build-prd` finishes, verify the state:
 - **If the PRD did not qualify:** confirm `docs/PRD.md` remains the sole
   requirements document and the decomposition-not-required outcome was reported.
 
-If any section or file is missing, re-invoke `forge-build-prd` in gap-fill mode
-before continuing.
+Then run a **content gap check** on `docs/PRD.md`, matching the interactive
+quality pass: verify every major component has clear acceptance criteria, a
+defined tech stack, non-functional requirements (performance, security,
+privacy), and implementation phases.
+
+If any section, file, or content gap is found, re-invoke `forge-build-prd` in
+**gap-fill mode** - prompt it to "Review docs/PRD.md for gaps: check that every
+major component has clear acceptance criteria, a defined tech stack,
+non-functional requirements (performance, security, privacy), and implementation
+phases. Flag anything missing and fill in the gaps." - then re-run this
+verification before continuing.
+
+> In **headless mode** this gap check runs automatically and never blocks: no
+> user is present to review, so you fix every gap yourself and re-verify the
+> document meets all the checks above before proceeding to the decomposition
+> check. Record any unresolved judgement calls in the PRD's Open Questions.
 
 ---
 
