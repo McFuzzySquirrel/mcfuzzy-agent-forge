@@ -1,6 +1,6 @@
 {
   "name": "forge-launcher",
-  "version": "1.0.0-beta.0",
+  "version": "1.0.0-beta.1",
   "type": "module",
   "description": "One command from zero to auto-build: creates a repo, bootstraps Agent Forge, captures your idea, and launches the full pipeline. Cross-platform replacement for the forge-launcher/bootstrap/forge-engine-run shell scripts.",
   "bin": {

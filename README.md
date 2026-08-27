@@ -19,7 +19,7 @@ One command, zero to running - no PRD needed. The launcher creates your repo, bo
 
 ```bash
 # Anywhere (npm package - requires Node.js 18+):
-npx forge-launcher@beta          # v1.0.0-beta.0 pre-release (once published)
+npx forge-launcher@beta          # v1.0.0-beta.1 pre-release (once published)
 
 # Or from a clone (legacy shell wrappers, no install):
 git clone https://github.com/McFuzzySquirrel/mcfuzzy-agent-forge.git
@@ -27,7 +27,7 @@ cd mcfuzzy-agent-forge
 ./scripts/forge-launcher.sh          # PowerShell: .\scripts\forge-launcher.ps1
 ```
 
-The npm package is currently a **pre-release** (`1.0.0-beta.0`). Until it is
+The npm package is currently a **pre-release** (`1.0.0-beta.1`). Until it is
 published, install the packed tarball locally (below).
 
 Answer the prompts, then open the repo in your agent harness and run the queued command it prints. Full reference: [docs/forge-launcher.md](docs/forge-launcher.md).
@@ -43,10 +43,10 @@ install and run the interactive TUI from any empty directory:
 ```bash
 # 1. Build the package (compiles dist/ + stages templates as resources)
 cd scripts/forge-launcher
-npm pack                                   # → forge-launcher-1.0.0-beta.0.tgz
+npm pack                                   # → forge-launcher-1.0.0-beta.1.tgz
 
 # 2. Install it like `npm install -g forge-launcher@beta` would (isolated prefix)
-npm install -g --prefix /tmp/forge-user/install ./forge-launcher-1.0.0-beta.0.tgz
+npm install -g --prefix /tmp/forge-user/install ./forge-launcher-1.0.0-beta.1.tgz
 
 # 3. Be the new user: run the TUI in a fresh, unrelated workspace
 mkdir -p /tmp/forge-user/workspace

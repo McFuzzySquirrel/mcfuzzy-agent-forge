@@ -1,5 +1,6 @@
-import { confirm, isCancel, multiline, path as clackPath, select, text } from "@clack/prompts";
+import { confirm, isCancel, multiline, select, text } from "@clack/prompts";
 import fs from "node:fs";
+import path from "node:path";
 import readline from "node:readline";
 import { expandPath } from "./paths.ts";
 
@@ -34,7 +35,7 @@ async function readlinePrompt(message: string, def = ""): Promise<string> {
   return answer.trim() || def;
 }
 
-/** readline line input with Tab completion for file/dir paths. */
+/** readline line input with Tab completion for file/dir paths (both \ and /). */
 async function readlinePathPrompt(message: string, def = ""): Promise<string> {
   const display = def ? `${message} [${def}]: ` : `${message}: `;
   const rl = readline.createInterface({
@@ -42,15 +43,17 @@ async function readlinePathPrompt(message: string, def = ""): Promise<string> {
     output: process.stdout,
     terminal: true,
     completer: (line: string) => {
-      const dir = line.includes("/") ? line.slice(0, line.lastIndexOf("/") + 1) : "";
-      const base = line.includes("/") ? line.slice(line.lastIndexOf("/") + 1) : line;
+      const { dir, base } = splitPathInput(line);
       let entries: string[] = [];
       try {
-        entries = fs.readdirSync(expandPath(dir) || dir || ".");
+        const readDir = dir ? path.resolve(expandPath(dir) || dir) : ".";
+        entries = fs.readdirSync(readDir);
       } catch {
         return [[line], line];
       }
-      const hits = entries.filter((e) => e.startsWith(base)).map((e) => dir + e);
+      const hits = entries
+        .filter((e) => e.toLowerCase().startsWith(base.toLowerCase()))
+        .map((e) => dir + e);
       return [hits.length ? hits : [line], line];
     },
   });
@@ -116,6 +119,117 @@ async function readlineMultiline(message: string): Promise<string> {
 }
 
 // ---------------------------------------------------------------------------
+// Path picking helpers (cross-platform: \ and / separators, case-insensitive)
+// ---------------------------------------------------------------------------
+
+/** Splits a typed path into its directory prefix and the trailing name part. */
+export function splitPathInput(line: string): { dir: string; base: string } {
+  const idx = Math.max(line.lastIndexOf("/"), line.lastIndexOf("\\"));
+  if (idx === -1) return { dir: "", base: line };
+  return { dir: line.slice(0, idx + 1), base: line.slice(idx + 1) };
+}
+
+export interface DirEntry {
+  name: string;
+  path: string;
+  isDirectory: boolean;
+}
+
+/** Lists directory entries, folders first, then case-insensitive by name. */
+export function listDirEntries(dir: string, opts: { directory?: boolean } = {}): DirEntry[] {
+  const abs = path.resolve(dir || ".");
+  let raw: fs.Dirent[];
+  try {
+    raw = fs.readdirSync(abs, { withFileTypes: true });
+  } catch {
+    return [];
+  }
+  return raw
+    .filter((e) => e.name !== "." && e.name !== "..")
+    .filter((e) => (opts.directory ? e.isDirectory() : true))
+    .map((e) => ({ name: e.name, path: path.join(abs, e.name), isDirectory: e.isDirectory() }))
+    .sort((a, b) => {
+      if (a.isDirectory !== b.isDirectory) return a.isDirectory ? -1 : 1;
+      return a.name.localeCompare(b.name, undefined, { sensitivity: "base" });
+    });
+}
+
+const USE_FOLDER = "\u0000use";
+const TYPE_PATH = "\u0000type";
+const GO_UP = "\u0000up";
+
+function validateTypedPath(input: string | undefined, opts: { directory?: boolean }): string | undefined {
+  const raw = expandPath((input ?? "").trim());
+  if (!raw) return "Path cannot be empty";
+  const p = path.resolve(raw);
+  if (!fs.existsSync(p)) return opts.directory ? undefined : `File not found: ${p}`;
+  const st = fs.statSync(p);
+  if (opts.directory && !st.isDirectory()) return `Not a directory: ${p}`;
+  if (!opts.directory && !st.isFile()) return `Not a file: ${p}`;
+  return undefined;
+}
+
+/**
+ * Interactive cross-platform file/directory picker. Uses a clack `select` list
+ * (reliable on Windows, unlike @clack/prompts' `path` autocomplete, which
+ * hardcodes "/" and does case-sensitive full-path prefix matching). Navigate
+ * with folders, "..", and a "Type a path…" free-text entry for search.
+ */
+export async function pickPath(
+  message: string,
+  initial = "",
+  opts: { directory?: boolean } = {},
+): Promise<string> {
+  let current = initial ? path.resolve(expandPath(initial) || initial) : path.resolve(".");
+  if (opts.directory && fs.existsSync(current) && !fs.statSync(current).isDirectory()) {
+    current = path.dirname(current);
+  }
+  for (;;) {
+    const entries = listDirEntries(current, opts);
+    const atRoot = path.dirname(current) === current;
+    const options: Array<{ value: string; label: string; hint?: string }> = [];
+    if (opts.directory) options.push({ value: USE_FOLDER, label: "Use this folder", hint: current });
+    options.push({ value: TYPE_PATH, label: "Type a path\u2026", hint: "" });
+    if (!atRoot) options.push({ value: GO_UP, label: "..  (go up)", hint: path.dirname(current) });
+    for (const e of entries) {
+      options.push({
+        value: e.path,
+        label: e.isDirectory ? `${e.name}/` : e.name,
+        hint: e.isDirectory ? "directory" : "file",
+      });
+    }
+    if (options.length === 0) return current;
+
+    const choice = checkCancel<string>(
+      await select({
+        message: `${message}\n  ${current}`,
+        options,
+        initialValue: opts.directory ? USE_FOLDER : undefined,
+      }),
+    );
+    if (choice === USE_FOLDER) return current;
+    if (choice === TYPE_PATH) {
+      const typed = checkCancel<string>(
+        await text({
+          message: "Enter a path",
+          initialValue: current,
+          validate: (v) => validateTypedPath(v, opts),
+        }),
+      );
+      return path.resolve(expandPath(typed.trim() || current) || current);
+    }
+    if (choice === GO_UP) {
+      current = path.dirname(current);
+      continue;
+    }
+    const entry = entries.find((e) => e.path === choice);
+    if (!entry) continue;
+    if (entry.isDirectory) current = entry.path;
+    else return entry.path;
+  }
+}
+
+// ---------------------------------------------------------------------------
 // Public prompt helpers (clack when interactive TTY, readline otherwise)
 // ---------------------------------------------------------------------------
 
@@ -128,8 +242,9 @@ export async function prompt(message: string, def = ""): Promise<string> {
 }
 
 /**
- * Reads a file/directory path. When interactive, uses a clack autocomplete path
- * picker (Tab-completes existing entries); falls back to readline for non-TTY.
+ * Reads a file/directory path. Interactive TTY sessions get a cross-platform
+ * directory picker (folders, "..", type-to-search); piped input falls back to
+ * a readline prompt.
  */
 export async function promptPath(
   message: string,
@@ -138,12 +253,7 @@ export async function promptPath(
 ): Promise<string> {
   if (prompts.nonInteractive) return def;
   if (!isTty()) return readlinePrompt(message, def);
-  if (opts.directory) {
-    const result = await clackPath({ message, directory: true, initialValue: def || undefined });
-    return checkCancel(result).trim() || def;
-  }
-  const result = await clackPath({ message, initialValue: def || undefined });
-  return checkCancel(result).trim() || def;
+  return pickPath(message, def, opts);
 }
 
 /** Reads multiple paths until a blank line (readline; keeps Tab completion). */

@@ -43,7 +43,7 @@
 
 ### npm package (recommended, cross-platform)
 
-> The npm package is a **pre-release** (`forge-launcher@beta`, v1.0.0-beta.0).
+> The npm package is a **pre-release** (`forge-launcher@beta`, v1.0.0-beta.1).
 > Until it is published, install the packed tarball from
 > `scripts/forge-launcher/` (see the README "Try the npm launcher locally"
 > section) or use the legacy wrappers below.
