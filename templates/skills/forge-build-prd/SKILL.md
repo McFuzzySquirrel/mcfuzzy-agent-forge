@@ -118,7 +118,11 @@ Incorporate feedback and iterate until the user confirms the document is ready. 
 
 > **Headless mode.** When invoked non-interactively, present the checklist once
 > (it is part of the audit trail) but do **not** block for approval - the
-> headless invocation has already authorized the document. Proceed to save
+> headless invocation has already authorized the document. Before saving, run a
+> **gap check** against the draft: verify every major component has clear
+> acceptance criteria, a defined tech stack, non-functional requirements
+> (performance, security, privacy), and implementation phases; **fill any gaps**
+> the same way the interactive gap-fill pass would. Only then save
 > `docs/PRD.md` and run Step 5.
 
 ---
