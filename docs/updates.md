@@ -4,6 +4,47 @@ Detailed release and change notes for McFuzzy Agent Forge.
 
 ---
 
+## August 2026 - v3.17
+
+### Cross-platform `forge-launcher` fixes for Windows
+
+The `forge-launcher` npm package (`1.0.0-beta.2`) is now reliable on Windows,
+where the interactive TUI and CLI spawning previously misbehaved:
+
+- **Directory picker that works on Windows.** `@clack/prompts`' `path`
+  autocomplete hardcodes `/` and does case-sensitive full-path prefix matching,
+  so on Windows the "Parent directory" step listed nothing and typing a name to
+  search found nothing. The launcher now uses its own cross-platform picker
+  (a clack `select` list over a directory listing): subfolders show immediately,
+  `..` goes up (disabled at a drive root), and a "Type a path…" entry accepts
+  either `\` or `/` case-insensitively. The readline/Tab-completion fallback
+  shares the fix.
+- **No more `spawn opencode ENOENT`.** CLIs installed via `npm install -g`
+  (opencode, copilot, claude) are `.cmd` shims on Windows, which plain
+  `child_process.spawn` cannot launch. Spawning now goes through `cross-spawn`,
+  which resolves shims with correct argument quoting. A failed spawn reports
+  `Failed to run '<cmd>': … — is it installed and on PATH?` instead of a cryptic
+  ENOENT. The terminal auto-launch code also gets correct PATH detection
+  (`;`-delimited, `.exe`/`.cmd`/`.bat`) and Windows Terminal detection via
+  `WT_SESSION`.
+- **Friendlier pre-publish install guidance.** The README and
+  `docs/forge-launcher.md` document a simple local install
+  (`npm install` → `npm pack` → `npm install -g <tarball>`), a dev symlink
+  (`npm link`), and the matching uninstall/unlink cleanup — no temp-workspace
+  ceremony for day-to-day testing.
+- **Update check.** On startup, `forge-launcher` checks the npm registry once a
+  day (honoring the configured registry, so a local Verdaccio works) and prints
+  a notice when a newer version exists — prereleases check the `beta` tag,
+  releases check `latest`. The result is cached in a user-level file, the
+  fetch is timeout-bounded and fails silently offline, and it can be disabled
+  with `--no-update-check` or `FORGE_SKIP_UPDATE_CHECK=1` (also skipped in CI).
+- **Tests.** The `forge-launcher` suite is now **36** `node --test` cases (new:
+  the path-picker helpers, spawn error handling, and the update check's
+  dist-tag heuristic, version comparison, cache freshness, registry URL, and
+  fetch paths); the package builds and typechecks clean.
+
+---
+
 ## August 2026 - v3.16
 
 ### Live visualization: The Squirrel Forge

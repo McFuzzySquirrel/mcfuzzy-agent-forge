@@ -9,7 +9,7 @@
 
 **McFuzzy Agent Forge** turns your requirements into a team of specialist agents that plan, implement, and validate a project. The PRD is the quality gate: you deliberately review it, then the pipeline generates the team and drives the build - either interactively or fully autonomously ("dark orchestration").
 
-**Latest: v3.16** - the workflow engine now ships a live **Squirrel Forge dashboard**: add `--viz` to `workflow-engine run` (or `forge-launcher engine-run --viz`) and a PixiJS oak tree grows as the build executes - each agent a named squirrel, artifacts rolled as acorns between tasks, hover/click for task detail, pan/zoom - with a standalone `workflow-engine viz` attach mode for watching detached runs. See [docs/updates.md](docs/updates.md) and [ADR-025](docs/adr/025-squirrel-forge-live-workflow-viz.md). (v3.15: the cross-platform `forge-launcher` npm package with its interactive TUI, engine configuration, and feature-based manifest compilation.)
+**Latest: v3.17** - the `forge-launcher` npm package is now reliable on Windows: the TUI's directory picker works (no more empty "search"), spawned CLIs resolve npm `.cmd` shims (no more `spawn opencode ENOENT`), and pre-publish local install/uninstall is documented. See [docs/updates.md](docs/updates.md). (v3.16: the workflow engine now ships a live **Squirrel Forge dashboard**: add `--viz` to `workflow-engine run` (or `forge-launcher engine-run --viz`) and a PixiJS oak tree grows as the build executes - each agent a named squirrel, artifacts rolled as acorns between tasks, hover/click for task detail, pan/zoom - with a standalone `workflow-engine viz` attach mode for watching detached runs. See [docs/updates.md](docs/updates.md) and [ADR-025](docs/adr/025-squirrel-forge-live-workflow-viz.md). (v3.15: the cross-platform `forge-launcher` npm package with its interactive TUI, engine configuration, and feature-based manifest compilation.))
 
 ---
 
@@ -19,7 +19,7 @@ One command, zero to running - no PRD needed. The launcher creates your repo, bo
 
 ```bash
 # Anywhere (npm package - requires Node.js 18+):
-npx forge-launcher@beta          # v1.0.0-beta.1 pre-release (once published)
+npx forge-launcher@beta          # v1.0.0-beta.2 pre-release (once published)
 
 # Or from a clone (legacy shell wrappers, no install):
 git clone https://github.com/McFuzzySquirrel/mcfuzzy-agent-forge.git
@@ -27,7 +27,7 @@ cd mcfuzzy-agent-forge
 ./scripts/forge-launcher.sh          # PowerShell: .\scripts\forge-launcher.ps1
 ```
 
-The npm package is currently a **pre-release** (`1.0.0-beta.1`). Until it is
+The npm package is currently a **pre-release** (`1.0.0-beta.2`). Until it is
 published, install the packed tarball locally (below).
 
 Answer the prompts, then open the repo in your agent harness and run the queued command it prints. Full reference: [docs/forge-launcher.md](docs/forge-launcher.md).
@@ -36,17 +36,51 @@ Answer the prompts, then open the repo in your agent harness and run the queued 
 
 ### Try the npm launcher locally (pre-publish)
 
-`npx forge-launcher@beta` needs the package published to npm. Until then, test the
-exact end-user experience — install the packed package like a normal global
-install and run the interactive TUI from any empty directory:
+`npx forge-launcher@beta` needs the package published to npm. Until then, install
+it locally from your clone:
+
+```bash
+# 1. Install build deps + build the package (compiles dist/ + stages templates)
+cd scripts/forge-launcher
+npm install
+npm pack                                   # → forge-launcher-1.0.0-beta.2.tgz
+
+# 2. Install the tarball exactly like a published package (global `forge-launcher`)
+npm install -g ./forge-launcher-1.0.0-beta.2.tgz
+```
+
+`forge-launcher` (or `npx forge-launcher`) now works from any directory.
+
+**Developing (symlink instead of tarball).** Once `dist/` is built, link the
+package globally so edits take effect after each rebuild:
+
+```bash
+cd scripts/forge-launcher
+npm run build && npm link                 # global symlink → `forge-launcher`
+```
+
+**Remove the local install:**
+
+```bash
+npm uninstall -g forge-launcher            # removes a tarball install (or link)
+cd scripts/forge-launcher && npm unlink    # drops the symlink created by `npm link`
+```
+
+> **Update check.** On startup, `forge-launcher` checks the npm registry once a
+> day and prints a notice when a newer version is available. Disable it with
+> `--no-update-check` or `FORGE_SKIP_UPDATE_CHECK=1` (also skipped in CI).
+
+To also verify the exact end-user experience — a clean, unrelated workspace
+where the launcher runs on its **bundled** templates — install into an isolated
+prefix and run from a fresh directory:
 
 ```bash
 # 1. Build the package (compiles dist/ + stages templates as resources)
 cd scripts/forge-launcher
-npm pack                                   # → forge-launcher-1.0.0-beta.1.tgz
+npm pack                                   # → forge-launcher-1.0.0-beta.2.tgz
 
 # 2. Install it like `npm install -g forge-launcher@beta` would (isolated prefix)
-npm install -g --prefix /tmp/forge-user/install ./forge-launcher-1.0.0-beta.1.tgz
+npm install -g --prefix /tmp/forge-user/install ./forge-launcher-1.0.0-beta.2.tgz
 
 # 3. Be the new user: run the TUI in a fresh, unrelated workspace
 mkdir -p /tmp/forge-user/workspace

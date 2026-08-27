@@ -4,6 +4,7 @@ import { engineRunCli } from "./engine-run.ts";
 import { fail } from "./format.ts";
 import { runLauncher } from "./launcher.ts";
 import { PromptCancelled, prompts } from "./prompts.ts";
+import { checkForUpdate, printUpdateNotice } from "./update-check.ts";
 
 const USAGE = `forge-launcher - One command from zero to auto-build
 
@@ -22,6 +23,7 @@ Launcher options:
   --draft             Pre-answer "yes" to the optional auto-draft stages (PRD and/or agent team).
   --dry-run           Print commands without executing them.
   --debug             Print the skill-run log tail after headless runs (also FORGE_LAUNCHER_DEBUG=1).
+  --no-update-check   Skip the daily npm update check.
   -h, --help          Show this help.
 
 Forge skills run with FORGE_HEADLESS=1 so their headless gate fires
@@ -40,7 +42,7 @@ async function main(): Promise<number> {
     return 0;
   }
 
-  const opts = { nonInteractive: false, headless: false, draft: false, dryRun: false };
+  const opts = { nonInteractive: false, headless: false, draft: false, dryRun: false, noUpdateCheck: false };
   for (const a of args) {
     switch (a) {
       case "--non-interactive": opts.nonInteractive = true; break;
@@ -49,6 +51,7 @@ async function main(): Promise<number> {
       case "--draft": opts.draft = true; break;
       case "--dry-run": opts.dryRun = true; break;
       case "--debug": process.env.FORGE_LAUNCHER_DEBUG = "1"; break;
+      case "--no-update-check": opts.noUpdateCheck = true; break;
       default:
         fail(`Unknown option: ${a}`);
         process.stdout.write("\n" + USAGE);
@@ -57,6 +60,8 @@ async function main(): Promise<number> {
   }
 
   prompts.nonInteractive = opts.nonInteractive;
+  const update = await checkForUpdate({ skip: opts.noUpdateCheck });
+  if (update) printUpdateNotice(update);
   return runLauncher(opts);
 }
 

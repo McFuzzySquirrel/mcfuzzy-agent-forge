@@ -43,10 +43,9 @@
 
 ### npm package (recommended, cross-platform)
 
-> The npm package is a **pre-release** (`forge-launcher@beta`, v1.0.0-beta.1).
-> Until it is published, install the packed tarball from
-> `scripts/forge-launcher/` (see the README "Try the npm launcher locally"
-> section) or use the legacy wrappers below.
+> The npm package is a **pre-release** (`forge-launcher@beta`, v1.0.0-beta.2).
+> Until it is published, install it locally from the clone (see the README
+> "Try the npm launcher locally" section) or use the legacy wrappers below.
 
 ```bash
 npx forge-launcher@beta [--non-interactive] [--headless] [--draft] [--dry-run] [--debug]
@@ -56,6 +55,34 @@ npx forge-launcher@beta engine-run [--repo <path>] [--harness <h>] [--concurrenc
 ```
 
 When installed globally (`npm install -g forge-launcher@beta`), drop the `npx`.
+
+#### Install locally before publishing
+
+From the clone, install the packed tarball as a global command, or symlink for
+development:
+
+```bash
+cd scripts/forge-launcher
+npm install                               # build deps
+npm pack                                  # build + stage templates → forge-launcher-1.0.0-beta.2.tgz
+npm install -g ./forge-launcher-1.0.0-beta.2.tgz   # global `forge-launcher`
+
+# dev alternative (once dist/ is built): global symlink
+npm run build && npm link
+```
+
+Remove either install with:
+
+```bash
+npm uninstall -g forge-launcher            # removes a tarball install (or link)
+cd scripts/forge-launcher && npm unlink    # drops the `npm link` symlink
+```
+
+**Update check.** On startup, `forge-launcher` checks the npm registry (honoring
+your configured registry, e.g. a local Verdaccio) once a day and prints a notice
+when a newer version is available — prereleases check the `beta` tag, releases
+check `latest`. Disable it with `--no-update-check` or
+`FORGE_SKIP_UPDATE_CHECK=1` (also skipped in CI).
 
 ### Linux / macOS (legacy script)
 
