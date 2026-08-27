@@ -176,44 +176,7 @@ html, body {
 #tooltip .tt-sub { color: var(--text-dim); margin-top: 2px; }
 #tooltip .tt-status { margin-top: 4px; }
 
-/* ── Detail panel ────────────────────────────────────── */
-
-#panel {
-  position: fixed;
-  z-index: 40;
-  top: 50%;
-  right: 20px;
-  transform: translateY(-50%);
-  width: 300px;
-  max-height: 70vh;
-  overflow: auto;
-  background: var(--panel-bg);
-  border: 1px solid var(--panel-border);
-  border-radius: 14px;
-  padding: 16px;
-  font-size: 12.5px;
-  line-height: 1.55;
-  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.55);
-  backdrop-filter: blur(6px);
-}
-
-#panel-close {
-  position: absolute;
-  top: 8px;
-  right: 12px;
-  cursor: pointer;
-  color: var(--text-dim);
-  font-size: 18px;
-  line-height: 1;
-}
-
-#panel-close:hover { color: var(--text); }
-
-#panel-body h3 { margin: 0 0 8px; font-size: 14px; }
-#panel-body .kv { display: flex; gap: 8px; margin: 3px 0; }
-#panel-body .kv .k { color: var(--text-dim); width: 84px; flex: none; }
-#panel-body .files { margin-top: 8px; }
-#panel-body .files div { color: var(--text-dim); font-family: ui-monospace, monospace; font-size: 11px; }
+/* ── Status labels ───────────────────────────────────── */
 
 .status-label {
   display: inline-block;
