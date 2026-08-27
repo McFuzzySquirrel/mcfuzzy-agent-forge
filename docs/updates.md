@@ -48,25 +48,25 @@ the same Windows blind spot as the launcher:
   (`opencode`, `copilot`, and flowforge-kernel adapters) now spawns through
   `cross-spawn`, resolving npm-installed `.cmd`/`.bat` shims — so `opencode run`
   tasks no longer fail with `spawn opencode ENOENT` during an engine run.
-- **Squirrel Forge dashboard renders and connects.** The vendored PixiJS v8
+- **The Forge Board dashboard renders and connects.** The vendored PixiJS v8
   build exposes the `PIXI` global, but `app.js` referenced `Pixi`, so the
   dashboard script aborted with `ReferenceError: Pixi is not defined` before
   opening the SSE connection. `index.html` now normalizes the global
-  (`window.Pixi = window.PIXI || window.Pixi`), so the tree renders and the
+  (`window.Pixi = window.PIXI || window.Pixi`), so the board renders and the
   dashboard connects.
 - **Kanban dashboard theme.** The oak-tree-and-squirrel metaphor is gone. The
-  build now renders as a **kanban board**: one band per phase stacked
-  top-to-bottom (bands **auto-size** so stacked cards never overlap the next
-  band), with tasks as cards flowing left-to-right through
-  **To Do · In Progress · Done · Failed**. Cards are colored by their owning
-  agent (deterministic accent + legend), re-position themselves smoothly as
-  their status changes, and dependency/artifact edges connect them (brightening
-  on hover) with artifact hand-offs shown as dots. Long titles are trimmed to
-  fit the card, context-projection and artifact badges sit on each card, and
-  the HUD counts *done / total* tasks. Pan/zoom (from the board/background),
-  hover tooltips, and the click detail panel all work as before; the fireflies,
-  leaves, and squirrel animations were removed in favor of a calm, legible
-  board.
+  build now renders as a **kanban board** — renamed **The Forge Board** — one
+  band per phase stacked top-to-bottom (bands **auto-size** so stacked cards
+  never overlap the next band), with tasks as cards flowing left-to-right
+  through **To Do · In Progress · Done · Failed**. Cards are colored by their
+  owning agent (deterministic accent + legend), re-position themselves smoothly
+  as their status changes, and dependency/artifact edges connect them
+  (brightening on hover) with artifact hand-offs shown as dots. Long titles are
+  trimmed to fit the card, context-projection and artifact badges sit on each
+  card, and the HUD counts *done / total* tasks. Pan/zoom (from the
+  board/background), hover tooltips, and the click detail panel all work as
+  before; the fireflies, leaves, and squirrel animations were removed in favor
+  of a calm, legible board.
 - **Cards are name tags with agent faces.** Each task renders as a **name tag**
   badge: a status-colored header ribbon, an avatar circle holding a
   procedurally-drawn **agent face** (deterministic skin/hair tinted per agent,
@@ -83,6 +83,14 @@ the same Windows blind spot as the launcher:
 - **Tests.** The engine suite is now **23** `node --test` cases (kanban layout
   replaces the whorl-tree layout, squirrel-name module removed, plus a crash-
   recovery regression test); the launcher suite remains at **36**.
+
+Related architecture decisions:
+
+- [ADR-026](adr/026-forge-board-kanban-dashboard.md): the Forge Board — kanban
+  redesign, name-tag cards with agent faces, and the running-status
+  persistence/crash-recovery behavior.
+- [ADR-025](adr/025-squirrel-forge-live-workflow-viz.md): the original Squirrel
+  Forge oak-tree visualization (superseded by ADR-026).
 
 ---
 

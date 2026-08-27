@@ -245,7 +245,7 @@ step — a set of defaults you can press Enter through:
   [ADR-021](adr/021-parallel-task-dispatch.md)).
 - **Per-task timeout (ms)** — default `600000`.
 - **Max retries per task** — default `2`.
-- **Live Squirrel Forge dashboard** — launch the visualization during the run
+- **Live Forge Board dashboard** — launch the visualization during the run
   (default on). A port prompt follows (blank = `4299`). The dashboard starts
   when the engine starts — after the manifest is prepared — and its URL is
   printed in `docs/engine-run.log`.
@@ -266,11 +266,12 @@ forge-launcher engine-run --repo "<repo-dir>" --harness opencode --yes --viz  # 
 ```
 
 Pass `--viz` (or `--viz-port <n>`) to `forge-launcher engine-run` to launch the
-**live Squirrel Forge dashboard** (a growing oak tree of named-squirrel agents
-performing the build) alongside the engine run. Add `--no-open` to skip
-auto-opening the browser. `FORGE_ENGINE_VIZ=1` and `FORGE_ENGINE_VIZ_PORT` set
-the same defaults. To attach the dashboard to an already-running or detached
-engine run instead, use `npm run workflow-engine -- viz --repo "<repo-dir>"`
+**live Forge Board dashboard** (a kanban of agent name-tag cards flowing through
+To Do / In Progress / Done / Failed) alongside the engine run. Add `--no-open`
+to skip auto-opening the browser. `FORGE_ENGINE_VIZ=1` and
+`FORGE_ENGINE_VIZ_PORT` set the same defaults. To attach the dashboard to an
+already-running or detached engine run instead, use
+`npm run workflow-engine -- viz --repo "<repo-dir>"`
 inside the repo's engine package.
 
 The engine run honours parallel dispatch too: set `FORGE_ENGINE_CONCURRENCY=<n>`
@@ -624,7 +625,7 @@ reflect the running build (monitor + resume) rather than the manual
  | `FORGE_ENGINE_HEARTBEAT_MS` | 8 | Engine heartbeat interval in ms while a task runs (default `15000`; `0` disables) |
  | `FORGE_WORKFLOW_ENGINE` | 8 | `1` to append `GO --workflow-engine` to the queued headless command (build executes via the workflow engine) |
   | `FORGE_ENGINE_HARNESS` | 8 | Per-task harness for the workflow engine: `opencode` (default), `copilot`, `openai`, `stub`, or `flowforge-kernel` |
-  | `FORGE_ENGINE_VIZ` | 8 | `1` to launch the live Squirrel Forge dashboard with the engine run |
+  | `FORGE_ENGINE_VIZ` | 8 | `1` to launch the live Forge Board dashboard with the engine run |
   | `FORGE_ENGINE_VIZ_PORT` | 8 | Dashboard port when `FORGE_ENGINE_VIZ=1` (default `4299`) |
 
 All other step inputs (repo name, description, visibility, parent directory) use their defaults in non-interactive mode. Override them by setting the variables before running:

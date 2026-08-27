@@ -58,7 +58,7 @@ npm run workflow-engine -- run --harness flowforge-kernel
 npm run workflow-engine -- run --max-retries 3 --retry-delay-ms 10000
 npm run workflow-engine -- run --harness opencode --yes   # skip the pre-run gate
 npm run workflow-engine -- run --heartbeat-ms 5000        # heartbeat every 5s while a task runs
-npm run workflow-engine -- run --harness stub --viz --yes # run with the live Squirrel Forge dashboard
+npm run workflow-engine -- run --harness stub --viz --yes # run with the live Forge Board dashboard
 ```
 
 The engine prints a pre-run summary (harness, phases, tasks) and, when run
@@ -79,13 +79,14 @@ npm run workflow-engine -- run --heartbeat-ms 0            # disable
 
 `--heartbeat-ms` overrides the `FORGE_ENGINE_HEARTBEAT_MS` environment variable.
 
-### Live visualization (The Squirrel Forge)
+### Live visualization (The Forge Board)
 
 Pass `--viz` (or `--viz=<port>`, default `4299`) to run to launch a live PixiJS
-dashboard of the build in your browser. The DAG is drawn as a growing oak tree:
-each agent is a named squirrel doing its tasks, phases are whorls up the trunk,
-artifacts are acorns rolled between squirrels, and statuses map to poses.
-Hover for tooltips, click for task details, drag to pan, scroll to zoom.
+dashboard of the build in your browser. The build renders as a kanban board:
+one band per phase, with tasks as name-tag cards (each carrying the owning
+agent's face and name) flowing left-to-right through To Do / In Progress /
+Done / Failed, connected by dependency and artifact edges. Hover for tooltips,
+click for task details, drag to pan, scroll to zoom.
 
 ```bash
 npm run workflow-engine -- run --harness stub --viz --yes

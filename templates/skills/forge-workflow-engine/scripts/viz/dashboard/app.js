@@ -1,7 +1,7 @@
 /* global Pixi */
 "use strict";
 
-// ─── The Squirrel Forge — kanban dashboard ─────────────────────────────────────
+// ─── The Forge Board — live workflow kanban ───────────────────────────────────
 // Live PixiJS dashboard for the forge-workflow-engine. Connects to the viz
 // server over SSE (/api/events) with an initial snapshot (/api/manifest +
 // /api/state + /api/layout) and renders the build as a kanban board: one band

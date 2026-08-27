@@ -108,7 +108,7 @@ npm run workflow-engine -- viz     [--repo <path>] [--port <n>] [--no-open]
 | `--concurrency <n>` | `1` | Max ready tasks to run in parallel (see *Parallel dispatch* below) |
 | `--task-timeout-ms <ms>` | `600000` (10 min) | Per-task timeout before the harness call is killed; a task's own `timeoutMs` in the manifest overrides this |
 | `--yes` | *(off)* | Skip the interactive pre-run gate |
-| `--viz [port]` | *(off)* | Launch the live Squirrel Forge dashboard (default port `4299`, next free port if busy) |
+| `--viz [port]` | *(off)* | Launch the live Forge Board dashboard (default port `4299`, next free port if busy) |
 | `--no-open` | *(off)* | Do not auto-open the browser (the URL is still printed) |
 
 ### Pre-run gate
@@ -127,7 +127,7 @@ the engine prints a heartbeat line every `--heartbeat-ms`:
 [engine] …still working on task 1.1 (@project-architect, 45s elapsed)
 ```
 
-### Live visualization (The Squirrel Forge)
+### Live visualization (The Forge Board)
 
 Pass `--viz` to run (or `forge-launcher engine-run --viz`) to launch a live
 dashboard in your browser at `http://127.0.0.1:4299`:
@@ -136,21 +136,22 @@ dashboard in your browser at `http://127.0.0.1:4299`:
 npm run workflow-engine -- run --harness stub --viz --yes
 ```
 
-The dashboard renders the build DAG as a single oak tree that **grows over the
-course of the run**. Each agent is a **named squirrel** (deterministic names,
-e.g. `api-engineer` → "Tailor", `qa-engineer` → "Nutsy"). Phases are whorls up
-the trunk, tasks hang from each whorl's branches, and statuses become poses:
-dozing = pending, scurrying = running, celebration bounce = complete, tumble =
-failed. Artifacts are **acorns** that roll up the trunk to the consuming
-squirrel on `artifact.created`, and `context.projected` shows a knapsack-arc
-gauge of token reduction on a busy squirrel. The canopy fills with leaves as
-tasks complete, browns on failure, and blooms when all squirrels hoist the
-golden acorn at the end.
+The dashboard renders the build as a **kanban board**. Each phase is a
+horizontal **band** (auto-sized to its tasks so cards never overlap), and tasks
+are **name-tag cards** that flow left-to-right through **To Do · In Progress ·
+Done · Failed** as their status changes. Each card carries a procedurally-drawn
+**agent face** — deterministic skin/hair tinted per agent (matching its
+legend color) with a mouth that reacts: neutral when pending, working when
+running, a smile on complete, a frown on failure — plus the agent's name, the
+task title, and the task id. Dependency and artifact **edges** connect the
+cards (brightening on hover), artifact hand-offs animate as glowing dots, and
+`context.projected` shows a `ctx −N%` badge on the producing card.
 
-Interactions: hover a squirrel for a tooltip, click for the task detail panel
-(title, owner, status, duration, files, artifact), drag to pan, scroll to zoom.
-Events stream over Server-Sent Events; a snapshot is replayed on every
-(re)connect.
+Interactions: hover a card for a tooltip, click for the task detail panel
+(title, owner, status, duration, files, artifact, inputs), drag to pan, scroll
+to zoom. Events stream over Server-Sent Events; a snapshot is replayed on every
+(re)connect, and the engine persists a task's `running` status so the In
+Progress column reflects in-flight work even on a mid-run refresh.
 
 To **attach to an already-running (or detached) engine run**, use the `viz`
 subcommand from any terminal — it tails the audit log and serves the same
@@ -162,7 +163,8 @@ npm run workflow-engine -- viz --repo <repo-dir>
 
 Both modes bind to `127.0.0.1` only. Pass `--no-open` to skip auto-opening the
 browser (the URL is printed instead). See
-[ADR-025](adr/025-squirrel-forge-live-workflow-viz.md) for the full design.
+[ADR-026](adr/026-forge-board-kanban-dashboard.md) for the redesign and
+[ADR-025](adr/025-squirrel-forge-live-workflow-viz.md) for the original design.
 
 ### Task timeout
 
