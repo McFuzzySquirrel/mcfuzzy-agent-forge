@@ -113,7 +113,9 @@ dashboard of the build in your browser. The build renders as a kanban board:
 one band per phase, with tasks as name-tag cards (each carrying the owning
 agent's face and name) flowing left-to-right through To Do / In Progress /
 Done / Failed, connected by dependency and artifact edges. Hover for tooltips,
-click for task details, drag to pan, scroll to zoom.
+click a card to expand it in place with task detail (description, status,
+owner, phase, duration, artifact, inputs, dependencies, outputs, validation,
+errors), drag to pan, scroll to zoom.
 
 ```bash
 npm run workflow-engine -- run --harness stub --viz --yes

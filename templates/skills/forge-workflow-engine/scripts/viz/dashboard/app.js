@@ -62,19 +62,32 @@ function toTexture(target) {
   return RENDERER.generateTexture({ target });
 }
 
+/** Shared text-style factory: bakes text at 2x resolution so it stays crisp
+ * when the camera zooms in (PixiJS rasterizes Text into a texture once). */
+function textStyle(overrides) {
+  return Object.assign({
+    fontFamily: "system-ui, sans-serif",
+    resolution: 2,
+  }, overrides);
+}
+
+/** Procedural textures are baked once, so draw them at 2x and render the
+ * sprite at half scale - keeps dots/glows crisp when the camera zooms in. */
 function circleTexture(radius, color, alpha = 1) {
   const g = new P.Graphics();
-  g.circle(radius, radius, radius).fill({ color, alpha });
+  const r = radius * 2;
+  g.circle(r, r, r).fill({ color, alpha });
   return toTexture(g);
 }
 
 function softGlowTexture(radius, color) {
   const g = new P.Graphics();
   const steps = 8;
+  const r2 = radius * 2;
   for (let i = 0; i < steps; i += 1) {
-    const r = radius * (1 - i / steps);
+    const r = r2 * (1 - i / steps);
     const a = (1 - i / steps) ** 2 * 0.35;
-    g.circle(radius, radius, r).fill({ color, alpha: a });
+    g.circle(r2, r2, r).fill({ color, alpha: a });
   }
   return toTexture(g);
 }
@@ -189,6 +202,7 @@ function truncate(text, maxChars) {
   const edgeGfx = new P.Graphics();
   const edgeLayer = new P.Container();
   const cardLayer = new P.Container();
+  cardLayer.sortableChildren = true; // expanded cards float above their neighbors
   const effectLayer = new P.Container();
 
   const world = new P.Container();
@@ -250,7 +264,9 @@ function truncate(text, maxChars) {
   app.stage.on("wheel", (e) => {
     e.preventDefault();
     const factor = Math.pow(1.0015, -e.deltaY);
-    const newScale = clamp(scale * factor, 0.25, 2.5);
+    // Max zoom 2.0 matches the 2x text/texture baking; beyond that content
+    // upscales and goes soft.
+    const newScale = clamp(scale * factor, 0.25, 2.0);
     const k = newScale / scale;
     world.x = e.global.x - (e.global.x - world.x) * k;
     world.y = e.global.y - (e.global.y - world.y) * k;
@@ -346,13 +362,12 @@ function truncate(text, maxChars) {
     for (const col of state.columns.values()) {
       const t = new P.Text({
         text: col.label,
-        style: {
-          fontFamily: "system-ui, sans-serif",
+        style: textStyle({
           fontSize: 14,
           fontWeight: "800",
           fill: 0xe8ecf5,
           letterSpacing: 0.04,
-        },
+        }),
       });
       t.anchor.set(0.5, 0.5);
       t.position.set(col.x + col.width / 2, 26);
@@ -363,12 +378,12 @@ function truncate(text, maxChars) {
       const label = new P.Container();
       const name = new P.Text({
         text: truncate(phase.title || phase.id, 20),
-        style: { fontFamily: "system-ui, sans-serif", fontSize: 13, fontWeight: "700", fill: 0xc7cde0 },
+        style: textStyle({ fontSize: 13, fontWeight: "700", fill: 0xc7cde0 }),
       });
       name.position.set(0, 0);
       const idx = new P.Text({
         text: `Phase ${phase.index + 1}`,
-        style: { fontFamily: "system-ui, sans-serif", fontSize: 10, fill: 0x8b96b8 },
+        style: textStyle({ fontSize: 10, fill: 0x8b96b8 }),
       });
       idx.position.set(0, 18);
       label.addChild(name, idx);
@@ -420,40 +435,49 @@ function truncate(text, maxChars) {
     avatar.position.set(30, GEOM.cardH / 2);
     const nameText = new P.Text({
       text: "",
-      style: { fontFamily: "system-ui, sans-serif", fontSize: 11, fontWeight: "700", fill: 0xeef1f9 },
+      style: textStyle({ fontSize: 11, fontWeight: "700", fill: 0xeef1f9 }),
     });
     nameText.position.set(52, 6);
     const title = new P.Text({
       text: "",
-      style: { fontFamily: "system-ui, sans-serif", fontSize: 9.5, fontWeight: "500", fill: 0xb6c0dc },
+      style: textStyle({ fontSize: 9.5, fontWeight: "500", fill: 0xb6c0dc }),
     });
     title.position.set(52, 21);
     const idText = new P.Text({
       text: "",
-      style: { fontFamily: "ui-monospace, monospace", fontSize: 8.5, fill: 0x7f88a8 },
+      style: textStyle({ fontFamily: "ui-monospace, monospace", fontSize: 8.5, fill: 0x7f88a8 }),
     });
     idText.position.set(52, 35);
     const dot = new P.Sprite(circleTexture(5, 0xffffff));
     dot.anchor.set(0.5);
+    dot.scale.set(0.5);
     const badgeLayer = new P.Container();
+    // Expanded-detail layer, appended last so it draws above the name-tag
+    // content. paintCard never touches it; expansion fills it on demand.
+    const detailLayer = new P.Container();
+    detailLayer.eventMode = "none";
 
     const root = new P.Container();
     root.eventMode = "static";
     root.cursor = "pointer";
     root.hitArea = new P.Rectangle(0, 0, cardW, GEOM.cardH);
-    root.addChild(bg, ribbon, avatar, nameText, title, idText, dot, badgeLayer);
+    root.addChild(bg, ribbon, avatar, nameText, title, idText, dot, badgeLayer, detailLayer);
 
     const entry = {
-      root, bg, ribbon, avatar, nameText, title, idText, dot, badgeLayer,
+      root, bg, ribbon, avatar, nameText, title, idText, dot, badgeLayer, detailLayer,
       task, status: "pending", artifactId: null, ctxPct: null,
       targetX: 0, targetY: 0,
+      expanded: false, detailH: 0, curH: 0, detailTexts: [],
     };
 
     root.on("pointertap", (e) => {
       e.stopPropagation();
-      showPanel(entry);
+      if (entry.expanded) collapseCard(entry); else expandCard(entry);
     });
-    root.on("pointerover", () => { setHover(task.id); showTooltip(entry); });
+    root.on("pointerover", () => {
+      setHover(task.id);
+      if (!entry.expanded) showTooltip(entry);
+    });
     root.on("pointerout", () => { setHover(null); hideTooltip(); });
 
     return entry;
@@ -483,11 +507,15 @@ function truncate(text, maxChars) {
     const cardW = state.cardW;
     const hue = agentHue(entry.task.ownerAgent);
     const running = entry.status === "running";
+    // Expanded cards grow (height animated via entry.curH) and use an opaque
+    // backdrop so overlapping neighbors don't bleed through.
+    const h = GEOM.cardH + entry.curH;
+    const expanded = entry.expanded || entry.curH > 0.5;
 
     entry.bg.clear();
-    entry.bg.roundRect(0, 0, cardW, GEOM.cardH, 8)
-      .fill({ color, alpha: running ? 0.14 : 0.08 })
-      .stroke({ width: 1.5, color: agentColor(entry.task.ownerAgent), alpha: 0.85 });
+    entry.bg.roundRect(0, 0, cardW, h, 8)
+      .fill({ color: expanded ? 0x0c1224 : color, alpha: expanded ? 1 : (running ? 0.14 : 0.08) })
+      .stroke({ width: 1.5, color: agentColor(entry.task.ownerAgent), alpha: expanded ? 1 : 0.85 });
     // Name-tag header ribbon (status color).
     entry.ribbon.clear();
     entry.ribbon.roundRect(0, 0, cardW, 3, 2)
@@ -509,7 +537,7 @@ function truncate(text, maxChars) {
     if (entry.ctxPct !== null) {
       const t = new P.Text({
         text: `ctx −${entry.ctxPct}%`,
-        style: { fontFamily: "system-ui, sans-serif", fontSize: 9, fill: 0xa9d1f7 },
+        style: textStyle({ fontSize: 9, fill: 0xa9d1f7 }),
       });
       t.anchor.set(1, 0);
       t.position.set(bx, 26);
@@ -519,12 +547,110 @@ function truncate(text, maxChars) {
     if (entry.artifactId) {
       const t = new P.Text({
         text: `⛁ ${entry.artifactId}`,
-        style: { fontFamily: "system-ui, sans-serif", fontSize: 9, fill: 0xf5c542 },
+        style: textStyle({ fontSize: 9, fill: 0xf5c542 }),
       });
       t.anchor.set(1, 0);
       t.position.set(bx, 26);
       entry.badgeLayer.addChild(t);
     }
+  }
+
+  // ── Expanded cards ─────────────────────────────────────────────────────────
+  const DETAIL_FONT = 10;
+  const DETAIL_PAD_X = 12;
+  const DETAIL_ROW_GAP = 3;
+  const DETAIL_BOTTOM_PAD = 12;
+  const DETAIL_ROW_H = 15; // fixed row step (measurement-safe, roomy)
+
+  let expandedEntry = null;
+
+  /** Finds the full manifest task (rich detail) by id. */
+  function manifestTaskFor(id) {
+    if (!state.manifest) return null;
+    for (const phase of state.manifest.phases) {
+      for (const t of phase.tasks) if (t.id === id) return t;
+    }
+    return null;
+  }
+
+  /** Rebuilds the detail rows of an expanded card; returns the extension
+   *  height below the name-tag area. */
+  function buildDetail(entry) {
+    const task = manifestTaskFor(entry.task.id) || entry.task;
+    const layer = entry.detailLayer;
+    layer.removeChildren().forEach((c) => c.destroy());
+    entry.detailTexts.length = 0;
+
+    const w = state.cardW;
+    let y = GEOM.cardH + 8;
+    const long = (v) => truncate(String(v ?? ""), 64);
+
+    const push = (text, style) => {
+      const t = new P.Text({ text, style });
+      t.position.set(DETAIL_PAD_X, y);
+      layer.addChild(t);
+      entry.detailTexts.push(t);
+      return t;
+    };
+
+    const row = (label, value, fill) => {
+      push(label, textStyle({ fontSize: DETAIL_FONT, fontWeight: "600", fill: 0x7f88a8 }));
+      push(value, textStyle({ fontSize: DETAIL_FONT, fill: fill || 0xdbe4ff }));
+      y += DETAIL_ROW_H;
+    };
+
+    if (task.description) {
+      const l = push("Description", textStyle({ fontSize: DETAIL_FONT, fontWeight: "600", fill: 0x7f88a8 }));
+      const body = new P.Text({
+        text: truncate(task.description, 240),
+        style: textStyle({
+          fontSize: DETAIL_FONT,
+          fill: 0xb6c0dc,
+          wordWrap: true,
+          wordWrapWidth: w - DETAIL_PAD_X * 2,
+          lineHeight: 14,
+        }),
+      });
+      body.position.set(DETAIL_PAD_X, y + l.height + 2);
+      layer.addChild(body);
+      entry.detailTexts.push(body);
+      y += l.height + 2 + (body.height > 0 ? body.height : 42) + 6;
+    }
+
+    row("Status", STATUS_LABEL[entry.status] || entry.status, STATUS_COLORS[entry.status] || 0xdbe4ff);
+    row("Owner", agentLabel(entry.task.ownerAgent));
+    row("Phase", String(entry.task.phaseId ?? ""));
+    if (entry.durationMs) row("Duration", `${Math.round(entry.durationMs / 1000)}s`);
+    if (task.timeoutMs) row("Timeout", `${Math.round(task.timeoutMs / 1000)}s`);
+    if (entry.artifactId) row("Artifact", String(entry.artifactId));
+    if (entry.errorMessage) row("Error", long(entry.errorMessage), 0xff8f8f);
+    if (task.inputs && task.inputs.length) row("Inputs", long(task.inputs.join(", ")));
+    if (task.dependencies && task.dependencies.length) row("Dependencies", long(task.dependencies.join(", ")));
+    if (task.expectedOutputs && task.expectedOutputs.length) row("Outputs", long(task.expectedOutputs.join(", ")));
+    if (task.validationCommands && task.validationCommands.length) row("Validation", long(task.validationCommands.join("; ")));
+
+    return y - (GEOM.cardH + 8) + DETAIL_BOTTOM_PAD;
+  }
+
+  function expandCard(entry) {
+    if (expandedEntry && expandedEntry !== entry) collapseCard(expandedEntry);
+    expandedEntry = entry;
+    entry.expanded = true;
+    entry.root.zIndex = 1;
+    entry.detailH = buildDetail(entry);
+    if (entry.curH === 0) entry.curH = 1;
+    entry.root.hitArea = new P.Rectangle(0, 0, state.cardW, GEOM.cardH + entry.detailH);
+    hideTooltip();
+    paintCard(entry);
+  }
+
+  function collapseCard(entry) {
+    entry.expanded = false;
+    entry.root.zIndex = 0;
+    entry.root.hitArea = new P.Rectangle(0, 0, state.cardW, GEOM.cardH);
+    if (expandedEntry === entry) expandedEntry = null;
+    hideTooltip();
+    paintCard(entry);
   }
 
   function columnKeyFor(status) {
@@ -599,6 +725,7 @@ function truncate(text, maxChars) {
       if (!to) continue;
       const dot = new P.Sprite(softGlowTexture(6, 0xf5c542));
       dot.anchor.set(0.5);
+      dot.scale.set(0.5);
       dot.eventMode = "none";
       dot.position.set(from.root.x + state.cardW, from.root.y + GEOM.cardH / 2);
       effectLayer.addChild(dot);
@@ -644,6 +771,7 @@ function truncate(text, maxChars) {
     state.edges.length = 0;
     state.columns.clear();
     state.phases.clear();
+    expandedEntry = null;
     clearLabels();
 
     const colKeys = ["pending", "running", "complete", "failed"];
@@ -695,6 +823,7 @@ function truncate(text, maxChars) {
     entry.status = status;
     if (status === "complete") entry.files = entry.files || [];
     paintCard(entry);
+    if (entry.expanded) buildDetail(entry);
     layoutCards();
     computeCounts();
     updateHud();
@@ -740,7 +869,7 @@ function truncate(text, maxChars) {
     legend.innerHTML = chips.join("");
   }
 
-  // ── Tooltip / panel ───────────────────────────────────────────────────────
+  // ── Tooltip ───────────────────────────────────────────────────────────────
   function statusHtml(status) {
     return `<span class="status-label status-${status}">${STATUS_LABEL[status]}</span>`;
   }
@@ -761,27 +890,13 @@ function truncate(text, maxChars) {
     $id("tooltip").classList.add("hidden");
   }
 
-  function showPanel(entry) {
-    const task = entry.task;
-    const files = entry.files || [];
-    const panel = $id("panel");
-    $id("panel-body").innerHTML =
-      `<h3>${esc(task.ownerAgent || "unassigned")} — ${esc(task.title)}</h3>` +
-      `<div class="kv"><span class="k">Task</span><span>${esc(task.id)}</span></div>` +
-      `<div class="kv"><span class="k">Phase</span><span>${esc(task.phaseId)}</span></div>` +
-      `<div class="kv"><span class="k">Agent</span><span>${task.ownerAgent ? esc(task.ownerAgent) : "unassigned"}</span></div>` +
-      `<div class="kv"><span class="k">Status</span><span>${statusHtml(entry.status)}</span></div>` +
-      (entry.durationMs ? `<div class="kv"><span class="k">Duration</span><span>${Math.round(entry.durationMs / 1000)}s</span></div>` : "") +
-      (entry.errorMessage ? `<div class="kv"><span class="k">Error</span><span style="color:#ff8f8f">${esc(entry.errorMessage)}</span></div>` : "") +
-      (entry.artifactId ? `<div class="kv"><span class="k">Artifact</span><span>${esc(entry.artifactId)}</span></div>` : "") +
-      (task.inputs?.length ? `<div class="kv"><span class="k">Inputs</span><span>${task.inputs.map(esc).join(", ")}</span></div>` : "") +
-      (files.length ? `<div class="files">Files:<div>${files.map((f) => esc(f)).join("<div>")}</div></div>` : "");
-    panel.classList.remove("hidden");
-  }
-
-  $id("panel-close").addEventListener("click", () => $id("panel").classList.add("hidden"));
-  background.on("pointertap", () => $id("panel").classList.add("hidden"));
-  boardGfx.on("pointertap", () => $id("panel").classList.add("hidden"));
+  // Clicking a card expands it in place; clicking the board/background or
+  // pressing Escape collapses the expanded card again.
+  background.on("pointertap", () => { if (expandedEntry) collapseCard(expandedEntry); });
+  boardGfx.on("pointertap", () => { if (expandedEntry) collapseCard(expandedEntry); });
+  window.addEventListener("keydown", (e) => {
+    if (e.key === "Escape" && expandedEntry) collapseCard(expandedEntry);
+  });
 
   // ── Overlays / banners ────────────────────────────────────────────────────
   function showBanner(title, sub, kind) {
@@ -928,6 +1043,28 @@ function truncate(text, maxChars) {
     // Cards glide to their column/stack position.
     let moving = false;
     for (const entry of state.ordered) {
+      // Expanded-card height animation (open/close) + detail fade.
+      const target = entry.expanded ? entry.detailH : 0;
+      const ek = 1 - Math.exp(-dt * 12);
+      entry.curH = lerp(entry.curH, target, ek);
+      if (Math.abs(entry.curH - target) < 0.5) entry.curH = target;
+      if (!entry.expanded && entry.curH < 0.5) entry.detailH = 0;
+      if (entry.expanded || entry.curH > 0) {
+        // Grow the opaque backdrop with the animated height (paintCard only
+        // repaints on events, so animate the card bg here).
+        const hh = GEOM.cardH + entry.curH;
+        entry.bg.clear();
+        entry.bg.roundRect(0, 0, state.cardW, hh, 8)
+          .fill({ color: 0x0c1224, alpha: 1 })
+          .stroke({ width: 1.5, color: agentColor(entry.task.ownerAgent), alpha: 1 });
+        if (entry.detailH > 0) {
+          entry.detailLayer.alpha = clamp(entry.curH / entry.detailH, 0, 1);
+          if (Math.abs(entry.curH - target) > 0.5) {
+            entry.root.hitArea = new P.Rectangle(0, 0, state.cardW, hh);
+          }
+        }
+      }
+
       const k = 1 - Math.exp(-dt * 8);
       const nx = lerp(entry.root.x, entry.targetX, k);
       const ny = lerp(entry.root.y, entry.targetY, k);
