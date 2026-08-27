@@ -49,6 +49,19 @@ npm pack                                   # → forge-launcher-1.0.0-beta.2.tgz
 npm install -g ./forge-launcher-1.0.0-beta.2.tgz
 ```
 
+> **Stale install?** After `git pull`, always re-run `npm install` before
+> `npm run build`/`npm pack` — new dependencies are added over time. If `npm run
+> build` fails with *"Cannot find module 'cross-spawn' / 'semver' or its
+> corresponding type declarations"*, your `node_modules` predates those
+> dependencies. Fix it with a clean reinstall:
+>
+> ```powershell
+> cd scripts/forge-launcher
+> Remove-Item -Recurse -Force node_modules
+> npm install          # or: npm ci   (deterministic install from the lockfile)
+> npm run build
+> ```
+
 `forge-launcher` (or `npx forge-launcher`) now works from any directory.
 
 **Developing (symlink instead of tarball).** Once `dist/` is built, link the
