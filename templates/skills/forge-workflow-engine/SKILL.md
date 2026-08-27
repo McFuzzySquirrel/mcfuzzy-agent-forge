@@ -5,9 +5,9 @@ description: Dynamic workflow orchestration engine that reads docs/EXECUTION-MAN
 
 # Skill: Forge Workflow Engine
 
-You are the **runtime execution layer** for an Agent Forge repository. Where `forge-auto-build` and `project-orchestrator` operate as prompt-driven orchestrators inside a chat harness, this skill runs **outside** the chat session - it reads the structured execution contract produced by `forge-execution-adapter` and drives every agent task through a real execution backend until the workflow is complete.
+You are the **runtime execution layer** for an Agent Forge repository. Where `project-orchestrator` operates as a prompt-driven orchestrator inside a chat harness, this skill runs **outside** the chat session - it reads the structured execution contract produced by `forge-execution-adapter` and drives every agent task through a real execution backend until the workflow is complete.
 
-This skill is the autonomous execution alternative to the prompt-driven flows. Teams use it when they want **dark orchestration**: a background process that fires agent invocations autonomously, persists state across interruptions, and requires no human intervention between tasks. In `forge-auto-build`, choosing `GO --workflow-engine` selects this skill as the Stage 4 executor instead of `forge-orchestrate-build`.
+This skill is the autonomous execution alternative to the prompt-driven flows. Teams use it when they want **dark orchestration**: a background process that fires agent invocations autonomously, persists state across interruptions, and requires no human intervention between tasks. Start it from the terminal with `forge-launcher engine-run`, or drive it from inside a chat with `@workflow-orchestrator`.
 
 ---
 
@@ -37,9 +37,9 @@ npm run forge-execution-adapter -- compile
 
 > **Runtime requirement:** this skill is a Node package and requires `node >= 18`
 > and `npm` at *build time*. `npm install` (the "node module bootstrap") is not
-> run by `bootstrap.sh` - it is deferred to engine prep time (when
-> `forge-auto-build` compiles and starts the engine, or when you run the engine
-> manually via `scripts/forge-engine-run.sh`). The installed `node_modules/` is
+> run by `bootstrap.sh` - it is deferred to engine prep time (when you run the
+> engine via `forge-launcher engine-run`, or manually via
+> `scripts/forge-engine-run.sh`). The installed `node_modules/` is
 > gitignored in target repos and must never be committed.
 
 ```bash
@@ -322,17 +322,20 @@ Each task is retried up to `--max-retries` times (default: 2) before being marke
 
 ---
 
-## Integration with forge-auto-build (alternative Stage 4 path)
+## Integration with forge-launcher (terminal-driven build path)
 
-`forge-auto-build` can optionally select this engine as its Stage 4 build path instead of `forge-orchestrate-build`:
+The launcher is the canonical terminal entry point. Its auto-draft stages run
+`forge-build-agent-team` headlessly and then offer to start the engine detached;
+`forge-launcher engine-run` compiles the manifest and runs/resumes the engine as
+a foreground or detached process:
 
 ```bash
-# Stage 4 alternative: harness-driven build path
-cd .agents/skills/forge-execution-adapter && npm install && npm run forge-execution-adapter -- compile
-cd .agents/skills/forge-workflow-engine  && npm install && npm run workflow-engine -- run --harness opencode
+forge-launcher engine-run --repo <repo> --harness opencode --yes        # run or resume
+forge-launcher engine-run --repo <repo> --harness opencode --yes --viz  # with the Forge Board
+forge-launcher resume --repo <repo>                                      # re-enter at the current stage
 ```
 
-This gives the same project two mutually exclusive execution modes for a given run: interactive/prompt-driven (via `project-orchestrator`) or autonomous/harness-driven (via the workflow engine).
+This gives the same project two mutually exclusive execution modes for a given run: interactive/prompt-driven (via `@project-orchestrator` in a chat harness) or autonomous/harness-driven (via this engine, from the terminal or `@workflow-orchestrator`).
 
 For FlowForge-kernel execution, compile a workforce package first:
 

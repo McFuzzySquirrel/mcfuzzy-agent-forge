@@ -53,6 +53,7 @@ npx forge-launcher@beta bootstrap [TARGET_DIR] [--harness agents|github|claude|o
 npx forge-launcher@beta engine-run [--repo <path>] [--harness <h>] [--concurrency <n>]
                               [--task-timeout-ms <ms>] [--yes] [--dry-run]
                               [--keep-alive [--keep-alive-port <n>]] [--attach <url>]
+npx forge-launcher@beta resume [--repo <path>] [--non-interactive] [--dry-run]
 ```
 
 When installed globally (`npm install -g forge-launcher@beta`), drop the `npx`.
@@ -207,6 +208,33 @@ blocking child of the session) and the per-task harness is selected with
 > status`, and whether the skill file resolved, then offers (interactive) to
 > open the harness CLI to run the skill manually. Use `--debug` /
 > `FORGE_LAUNCHER_DEBUG=1` to always see the log tail.
+
+### Resume (pick up where you left off)
+
+Reviews take time. `forge-launcher resume` re-enters an existing project at its
+current stage (idea → PRD → team → build) as a full interactive wizard, so you
+can walk away at any review boundary and come back later:
+
+```bash
+forge-launcher resume [--repo <path>]     # interactive wizard
+forge-launcher resume --repo <path> --non-interactive   # print state + next commands
+```
+
+It detects what's already drafted, prints where you are (with clickable review
+links to `docs/IDEA.md`, `docs/PRD.md`, the agent/skills dirs, and
+`docs/WORKFLOW-STATE.json` when a run exists), then offers the right next action:
+
+- Nothing captured yet → capture the idea / open the harness for `forge-auto-build-prd`.
+- Idea, no PRD → auto-draft the PRD headlessly, or open the harness to draft it manually.
+- PRD, no team → auto-draft the agent team headlessly, or open the harness for `forge-build-agent-team`.
+- Team, no manifest → start the engine (`engine-run`), print the command, or open the harness for the orchestrator.
+- Manifest + engine state → report the run status (running / paused / complete / failed, task counts, failed tasks, blockers) and offer to **resume the engine run**, tail the logs, or open the harness CLI. A `running` run warns against starting a second one; a `complete` run points you at monitoring rather than resuming.
+
+The same "where am I / what's next" checks make the launcher's queued in-harness
+command **conditional**: when a team already exists it queues
+`/forge-orchestrate-build` (project-orchestrator); when no team exists yet it
+keeps queueing `/forge-auto-build` (which generates the team in-chat). Headless
+runs keep using `/forge-auto-build` as the terminal fast-path.
 
 ### Auto-draft (optional): idea → PRD → team, with review boundaries
 
@@ -526,7 +554,7 @@ Then, for harnesses with a spawnable CLI (`copilot`, `opencode`, `claude`):
 Launch claude in the new repository now? [y/N]: y
   Launching claude in: /home/user/projects/my-cool-app
   ✔  claude launched. Use /forge-auto-build-prd in the Claude Code chat to build
-     the reviewed PRD, then /forge-auto-build for the agent team and build.
+     the reviewed PRD, then the launcher/team step for the agent team and build.
 ```
 
 For GitHub Copilot, the launcher now tries to open the GitHub Copilot CLI in a separate terminal if `copilot` is installed. If that is not available, it falls back to the manual chat instructions below:
@@ -537,17 +565,29 @@ For GitHub Copilot, the launcher now tries to open the GitHub Copilot CLI in a s
     @workspace /forge-auto-build-prd Use docs/IDEA.md as the project idea
 
   The skill will build a reviewed PRD from your idea (with automatic
-  decomposition when it qualifies), then direct you to forge-auto-build for
-  the agent team and build execution.
+  decomposition when it qualifies), then direct you to team generation and
+  build execution.
 ```
 
-When a PRD **was** captured in Step 6, the queued command is instead:
+When a PRD **was** captured in Step 6, the queued command is **conditional on
+whether the agent team exists**:
 
 ```
+  # team already generated (auto-draft):
+  @workspace /forge-orchestrate-build Use docs/PRD.md as the project PRD
+  # no team yet:
   @workspace /forge-auto-build Use docs/PRD.md as the project PRD
 ```
 
-`forge-auto-build` requires the PRD to already exist. It generates the agent team, optionally assigns models, then executes the build - type `GO` at its pre-flight gate, or `GO --workflow-engine` to run the build through the workflow engine instead of the prompt-driven orchestrator. On the engine path the engine starts detached (`docs/engine-run.log`), `forge-auto-build` polls `docs/WORKFLOW-STATE.json` until the run is `complete` or `failed`, and you can run or resume it standalone with `forge-launcher engine-run`.
+`/forge-orchestrate-build` (project-orchestrator) drives the interactive build
+with per-phase approval. `/forge-auto-build` is the **terminal/headless
+fast-path**: it requires the PRD to already exist, generates the agent team,
+optionally assigns models, then executes the build — type `GO` at its
+pre-flight gate, or `GO --workflow-engine` to run the build through the
+workflow engine instead of the prompt-driven orchestrator. On the engine path
+the engine starts detached (`docs/engine-run.log`), `forge-auto-build` polls
+`docs/WORKFLOW-STATE.json` until the run is `complete` or `failed`, and you can
+run or resume it standalone with `forge-launcher engine-run`.
 
 ### Step 9 -Summary
 
@@ -568,20 +608,19 @@ When a PRD **was** captured in Step 6, the queued command is instead:
   Next steps:
 
   1. Open the project in your agent harness.
-  2. Run the queued pipeline command:
+  2. Run the queued command (conditional on the agent team):
 
-      @workspace /forge-auto-build Use docs/PRD.md as the project PRD
+      @workspace /forge-orchestrate-build Use docs/PRD.md as the project PRD
+      # (or, if no team exists yet: /forge-auto-build Use docs/PRD.md as the
+      #  project PRD - it generates the team in-chat)
 
-  3. Review the pre-flight summary that the skill presents.
-  4. Type GO to start the autonomous pipeline (add --workflow-engine to run
-     the build through the workflow engine once the agent team is generated).
-     On the engine path the engine runs detached (docs/engine-run.log); run or
-     resume it standalone with forge-launcher engine-run.
+  3. Drive the build interactively (project-orchestrator), or run it
+     autonomously with forge-launcher engine-run.
 ```
 
 When the engine was started in Step 8, the summary's **Next steps** instead
 reflect the running build (monitor + resume) rather than the manual
-`@workspace /forge-auto-build` path:
+`@workspace /forge-orchestrate-build` path:
 
 ```
   Next steps:
@@ -670,19 +709,26 @@ Pass this file to `forge-auto-build-prd` by referencing it in the chat:
 @workspace /forge-auto-build-prd Use docs/IDEA.md as the project idea
 ```
 
-`forge-auto-build-prd` builds a reviewed PRD from the idea (with automatic decomposition when it qualifies) and stops there. Once `docs/PRD.md` exists, run `forge-auto-build` for the agent team and build execution:
+`forge-auto-build-prd` builds a reviewed PRD from the idea (with automatic decomposition when it qualifies) and stops there. Once `docs/PRD.md` exists, generate the team and build — from the terminal, re-enter at the right stage:
 
 ```
-@workspace /forge-auto-build Use docs/PRD.md as the project PRD
+forge-launcher resume [--repo <path>]     # picks up at the team/build stage
 ```
 
-Or invoke `forge-auto-build` without arguments and let it detect the best PRD representation from the repo (`docs/PRD.md`, or the decomposed `docs/product-vision.md` + `docs/features/*.md`):
+Or in the harness, generate the team first, then drive the build interactively
+or autonomously:
 
 ```
-@workspace /forge-auto-build
+@workspace /forge-build-agent-team Use docs/PRD.md to build the agent team
+@workspace @project-orchestrator Execute the full build      # interactive
+@workspace @workflow-orchestrator Run the workflow           # autonomous
 ```
 
-When invoked without arguments, the skill uses an explicit PRD path if one was supplied, then `docs/PRD.md`, then the decomposed layout. If no PRD representation exists, it stops and directs you to `forge-auto-build-prd` or `forge-build-prd`.
+`forge-auto-build` remains available as the **terminal/headless fast-path** —
+the launcher's `--headless` / auto-draft drives it via `opencode run --auto`
+(queued as `/forge-auto-build Use docs/PRD.md as the project PRD. GO
+[--workflow-engine]`). It requires a PRD representation to exist and never
+generates one.
 
 ---
 

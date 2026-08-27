@@ -1,11 +1,22 @@
 ---
 name: forge-auto-build
-description: "Execution fast-path meta-skill that chains the build pipeline from an existing PRD in a single continuous flow: forge-build-agent-team → optionally forge-assign-models → one build execution path (`forge-orchestrate-build` or `forge-workflow-engine`). Use this skill when a PRD already exists (docs/PRD.md or the decomposed product-vision + features layout) and you want to go from that approved PRD to a fully built, validated, and committed project without manual hand-offs between steps. A single pre-flight confirmation gate is presented before the autonomous run begins."
+description: "Execution fast-path meta-skill that chains the build pipeline from an existing PRD in a single continuous flow: forge-build-agent-team → optionally forge-assign-models → one build execution path (`forge-orchestrate-build` or `forge-workflow-engine`). This is a terminal/headless fast-path, driven by forge-launcher or `opencode run --auto` — it is NOT the in-harness entry point. Inside a chat harness use `@project-orchestrator` (interactive) or `@workflow-orchestrator` (autonomous). Use this skill when a PRD already exists (docs/PRD.md or the decomposed product-vision + features layout) and you want to go from that approved PRD to a fully built, validated, and committed project without manual hand-offs between steps. A single pre-flight confirmation gate is presented before the autonomous run begins."
 ---
 
 # Skill: Full Auto Build (End-to-End Pipeline)
 
 You are running the **build pipeline** on behalf of the user in one continuous, autonomous flow. Your job is to chain the downstream skills and agents in order, validate outputs at each stage, commit after each phase, and produce a finished project -all from a single invocation.
+
+> **Where this skill fits.** `forge-auto-build` is the **terminal/headless fast-path**:
+> it is invoked by `forge-launcher` (auto-draft / headless runs) or directly via
+> `opencode run --auto` / `copilot -p --yolo`. It is **not** the in-harness
+> interactive entry point. If you are already inside a chat harness, drive the
+> build with `@project-orchestrator` (`forge-orchestrate-build`, interactive,
+> per-phase approval) or `@workflow-orchestrator` (`forge-workflow-engine`,
+> autonomous) instead. Both orchestrators expect the agent team to already exist
+> (generate it via `forge-launcher resume`, the launcher's auto-draft, or
+> `/forge-build-agent-team`). This skill exists so a terminal/CI flow can chain
+> team generation → build without a chat session.
 
 The underlying skills (`forge-build-agent-team`, `forge-assign-models`, `forge-orchestrate-build`) each own their own work. You are the conductor: you invoke them in sequence, verify each handoff, commit progress, and keep the user informed without interrupting them.
 
@@ -19,9 +30,9 @@ The underlying skills (`forge-build-agent-team`, `forge-assign-models`, `forge-o
 |---|---|---|
 | `forge-auto-build-prd` | idea → reviewed PRD (with automatic decomposition) | Review gate inside PRD flow |
 | `forge-build-prd` | idea/seed docs → `docs/PRD.md` | Review gate before save |
-| `@project-orchestrator` | Build execution only (no PRD, no team) | Optional pause between each phase |
-| `@workflow-orchestrator` | Build execution via the workflow engine only | One pre-run gate |
-| **`forge-auto-build`** | existing PRD → agent team → (optional models) → choose manual or engine build path → committed result | **One** pre-flight gate, then fully autonomous |
+| `@project-orchestrator` | In-harness interactive build execution only (no PRD, no team) | Optional pause between each phase |
+| `@workflow-orchestrator` | In-harness build execution via the workflow engine only | One pre-run gate |
+| **`forge-auto-build`** | **Terminal/headless** fast-path: existing PRD → agent team → (optional models) → choose manual or engine build path → committed result | **One** pre-flight gate, then fully autonomous |
 
 Use this skill when you want the build pipeline to run hands-free after a single approval, from a PRD that has already been reviewed and confirmed.
 

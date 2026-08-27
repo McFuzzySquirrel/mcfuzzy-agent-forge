@@ -225,8 +225,33 @@ test("non-interactive run with a PRD queues forge-auto-build", async () => {
   assert.equal(code, 0, out);
   const repo = path.join(parent, "with-prd-app");
   assert.ok(fs.existsSync(path.join(repo, "docs", "PRD.md")));
+  // No team generated (no auto-draft) -> forge-auto-build still does in-chat team-gen.
   assert.ok(out.includes("/forge-auto-build Use docs/PRD.md as the project PRD"));
   assert.ok(!out.includes("/forge-auto-build-prd Use docs/IDEA.md"));
+});
+
+test("non-interactive run with a PRD and a generated team queues /forge-orchestrate-build", async () => {
+  const parent = tmpDir();
+  const prd = path.join(parent, "prd.md");
+  fs.writeFileSync(prd, "# PRD\n\nBuild a thing.\n");
+
+  const { code, out } = await runCli(["--non-interactive"], {
+    FORGE_HARNESS_CHOICE: "4",
+    FORGE_REPO_NAME: "with-team-app",
+    FORGE_REPO_PARENT_DIR: parent,
+    FORGE_IDEA: "A thing",
+    FORGE_PRD_FILE: prd,
+    FORGE_YN_DEFAULT: "n",
+    FORGE_AUTO_DRAFT: "1",
+    FORGE_RUN_WITH: "stub",
+  });
+
+  assert.equal(code, 0, out);
+  const repo = path.join(parent, "with-team-app");
+  assert.ok(fs.existsSync(path.join(repo, ".agents", "agents", "stub-project-agent.md")), out);
+  // Team exists -> the in-harness entry is the interactive orchestrator.
+  assert.ok(out.includes("/forge-orchestrate-build Use docs/PRD.md as the project PRD"), out);
+  assert.ok(!out.includes("/forge-auto-build Use docs/PRD.md as the project PRD"), out);
 });
 
 test("commit step created the bootstrap commit", async () => {

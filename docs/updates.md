@@ -4,6 +4,55 @@ Detailed release and change notes for McFuzzy Agent Forge.
 
 ---
 
+## August 2026 - v3.22
+
+### Launcher as the single entry point: `forge-launcher resume`, review links, conditional in-harness command
+
+The launcher becomes the one terminal on-ramp, and "when to use what" collapses
+to a single mental model: **`forge-launcher` starts you, then you either drive
+the build interactively in the harness (`@project-orchestrator`) or hand it to
+the autonomous engine (`@workflow-orchestrator` / `forge-launcher engine-run`).**
+
+- **`forge-launcher resume [--repo]`** — re-enters an existing project at its
+  current stage (idea → PRD → team → build) as a full interactive wizard. It
+  detects what's already drafted, prints where you are with clickable review
+  links, and offers the right next action: capture an idea, auto-draft the PRD /
+  team headlessly, resume a paused or failed engine run, tail logs, or open the
+  harness CLI. `--non-interactive` prints the state plus the exact next commands
+  to run. This covers the "walk away to review and make changes, come back
+  later" gap in the previous linear 9-step flow.
+- **Review links** — the review boundaries (drafted PRD, generated team) and the
+  engine summary now emit OSC 8 terminal hyperlinks (Ctrl/Cmd+click to open the
+  file), falling back to plain paths on non-TTY output.
+- **Conditional in-harness command** — when the launcher opens the CLI (or prints
+  next steps) and the agent team already exists, it now queues
+  `/forge-orchestrate-build` (project-orchestrator) instead of
+  `/forge-auto-build`, honouring "in the harness = project-orchestrator". When
+  no team exists yet it keeps queueing `/forge-auto-build` (which generates the
+  team in-chat); headless runs keep using `/forge-auto-build` as the terminal
+  fast-path.
+- **`forge-auto-build` demoted, not removed** — it stays installed but is
+  repositioned as the **terminal/headless fast-path** (launcher-driven,
+  `opencode run --auto`), explicitly *not* the in-harness entry point. The
+  `project-orchestrator` and `workflow-orchestrator` agents now document their
+  in-harness roles and the launcher's `engine-run` / `resume` as the canonical
+  terminal entry.
+- **When to use what:**
+  - New project → `forge-launcher` (terminal).
+  - In the harness, interactive build → `@project-orchestrator`.
+  - Autonomous build → `forge-launcher engine-run` or `@workflow-orchestrator`.
+  - Lost your place → `forge-launcher resume`.
+  - Authoring only → `/forge-build-prd`, `/forge-auto-build-prd`,
+    `/forge-build-agent-team`.
+- New tests: `resume.test.ts` (state detection + next-action branches) and
+  conditional-queue coverage in `launcher.test.ts`; `format.test.ts` covers the
+  OSC 8 `hyperlink` helper. Launcher suite green.
+
+- [ADR-028](adr/028-launcher-entry-resume-and-auto-build-demotion.md): entry-point
+  consolidation, `forge-launcher resume`, and the `forge-auto-build` demotion.
+
+---
+
 ## August 2026 - v3.21
 
 ### OpenCode harness selects the forge agent natively

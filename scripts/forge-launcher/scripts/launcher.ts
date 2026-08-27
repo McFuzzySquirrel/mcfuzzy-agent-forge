@@ -4,8 +4,8 @@ import os from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { bootstrap } from "./bootstrap.ts";
-import { command, fail, header, info, ok, out, printLogTail, runCommand, runLogged, runWithHeartbeat, spawnDetached, step, warn } from "./format.ts";
-import { expandPath, resolveInputFile } from "./paths.ts";
+import { command, fail, header, info, link, ok, out, printLogTail, runCommand, runLogged, runWithHeartbeat, spawnDetached, step, warn } from "./format.ts";
+import { detectRepoRoot, expandPath, resolveInputFile } from "./paths.ts";
 import { prompt, promptMultiline, promptPath, promptPathLoop, promptSelect, promptYesNo, prompts } from "./prompts.ts";
 import { launchCliInTerminal } from "./terminal.ts";
 
@@ -174,12 +174,23 @@ function prdSourceForTeam(): string {
 const PRD_HEADLESS_MSG =
   "Use docs/IDEA.md as the project idea. Headless mode: auto-proceed with default assumptions and approve the PRD. After drafting, run a PRD gap check: every major component must have clear acceptance criteria, a defined tech stack, non-functional requirements (performance, security, privacy), and implementation phases; fill any gaps before approving.";
 
+/**
+ * In-harness command to queue when the launcher opens the CLI (or prints
+ * next steps). Conditional on the team so the harness entry honours the
+ * "in the harness = project-orchestrator" rule when possible:
+ *   - team exists    → /forge-orchestrate-build (project-orchestrator)
+ *   - PRD, no team   → /forge-auto-build (generates the team in-chat first)
+ *   - no PRD         → /forge-auto-build-prd (idea → PRD)
+ */
 function autobuildCommand(): string {
-  return hasPrd()
-    ? "/forge-auto-build Use docs/PRD.md as the project PRD"
-    : "/forge-auto-build-prd Use docs/IDEA.md as the project idea";
+  if (!hasPrd()) return "/forge-auto-build-prd Use docs/IDEA.md as the project idea";
+  if (hasGeneratedTeam()) return "/forge-orchestrate-build Use docs/PRD.md as the project PRD";
+  return "/forge-auto-build Use docs/PRD.md as the project PRD";
 }
 
+/** Headless (terminal-driven) skill invocation - no chat session, so it keeps
+ *  using forge-auto-build as the launcher-driven fast-path rather than the
+ *  in-harness orchestrators. */
 export function headlessSkillMsg(): string {
   if (hasPrd()) {
     if (envFlag("FORGE_WORKFLOW_ENGINE")) {
@@ -401,9 +412,9 @@ async function autoDraftPrd(opts: LauncherOptions): Promise<void> {
     ok("PRD generated.");
     out("");
     out("  Review it before continuing:");
-    out(`    - ${path.join(state.repoDir, "docs", "PRD.md")}`);
+    out(`    - ${link(path.join(state.repoDir, "docs", "PRD.md"))}`);
     if (fs.existsSync(path.join(state.repoDir, "docs", "product-vision.md"))) {
-      out("    - " + path.join(state.repoDir, "docs", "product-vision.md") + " (decomposed) + docs/features/*.md");
+      out("    - " + link(path.join(state.repoDir, "docs", "product-vision.md")) + " (decomposed) + docs/features/*.md");
     } else {
       out("    - docs/PRD.md is monolithic (no decomposition)");
     }
@@ -595,8 +606,8 @@ async function autoDraftTeam(opts: LauncherOptions): Promise<void> {
     ok("Agent team generated.");
     out("");
     out("  Review the generated team before building:");
-    out(`    - Agents : ${harnessAgentsDir()}/`);
-    out(`    - Skills : ${path.dirname(harnessAgentsDir())}/skills/`);
+    out(`    - Agents : ${link(harnessAgentsDir() + "/")}`);
+    out(`    - Skills : ${link(path.dirname(harnessAgentsDir()) + "/skills/")}`);
   } else {
     await diagnoseAutoDraftFail(skill);
   }
@@ -1002,10 +1013,17 @@ async function launchAutobuild(opts: LauncherOptions): Promise<void> {
 
   out("");
   if (hasPrd()) {
-    out("  The repository is bootstrapped and ready for forge-auto-build.");
-    out("  forge-auto-build will generate the agent team, then execute the build");
-    out("  (add 'GO --workflow-engine' at its pre-flight gate to run via the");
-    out("  workflow engine instead of the prompt-driven orchestrator).");
+    if (hasGeneratedTeam()) {
+      out("  The repository is bootstrapped, PRD in place, and the agent team");
+      out("  is generated. In the harness, run /forge-orchestrate-build (project-");
+      out("  orchestrator) for an interactive build, or forge-launcher engine-run");
+      out("  for autonomous execution through the workflow engine.");
+    } else {
+      out("  The repository is bootstrapped and ready for forge-auto-build.");
+      out("  forge-auto-build will generate the agent team, then execute the build");
+      out("  (add 'GO --workflow-engine' at its pre-flight gate to run via the");
+      out("  workflow engine instead of the prompt-driven orchestrator).");
+    }
   } else {
     out("  The repository is bootstrapped. forge-auto-build-prd will turn your idea");
     out("  into a reviewed PRD, then forge-auto-build will generate the agent team");
@@ -1026,7 +1044,7 @@ async function launchAutobuild(opts: LauncherOptions): Promise<void> {
   if (state.engineStarted) {
     out("");
     info("The workflow engine is already running this build in the background.");
-    info("Skipping the interactive CLI launch prompt - no need to run forge-auto-build.");
+    info("Skipping the interactive CLI launch prompt - monitor or resume it with forge-launcher resume.");
     return;
   }
 
@@ -1091,6 +1109,394 @@ async function launchAutobuild(opts: LauncherOptions): Promise<void> {
   }
 }
 
+// --- Resume: re-enter an existing project at the current stage --------------
+
+export interface ResumeOptions {
+  repo?: string;
+  nonInteractive?: boolean;
+  dryRun?: boolean;
+}
+
+interface ResumeEngineState {
+  runId?: string;
+  status?: string;
+  harness?: string;
+  currentPhase?: string;
+  tasks?: Record<string, { taskId?: string; status?: string; errorMessage?: string }>;
+  blockers?: string[];
+}
+
+/** Detects which harness root a repo was bootstrapped with. */
+function detectHarnessForRepo(repoDir: string): { harness: HarnessName; label: string } {
+  const roots: Array<[HarnessName, string]> = [
+    ["opencode", ".opencode"],
+    ["github", ".github"],
+    ["claude", ".claude"],
+    ["agents", ".agents"],
+  ];
+  const bootstrapped = roots.find(([, root]) =>
+    fs.existsSync(path.join(repoDir, root, "agents")) ||
+    fs.existsSync(path.join(repoDir, root, "skills")));
+  const [harness] = bootstrapped ?? (["agents", ".agents"] as [HarnessName, string]);
+  const labels: Record<HarnessName, string> = {
+    github: "GitHub Copilot",
+    opencode: "opencode",
+    claude: "Claude Code",
+    agents: "Generic .agents",
+  };
+  return { harness, label: labels[harness] };
+}
+
+/** Re-populates the module state from an existing repo (resume entry point). */
+function setupStateForRepo(repoDir: string): void {
+  const { harness, label } = detectHarnessForRepo(repoDir);
+  state.repoDir = repoDir;
+  state.harness = harness;
+  state.harnessLabel = label;
+  state.remoteCreated = false;
+  state.ghAvailable = commandExists("gh");
+  state.copilotAvailable = commandExists("copilot");
+  state.opencodeAvailable = commandExists("opencode");
+  state.claudeAvailable = commandExists("claude");
+  state.prdAdded = fs.existsSync(path.join(repoDir, "docs", "PRD.md"));
+  state.researchAdded = fs.existsSync(path.join(repoDir, "docs", "research"));
+  state.engineStarted = false;
+  state.engineConfig.harness = process.env.FORGE_ENGINE_HARNESS ?? "opencode";
+  state.engineConfig.granularity = process.env.FORGE_ENGINE_GRANULARITY ?? "";
+  state.engineConfig.concurrency = process.env.FORGE_ENGINE_CONCURRENCY ?? "";
+  state.engineConfig.taskTimeoutMs = process.env.FORGE_ENGINE_TASK_TIMEOUT_MS ?? "";
+  state.engineConfig.maxRetries = process.env.FORGE_ENGINE_MAX_RETRIES ?? "";
+  state.engineConfig.viz = envFlag("FORGE_ENGINE_VIZ");
+  state.engineConfig.vizPort = process.env.FORGE_ENGINE_VIZ_PORT ?? "";
+  state.engineConfig.keepAlive = envFlag("FORGE_ENGINE_ATTACH");
+  state.engineConfig.attach = process.env.FORGE_ENGINE_ATTACH_URL ?? "";
+}
+
+function readEngineState(): ResumeEngineState | null {
+  const sp = path.join(state.repoDir, "docs", "WORKFLOW-STATE.json");
+  if (!fs.existsSync(sp)) return null;
+  try {
+    return JSON.parse(fs.readFileSync(sp, "utf8")) as ResumeEngineState;
+  } catch {
+    return null;
+  }
+}
+
+function prdDocName(): string {
+  return fs.existsSync(path.join(state.repoDir, "docs", "product-vision.md"))
+    ? "product-vision.md (decomposed)"
+    : "PRD.md";
+}
+
+function printResumeWhere(): void {
+  const ideaPath = path.join(state.repoDir, "docs", "IDEA.md");
+  const idea = fs.existsSync(ideaPath);
+  const prd = hasPrd();
+  const team = hasGeneratedTeam();
+  const manifest = fs.existsSync(path.join(state.repoDir, "docs", "EXECUTION-MANIFEST.json"));
+  const engine = readEngineState();
+
+  step("Resume project state");
+  out("");
+  out(`  Repository  : ${link(state.repoDir)}`);
+  out(`  Harness     : ${state.harnessLabel} (${harnessRootDir()}/)`);
+  out("");
+  info("Where you are:");
+  out(`    - Project idea       : ${idea ? `yes  ${link(ideaPath)}` : "no"}`);
+  out(`    - PRD                : ${prd ? `yes  ${link(path.join(state.repoDir, "docs", prdDocName()))}` : "no"}`);
+  out(`    - Agent team         : ${team ? `yes  ${link(harnessAgentsDir() + "/")}` : "no"}`);
+  out(`    - Execution manifest : ${manifest ? "yes" : "no"}`);
+  if (engine) out(`    - Engine run         : ${engine.status ?? "unknown"}${engine.runId ? ` (run ${engine.runId})` : ""}`);
+  out("");
+}
+
+/** Stage: capture a project idea (only when nothing at all exists yet). */
+async function resumeIdeaStep(opts: ResumeOptions): Promise<boolean> {
+  const ideaPath = path.join(state.repoDir, "docs", "IDEA.md");
+  if (fs.existsSync(ideaPath) || hasPrd()) return true;
+  if (opts.nonInteractive) {
+    out("  No idea or PRD captured yet. Next: run the launcher to capture an idea:");
+    command("forge-launcher");
+    return false;
+  }
+  out("  No project idea or PRD captured yet in this repository.");
+  out("");
+  const choice = await promptSelect("What would you like to do?", [
+    { value: "capture", label: "Capture your project idea now", hint: "writes docs/IDEA.md" },
+    { value: "cli", label: "Open the harness CLI to run /forge-auto-build-prd manually" },
+    { value: "stop", label: "Stop here" },
+  ], { initial: "capture" });
+  if (choice === "stop") return false;
+  if (choice === "cli") {
+    await openCliFor("/forge-auto-build-prd Use docs/IDEA.md as the project idea");
+    return false;
+  }
+  if (opts.dryRun) {
+    warn("Dry-run: would prompt for an idea and write docs/IDEA.md.");
+    return false;
+  }
+  const ideaText = await promptMultiline("Describe your project idea");
+  if (!ideaText.trim()) {
+    warn("No idea text entered; stopping here.");
+    return false;
+  }
+  fs.mkdirSync(path.join(state.repoDir, "docs"), { recursive: true });
+  const content = [
+    "# Project Idea",
+    "",
+    ideaText,
+    "",
+    "---",
+    "",
+    `> Generated by forge-launcher (resume) on ${new Date().toISOString().replace(/\.\d{3}Z$/, "Z")}`,
+    "> Use this file as input for: `@workspace /forge-auto-build-prd Use docs/IDEA.md as the project idea`",
+    "",
+  ].join("\n");
+  fs.writeFileSync(ideaPath, content);
+  fs.copyFileSync(ideaPath, path.join(state.repoDir, "IDEA.md"));
+  ok(`Idea saved to: ${link(ideaPath)}`);
+  return true;
+}
+
+/** Stage: turn the idea into a reviewed PRD. */
+async function resumePrdStep(opts: ResumeOptions): Promise<boolean> {
+  if (hasPrd()) return true;
+  if (!fs.existsSync(path.join(state.repoDir, "docs", "IDEA.md"))) return true;
+  if (opts.nonInteractive) {
+    out("  No PRD yet. Next: draft the PRD from docs/IDEA.md:");
+    command(headlessCmdFor(`/forge-auto-build-prd ${PRD_HEADLESS_MSG}`));
+    return false;
+  }
+  out("  No PRD yet. docs/IDEA.md is ready to become a reviewed PRD.");
+  out("");
+  const choice = await promptSelect("How do you want to create the PRD?", [
+    { value: "draft", label: "Auto-draft it now", hint: "headless forge-auto-build-prd" },
+    { value: "cli", label: "Open the harness CLI to draft it manually" },
+    { value: "stop", label: "Stop here" },
+  ], { initial: "draft" });
+  if (choice === "stop") return false;
+  if (choice === "cli") {
+    await openCliFor("/forge-auto-build-prd Use docs/IDEA.md as the project idea");
+    return false;
+  }
+  const ran = await runSkillHeadless(`/forge-auto-build-prd ${PRD_HEADLESS_MSG}`, opts);
+  if (!ran) return false;
+  await draftCommit("docs: add auto-drafted PRD");
+  if (hasPrd()) {
+    state.prdAdded = true;
+    ok("PRD generated.");
+    out("");
+    out("  Review it before continuing:");
+    out(`    - ${link(path.join(state.repoDir, "docs", "PRD.md"))}`);
+    if (fs.existsSync(path.join(state.repoDir, "docs", "product-vision.md"))) {
+      out("    - " + link(path.join(state.repoDir, "docs", "product-vision.md")) + " (decomposed) + docs/features/*.md");
+    } else {
+      out("    - docs/PRD.md is monolithic (no decomposition)");
+    }
+  } else {
+    await diagnoseAutoDraftFail("forge-auto-build-prd");
+    return false;
+  }
+  return true;
+}
+
+/** Stage: generate the agent team from the PRD. */
+async function resumeTeamStep(opts: ResumeOptions): Promise<boolean> {
+  if (hasGeneratedTeam()) return true;
+  if (!hasPrd()) return true;
+  if (opts.nonInteractive) {
+    out("  No agent team yet. Next: generate the team from the PRD:");
+    command(headlessCmdFor(`/forge-build-agent-team Use ${prdSourceForTeam()} to build the agent team. Auto-proceed with default assumptions and no questions.`));
+    return false;
+  }
+  out("  No agent team yet. docs/PRD.md is ready for team generation.");
+  out("");
+  const choice = await promptSelect("How do you want to generate the team?", [
+    { value: "draft", label: "Auto-draft it now", hint: "headless forge-build-agent-team" },
+    { value: "cli", label: "Open the harness CLI to build the team manually" },
+    { value: "stop", label: "Stop here" },
+  ], { initial: "draft" });
+  if (choice === "stop") return false;
+  if (choice === "cli") {
+    await openCliFor("/forge-build-agent-team Use docs/PRD.md to build the agent team");
+    return false;
+  }
+  const prdSource = prdSourceForTeam();
+  const ran = await runSkillHeadless(
+    `/forge-build-agent-team Use ${prdSource} to build the agent team. Auto-proceed with default assumptions and no questions.`,
+    opts,
+  );
+  if (!ran) return false;
+  await draftCommit("feat: generate auto-drafted agent team");
+  if (hasGeneratedTeam()) {
+    ok("Agent team generated.");
+    out("");
+    out("  Review the generated team before building:");
+    out(`    - Agents : ${link(harnessAgentsDir() + "/")}`);
+    out(`    - Skills : ${link(path.dirname(harnessAgentsDir()) + "/skills/")}`);
+  } else {
+    await diagnoseAutoDraftFail("forge-build-agent-team");
+    return false;
+  }
+  return true;
+}
+
+function printEngineStatus(engine: ResumeEngineState): void {
+  info("Engine run state:");
+  out(`    - Run id   : ${engine.runId ?? "unknown"}`);
+  out(`    - Status   : ${engine.status ?? "unknown"}`);
+  out(`    - Harness  : ${engine.harness ?? "-"}`);
+  if (engine.currentPhase) out(`    - Phase    : ${engine.currentPhase}`);
+  const tasks = Object.values(engine.tasks ?? {});
+  const counts: Record<string, number> = {};
+  for (const t of tasks) counts[t.status ?? "pending"] = (counts[t.status ?? "pending"] ?? 0) + 1;
+  out(`    - Tasks    : ${Object.entries(counts).map(([k, v]) => `${k}: ${v}`).join(", ") || "0"}`);
+  const failed = tasks.filter((t) => t.status === "failed");
+  if (failed.length) {
+    out(`    - Failed   : ${failed.map((t) => `${t.taskId ?? "?"}${t.errorMessage ? ` (${t.errorMessage})` : ""}`).join("; ")}`);
+  }
+  if (Array.isArray(engine.blockers) && engine.blockers.length) {
+    out(`    - Blockers : ${engine.blockers.join("; ")}`);
+  }
+  out("");
+}
+
+function printMonitorCommands(): void {
+  info("Monitor the build from another terminal:");
+  command(`tail -f ${path.join(state.repoDir, "docs", "engine-run.log")}`);
+  command(`tail -f ${path.join(state.repoDir, "docs", "PROGRESS.md")}`);
+  command(`forge-launcher engine-run --repo "${state.repoDir}" --harness ${state.engineConfig.harness || "opencode"} --yes`);
+  out("");
+}
+
+async function openCliFor(cmd: string): Promise<void> {
+  const cli = state.harness === "github" ? "copilot" : state.harness === "claude" ? "claude" : "opencode";
+  const launched = await launchCliInTerminal(cli, state.repoDir, state.harness === "github" ? [] : ["."]);
+  if (launched) ok(`${cli} launched in a separate terminal.`);
+  else {
+    warn(`${cli} did not open automatically. Run:`);
+    out(`    cd "${state.repoDir}" && ${cli} .`);
+  }
+  out(`    Then run: ${cmd}`);
+  out("");
+}
+
+/** Stage: start/resume the build via the engine or hand off to the harness. */
+async function resumeEngineStep(opts: ResumeOptions): Promise<void> {
+  const engine = readEngineState();
+  const engineHarness = state.engineConfig.harness || "opencode";
+
+  if (engine) {
+    printEngineStatus(engine);
+    if (opts.nonInteractive) {
+      if (engine.status === "complete") {
+        out("  The engine run is complete. Next:");
+        command(`tail -f ${path.join(state.repoDir, "docs", "PROGRESS.md")}`);
+      } else if (engine.status === "running") {
+        warn("The engine is already running in the background - do not start a second run.");
+        printMonitorCommands();
+      } else {
+        out("  Next: resume the engine run from WORKFLOW-STATE.json:");
+        command(`forge-launcher engine-run --repo "${state.repoDir}" --harness ${engineHarness} --yes`);
+      }
+      return;
+    }
+    if (engine.status === "complete") {
+      ok("The build is complete.");
+      const open = await promptYesNo("Open the harness CLI to continue (add features, review, etc.)?", "n");
+      if (open === "y") await openCliFor("/forge-orchestrate-build");
+      return;
+    }
+    if (engine.status === "running") {
+      warn("The engine is currently running in the background.");
+      info("Monitor it from another terminal, or wait for it to finish before resuming.");
+      printMonitorCommands();
+      return;
+    }
+    const choice = await promptSelect("What would you like to do?", [
+      { value: "resume", label: "Resume the engine run", hint: "continues from WORKFLOW-STATE.json" },
+      { value: "cli", label: "Open the harness CLI for project-orchestrator" },
+      { value: "logs", label: "Print monitor / log commands" },
+      { value: "stop", label: "Stop here" },
+    ], { initial: "resume" });
+    switch (choice) {
+      case "resume": await runEngineDetached(opts); break;
+      case "cli": await openCliFor(autobuildCommand()); break;
+      case "logs": printMonitorCommands(); break;
+    }
+    return;
+  }
+
+  // No engine run yet (the team-absent case is handled by the earlier stages).
+  if (opts.nonInteractive) {
+    out("  Next: compile the manifest and start the engine:");
+    command(`forge-launcher engine-run --repo "${state.repoDir}" --harness ${engineHarness} --yes`);
+    return;
+  }
+  await engineDecision(opts);
+  if (state.engineStarted) return;
+  const open = await promptYesNo(`Open the ${state.harnessLabel} CLI to build manually now?`, "n");
+  if (open === "y") await openCliFor(autobuildCommand());
+}
+
+function resumeSummary(): void {
+  out("");
+  out("════════════════════════════════════════════════════════");
+  out("  forge-launcher resume: where to pick up");
+  out("════════════════════════════════════════════════════════");
+  out("");
+  out(`  Repository  : ${link(state.repoDir)}`);
+  out(`  Harness     : ${state.harnessLabel}`);
+  const ideaPath = path.join(state.repoDir, "docs", "IDEA.md");
+  out(`  Idea file   : ${fs.existsSync(ideaPath) ? link(ideaPath) : "none"}`);
+  out(`  PRD         : ${hasPrd() ? link(path.join(state.repoDir, "docs", "PRD.md")) : "none"}`);
+  out(`  Agent team  : ${hasGeneratedTeam() ? link(harnessAgentsDir() + "/") : "none"}`);
+  out("");
+  out("  Next steps:");
+  out("");
+  if (state.engineStarted) {
+    out(`  1. The workflow engine is building in the background.`);
+    out(`     Monitor: tail -f ${path.join(state.repoDir, "docs", "PROGRESS.md")}`);
+  } else if (!hasPrd()) {
+    out(`  1. Run forge-launcher to continue: forge-launcher`);
+  } else if (!hasGeneratedTeam()) {
+    out(`  1. Generate the agent team: open the harness and run /forge-build-agent-team`);
+  } else {
+    out(`  1. Build: forge-launcher engine-run --repo "${state.repoDir}" --harness ${state.engineConfig.harness || "opencode"} --yes`);
+    out(`  2. Or in the harness: ${autobuildCommand()}`);
+  }
+  out("");
+}
+
+/**
+ * Re-enters an existing forge project at its current stage (idea → PRD → team →
+ * build) so a run paused for review can be picked up later. Full interactive
+ * wizard in a TTY; prints state + exact next commands with --non-interactive.
+ */
+export async function runResume(opts: ResumeOptions = {}): Promise<number> {
+  prompts.nonInteractive = Boolean(opts.nonInteractive);
+  const repoDir = opts.repo ? path.resolve(opts.repo) : detectRepoRoot();
+  if (!fs.existsSync(path.join(repoDir, ".git"))) {
+    fail(`Not a git repository: ${repoDir}`);
+    out("");
+    info("Run forge-launcher to create and bootstrap a new project first.");
+    return 1;
+  }
+  setupStateForRepo(repoDir);
+
+  printResumeWhere();
+
+  let go = await resumeIdeaStep(opts);
+  if (!go) { resumeSummary(); return 0; }
+  go = await resumePrdStep(opts);
+  if (!go) { resumeSummary(); return 0; }
+  go = await resumeTeamStep(opts);
+  if (!go) { resumeSummary(); return 0; }
+  await resumeEngineStep(opts);
+  resumeSummary();
+  return 0;
+}
+
 // --- Step 9: Summary -------------------------------------------------------
 
 function completionSummary(): void {
@@ -1128,20 +1534,27 @@ function completionSummary(): void {
     }
   } else {
     out("  1. Open the project in your agent harness.");
-    out("  2. Run the queued pipeline command:");
+    out("  2. Run the queued command:");
     out("");
     out(`       ${autobuildCommand()}`);
     out("");
-    out("  3. Review the pre-flight summary that the skill presents.");
-    out("  4. Type GO to start the autonomous pipeline (add --workflow-engine to");
-    out("     run the build through the workflow engine once the agent team is generated).");
+    if (hasPrd() && hasGeneratedTeam()) {
+      out("     (/forge-orchestrate-build drives the interactive build; use");
+      out("      forge-launcher engine-run for autonomous execution instead.)");
+    } else {
+      out("  3. Review the pre-flight summary that the skill presents.");
+      out("  4. Type GO to start the pipeline (add --workflow-engine to run the");
+      out("     build through the workflow engine once the agent team is generated).");
+    }
   }
   out("");
   out("  References:");
   out(`   • Prompt playbook : ${path.join(state.repoDir, "docs", "prompt-playbook.md")}`);
   const skillsRoot = state.harness === "github" ? ".github" : state.harness === "claude" ? ".claude" : state.harness === "opencode" ? ".opencode" : ".agents";
-  out(`   • forge-auto-build    : ${path.join(state.repoDir, skillsRoot, "skills", "forge-auto-build", "SKILL.md")}`);
-  out(`   • forge-auto-build-prd: ${path.join(state.repoDir, skillsRoot, "skills", "forge-auto-build-prd", "SKILL.md")}`);
+  out(`   • project-orchestrator   : ${path.join(state.repoDir, skillsRoot, "skills", "forge-orchestrate-build", "SKILL.md")}`);
+  out(`   • workflow-engine        : ${path.join(state.repoDir, skillsRoot, "skills", "forge-workflow-engine", "SKILL.md")}`);
+  out(`   • forge-auto-build-prd   : ${path.join(state.repoDir, skillsRoot, "skills", "forge-auto-build-prd", "SKILL.md")}`);
+  out(`   • forge-auto-build       : ${path.join(state.repoDir, skillsRoot, "skills", "forge-auto-build", "SKILL.md")} (terminal/headless fast-path)`);
   out("       (paths may vary by harness)");
   out("");
 }

@@ -6,14 +6,14 @@
 
 ## Overview
 
-`forge-workflow-engine` is the "dark orchestration" half of Agent Forge. Where `forge-auto-build` and `project-orchestrator` run *inside* a chat harness as prompt-driven orchestrators, this engine runs **outside** the chat session as a standalone Node process:
+`forge-workflow-engine` is the "dark orchestration" half of Agent Forge. Where `project-orchestrator` runs *inside* a chat harness as a prompt-driven orchestrator, this engine runs **outside** the chat session as a standalone Node process:
 
 1. Reads `docs/EXECUTION-MANIFEST.json` (the compiled build contract).
 2. Builds a task DAG and walks it phase-by-phase, task-by-task.
 3. Dispatches each task to a **harness adapter** (`opencode`, `copilot`, `openai`, `stub`, or `flowforge-kernel`).
 4. Persists state after every transition, so a run can be resumed, replayed, or audited at any time.
 
-It is the execution alternative to the prompt-driven flows: choose `GO --workflow-engine` inside `forge-auto-build`, or run it directly once a manifest exists.
+It is the execution alternative to the prompt-driven flows: start it from the terminal with `forge-launcher engine-run`, drive it in-harness with `@workflow-orchestrator`, or select it inside the `forge-auto-build` terminal fast-path with `GO --workflow-engine`.
 
 ---
 
@@ -61,9 +61,9 @@ forge-launcher engine-run --repo <repo-dir> --harness opencode --yes
 
 This installs the adapter and engine dependencies, compiles the manifest if missing, then runs the engine in the foreground. Add `--dry-run` to print the command sequence without executing it.
 
-### Via `forge-auto-build`
+### Via `forge-auto-build` (terminal/headless fast-path)
 
-At `forge-auto-build`'s pre-flight gate, type `GO --workflow-engine`. The team is generated, the manifest is compiled, and the engine starts **detached** (log: `docs/engine-run.log`) while `forge-auto-build` polls `docs/WORKFLOW-STATE.json` to completion.
+At `forge-auto-build`'s pre-flight gate, type `GO --workflow-engine`. The team is generated, the manifest is compiled, and the engine starts **detached** (log: `docs/engine-run.log`) while `forge-auto-build` polls `docs/WORKFLOW-STATE.json` to completion. To pick up a run later from any terminal, use `forge-launcher resume` or `forge-launcher engine-run`.
 
 ---
 
