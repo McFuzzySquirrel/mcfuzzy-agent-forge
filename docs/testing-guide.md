@@ -75,8 +75,8 @@ This is the explicit opposite of the interactive `project-orchestrator` flow, wh
 ```bash
 mkdir ~/forge-test && cd ~/forge-test
 git init
-# Run the bootstrap from your Agent Forge clone
-bash /path/to/mcfuzzy-agent-forge/scripts/bootstrap.sh
+# Run the bootstrap (from a forge-launcher install or your Agent Forge clone)
+forge-launcher bootstrap .
 git add -A && git commit -m "bootstrap"
 ```
 

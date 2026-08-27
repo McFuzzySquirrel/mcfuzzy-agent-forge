@@ -20,21 +20,14 @@ git init
 
 ## Step 1 - Bootstrap Agent Forge into Your Project
 
-Run the bootstrap script from the Agent Forge repo, pointing it at your new project:
+Copy the agent and skill templates into your project's harness directory with the launcher (Node, cross-platform):
 
-**Bash (Linux/macOS):**
 ```bash
-./scripts/bootstrap.sh ~/Projects/my-new-project
-```
-
-**PowerShell (Windows):**
-```powershell
-.\scripts\bootstrap.ps1 -Target C:\Projects\my-new-project
-```
-
-**Force overwrite if re-bootstrapping:**
-```bash
-./scripts/bootstrap.sh ~/Projects/my-new-project --force
+forge-launcher bootstrap ~/Projects/my-new-project           # default → .agents/
+forge-launcher bootstrap ~/Projects/my-new-project --harness github   # GitHub Copilot → .github/
+forge-launcher bootstrap ~/Projects/my-new-project --harness claude   # Claude Code → .claude/
+forge-launcher bootstrap ~/Projects/my-new-project --harness opencode # opencode → .opencode/
+forge-launcher bootstrap ~/Projects/my-new-project --force   # force overwrite when re-bootstrapping
 ```
 
 After bootstrapping, commit the templates so your harness can detect them:
@@ -435,13 +428,12 @@ Only modify skills I've approved in the audit report.
 | **Pick up where you left off** | `forge-launcher resume` (or `--repo <path>`) |
 | **Full auto build (terminal/headless, requires PRD)** | `forge-launcher --headless` (drives `opencode run --auto "/forge-auto-build Use docs/PRD.md as the project PRD. GO"` / `copilot -p "..." --yolo`) |
 | **Full auto build (workflow-engine path)** | `opencode run --auto --dir "<repo>" "/forge-auto-build Use docs/PRD.md as the project PRD. GO --workflow-engine"` |
-| **Launcher headless (whole pipeline)** | `./scripts/forge-launcher.sh --headless` (add `--dry-run` to print the command) |
-| **Launcher auto-draft (idea → PRD → team)** | `./scripts/forge-launcher.sh --draft` (non-interactive: set `FORGE_AUTO_DRAFT=1`) |
-| Bootstrap (Bash, default) | `./scripts/bootstrap.sh ~/Projects/my-project` |
-| Bootstrap (Bash, GitHub) | `./scripts/bootstrap.sh ~/Projects/my-project --harness github` |
-| Bootstrap (Bash, Claude) | `./scripts/bootstrap.sh ~/Projects/my-project --harness claude` |
-| Bootstrap (PowerShell) | `.\scripts\bootstrap.ps1 -Target C:\Projects\my-project` |
-| Bootstrap (PowerShell, harness) | `.\scripts\bootstrap.ps1 -Target C:\Projects\my-project -Harness github` |
+| **Launcher headless (whole pipeline)** | `forge-launcher --headless` (add `--dry-run` to print the command) |
+| **Launcher auto-draft (idea → PRD → team)** | `forge-launcher --draft` (non-interactive: set `FORGE_AUTO_DRAFT=1`) |
+| Bootstrap (default) | `forge-launcher bootstrap ~/Projects/my-project` |
+| Bootstrap (GitHub Copilot) | `forge-launcher bootstrap ~/Projects/my-project --harness github` |
+| Bootstrap (Claude Code) | `forge-launcher bootstrap ~/Projects/my-project --harness claude` |
+| Bootstrap (opencode) | `forge-launcher bootstrap ~/Projects/my-project --harness opencode` |
 | Build PRD from seed docs | `@workspace /forge-build-prd Build a complete PRD using docs/...` |
 | Build PRD from idea | `@workspace /forge-build-prd I want to build [idea]...` |
 | PRD quality pass | `@workspace /forge-build-prd Review docs/PRD.md for gaps...` |
@@ -482,7 +474,7 @@ Only modify skills I've approved in the audit report.
 - **One phase at a time** - resist asking the orchestrator to "build everything". Phases are checkpoints; review each one.
 - **Commit after each phase** - the orchestrator will prompt you, but make a habit of it. `git add . && git commit -m "feat: complete Phase N"`.
 - **The PRD is the source of truth** - if something looks wrong, fix the PRD first, then re-run the affected steps.
-- **Re-bootstrap safely** - run `bootstrap.sh --force` any time you want to pull in updated Agent Forge templates without losing your generated agents.
+- **Re-bootstrap safely** - run `forge-launcher bootstrap . --force` any time you want to pull in updated Agent Forge templates without losing your generated agents.
 - **Optimize generated skills** - after the initial build, run `@workspace /forge-optimize-skills` to audit your skills against best practices. The audit surfaces specific improvements you can apply immediately.
 - **Full auto build** - use `forge-auto-build` when a reviewed PRD already exists (`docs/PRD.md`, or the decomposed layout) and you want a single command to take you from that PRD to committed, validated code. One pre-flight gate, then fully autonomous. If no PRD exists yet, run `forge-auto-build-prd` first. If the run is interrupted, just re-invoke it -it resumes from `docs/PROGRESS.md`.
 - **Dark orchestration** - use `workflow-orchestrator` + the workflow engine for fully autonomous execution through a real harness (OpenCode or OpenAI API). Dry-run first with `--harness stub` to verify the engine setup before spending tokens.

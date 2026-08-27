@@ -183,44 +183,54 @@ Two principles govern the pipeline: **automate mechanical gates** (like decompos
 
 ### Prerequisites
 
+- Node.js 18+ (for the `forge-launcher` npm package)
 - An agent harness that reads agents/skills from a repo (GitHub Copilot, Claude Code, opencode, or any compatible runtime)
-- Git + Bash (Linux/macOS) or PowerShell 5.1+ (Windows)
+- `git`
 - Optional: `gh` (GitHub harness), `opencode`/`claude` CLIs (auto-launch), [Ollama](https://ollama.com/) (local models)
 
-### 1. Clone Agent Forge
+### 1. Install the launcher
+
+```bash
+npx forge-launcher@beta        # npm package (requires Node.js 18+)
+```
+
+The npm package is a **pre-release** (`1.0.0-beta.2`). Until it's published,
+install the packed tarball from a clone:
 
 ```bash
 git clone https://github.com/McFuzzySquirrel/mcfuzzy-agent-forge.git
-cd mcfuzzy-agent-forge
+cd mcfuzzy-agent-forge/scripts/forge-launcher
+npm install && npm pack && npm install -g ./forge-launcher-1.0.0-beta.2.tgz
+forge-launcher                 # the global command now works from anywhere
 ```
 
-### 2. Bootstrap into your project
+The legacy `./scripts/forge-launcher.sh` / `.\scripts\forge-launcher.ps1`
+wrappers still work from a clone with no install, but the npm package is the
+canonical cross-platform path.
 
-Copies agent and skill templates into your project's harness directory (default `.agents/`):
+For a **new project**, run `forge-launcher` and follow the prompts — it creates
+the repo, bootstraps the Agent Forge templates into your harness directory
+(default `.agents/`), captures your idea, and queues the next stage. Nothing
+else to set up.
+
+### 2. Add Agent Forge to an existing project
 
 ```bash
-# Bash
-./scripts/bootstrap.sh /path/to/your/project
-./scripts/bootstrap.sh /path/to/your/project --harness github   # GitHub Copilot
-./scripts/bootstrap.sh /path/to/your/project --harness claude   # Claude Code
-./scripts/bootstrap.sh /path/to/your/project --harness opencode # opencode
-
-# npm package (same subcommand)
-forge-launcher bootstrap /path/to/your/project --harness github
-
-# PowerShell
-.\scripts\bootstrap.ps1 -Target C:\path\to\project
-.\scripts\bootstrap.ps1 -Target C:\path\to\project -Harness github
+forge-launcher bootstrap /path/to/your/project --harness agents   # default
+forge-launcher bootstrap /path/to/your/project --harness github   # GitHub Copilot
+forge-launcher bootstrap /path/to/your/project --harness claude   # Claude Code
+forge-launcher bootstrap /path/to/your/project --harness opencode # opencode
 ```
 
-### 3. Commit and open the project
+`bootstrap` copies the agent and skill templates into the project's harness
+directory. Commit the templates, then open the project in your harness:
 
 ```bash
 cd /path/to/your/project
 git init && git add .agents/ && git commit -m "chore: bootstrap Agent Forge templates"
 ```
 
-Open the project in your harness, then pick a path.
+Then pick a path below.
 
 ### Path A - Full auto-build (requires a PRD)
 
@@ -357,7 +367,7 @@ mcfuzzy-agent-forge/
 
 | Problem | Fix |
 |---|---|
-| Bootstrap `permission denied` | `chmod +x scripts/bootstrap.sh` |
+| Bootstrap `permission denied` | Use `forge-launcher bootstrap` (Node, no execute bit needed); the legacy `scripts/bootstrap.sh` needs `chmod +x` |
 | Agents not appearing in the harness | Commit the files; verify paths match your harness (`.github/agents/`, `.claude/agents/`, `.opencode/agents/`, `.agents/agents/`); `name:` must match the filename |
 | `forge-auto-build` stops asking for a PRD | That's correct - run `forge-auto-build-prd` (or `forge-build-prd`) to create the reviewed PRD first |
 | Wrong harness directory | Re-run bootstrap with the correct `--harness` flag |
