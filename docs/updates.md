@@ -4,6 +4,39 @@ Detailed release and change notes for McFuzzy Agent Forge.
 
 ---
 
+## August 2026 - v3.20
+
+### Generated-team frontmatter quoting guard
+
+Auto-drafted teams could break the build: `forge-build-agent-team` generated
+`description:` frontmatter without quotes, and LLM prose routinely contains
+`: ` (colon-space), which YAML treats as a nested mapping. `gray-matter` — used
+by `forge-execution-adapter compile` to parse every agent/skill file — then
+threw, the manifest was never written, and the engine failed with a confusing
+"EXECUTION-MANIFEST.json not found".
+
+- **Always-quoted templates.** `forge-build-agent-team`'s agent and skill
+  templates now mandate double-quoted `description:` values, with a Gotcha
+  explaining the `: ` footgun.
+- **Mechanical gate.** A new dependency-free
+  `forge-build-agent-team/scripts/validate-frontmatter.mjs` scans the harness
+  agents/skills (the same files the adapter parses) and fails deterministically
+  on unquoted `: ` values, `#` inside an unquoted value, missing `name` /
+  `description`, or unterminated frontmatter. Step 7 of the skill now requires
+  it to pass instead of relying on self-report.
+- **Clear compile errors.** `forge-execution-adapter` discovery wraps frontmatter
+  parsing and rethrows `Invalid YAML frontmatter in <path>: <message> — hint:
+  wrap description values in double quotes`, naming the offending file instead
+  of a bare js-yaml error.
+- **Launcher fail-fast.** `forge-launcher engine-run` aborts immediately when the
+  manifest compile exits non-zero (surfacing the compile output) instead of
+  continuing to a misleading "manifest not found".
+- **Tests.** Adapter suite 17, launcher suite 40, engine suite 25 — all green;
+  the validator was exercised against a clean team and a deliberately broken
+  fixture.
+
+---
+
 ## August 2026 - v3.19
 
 ### Headless PRD quality: the gap check now runs automatically
