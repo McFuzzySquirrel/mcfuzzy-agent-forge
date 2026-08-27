@@ -94,7 +94,14 @@ export async function engineRun(opts: EngineRunOptions = {}): Promise<number> {
     if (!fs.existsSync(manifest) || recompile) {
       const compileArgs = ["run", "forge-execution-adapter", "--", "compile"];
       if (granularity) compileArgs.push("--granularity", granularity);
-      await run("npm", compileArgs, dryRun, adapterDir);
+      const code = await run("npm", compileArgs, dryRun, adapterDir);
+      if (code !== 0) {
+        // Fail fast with the compiler's own output instead of continuing on to
+        // a confusing "manifest not found" error.
+        throw new Error(
+          `Execution-manifest compile failed (exit ${code}). Fix the errors above (often unquoted YAML frontmatter in a generated agent/skill file), then run the engine again.`,
+        );
+      }
       if (recompile && fs.existsSync(path.join(repo, "docs", "WORKFLOW-STATE.json"))) {
         out("  Note: manifest recompiled with a new granularity. If a previous engine run is in progress, remove docs/WORKFLOW-STATE.json before the next fresh run.");
       }
