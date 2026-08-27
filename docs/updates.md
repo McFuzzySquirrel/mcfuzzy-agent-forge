@@ -4,6 +4,35 @@ Detailed release and change notes for McFuzzy Agent Forge.
 
 ---
 
+## August 2026 - v3.19
+
+### Headless PRD quality: the gap check now runs automatically
+
+The manual PRD flow runs a dedicated gap check (Step 2b of the prompt playbook):
+verify every major component has clear acceptance criteria, a defined tech stack,
+non-functional requirements (performance, security, privacy), and implementation
+phases - then fill any gaps. Headless/auto-draft PRD runs skipped that pass:
+
+- **Headless PRD gap check.** `forge-auto-build-prd` (headless) now runs the same
+  gap check on `docs/PRD.md` after drafting and re-invokes `forge-build-prd` in
+  gap-fill mode to fix any gaps, re-verifying before the decomposition check.
+  Direct headless `forge-build-prd` invocations do the same before saving. The
+  launcher's headless PRD command now spells the check out so the printed
+  command documents it.
+- **Decomposition and team validation were already covered.** `forge-decompose-prd`
+  Step 6 (coverage, valid dependency DAG, no cycles) and `forge-build-agent-team`
+  Step 7 (one owner per requirement, no conflicts, naming/frontmatter rules) run
+  unconditionally, headless included - no change needed there.
+- **Responsibility matrix from the team skill.** `forge-build-agent-team` Step 7
+  now writes `docs/agent-responsibility-matrix.md` (ownership by agent, team
+  validation summary, phase execution order) matching the execution-adapter's
+  deterministic matrix, so headless team generation produces the same durable
+  artifact the manual validation prompt and the compile gate do.
+- **Tests.** The launcher suite is now **40** `node --test` cases (new: the
+  headless PRD message documents the gap check). All packages typecheck clean.
+
+---
+
 ## August 2026 - v3.18
 
 ### Workflow-engine keep-alive attach mode

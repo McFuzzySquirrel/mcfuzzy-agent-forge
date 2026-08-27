@@ -976,7 +976,7 @@ export FORGE_YN_DEFAULT="n"
 ./scripts/forge-launcher.sh --non-interactive --headless --dry-run
 ```
 
-**Check ✓** The output includes `opencode run --auto --dir "/tmp/forge-headless-ci" "/forge-auto-build-prd Use docs/IDEA.md as the project idea. Headless mode: auto-proceed with default assumptions and approve the PRD."` and a `Dry-run: command printed, not executed.` line.
+**Check ✓** The output includes `opencode run --auto --dir "/tmp/forge-headless-ci" "/forge-auto-build-prd Use docs/IDEA.md as the project idea. Headless mode: auto-proceed with default assumptions and approve the PRD. After drafting, run a PRD gap check: every major component must have clear acceptance criteria, a defined tech stack, non-functional requirements (performance, security, privacy), and implementation phases; fill any gaps before approving."` and a `Dry-run: command printed, not executed.` line.
 
 Repeat with a PRD added (`FORGE_PRD_FILE=/path/to/prd.md` and `FORGE_WORKFLOW_ENGINE=1`):
 
@@ -1024,10 +1024,10 @@ From the bootstrapped repository (or the one created in Step 1), run the skill n
 
 ```bash
 cd /tmp/forge-headless-ci
-opencode run --auto "/forge-auto-build-prd Use docs/IDEA.md as the project idea. Headless mode: auto-proceed with default assumptions and approve the PRD."
+opencode run --auto "/forge-auto-build-prd Use docs/IDEA.md as the project idea. Headless mode: auto-proceed with default assumptions and approve the PRD. After drafting, run a PRD gap check: every major component must have clear acceptance criteria, a defined tech stack, non-functional requirements (performance, security, privacy), and implementation phases; fill any gaps before approving."
 ```
 
-**Check ✓** `docs/PRD.md` is produced without any interactive prompts - the skill auto-proceeds, and every unknown appears in the PRD's **Open Questions** section with a default assumption.
+**Check ✓** `docs/PRD.md` is produced without any interactive prompts - the skill auto-proceeds, every unknown appears in the PRD's **Open Questions** section with a default assumption, and the PRD passes the gap check (acceptance criteria, tech stack, non-functional requirements, and phases are all present).
 
 ---
 

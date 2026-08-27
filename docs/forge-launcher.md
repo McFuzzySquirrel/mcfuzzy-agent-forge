@@ -178,7 +178,7 @@ What gets queued:
 | Repo state | Queued command |
 |---|---|
 | PRD captured in Step 6 (or a decomposed PRD exists) | `opencode run --auto --dir "<repo>" "/forge-auto-build Use docs/PRD.md as the project PRD. GO [--workflow-engine]"` |
-| No PRD captured | `opencode run --auto --dir "<repo>" "/forge-auto-build-prd Use docs/IDEA.md as the project idea. Headless mode: auto-proceed with default assumptions and approve the PRD."` |
+| No PRD captured | `opencode run --auto --dir "<repo>" "/forge-auto-build-prd Use docs/IDEA.md as the project idea. Headless mode: auto-proceed with default assumptions and approve the PRD. After drafting, run a PRD gap check: every major component must have clear acceptance criteria, a defined tech stack, non-functional requirements (performance, security, privacy), and implementation phases; fill any gaps before approving."` |
 
 The embedded `GO` satisfies `forge-auto-build`'s pre-flight gate, and the
 headless `forge-auto-build-prd` invocation skips its interactive confirmation
@@ -472,7 +472,7 @@ the workflow engine - now (detached), later (prints the command), or manually:
 ```
 Generate the PRD from docs/IDEA.md automatically now (headless, auto-proceed with best answers)? [y/N]: y
   Auto-drafting the PRD from docs/IDEA.md (headless) …
-    opencode run --auto --dir "/home/user/projects/my-cool-app" "/forge-auto-build-prd Use docs/IDEA.md as the project idea. Headless mode: auto-proceed with default assumptions and approve the PRD."
+    opencode run --auto --dir "/home/user/projects/my-cool-app" "/forge-auto-build-prd Use docs/IDEA.md as the project idea. Headless mode: auto-proceed with default assumptions and approve the PRD. After drafting, run a PRD gap check: every major component must have clear acceptance criteria, a defined tech stack, non-functional requirements (performance, security, privacy), and implementation phases; fill any gaps before approving."
   ✔  Committed: 'docs: add auto-drafted PRD'
   ✔  PRD generated.
   Review it before continuing:

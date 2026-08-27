@@ -439,7 +439,7 @@ Only modify skills I've approved in the audit report.
 | Step | Command / Prompt |
 |------|-----------------|
 | **Build reviewed PRD from idea** | `@workspace /forge-auto-build-prd I want to build [idea]` |
-| **Headless PRD from idea** | `opencode run --auto --dir "<repo>" "/forge-auto-build-prd Use docs/IDEA.md as the project idea. Headless mode: auto-proceed with default assumptions and approve the PRD."` |
+| **Headless PRD from idea** | `opencode run --auto --dir "<repo>" "/forge-auto-build-prd Use docs/IDEA.md as the project idea. Headless mode: auto-proceed with default assumptions and approve the PRD. After drafting, run a PRD gap check: every major component must have clear acceptance criteria, a defined tech stack, non-functional requirements (performance, security, privacy), and implementation phases; fill any gaps before approving."` |
 | **Full auto build (from existing PRD)** | `@workspace /forge-auto-build docs/PRD.md` |
 | **Headless full auto build** | `opencode run --auto --dir "<repo>" "/forge-auto-build Use docs/PRD.md as the project PRD. GO"` or `copilot -p "..." --yolo` |
 | **Full auto build (with model assignment)** | `@workspace /forge-auto-build docs/PRD.md GO --assign-models` |
@@ -488,6 +488,7 @@ Only modify skills I've approved in the audit report.
 
 - **Open your target project first** - agents and skills resolve from the current workspace or repo directory.
 - **Review before executing** - always run the execution plan prompt (Step 5a) before asking the orchestrator to build anything.
+- **Headless runs get the same quality checks** - the headless/auto-draft PRD flow runs the Step 2b gap check (acceptance criteria, tech stack, NFRs, phases) and fills gaps before approving, and the skills' built-in validations (decomposition Step 6, team Step 7) always run - headless or not.
 - **One phase at a time** - resist asking the orchestrator to "build everything". Phases are checkpoints; review each one.
 - **Commit after each phase** - the orchestrator will prompt you, but make a habit of it. `git add . && git commit -m "feat: complete Phase N"`.
 - **The PRD is the source of truth** - if something looks wrong, fix the PRD first, then re-run the affected steps.

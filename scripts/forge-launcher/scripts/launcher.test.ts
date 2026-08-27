@@ -5,7 +5,7 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import { engineDetachedCommand } from "./launcher.ts";
+import { engineDetachedCommand, headlessSkillMsg } from "./launcher.ts";
 import { spawnDetached } from "./format.ts";
 
 const CLI = fileURLToPath(new URL("./cli.ts", import.meta.url));
@@ -58,6 +58,15 @@ test("non-interactive run with no PRD bootstraps and queues forge-auto-build-prd
   // CR-001 lifecycle: no PRD -> queue forge-auto-build-prd
   assert.ok(out.includes("/forge-auto-build-prd Use docs/IDEA.md as the project idea"));
   assert.ok(!out.includes("/forge-auto-build Use docs/PRD.md as the project PRD"));
+});
+
+test("headless PRD message includes the gap check the manual flow runs", () => {
+  const msg = headlessSkillMsg();
+  assert.ok(msg.startsWith("/forge-auto-build-prd "), msg);
+  assert.ok(msg.includes("PRD gap check"), msg);
+  assert.ok(msg.includes("acceptance criteria"), msg);
+  assert.ok(msg.includes("non-functional requirements"), msg);
+  assert.ok(msg.includes("implementation phases"), msg);
 });
 
 test("auto-draft engine command carries configured granularity/concurrency/timeout/retries", async () => {

@@ -260,6 +260,36 @@ Before finalizing:
 - [ ] Generated skills use progressive disclosure for content exceeding ~50 lines of templates
 - [ ] All agent files have been written to `HARNESS_AGENTS_DIR`, not to `.agents/agents/` unless that is the detected harness directory
 
+After the validation passes, **write `docs/agent-responsibility-matrix.md`** so the
+responsibility map is a durable, reviewable artifact (the workflow-engine compile
+gate writes the same file; see the execution-adapter's deterministic matrix).
+Mirror its structure:
+
+```markdown
+# Agent Responsibility Matrix
+
+- **Source layout:** monolithic | features
+- **Source:** docs/PRD.md (or docs/product-vision.md + docs/features/*)
+
+## Team Validation
+- Unassigned tasks: **N**   (list any)
+- Duplicate file owners: **N**   (list any)
+- Orphan agents: **N**   (list any)
+
+## Ownership by Agent
+
+### <agent-name>
+| Phase | Feature | Task | Outputs |
+|---|---|---|---|
+| 1 | - | 1.1 | src/api/routes.ts |
+
+## Phase Execution Order
+1. **<phase-id>** — <title> — owned by <agents>
+```
+
+Fill the tables from the PRD's implementation phases and each agent's ownership
+mapping; this file becomes the source of truth for who owns what.
+
 ### Step 8: Present the Team
 
 Summarize with tables: Custom Agents (name/role/sections/phase), Skills (name/purpose/used by), Collaboration Map.
