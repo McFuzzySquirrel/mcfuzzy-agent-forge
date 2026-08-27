@@ -186,7 +186,7 @@ The engine is harness-agnostic. Select the backend with `--harness`:
 
 | Adapter | Flag | How it invokes agents |
 |---|---|---|
-| **OpenCode CLI** (default) | `--harness opencode` | `opencode run --model <m> --dir <repo> "<agent body + task prompt>"` |
+| **OpenCode CLI** (default) | `--harness opencode` | `opencode run --model <m> [--agent <name>] --dir <repo> "<task prompt>"` |
 | **GitHub Copilot CLI** | `--harness copilot` | `copilot -p "<agent context + task prompt>" --yolo` |
 | **OpenAI API** | `--harness openai` | `POST /v1/chat/completions` with agent rawBody as system prompt |
 | **Stub** | `--harness stub` | Returns synthetic success; no real calls (for testing) |
@@ -212,9 +212,13 @@ The copilot adapter inlines the agent file contents into the prompt (there is no
 `--system-prompt` flag on `copilot -p`) and auto-approves tool permissions with
 `--yolo`, mirroring the opencode adapter's `--auto`.
 
-The opencode adapter does the same: `opencode run` has no `--system-prompt` flag,
-so it inlines the agent persona (`agent.rawBody`) into the prompt as an inline
-context block and auto-approves tool permissions with `--auto`.
+The opencode adapter selects the forge agent natively when its file lives under
+the project's `.opencode/agents/` directory: it passes `--agent <name>` so
+opencode loads the persona itself (sessions show the forge agent, not the
+default build agent) and does **not** inline it. For other harness roots
+(`.agents`, `.claude`, `.github`) opencode cannot discover the agent files, so it
+falls back to inlining the persona (`agent.rawBody`) as an inline context block.
+Tool permissions are auto-approved with `--auto` in both cases.
 
 ### OpenAI adapter environment variables
 
@@ -346,7 +350,7 @@ cd .agents/skills/forge-workflow-engine   && npm install && npm run workflow-eng
 - **OpenCode must be in `$PATH`.** The `opencode` adapter shells out to the binary. If OpenCode is installed at a non-standard path, set `OPENCODE_BIN`.
 - **Per-task cold start is the main harness overhead.** Without `--keep-alive`/`--attach`, every task spawns a fresh `opencode run` that re-boots config, skills, and all MCP servers. Use attach mode for multi-task runs; the opencode CLI documents this as the way to "avoid MCP server cold boot times on every run".
 - **Attach mode needs a healthy server.** `--keep-alive` polls `GET /global/health` before dispatching and fails fast if `opencode serve` cannot start. Reusing `--attach` against a dead URL fails per task - start the server first.
-- **Agent file paths must be absolute or resolvable from the repo root.** The adapter inlines the agent persona (`agent.rawBody`) into the prompt; `rawBody` comes from discovery, which reads the agent `.md` file.
+- **Agent file paths must be absolute or resolvable from the repo root.** Discovery reads the agent `.md` file and sets `agent.path`. For `.opencode/agents/` files the adapter passes `--agent <name>` and skips the inline persona; for other harness roots it inlines `agent.rawBody` into the prompt.
 - **Parallelism is opt-in and harness-gated.** The engine executes the ready-task frontier concurrently up to `--concurrency <n>` (default `1` = sequential). Only harness adapters that declare `supportsConcurrency` are parallelized; repo-editing harnesses still rely on the dependency graph for file isolation. See ADR-021.
 
 ---

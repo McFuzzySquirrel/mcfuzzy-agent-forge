@@ -195,14 +195,20 @@ Each adapter translates a `(agent, task)` pair into a real execution call:
 
 ### `OpenCodeAdapter`
 
-Shells out to the `opencode` CLI:
+Shells out to the `opencode` CLI per task:
 
 ```
-opencode run --model <agent.model> "<agent body + task title + description>"
+opencode run --model <agent.model> [--agent <name>] "<task title + description>"
 ```
 
-The agent's `.agent.md` body is inlined into the prompt (`opencode run` has no
-`--system-prompt` flag). The task's title and description complete the user prompt. Outputs are verified by checking whether the `expectedOutputs` files exist on disk after the call.
+When the owning agent's file lives under the project's `.opencode/agents/`
+directory, the adapter passes `--agent <name>` so opencode loads the persona
+itself — the session runs under the forge agent rather than the default build
+agent — and the persona is not inlined. `opencode run` has no `--system-prompt`
+flag, so for other harness roots (`.agents`, `.claude`, `.github`) it falls back
+to inlining the agent body into the prompt. The task's title and description
+complete the user prompt. Outputs are verified by checking whether the
+`expectedOutputs` files exist on disk after the call.
 
 ### `CopilotAdapter`
 
@@ -329,8 +335,9 @@ workflow-engine run --harness opencode
                │                                             │
                ├─ for each ready task:                       │
                │     markTaskStarted() → save state          │
-               │     harness.invoke(agent, task)             │
-               │       ↳ opencode run "<agent body + task>"  │
+                │     harness.invoke(agent, task)             │
+                │       ↳ opencode run [--agent <name>]       │
+                │            "<persona? + task>"              │
                │     on success:                             │
                │       markTaskComplete() → save → syncMd    │
                │     on failure (retries exhausted):         │
