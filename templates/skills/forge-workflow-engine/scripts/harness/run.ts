@@ -15,6 +15,11 @@ export interface RunCommandResult {
   status: number | null;
   /** Human-readable failure reason (spawn error, timeout, or buffer overflow). */
   error?: string;
+  /**
+   * Milliseconds from spawn until the first stdout/stderr byte arrived. A proxy
+   * for process startup cost (the harness cold-boot the attach mode removes).
+   */
+  bootMs?: number;
 }
 
 /**
@@ -33,18 +38,22 @@ export function runCommand(
   return new Promise((resolve) => {
     const child = spawn(bin, args, { cwd: opts.cwd, env: opts.env, stdio: ["ignore", "pipe", "pipe"] });
 
+    const startedAt = Date.now();
     let stdout = "";
     let stderr = "";
     let settled = false;
+    let firstOutputAt: number | undefined;
 
     const settle = (status: number | null, error?: string) => {
       if (settled) return;
       settled = true;
       clearTimeout(timer);
-      resolve({ stdout, stderr, status, error });
+      const bootMs = firstOutputAt === undefined ? Date.now() - startedAt : firstOutputAt - startedAt;
+      resolve({ stdout, stderr, status, error, bootMs });
     };
 
     const append = (target: "stdout" | "stderr", chunk: Buffer) => {
+      if (firstOutputAt === undefined) firstOutputAt = Date.now();
       const text = chunk.toString("utf8");
       if (target === "stdout") {
         if (stdout.length + text.length > opts.maxBufferBytes) {

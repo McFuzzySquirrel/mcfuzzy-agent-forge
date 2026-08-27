@@ -58,6 +58,7 @@ npm run workflow-engine -- run --harness flowforge-kernel
 npm run workflow-engine -- run --max-retries 3 --retry-delay-ms 10000
 npm run workflow-engine -- run --harness opencode --yes   # skip the pre-run gate
 npm run workflow-engine -- run --heartbeat-ms 5000        # heartbeat every 5s while a task runs
+npm run workflow-engine -- run --harness opencode --keep-alive   # warm opencode server for the run
 npm run workflow-engine -- run --harness stub --viz --yes # run with the live Forge Board dashboard
 ```
 
@@ -78,6 +79,32 @@ npm run workflow-engine -- run --heartbeat-ms 0            # disable
 ```
 
 `--heartbeat-ms` overrides the `FORGE_ENGINE_HEARTBEAT_MS` environment variable.
+
+### Keep-alive attach mode (opencode harness)
+
+By default the opencode adapter cold-starts a fresh `opencode run` process for
+every task - each one re-boots the project instance: config, AGENTS.md, skills,
+agent files, and every MCP server (the biggest chunk of per-task overhead). For
+multi-task runs, pass `--keep-alive` to instead boot a single headless
+`opencode serve` instance once and attach every task to it:
+
+```bash
+npm run workflow-engine -- run --harness opencode --keep-alive
+npm run workflow-engine -- run --harness opencode --keep-alive --keep-alive-port 4096
+```
+
+The server is torn down when the run finishes. Each `opencode run --attach` still
+creates a fresh, isolated session per task - the server only keeps the shared
+project instance (config/skills/MCP) warm. If you already keep an `opencode serve`
+running (e.g. started manually or by the TUI), skip the lifecycle management and
+point tasks at it:
+
+```bash
+npm run workflow-engine -- run --harness opencode --attach http://127.0.0.1:4096
+```
+
+`--keep-alive` and `--attach` also have env equivalents: `FORGE_ENGINE_ATTACH=1`
+(auto-start) and `FORGE_ENGINE_ATTACH_URL=<url>` (reuse an existing server).
 
 ### Live visualization (The Forge Board)
 
@@ -169,6 +196,8 @@ The engine is harness-agnostic. Select the backend with `--harness`:
 |---|---|---|
 | `OPENCODE_BIN` | `opencode` | Path to the opencode binary |
 | `OPENCODE_EXTRA_FLAGS` | *(empty)* | Extra flags appended to every `opencode run` call |
+| `FORGE_ENGINE_ATTACH` | *(empty)* | `1` to auto-start an `opencode serve` instance for the run (`--keep-alive`) |
+| `FORGE_ENGINE_ATTACH_URL` | *(empty)* | Attach tasks to an existing `opencode serve` URL instead of cold-starting per task (`--attach`) |
 
 ### Copilot adapter environment variables
 
@@ -313,6 +342,8 @@ cd .agents/skills/forge-workflow-engine   && npm install && npm run workflow-eng
 - **Manifest must exist first.** The engine reads `docs/EXECUTION-MANIFEST.json` - it does not re-parse the PRD. If the PRD changes after a compile, re-run `forge-execution-adapter compile` and then start a fresh run.
 - **State is tied to a run ID.** Compiling a new manifest after a partial run will produce a manifest that no longer matches the in-progress state. Start a new run (`rm docs/WORKFLOW-STATE.json`) rather than mixing them.
 - **OpenCode must be in `$PATH`.** The `opencode` adapter shells out to the binary. If OpenCode is installed at a non-standard path, set `OPENCODE_BIN`.
+- **Per-task cold start is the main harness overhead.** Without `--keep-alive`/`--attach`, every task spawns a fresh `opencode run` that re-boots config, skills, and all MCP servers. Use attach mode for multi-task runs; the opencode CLI documents this as the way to "avoid MCP server cold boot times on every run".
+- **Attach mode needs a healthy server.** `--keep-alive` polls `GET /global/health` before dispatching and fails fast if `opencode serve` cannot start. Reusing `--attach` against a dead URL fails per task - start the server first.
 - **Agent file paths must be absolute or resolvable from the repo root.** The adapter inlines the agent persona (`agent.rawBody`) into the prompt; `rawBody` comes from discovery, which reads the agent `.md` file.
 - **Parallelism is opt-in and harness-gated.** The engine executes the ready-task frontier concurrently up to `--concurrency <n>` (default `1` = sequential). Only harness adapters that declare `supportsConcurrency` are parallelized; repo-editing harnesses still rely on the dependency graph for file isolation. See ADR-021.
 
