@@ -1,4 +1,5 @@
 import { existsSync, readFileSync } from "node:fs";
+import { relative } from "node:path";
 
 import { runCommand } from "./run.ts";
 import { DEFAULT_TASK_TIMEOUT_MS, type AgentDescriptor, type HarnessAdapter, type ManifestTask, type TaskResult, type WorkflowState } from "../types.ts";
@@ -6,13 +7,20 @@ import { DEFAULT_TASK_TIMEOUT_MS, type AgentDescriptor, type HarnessAdapter, typ
 /**
  * OpenCode CLI harness adapter.
  *
- * Invokes `opencode run` with the agent's persona inlined into the prompt,
- * captures stdout/stderr, and returns a structured TaskResult.
+ * Invokes `opencode run` per task, captures stdout/stderr, and returns a
+ * structured TaskResult.
  *
- * Unlike `copilot -p`, `opencode run` has no `--system-prompt` flag, so the
- * agent file body is prepended to the user prompt as an inline context block.
+ * Agent selection is native when possible: if the owning agent's file lives
+ * under the project's `.opencode/agents/` directory, the adapter passes
+ * `--agent <name>` so opencode loads the persona itself (the session shows the
+ * forge agent rather than the default build agent) and the persona is not
+ * inlined. For other harness roots (`.agents`, `.claude`, `.github`) opencode
+ * cannot discover the agent files, so - since `opencode run` has no
+ * `--system-prompt` flag - the agent file body is prepended to the user prompt
+ * as an inline context block instead.
  *
- * Expected CLI shape:
+ * Expected CLI shapes:
+ *   opencode run [--model <model-id>] [--agent <name>] "<task prompt>"
  *   opencode run [--model <model-id>] "<agent body + task prompt>"
  *
  * Set OPENCODE_BIN env var to override the opencode binary path.
@@ -56,15 +64,16 @@ export class OpenCodeAdapter implements HarnessAdapter {
     const start = Date.now();
 
     const modelFlag = agent.model ? ["--model", agent.model] : [];
+    const agentFlag = this.canSelectAgent(agent, repoRoot) ? ["--agent", agent.name] : [];
 
-    const prompt = this.buildPrompt(agent, task, contextBlock);
+    const prompt = this.buildPrompt(agent, task, contextBlock, agentFlag.length === 0);
     // `--dir` pins the project directory explicitly: `opencode run` resolves its
     // working directory from its parent process, not the child's spawn `cwd`, so
     // relying on `cwd: repoRoot` alone runs tasks in the wrong project when the
     // engine process lives in a subdirectory (e.g. the engine's own package dir).
     // With `--attach`, `--dir` names the project root on the remote server.
     const attachFlags = this.attachUrl ? ["--attach", this.attachUrl] : [];
-    const args = ["run", ...modelFlag, "--dir", repoRoot, ...attachFlags, ...this.extraFlags, prompt];
+    const args = ["run", ...modelFlag, ...agentFlag, "--dir", repoRoot, ...attachFlags, ...this.extraFlags, prompt];
 
     const result = await runCommand(this.bin, args, {
       cwd: repoRoot,
@@ -119,7 +128,26 @@ export class OpenCodeAdapter implements HarnessAdapter {
     };
   }
 
-  private buildPrompt(agent: AgentDescriptor, task: ManifestTask, contextBlock?: string): string {
+  /**
+   * True when opencode can select this agent natively: it must have a name and
+   * its file must live under the project's `.opencode/agents/` directory - the
+   * only harness root opencode scans for agent definitions. For `.agents`,
+   * `.claude`, and `.github` roots the adapter falls back to inlining the
+   * persona into the prompt (see `buildPrompt`).
+   */
+  private canSelectAgent(agent: AgentDescriptor, repoRoot: string): boolean {
+    if (!agent.name) return false;
+    return relative(repoRoot, agent.path).split(/[\\/]/).includes(".opencode");
+  }
+
+  private buildPrompt(
+    agent: AgentDescriptor,
+    task: ManifestTask,
+    contextBlock?: string,
+    inlinePersona = true,
+  ): string {
+    const personaBlock = inlinePersona ? agent.rawBody : null;
+
     const contextHints = task.expectedOutputs.length > 0
       ? `\n\nExpected output files: ${task.expectedOutputs.join(", ")}`
       : "";
@@ -129,7 +157,7 @@ export class OpenCodeAdapter implements HarnessAdapter {
       : "";
 
     return [
-      agent.rawBody,
+      personaBlock,
       "",
       contextBlock ?? "",
       `Task: ${task.title}`,

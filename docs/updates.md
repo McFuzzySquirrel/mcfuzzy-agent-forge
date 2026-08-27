@@ -4,6 +4,29 @@ Detailed release and change notes for McFuzzy Agent Forge.
 
 ---
 
+## August 2026 - v3.21
+
+### OpenCode harness selects the forge agent natively
+
+`opencode run` supports an `--agent <name>` flag, but the workflow engine's
+opencode adapter never passed it — every task ran under opencode's **default
+agent**, with the forge persona inlined into the prompt. Session lists in
+opencode showed default "build" sessions instead of the forge agents
+(`discovery-engineer`, `qa-engineer`, …).
+
+- **`--agent` when possible.** When the owning agent's file lives under the
+  project's `.opencode/agents/` directory, `OpenCodeAdapter` now passes
+  `--agent <name>` and lets opencode load the persona itself. The persona is no
+  longer inlined into the prompt, so sessions are attributed to the real forge
+  agent and per-task prompts carry no duplicated system text.
+- **Graceful fallback.** For other harness roots (`.agents`, `.claude`,
+  `.github`) opencode cannot discover the agent files, so the adapter keeps the
+  previous inline-persona behavior and passes no `--agent`.
+- Covered by new adapter tests (`opencode-adapter.test.ts`) asserting the
+  `.opencode` vs non-`.opencode` split and the no-name case.
+
+---
+
 ## August 2026 - v3.20
 
 ### Generated-team frontmatter quoting guard

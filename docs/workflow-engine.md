@@ -73,15 +73,19 @@ The engine is harness-agnostic. Select the backend with `--harness`:
 
 | Adapter | Flag | How it invokes agents |
 |---|---|---|
-| **OpenCode CLI** (default) | `--harness opencode` | `opencode run --auto --dir <repo> "<agent body + task prompt>"` |
+| **OpenCode CLI** (default) | `--harness opencode` | `opencode run --auto [--agent <name>] --dir <repo> "<task prompt>"` |
 | **GitHub Copilot CLI** | `--harness copilot` | `copilot -p "<agent body + task prompt>" --yolo` |
 | **OpenAI API** | `--harness openai` | `POST /v1/chat/completions` with the agent `rawBody` as the system prompt |
 | **Stub** | `--harness stub` | Returns synthetic success; no real calls (for testing) |
 | **FlowForge Kernel CLI** | `--harness flowforge-kernel` | Hands off to `flowforge run` against a compiled `.workforce` package |
 
-The `opencode` and `copilot` adapters inline the agent persona into the prompt
-(neither CLI has a `--system-prompt` flag) and run the child process
-asynchronously, so the engine's heartbeat stays responsive.
+The `copilot` adapter inlines the agent persona into the prompt (there is no
+`--system-prompt` flag on `copilot -p`). The `opencode` adapter selects the forge
+agent natively when its file lives under the project's `.opencode/agents/`
+directory (`--agent <name>`), so sessions show the forge agent rather than the
+default build agent; for other harness roots it inlines the persona the same way
+the copilot adapter does. Both run the child process asynchronously, so the
+engine's heartbeat stays responsive.
 
 ---
 
