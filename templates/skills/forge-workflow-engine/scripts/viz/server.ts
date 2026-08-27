@@ -7,7 +7,7 @@ import { fileURLToPath } from "node:url";
 import type { AuditEvent } from "../types.ts";
 import type { ExecutionManifest, WorkflowState } from "../types.ts";
 import { setAuditListener } from "./bus.ts";
-import { layoutManifest, type TreeLayout } from "./layout.ts";
+import { layoutManifest, type KanbanLayout } from "./layout.ts";
 
 // ─── Live workflow-engine visualization server ───────────────────────────────
 //
@@ -49,8 +49,8 @@ export interface VizServer {
 export interface VizSnapshot {
   manifest: ExecutionManifest | null;
   state: WorkflowState | null;
-  /** Pre-computed whorl-tree layout derived from the manifest. */
-  layout: TreeLayout | null;
+  /** Pre-computed kanban layout derived from the manifest. */
+  layout: KanbanLayout | null;
 }
 
 export interface VizSource {

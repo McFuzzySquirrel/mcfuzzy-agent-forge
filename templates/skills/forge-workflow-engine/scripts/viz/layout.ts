@@ -1,12 +1,22 @@
 import type { ExecutionManifest } from "../../../forge-execution-adapter/scripts/types.ts";
 
-// ─── Whorl-tree layout ────────────────────────────────────────────────────────
+// ─── Kanban layout ────────────────────────────────────────────────────────────
 //
-// Pure layout: maps the manifest DAG onto a single growing oak. Phases are
-// whorls/levels up the trunk (time grows upward), tasks hang from the whorl's
-// branch line left-to-right across the trunk, and dependency / artifact edges
-// become acorn trails. Keeping this a pure function makes it unit-testable and
+// Pure layout: maps the manifest onto a kanban board. Phases become horizontal
+// bands stacked top-to-bottom; each band holds its tasks in four status
+// columns (To Do / In Progress / Done / Failed). Dependency and artifact edges
+// connect the cards. Keeping this a pure function makes it unit-testable and
 // keeps rendering concerns out of the engine.
+
+export type ColumnKey = "pending" | "running" | "complete" | "failed";
+
+export interface KanbanColumn {
+  key: ColumnKey;
+  label: string;
+  /** Left edge of the column (screen coords). */
+  x: number;
+  width: number;
+}
 
 export interface LayoutTask {
   id: string;
@@ -14,8 +24,10 @@ export interface LayoutTask {
   ownerAgent?: string;
   phaseId: string;
   phaseIndex: number;
-  /** 0-based position along the whorl's branch line. */
+  /** 0-based manifest order within its phase. */
   indexInPhase: number;
+  /** Initial top-left of the card (To Do column). The dashboard re-positions
+   *  cards dynamically as their status changes. */
   x: number;
   y: number;
   produces?: string;
@@ -28,11 +40,12 @@ export interface LayoutPhase {
   title: string;
   description?: string;
   index: number;
-  /** Y of the whorl's branch line (screen coords, lower = first phase). */
+  /** Top edge of the band (screen coords, lower = earlier phase). */
   y: number;
+  height: number;
 }
 
-export type LayoutEdgeKind = "dependency" | "artifact" | "phase";
+export type LayoutEdgeKind = "dependency" | "artifact";
 
 export interface LayoutEdge {
   from: string;
@@ -40,12 +53,10 @@ export interface LayoutEdge {
   kind: LayoutEdgeKind;
 }
 
-export interface TreeLayout {
+export interface KanbanLayout {
   width: number;
   height: number;
-  trunkX: number;
-  trunkTop: number;
-  trunkBottom: number;
+  columns: KanbanColumn[];
   phases: LayoutPhase[];
   tasks: LayoutTask[];
   edges: LayoutEdge[];
@@ -54,61 +65,103 @@ export interface TreeLayout {
 export interface LayoutOptions {
   width?: number;
   height?: number;
-  /** Vertical space between whorls. */
-  phaseHeight?: number;
-  /** Distance the branch line spans from the trunk to each side. */
-  branchSpan?: number;
-  /** Bottom margin for the first whorl. */
-  bottomMargin?: number;
-  /** Top margin for the highest whorl. */
+  /** Left rail width for phase labels. */
+  labelWidth?: number;
+  /** Horizontal padding inside columns. */
+  padX?: number;
+  /** Vertical padding inside bands. */
+  padY?: number;
+  /** Vertical gap between bands. */
+  bandGap?: number;
+  /** Space above the first band (reserves room for the column header row). */
   topMargin?: number;
+  bottomMargin?: number;
+  /** Space between a band's top edge and its first card. */
+  headerSpace?: number;
+  /** Card height. */
+  cardHeight?: number;
+  /** Vertical gap between stacked cards. */
+  cardGap?: number;
+  /** Extra padding below the last card in a band. */
+  bottomPad?: number;
 }
 
 const DEFAULTS: Required<LayoutOptions> = {
   width: 1280,
   height: 800,
-  phaseHeight: 180,
-  branchSpan: 460,
-  bottomMargin: 110,
-  topMargin: 90,
+  labelWidth: 170,
+  padX: 18,
+  padY: 12,
+  bandGap: 20,
+  topMargin: 84,
+  bottomMargin: 40,
+  headerSpace: 40,
+  cardHeight: 62,
+  cardGap: 16,
+  bottomPad: 8,
+};
+
+const COLUMN_LABELS: Record<ColumnKey, string> = {
+  pending: "To Do",
+  running: "In Progress",
+  complete: "Done",
+  failed: "Failed",
 };
 
 export function layoutManifest(
   manifest: ExecutionManifest,
   options: LayoutOptions = {},
-): TreeLayout {
+): KanbanLayout {
   const opts = { ...DEFAULTS, ...options };
-  const trunkX = opts.width / 2;
-  const baseY = opts.height - opts.bottomMargin;
+  const avail = opts.width - opts.labelWidth - opts.padX * 2;
+  const colW = avail / Object.keys(COLUMN_LABELS).length;
 
-  const phases: LayoutPhase[] = manifest.phases.map((phase, index) => ({
-    id: phase.id,
-    title: phase.title,
-    description: phase.description,
-    index,
-    y: baseY - index * opts.phaseHeight,
+  const columns: KanbanColumn[] = (Object.keys(COLUMN_LABELS) as ColumnKey[]).map((key, i) => ({
+    key,
+    label: COLUMN_LABELS[key]!,
+    x: opts.labelWidth + opts.padX + i * colW,
+    width: colW,
   }));
+
+  // Each band auto-sizes to its busiest column (all tasks sit in To Do until
+  // they run), so stacked cards never overflow into the next band.
+  const phases: LayoutPhase[] = [];
+  let bandY = opts.topMargin;
+  for (const phase of manifest.phases) {
+    const height =
+      opts.headerSpace +
+      phase.tasks.length * (opts.cardHeight + opts.cardGap) +
+      opts.bottomPad;
+    phases.push({
+      id: phase.id,
+      title: phase.title,
+      description: phase.description,
+      index: phases.length,
+      y: bandY,
+      height,
+    });
+    bandY += height + opts.bandGap;
+  }
 
   const phasesById = new Map(phases.map((p) => [p.id, p]));
 
+  const toDo = columns.find((c) => c.key === "pending")!;
+
   const tasks: LayoutTask[] = [];
   for (const phase of manifest.phases) {
-    const phaseLayout = phasesById.get(phase.id);
-    if (!phaseLayout) continue;
-    const n = phase.tasks.length;
-    for (let i = 0; i < n; i += 1) {
+    const band = phasesById.get(phase.id);
+    if (!band) continue;
+    for (let i = 0; i < phase.tasks.length; i += 1) {
       const task = phase.tasks[i]!;
-      // Spread tasks evenly along the whorl's branch line, across the trunk.
-      const frac = n <= 1 ? 0 : (i / (n - 1)) * 2 - 1;
       tasks.push({
         id: task.id,
         title: task.title,
         ownerAgent: task.ownerAgent,
         phaseId: phase.id,
-        phaseIndex: phaseLayout.index,
+        phaseIndex: band.index,
         indexInPhase: i,
-        x: trunkX + frac * opts.branchSpan,
-        y: phaseLayout.y + 34,
+        x: toDo.x + opts.padX,
+        y: band.y + opts.headerSpace + i * (opts.cardHeight + opts.cardGap),
         produces: task.produces,
         inputs: task.inputs ?? [],
         dependencies: task.dependencies,
@@ -130,26 +183,10 @@ export function layoutManifest(
       }
     }
   }
-  for (let i = 0; i < manifest.phases.length - 1; i += 1) {
-    const current = manifest.phases[i]!;
-    const next = manifest.phases[i + 1]!;
-    const lastOfCurrent = current.tasks[current.tasks.length - 1];
-    const firstOfNext = next.tasks[0];
-    if (lastOfCurrent && firstOfNext) {
-      edges.push({ from: lastOfCurrent.id, to: firstOfNext.id, kind: "phase" });
-    }
-  }
 
-  const lastPhase = phases[phases.length - 1];
+  const height = (phases.length
+    ? phases[phases.length - 1]!.y + phases[phases.length - 1]!.height
+    : opts.topMargin) + opts.bottomMargin;
 
-  return {
-    width: opts.width,
-    height: opts.height,
-    trunkX,
-    trunkTop: Math.max(lastPhase?.y ?? 0, opts.topMargin),
-    trunkBottom: baseY,
-    phases,
-    tasks,
-    edges,
-  };
+  return { width: opts.width, height, columns, phases, tasks, edges };
 }

@@ -1,11 +1,13 @@
 /* global Pixi */
 "use strict";
 
-// ─── The Squirrel Forge ───────────────────────────────────────────────────────
+// ─── The Squirrel Forge — kanban dashboard ─────────────────────────────────────
 // Live PixiJS dashboard for the forge-workflow-engine. Connects to the viz
 // server over SSE (/api/events) with an initial snapshot (/api/manifest +
-// /api/state), renders the build DAG as a growing oak tree, and maps every
-// audit event to a squirrel doing its job.
+// /api/state + /api/layout) and renders the build as a kanban board: one band
+// per phase, tasks as cards flowing left-to-right through To Do / In Progress /
+// Done / Failed, colored by their owning agent, with dependency and artifact
+// edges between cards.
 
 const P = Pixi;
 
@@ -30,13 +32,11 @@ function hashString(input) {
   return h;
 }
 
-function lerp(a, b, t) { return a + (b - a) * t; }
-
 function clamp(v, lo, hi) { return Math.max(lo, Math.min(hi, v)); }
 
-function easeOutCubic(t) { return 1 - Math.pow(1 - t, 3); }
+function lerp(a, b, t) { return a + (b - a) * t; }
 
-function rand(a, b) { return a + Math.random() * (b - a); }
+function easeOutCubic(t) { return 1 - Math.pow(1 - t, 3); }
 
 function $id(id) { return document.getElementById(id); }
 
@@ -48,6 +48,12 @@ function setStatus(text, kind) {
   meta.className = kind || "";
 }
 
+function esc(s) {
+  return String(s ?? "").replace(/[&<>"']/g, (c) => ({
+    "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;",
+  }[c]));
+}
+
 // The renderer is set once the Pixi app initializes; texture factories below
 // use it to bake procedural Graphics into reusable textures.
 let RENDERER = null;
@@ -55,25 +61,6 @@ let RENDERER = null;
 function toTexture(target) {
   return RENDERER.generateTexture({ target });
 }
-
-// Bezier point along a cubic (used for acorn travel paths).
-function bezier(t, p0, p1, p2, p3) {
-  const u = 1 - t;
-  return {
-    x: u * u * u * p0.x + 3 * u * u * t * p1.x + 3 * u * t * t * p2.x + t * t * t * p3.x,
-    y: u * u * u * p0.y + 3 * u * u * t * p1.y + 3 * u * t * t * p2.y + t * t * t * p3.y,
-  };
-}
-
-function edgePath(from, to, sag) {
-  const p0 = { x: from.x, y: from.y };
-  const p3 = { x: to.x, y: to.y };
-  const midX = (p0.x + p3.x) / 2;
-  const midY = Math.min(p0.y, p3.y) - sag;
-  return { p0, p1: { x: midX, y: midY }, p2: { x: midX, y: midY }, p3 };
-}
-
-// ─── Texture factories (procedural, no assets) ────────────────────────────────
 
 function circleTexture(radius, color, alpha = 1) {
   const g = new P.Graphics();
@@ -92,180 +79,88 @@ function softGlowTexture(radius, color) {
   return toTexture(g);
 }
 
-function acornTexture() {
-  const g = new P.Graphics();
-  g.ellipse(26, 40, 13, 16).fill({ color: 0x8a5a2b });
-  g.ellipse(26, 40, 13, 16).stroke({ width: 2, color: 0x5f3c1a });
-  g.arc(26, 28, 13, Math.PI, 0).lineTo(26, 20).closePath().fill({ color: 0x5f3c1a });
-  g.rect(25, 16, 2, 6).fill({ color: 0x7a5a2f });
-  return toTexture(g);
+// ─── Kanban constants ─────────────────────────────────────────────────────────
+
+const STATUS_COLORS = {
+  pending: 0x8b96b8,
+  running: 0x6fd0ff,
+  complete: 0x5ed36a,
+  failed: 0xff6b6b,
+  skipped: 0x7f88a8,
+};
+
+const STATUS_LABEL = {
+  pending: "pending", running: "running", complete: "complete", failed: "failed", skipped: "skipped",
+};
+
+const EDGE_COLORS = { dependency: 0x7f9bd8, artifact: 0xf5c542 };
+
+// Board geometry (mirrors layout.ts DEFAULTS so a stale server layout can be
+// re-derived from the manifest alone).
+const GEOM = {
+  labelWidth: 170,
+  padX: 18,
+  padY: 12,
+  bandGap: 20,
+  topMargin: 84,
+  headerSpace: 40,
+  cardH: 62,
+  cardGap: 16,
+  bottomPad: 8,
+};
+
+/** Deterministic hue per agent. */
+function agentHue(agent) {
+  return agent ? hashString(agent) % 360 : 210;
 }
 
-function squirrelTextures(hue) {
-  const fur = hslToHex(hue, 55, 48);
-  const furDark = hslToHex(hue, 55, 32);
-  const cream = 0xf2e3c4;
-
-  const body = new P.Graphics();
-  // tail (drawn behind)
-  body.circle(-14, -6, 22).fill({ color: furDark });
-  body.circle(-8, 2, 14).fill({ color: furDark });
-  body.ellipse(-16, -2, 24, 16).fill({ color: cream });
-  // body
-  body.ellipse(2, 4, 24, 30).fill({ color: fur });
-  body.ellipse(2, 4, 24, 30).stroke({ width: 2.5, color: furDark });
-  body.ellipse(6, 10, 12, 18).fill({ color: cream, alpha: 0.9 });
-  // head
-  body.circle(20, -20, 16).fill({ color: fur });
-  body.circle(20, -20, 16).stroke({ width: 2.5, color: furDark });
-  // ears
-  body.poly([8, -32, 14, -44, 18, -32]).fill({ color: fur });
-  body.poly([8, -32, 14, -44, 18, -32]).stroke({ width: 2, color: furDark });
-  body.poly([24, -34, 28, -46, 33, -34]).fill({ color: fur });
-  body.poly([24, -34, 28, -46, 33, -34]).stroke({ width: 2, color: furDark });
-  body.poly([11, -38, 14, -44, 17, -38]).fill({ color: cream, alpha: 0.85 });
-  // muzzle + nose
-  body.circle(33, -14, 7).fill({ color: cream });
-  body.circle(37, -15, 3).fill({ color: 0x241610 });
-  // feet
-  body.ellipse(-4, 34, 8, 5).fill({ color: furDark });
-  body.ellipse(12, 35, 8, 5).fill({ color: furDark });
-
-  const tail = new P.Graphics();
-  tail.circle(0, 0, 22).fill({ color: furDark });
-  tail.circle(-2, 4, 13).fill({ color: cream });
-  tail.circle(0, 0, 22).stroke({ width: 2.5, color: furDark });
-
-  const eye = new P.Graphics();
-  eye.circle(0, 0, 3).fill({ color: 0x1a0f08 });
-  eye.circle(-1, -1, 1).fill({ color: 0xffffff });
-
-  return {
-    body: toTexture(body),
-    tail: toTexture(tail),
-    eye: toTexture(eye),
-    fur,
-    furDark,
-  };
+/** Deterministic color per agent (name-tag ring + border). */
+function agentColor(agent) {
+  return hslToHex(agentHue(agent), 55, 62);
 }
 
-function leafTexture(color) {
-  const g = new P.Graphics();
-  g.ellipse(0, 0, 9, 5).fill({ color });
-  g.moveTo(0, 0).lineTo(-9, 0).stroke({ width: 1.5, color: 0x225e30 });
-  return toTexture(g);
+/** Readable name-tag label for an agent id ("qa-engineer" → "Qa Engineer"). */
+function agentLabel(agent) {
+  const s = String(agent ?? "").trim();
+  if (!s) return "unassigned";
+  return s.replace(/[-_]/g, " ").replace(/\b\w/g, (c) => c.toUpperCase());
 }
 
-// ─── Squirrel actor ───────────────────────────────────────────────────────────
+/**
+ * Draws a stylized agent face into a Graphics (centered on 0,0): a colored
+ * avatar ring, a skin-toned head with a hair cap, eyes, and a mouth that
+ * reacts to the task's status.
+ */
+function drawFace(g, hue, status) {
+  g.clear();
+  const ring = hslToHex(hue, 55, 58);
+  const skin = hslToHex(hue, 45, 78);
+  const hair = hslToHex(hue, 55, 34);
+  const dark = 0x221a17;
 
-function createSquirrel(x, y, hue, name) {
-  const tex = squirrelTextures(hue);
+  g.circle(0, 0, 18).fill({ color: 0x0c1120, alpha: 0.9 }).stroke({ width: 2.5, color: ring });
+  g.circle(0, 0, 13).fill({ color: skin });
+  // Hair cap (top half).
+  g.arc(0, 0, 12.5, Math.PI, 0).lineTo(-12.5, 0).lineTo(0, 0).closePath().fill({ color: hair });
+  // Eyes.
+  g.circle(-5, 4.5, 1.7).fill({ color: dark });
+  g.circle(5, 4.5, 1.7).fill({ color: dark });
 
-  const body = new P.Sprite(tex.body);
-  body.anchor.set(0.5, 0.5);
-  const tail = new P.Sprite(tex.tail);
-  tail.anchor.set(0.9, 0.6);
-  tail.position.set(-14, -8);
-  const eye = new P.Sprite(tex.eye);
-  eye.anchor.set(0.5);
-  eye.position.set(24, -22);
-  const nameLabel = new P.Text({
-    text: name,
-    style: {
-      fontFamily: "system-ui, sans-serif",
-      fontSize: 12,
-      fill: 0xe8eaff,
-      stroke: { color: 0x0b0e1a, width: 3 },
-      fontVariant: "small-caps",
-    },
-  });
-  nameLabel.anchor.set(0.5, 0);
-  nameLabel.position.set(0, 42);
-  nameLabel.alpha = 0.9;
-
-  const root = new P.Container();
-  root.position.set(x, y);
-  root.eventMode = "static";
-  root.cursor = "pointer";
-  root.hitArea = new P.Circle(0, 0, 36);
-  root.addChild(body, tail, eye, nameLabel);
-
-  const actor = {
-    root,
-    name,
-    hue,
-    tex,
-    state: { pose: "idle", t: 0, gather: null, gauge: 0 },
-    setPose(pose) {
-      if (actor.state.pose !== "gather" || pose === "gather") actor.state.pose = pose;
-      actor.state.t = 0;
-    },
-  };
-
-  return actor;
-}
-
-// ─── Ephemeral particle burst (leaf / gold spark showers) ─────────────────────
-
-function createBurstLayer() {
-  const layer = new P.Container();
-  const live = [];
-  const leafTex = leafTexture(0x5ed36a);
-  const goldTex = softGlowTexture(10, 0xf5c542);
-
-  function spawn(x, y, kind = "leaf", count = 10) {
-    const texture = kind === "gold" ? goldTex : leafTex;
-    const palette = kind === "gold" ? 0xf5c542 : 0x4fae5a;
-    for (let i = 0; i < count; i += 1) {
-      const s = new P.Sprite(texture);
-      s.anchor.set(0.5);
-      s.tint = palette;
-      s.position.set(x, y);
-      const angle = rand(0, Math.PI * 2);
-      const speed = rand(30, 160);
-      const scale = rand(0.5, 1.4);
-      s.scale.set(scale);
-      s.rotation = rand(0, Math.PI * 2);
-      live.push({
-        s,
-        x, y,
-        vx: Math.cos(angle) * speed,
-        vy: Math.sin(angle) * speed - 40,
-        gravity: 220,
-        drag: 0.92,
-        rot: rand(-3, 3),
-        life: rand(0.8, 1.6),
-        age: 0,
-        baseScale: scale,
-      });
-      layer.addChild(s);
-    }
+  // Mouth reacts to status.
+  if (status === "complete") {
+    g.arc(0, 9, 4, Math.PI, 0).stroke({ width: 1.6, color: dark, cap: "round" });
+  } else if (status === "failed") {
+    g.arc(0, 9, 4, 0, Math.PI).stroke({ width: 1.6, color: dark, cap: "round" });
+  } else if (status === "running") {
+    g.circle(0, 10, 2).fill({ color: dark });
+  } else {
+    g.moveTo(-3, 9).lineTo(3, 9).stroke({ width: 1.6, color: dark, cap: "round" });
   }
+}
 
-  function update(dt) {
-    for (let i = live.length - 1; i >= 0; i -= 1) {
-      const p = live[i];
-      p.age += dt;
-      if (p.age >= p.life) {
-        layer.removeChild(p.s);
-        p.s.destroy();
-        live.splice(i, 1);
-        continue;
-      }
-      p.vx *= p.drag;
-      p.vy = p.vy * p.drag + p.gravity * dt;
-      p.x += p.vx * dt;
-      p.y += p.vy * dt;
-      p.rot += p.rot * dt;
-      p.s.position.set(p.x, p.y);
-      p.s.rotation += p.rot * dt;
-      const k = 1 - p.age / p.life;
-      p.s.alpha = clamp(k, 0, 1);
-      p.s.scale.set(p.baseScale * clamp(k * 1.4, 0.2, 1.2));
-    }
-  }
-
-  return { layer, spawn, update };
+function truncate(text, maxChars) {
+  const t = String(text ?? "");
+  return t.length > maxChars ? `${t.slice(0, Math.max(1, maxChars - 1))}…` : t;
 }
 
 // ─── The dashboard app ────────────────────────────────────────────────────────
@@ -274,7 +169,7 @@ function createBurstLayer() {
   const app = new P.Application();
   await app.init({
     resizeTo: window,
-    background: 0x070b16,
+    background: 0x0c1120,
     antialias: true,
     autoDensity: true,
     resolution: Math.min(window.devicePixelRatio || 1, 2),
@@ -288,84 +183,30 @@ function createBurstLayer() {
   const screenH = () => app.screen.height;
 
   // ── Layers ────────────────────────────────────────────────────────────────
-  const sky = new P.Graphics();
-  const moon = new P.Container();
-  const cloudLayer = new P.Container();
-  const backgroundLayer = new P.Container();
-  backgroundLayer.addChild(sky, moon, cloudLayer);
-
-  const trunk = new P.Graphics();
-  const branches = new P.Container();
-  const treeLayer = new P.Container();
-  treeLayer.addChild(trunk, branches);
-
+  const background = new P.Graphics();
+  const boardGfx = new P.Graphics();
+  const labelLayer = new P.Container();
   const edgeGfx = new P.Graphics();
   const edgeLayer = new P.Container();
-  edgeLayer.addChild(edgeGfx);
-
-  const squirrelLayer = new P.Container();
-  const acornLayer = new P.Container();
-  const leafBloom = new P.Container();
-  const effectsLayer = createBurstLayer();
+  const cardLayer = new P.Container();
+  const effectLayer = new P.Container();
 
   const world = new P.Container();
-  world.addChild(treeLayer, edgeLayer, leafBloom, squirrelLayer, acornLayer, effectsLayer.layer);
+  world.addChild(boardGfx, labelLayer, edgeLayer, cardLayer, effectLayer);
 
-  const panArea = new P.Graphics();
-  panArea.eventMode = "static";
-  panArea.cursor = "grab";
+  // Only cards, the board, and the background are interactive; decorative
+  // layers (labels/edges/effects) never block pointer events.
+  labelLayer.eventMode = "none";
+  edgeLayer.eventMode = "none";
+  effectLayer.eventMode = "none";
+
+  background.eventMode = "static";
+  background.cursor = "grab";
+  boardGfx.eventMode = "static";
+  boardGfx.cursor = "grab";
 
   app.stage.eventMode = "static";
-  app.stage.addChild(backgroundLayer, world, panArea);
-
-  // ── Fireflies + falling leaves ────────────────────────────────────────────
-  const fireflyTex = softGlowTexture(8, 0xffe9a8);
-  const fireflies = new P.ParticleContainer({
-    texture: fireflyTex,
-    boundsArea: new P.Rectangle(0, 0, 1600, 1200),
-    dynamicProperties: { position: true, color: true },
-    blendMode: "add",
-  });
-  const fireflyState = [];
-  for (let i = 0; i < 140; i += 1) {
-    const p = new P.Particle({
-      texture: fireflyTex,
-      x: rand(0, 1600),
-      y: rand(0, 1200),
-      scaleX: rand(0.3, 1),
-      scaleY: rand(0.3, 1),
-      anchorX: 0.5,
-      anchorY: 0.5,
-      tint: 0xffe9a8,
-    });
-    fireflies.addParticle(p);
-    fireflyState.push({ p, phase: rand(0, Math.PI * 2), speed: rand(6, 22), amp: rand(10, 40), base: p.x });
-  }
-  backgroundLayer.addChild(fireflies);
-
-  const leafTexP = leafTexture(0x3f9d4f);
-  const fallingLeaves = new P.ParticleContainer({
-    texture: leafTexP,
-    boundsArea: new P.Rectangle(0, 0, 1600, 1200),
-    dynamicProperties: { position: true, rotation: true },
-  });
-  const fallState = [];
-  for (let i = 0; i < 46; i += 1) {
-    const p = new P.Particle({
-      texture: leafTexP,
-      x: rand(0, 1600),
-      y: rand(0, 1200),
-      scaleX: rand(0.5, 1.2),
-      scaleY: rand(0.5, 1.2),
-      anchorX: 0.5,
-      anchorY: 0.5,
-      rotation: rand(0, Math.PI * 2),
-      tint: rand(0, 1) > 0.6 ? 0xd99a3f : 0x3f9d4f,
-    });
-    fallingLeaves.addParticle(p);
-    fallState.push({ p, drift: rand(6, 18), rot: rand(-1.5, 1.5), tintPulse: rand(0, Math.PI * 2) });
-  }
-  backgroundLayer.addChild(fallingLeaves);
+  app.stage.addChild(background, world);
 
   // ── Camera pan / zoom ────────────────────────────────────────────────────
   let dragging = false;
@@ -374,31 +215,31 @@ function createBurstLayer() {
   let scale = 1;
 
   function resize() {
-    sky.clear();
+    background.clear();
     const w = screenW();
     const h = screenH();
     const grad = new P.FillGradient({
       start: { x: 0, y: 0 },
       end: { x: 0, y: 1 },
       colorStops: [
-        { offset: 0, color: 0x070b16 },
-        { offset: 0.55, color: 0x141a33 },
-        { offset: 1, color: 0x2a2f4a },
+        { offset: 0, color: 0x0c1120 },
+        { offset: 1, color: 0x141a2e },
       ],
     });
-    sky.rect(0, 0, w, h).fill(grad);
-    panArea.clear();
-    panArea.rect(0, 0, w, h).fill({ color: 0x000000, alpha: 0.001 });
+    background.rect(0, 0, w, h).fill(grad);
   }
 
-  panArea.on("pointerdown", (e) => {
+  function startPan(e) {
     dragging = true;
-    panArea.cursor = "grabbing";
+    background.cursor = "grabbing";
+    boardGfx.cursor = "grabbing";
     dragStart.set(e.global.x, e.global.y);
     worldStart.set(world.x, world.y);
-  });
-  app.stage.on("pointerup", () => { dragging = false; panArea.cursor = "grab"; });
-  app.stage.on("pointerupoutside", () => { dragging = false; panArea.cursor = "grab"; });
+  }
+  background.on("pointerdown", startPan);
+  boardGfx.on("pointerdown", startPan);
+  app.stage.on("pointerup", () => { dragging = false; background.cursor = "grab"; boardGfx.cursor = "grab"; });
+  app.stage.on("pointerupoutside", () => { dragging = false; background.cursor = "grab"; boardGfx.cursor = "grab"; });
   app.stage.on("globalpointermove", (e) => {
     if (!dragging) return;
     world.position.set(
@@ -411,7 +252,6 @@ function createBurstLayer() {
     const factor = Math.pow(1.0015, -e.deltaY);
     const newScale = clamp(scale * factor, 0.25, 2.5);
     const k = newScale / scale;
-    // zoom around cursor
     world.x = e.global.x - (e.global.x - world.x) * k;
     world.y = e.global.y - (e.global.y - world.y) * k;
     scale = newScale;
@@ -423,148 +263,455 @@ function createBurstLayer() {
   });
   resize();
 
-  // ── Moon + clouds (static backdrop, slight parallax) ─────────────────────
-  const moonGlow = new P.Sprite(softGlowTexture(90, 0xe8e6ff));
-  moonGlow.anchor.set(0.5);
-  moonGlow.position.set(1100, 120);
-  moonGlow.alpha = 0.5;
-  const moonCore = new P.Sprite(circleTexture(38, 0xf4f2ff));
-  moonCore.anchor.set(0.5);
-  moonCore.position.set(1100, 120);
-  moon.addChild(moonGlow, moonCore);
-
-  const cloudTex = circleTexture(46, 0x8f9cc4, 0.16);
-  for (let i = 0; i < 7; i += 1) {
-    const c = new P.Sprite(cloudTex);
-    c.anchor.set(0.5);
-    c.position.set(rand(0, 1600), rand(60, 420));
-    c.scale.set(rand(0.6, 1.8), rand(0.4, 1));
-    cloudLayer.addChild(c);
-  }
-
   // ── State ────────────────────────────────────────────────────────────────
   const state = {
     manifest: null,
     layout: null,
-    nodes: new Map(),      // taskId -> { task, actor, leaf }
+    cards: new Map(),    // taskId -> card entry
+    ordered: [],         // cards in manifest order (for stable stacking)
     edges: [],
-    phases: new Map(),     // phaseId -> { phase, branch, knot, sprouted }
+    columns: new Map(),  // columnKey -> { x, width, label }
+    phases: new Map(),   // phaseId -> { id, title, index, y, height }
+    cardW: 0,
+    width: 1280,
+    height: 800,
+    hovered: null,
+    currentPhase: null,
     startedAt: null,
     status: "idle",
-    running: false,
     counts: { pending: 0, running: 0, complete: 0, failed: 0, skipped: 0 },
     total: 0,
   };
 
-  const trunkGrowth = { current: 0, target: 0 };
-  const moonPhase = { x: 1100, y: 120, glow: 0 };
-
-  // ── Tree drawing ─────────────────────────────────────────────────────────
-  function drawTree() {
-    const layout = state.layout;
-    if (!layout) return;
-    const trunkX = layout.trunkX;
-    const bottom = layout.trunkBottom;
-    const top = layout.trunkTop;
-    const growthT = easeOutCubic(clamp(trunkGrowth.current / (top - bottom + 1), 0, 1));
-    const baseW = 26 + 34 * growthT;
-    const growY = lerp(bottom, top, growthT);
-
-    trunk.clear();
-    trunk.moveTo(trunkX - baseW / 2, bottom + 30);
-    trunk.lineTo(trunkX - baseW * 0.35, growY);
-    trunk.lineTo(trunkX + baseW * 0.35, growY);
-    trunk.lineTo(trunkX + baseW / 2, bottom + 30);
-    trunk.closePath().fill({ color: 0x4a2f18 });
-    trunk.moveTo(trunkX - baseW / 2, bottom + 30)
-      .lineTo(trunkX - baseW * 0.35, growY)
-      .lineTo(trunkX + baseW * 0.35, growY)
-      .lineTo(trunkX + baseW / 2, bottom + 30)
-      .closePath()
-      .stroke({ width: 3, color: 0x2c1a0c });
+  // ── Geometry (columns + bands) from layout or manifest ───────────────────
+  function kanbanFromManifest(manifest) {
+    const w = 1280;
+    const avail = w - GEOM.labelWidth - GEOM.padX * 2;
+    const colW = avail / 4;
+    const keys = ["pending", "running", "complete", "failed"];
+    const labels = { pending: "To Do", running: "In Progress", complete: "Done", failed: "Failed" };
+    const columns = keys.map((key, i) => ({
+      key, label: labels[key],
+      x: GEOM.labelWidth + GEOM.padX + i * colW,
+      width: colW,
+    }));
+    let bandY = GEOM.topMargin;
+    const phases = manifest.phases.map((p) => {
+      const h = GEOM.headerSpace + p.tasks.length * (GEOM.cardH + GEOM.cardGap) + GEOM.bottomPad;
+      const ph = { id: p.id, title: p.title, index: 0, y: bandY, height: h };
+      bandY += h + GEOM.bandGap;
+      return ph;
+    });
+    phases.forEach((p, i) => { p.index = i; });
+    const tasks = [];
+    manifest.phases.forEach((p, pi) => {
+      p.tasks.forEach((t, ti) => {
+        tasks.push({
+          id: t.id, title: t.title, ownerAgent: t.ownerAgent,
+          phaseId: p.id, phaseIndex: pi, indexInPhase: ti,
+          produces: t.produces, inputs: t.inputs ?? [], dependencies: t.dependencies,
+        });
+      });
+    });
+    const tasksById = new Map(tasks.map((t) => [t.id, t]));
+    const edges = [];
+    for (const task of tasks) {
+      for (const depId of task.dependencies) {
+        if (tasksById.has(depId)) edges.push({ from: depId, to: task.id, kind: "dependency" });
+      }
+      for (const inputType of task.inputs) {
+        const producer = tasks.find((t) => t.produces === inputType);
+        if (producer && producer.id !== task.id) {
+          edges.push({ from: producer.id, to: task.id, kind: "artifact" });
+        }
+      }
+    }
+    const height = (phases.length
+      ? phases[phases.length - 1].y + phases[phases.length - 1].height
+      : GEOM.topMargin) + 40;
+    return { width: w, height, columns, phases, tasks, edges };
   }
 
-  function drawWhorlBranch(phaseEntry) {
-    const phase = phaseEntry.phase;
-    const t = phaseEntry.sproutT;
-    if (phaseEntry.branch) {
-      phaseEntry.branch.clear();
-      const span = clamp(t, 0, 1);
-      const halfSpan = span * 300;
-      const w = 7 * (1 - span * 0.6) + 2;
-      phaseEntry.branch.moveTo(state.layout.trunkX - halfSpan, phase.y)
-        .lineTo(state.layout.trunkX + halfSpan, phase.y)
-        .stroke({ width: w, cap: "round", color: 0x6d4526 });
-      phaseEntry.branch.moveTo(state.layout.trunkX - halfSpan, phase.y)
-        .quadraticCurveTo(state.layout.trunkX - halfSpan * 0.5, phase.y - 26, state.layout.trunkX, phase.y)
-        .stroke({ width: 3, cap: "round", color: 0x8a5a33 });
-      phaseEntry.branch.moveTo(state.layout.trunkX + halfSpan, phase.y)
-        .quadraticCurveTo(state.layout.trunkX + halfSpan * 0.5, phase.y - 26, state.layout.trunkX, phase.y)
-        .stroke({ width: 3, cap: "round", color: 0x8a5a33 });
+  function resolveLayout(manifest, layout) {
+    if (layout && Array.isArray(layout.columns) && layout.columns.length === 4) return layout;
+    return kanbanFromManifest(manifest);
+  }
+
+  // ── Board drawing ─────────────────────────────────────────────────────────
+  const headerTexts = [];
+  const phaseNameTexts = new Map(); // phaseId -> P.Text (label fill updated on active)
+
+  function buildLabels() {
+    clearLabels();
+    for (const col of state.columns.values()) {
+      const t = new P.Text({
+        text: col.label,
+        style: {
+          fontFamily: "system-ui, sans-serif",
+          fontSize: 14,
+          fontWeight: "800",
+          fill: 0xe8ecf5,
+          letterSpacing: 0.04,
+        },
+      });
+      t.anchor.set(0.5, 0.5);
+      t.position.set(col.x + col.width / 2, 26);
+      labelLayer.addChild(t);
+      headerTexts.push(t);
     }
-    if (phaseEntry.knot) {
-      phaseEntry.knot.clear();
-      const r = 6 + 4 * clamp(t, 0, 1);
-      phaseEntry.knot.circle(state.layout.trunkX, phase.y, r).fill({ color: 0x7a4c26 });
+    for (const phase of state.phases.values()) {
+      const label = new P.Container();
+      const name = new P.Text({
+        text: truncate(phase.title || phase.id, 20),
+        style: { fontFamily: "system-ui, sans-serif", fontSize: 13, fontWeight: "700", fill: 0xc7cde0 },
+      });
+      name.position.set(0, 0);
+      const idx = new P.Text({
+        text: `Phase ${phase.index + 1}`,
+        style: { fontFamily: "system-ui, sans-serif", fontSize: 10, fill: 0x8b96b8 },
+      });
+      idx.position.set(0, 18);
+      label.addChild(name, idx);
+      label.position.set(12, phase.y + 14);
+      labelLayer.addChild(label);
+      phaseNameTexts.set(phase.id, name);
     }
   }
 
-  function sproutWhorl(phaseId) {
-    const entry = state.phases.get(phaseId);
-    if (!entry || entry.sprouted) return;
-    entry.sprouted = true;
-    entry.sproutT = 0;
-    trunkGrowth.target = Math.min(trunkGrowth.target, state.layout.trunkTop);
+  function clearLabels() {
+    for (const t of headerTexts) t.destroy();
+    headerTexts.length = 0;
+    for (const t of phaseNameTexts.values()) t.destroy();
+    phaseNameTexts.clear();
+    labelLayer.removeChildren().forEach((c) => c.destroy());
+  }
+
+  /** Redraws the board graphics (column separators + phase bands + labels). */
+  function drawBoard() {
+    boardGfx.clear();
+    const bottom = state.height;
+
+    // Faint vertical separators between columns.
+    for (const col of state.columns.values()) {
+      boardGfx.moveTo(col.x - 0.5, GEOM.topMargin - 26).lineTo(col.x - 0.5, bottom)
+        .stroke({ width: 1, color: 0xffffff, alpha: 0.05 });
+    }
+
+    // Phase bands.
+    for (const phase of state.phases.values()) {
+      const active = phase.id === state.currentPhase;
+      const x0 = GEOM.labelWidth;
+      const w = state.width - GEOM.labelWidth;
+      boardGfx.roundRect(x0, phase.y, w, phase.height, 10)
+        .fill({ color: active ? 0x5ed36a : 0xffffff, alpha: active ? 0.05 : 0.025 })
+        .stroke({ width: 1, color: active ? 0x5ed36a : 0xffffff, alpha: active ? 0.35 : 0.06 });
+
+      const nameText = phaseNameTexts.get(phase.id);
+      if (nameText) nameText.style.fill = active ? 0x9be3a6 : 0xc7cde0;
+    }
+  }
+
+  // ── Cards (name tags) ─────────────────────────────────────────────────────
+  function createCard(task) {
+    const cardW = state.cardW;
+    const bg = new P.Graphics();
+    const ribbon = new P.Graphics();
+    const avatar = new P.Graphics();
+    avatar.position.set(30, GEOM.cardH / 2);
+    const nameText = new P.Text({
+      text: "",
+      style: { fontFamily: "system-ui, sans-serif", fontSize: 11, fontWeight: "700", fill: 0xeef1f9 },
+    });
+    nameText.position.set(52, 6);
+    const title = new P.Text({
+      text: "",
+      style: { fontFamily: "system-ui, sans-serif", fontSize: 9.5, fontWeight: "500", fill: 0xb6c0dc },
+    });
+    title.position.set(52, 21);
+    const idText = new P.Text({
+      text: "",
+      style: { fontFamily: "ui-monospace, monospace", fontSize: 8.5, fill: 0x7f88a8 },
+    });
+    idText.position.set(52, 35);
+    const dot = new P.Sprite(circleTexture(5, 0xffffff));
+    dot.anchor.set(0.5);
+    const badgeLayer = new P.Container();
+
+    const root = new P.Container();
+    root.eventMode = "static";
+    root.cursor = "pointer";
+    root.hitArea = new P.Rectangle(0, 0, cardW, GEOM.cardH);
+    root.addChild(bg, ribbon, avatar, nameText, title, idText, dot, badgeLayer);
+
+    const entry = {
+      root, bg, ribbon, avatar, nameText, title, idText, dot, badgeLayer,
+      task, status: "pending", artifactId: null, ctxPct: null,
+      targetX: 0, targetY: 0,
+    };
+
+    root.on("pointertap", (e) => {
+      e.stopPropagation();
+      showPanel(entry);
+    });
+    root.on("pointerover", () => { setHover(task.id); showTooltip(entry); });
+    root.on("pointerout", () => { setHover(null); hideTooltip(); });
+
+    return entry;
+  }
+
+  /** Fits the card title to the available width, trimming with an ellipsis. */
+  function fitTitle(entry, maxW) {
+    const t = entry.title;
+    const full = entry.task.title;
+    // Conservative first pass from a char-width estimate (measured width can lag
+    // on the very first paint), then refine by the actual rendered width.
+    const perChar = 6.4;
+    const budget = Math.floor((maxW - 10) / perChar);
+    t.text = full.length > budget ? `${full.slice(0, Math.max(1, budget - 1))}…` : full;
+    if (t.width <= maxW) return;
+    let text = t.text.endsWith("…") ? t.text.slice(0, -1) : t.text;
+    let guard = 0;
+    while (text.length > 1 && t.width > maxW && guard < 200) {
+      text = text.slice(0, -1);
+      t.text = `${text}…`;
+      guard += 1;
+    }
+  }
+
+  function paintCard(entry) {
+    const color = STATUS_COLORS[entry.status];
+    const cardW = state.cardW;
+    const hue = agentHue(entry.task.ownerAgent);
+    const running = entry.status === "running";
+
+    entry.bg.clear();
+    entry.bg.roundRect(0, 0, cardW, GEOM.cardH, 8)
+      .fill({ color, alpha: running ? 0.14 : 0.08 })
+      .stroke({ width: 1.5, color: agentColor(entry.task.ownerAgent), alpha: 0.85 });
+    // Name-tag header ribbon (status color).
+    entry.ribbon.clear();
+    entry.ribbon.roundRect(0, 0, cardW, 3, 2)
+      .fill({ color, alpha: running ? 0.95 : 0.7 });
+
+    drawFace(entry.avatar, hue, entry.status);
+
+    const nameMax = cardW - 52 - 66;
+    entry.nameText.text = truncate(agentLabel(entry.task.ownerAgent), Math.max(8, Math.floor(nameMax / 6.5)));
+    fitTitle(entry, cardW - 58);
+    entry.idText.text = entry.task.id;
+    entry.dot.tint = color;
+    entry.dot.position.set(cardW - 12, 12);
+    entry.root.alpha = entry.status === "skipped" ? 0.55 : 1;
+
+    // Badges (context projection, artifact).
+    entry.badgeLayer.removeChildren().forEach((c) => c.destroy());
+    let bx = cardW - 12;
+    if (entry.ctxPct !== null) {
+      const t = new P.Text({
+        text: `ctx −${entry.ctxPct}%`,
+        style: { fontFamily: "system-ui, sans-serif", fontSize: 9, fill: 0xa9d1f7 },
+      });
+      t.anchor.set(1, 0);
+      t.position.set(bx, 26);
+      entry.badgeLayer.addChild(t);
+      bx -= t.width + 6;
+    }
+    if (entry.artifactId) {
+      const t = new P.Text({
+        text: `⛁ ${entry.artifactId}`,
+        style: { fontFamily: "system-ui, sans-serif", fontSize: 9, fill: 0xf5c542 },
+      });
+      t.anchor.set(1, 0);
+      t.position.set(bx, 26);
+      entry.badgeLayer.addChild(t);
+    }
+  }
+
+  function columnKeyFor(status) {
+    return status === "skipped" ? "complete" : status;
+  }
+
+  /** Recompute each card's target position from (phase, status column, stack). */
+  function layoutCards() {
+    const stack = new Map();
+    for (const entry of state.ordered) {
+      const colKey = columnKeyFor(entry.status);
+      const key = `${entry.task.phaseId}:${colKey}`;
+      const idx = stack.get(key) ?? 0;
+      stack.set(key, idx + 1);
+      const col = state.columns.get(colKey);
+      const phase = state.phases.get(entry.task.phaseId);
+      if (!col || !phase) continue;
+      entry.targetX = col.x + GEOM.padX;
+      entry.targetY = phase.y + GEOM.headerSpace + idx * (GEOM.cardH + GEOM.cardGap);
+    }
   }
 
   // ── Edges ────────────────────────────────────────────────────────────────
-  const EDGE_COLORS = { dependency: 0x55c8e6, artifact: 0xf5b942, phase: 0x4f8f4f };
+  function cardAnchor(entry, side) {
+    return {
+      x: entry.root.x + (side === "right" ? state.cardW : 0),
+      y: entry.root.y + GEOM.cardH / 2,
+    };
+  }
 
   function drawEdges() {
     edgeGfx.clear();
     for (const edge of state.edges) {
-      const from = state.nodes.get(edge.from);
-      const to = state.nodes.get(edge.to);
+      const from = state.cards.get(edge.from);
+      const to = state.cards.get(edge.to);
       if (!from || !to) continue;
-      const path = edgePath(from.task, to.task, 70);
-      const doneFrom = from.status === "complete" || from.status === "skipped";
-      const doneTo = to.status === "complete" || to.status === "skipped";
-      const alpha = doneFrom && doneTo ? 0.55 : 0.22;
-      edgeGfx.moveTo(path.p0.x, path.p0.y)
-        .bezierCurveTo(path.p1.x, path.p1.y, path.p2.x, path.p2.y, path.p3.x, path.p3.y)
-        .stroke({ width: 2, cap: "round", color: EDGE_COLORS[edge.kind], alpha });
+      const a = cardAnchor(from, "right");
+      const b = cardAnchor(to, "left");
+      const touched = state.hovered === edge.from || state.hovered === edge.to;
+      const alpha = touched ? 0.75 : 0.16;
+      const width = touched ? 2.4 : 1.2;
+      const dx = Math.max(46, Math.abs(b.x - a.x) * 0.5);
+      const c1 = { x: a.x + dx, y: a.y };
+      const c2 = { x: b.x - dx, y: b.y };
+      const color = EDGE_COLORS[edge.kind];
+      edgeGfx.moveTo(a.x, a.y).bezierCurveTo(c1.x, c1.y, c2.x, c2.y, b.x, b.y)
+        .stroke({ width, cap: "round", color, alpha });
+      // arrowhead at the target
+      const ang = Math.atan2(b.y - c2.y, b.x - c2.x);
+      const s = 6;
+      edgeGfx.moveTo(b.x, b.y)
+        .lineTo(b.x - Math.cos(ang - 0.5) * s, b.y - Math.sin(ang - 0.5) * s)
+        .lineTo(b.x - Math.cos(ang + 0.5) * s, b.y - Math.sin(ang + 0.5) * s)
+        .closePath().fill({ color, alpha: touched ? 0.9 : 0.35 });
     }
   }
 
-  // ── Squirrel status → pose ───────────────────────────────────────────────
-  function applyStatusToNode(entry, status) {
+  function setHover(taskId) {
+    state.hovered = taskId;
+    drawEdges();
+  }
+
+  // ── Artifact handoff dots ─────────────────────────────────────────────────
+  const animateTravellers = [];
+
+  function launchArtifactHandoff(taskId) {
+    const from = state.cards.get(taskId);
+    if (!from) return;
+    for (const edge of state.edges) {
+      if (edge.kind !== "artifact" || edge.from !== taskId) continue;
+      const to = state.cards.get(edge.to);
+      if (!to) continue;
+      const dot = new P.Sprite(softGlowTexture(6, 0xf5c542));
+      dot.anchor.set(0.5);
+      dot.eventMode = "none";
+      dot.position.set(from.root.x + state.cardW, from.root.y + GEOM.cardH / 2);
+      effectLayer.addChild(dot);
+      animateTravellers.push({
+        sprite: dot,
+        a: cardAnchor(from, "right"),
+        b: cardAnchor(to, "left"),
+        t: 0, speed: 1.4,
+      });
+    }
+  }
+
+  function updateTravellers(dt) {
+    for (let i = animateTravellers.length - 1; i >= 0; i -= 1) {
+      const t = animateTravellers[i];
+      t.t += dt * t.speed;
+      if (t.t >= 1) {
+        effectLayer.removeChild(t.sprite);
+        t.sprite.destroy();
+        animateTravellers.splice(i, 1);
+        continue;
+      }
+      const k = easeOutCubic(t.t);
+      t.sprite.position.set(lerp(t.a.x, t.b.x, k), lerp(t.a.y, t.b.y, k));
+    }
+  }
+
+  // ── Scene build ──────────────────────────────────────────────────────────
+  function buildScene(manifest, layout) {
+    const resolved = resolveLayout(manifest, layout);
+    state.manifest = manifest;
+    state.layout = resolved;
+    state.width = resolved.width;
+    state.height = resolved.height;
+
+    // Idempotent rebuild on reconnect/restart.
+    for (const entry of state.cards.values()) {
+      cardLayer.removeChild(entry.root);
+      entry.root.destroy();
+    }
+    state.cards.clear();
+    state.ordered = [];
+    state.edges.length = 0;
+    state.columns.clear();
+    state.phases.clear();
+    clearLabels();
+
+    const colKeys = ["pending", "running", "complete", "failed"];
+    const colLabels = { pending: "To Do", running: "In Progress", complete: "Done", failed: "Failed" };
+    for (const col of resolved.columns) {
+      state.columns.set(col.key, { x: col.x, width: col.width, label: col.label || colLabels[col.key] || col.key });
+    }
+    for (const phase of resolved.phases) {
+      state.phases.set(phase.id, { id: phase.id, title: phase.title, index: phase.index, y: phase.y, height: phase.height });
+    }
+
+    state.cardW = Math.max(120, (state.columns.get("pending")?.width ?? 260) - GEOM.padX * 2);
+
+    for (const task of resolved.tasks) {
+      const entry = createCard(task);
+      state.cards.set(task.id, entry);
+      state.ordered.push(entry);
+      cardLayer.addChild(entry.root);
+    }
+    for (const edge of resolved.edges) state.edges.push(edge);
+
+    state.total = state.ordered.length;
+    buildLabels();
+    drawBoard();
+    layoutCards();
+    for (const entry of state.ordered) {
+      entry.root.position.set(entry.targetX, entry.targetY);
+      paintCard(entry);
+    }
+    drawEdges();
+    fitCamera();
+  }
+
+  function fitCamera() {
+    if (state.height <= 0) return;
+    const pad = 70;
+    const bw = state.width + pad * 2;
+    const bh = state.height + pad * 2;
+    scale = clamp(Math.min(screenW() / bw, screenH() / bh), 0.25, 1.2);
+    world.scale.set(scale);
+    world.position.set(
+      screenW() / 2 - (state.width / 2) * scale,
+      screenH() / 2 - (state.height / 2) * scale,
+    );
+  }
+
+  // ── Status application ────────────────────────────────────────────────────
+  function applyStatusToCard(entry, status) {
     entry.status = status;
-    const actor = entry.actor;
-    switch (status) {
-      case "running": actor.setPose("busy"); break;
-      case "complete": actor.setPose("complete"); break;
-      case "failed": actor.setPose("failed"); break;
-      case "skipped": actor.setPose("skip"); break;
-      default: actor.setPose("idle");
-    }
-    // leaf bloom
-    const leaf = entry.leaf;
-    if (leaf) {
-      if (status === "complete") { leaf.visible = true; leaf.tint = 0x5ed36a; }
-      else if (status === "failed") { leaf.visible = true; leaf.tint = 0xa85a3a; }
-    }
+    if (status === "complete") entry.files = entry.files || [];
+    paintCard(entry);
+    layoutCards();
+    computeCounts();
+    updateHud();
+    drawEdges();
   }
 
   function computeCounts() {
     const counts = { pending: 0, running: 0, complete: 0, failed: 0, skipped: 0 };
-    for (const node of state.nodes.values()) counts[node.status] += 1;
+    for (const entry of state.ordered) counts[entry.status] += 1;
     state.counts = counts;
   }
 
   function updateHud() {
     const { counts, total } = state;
-    $id("acorn-count").textContent = `${counts.complete} / ${total}`;
-    $id("progress-fill").style.width = `${total ? Math.round((counts.complete / total) * 100) : 0}%`;
+    const done = counts.complete + counts.skipped;
+    $id("done-count").textContent = `${done} / ${total}`;
+    $id("progress-fill").style.width = `${total ? Math.round((done / total) * 100) : 0}%`;
     const chips = [];
     for (const key of ["pending", "running", "complete", "failed", "skipped"]) {
       if (counts[key] > 0) {
@@ -578,146 +725,34 @@ function createBurstLayer() {
   function buildLegend() {
     const legend = $id("legend");
     const byAgent = new Map();
-    for (const node of state.nodes.values()) {
-      if (!node.task.ownerAgent) continue;
-      if (!byAgent.has(node.task.ownerAgent)) {
-        byAgent.set(node.task.ownerAgent, { name: node.actor.name, hue: node.actor.hue });
+    for (const entry of state.ordered) {
+      if (!entry.task.ownerAgent) continue;
+      if (!byAgent.has(entry.task.ownerAgent)) {
+        byAgent.set(entry.task.ownerAgent, agentColor(entry.task.ownerAgent));
       }
     }
     const chips = [];
-    for (const [agent, info] of byAgent) {
-      const color = hslToHex(info.hue, 55, 55);
+    for (const [agent, color] of byAgent) {
       chips.push(
-        `<span class="chip"><span class="dot" style="background:#${color.toString(16).padStart(6, "0")}"></span>${info.name} (${agent})</span>`,
+        `<span class="chip"><span class="dot" style="background:#${color.toString(16).padStart(6, "0")}"></span>${esc(agent)}</span>`,
       );
     }
     legend.innerHTML = chips.join("");
   }
 
-  // ── Camera fit ───────────────────────────────────────────────────────────
-  function fitCamera() {
-    if (!state.layout || state.layout.tasks.length === 0) return;
-    let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
-    for (const task of state.layout.tasks) {
-      minX = Math.min(minX, task.x); maxX = Math.max(maxX, task.x);
-      minY = Math.min(minY, task.y); maxY = Math.max(maxY, task.y);
-    }
-    const pad = 140;
-    const bw = maxX - minX + pad * 2;
-    const bh = maxY - minY + pad * 2;
-    scale = clamp(Math.min(screenW() / bw, screenH() / bh), 0.3, 1.4);
-    world.scale.set(scale);
-    world.position.set(
-      screenW() / 2 - ((minX + maxX) / 2) * scale,
-      screenH() / 2 - ((minY + maxY) / 2) * scale + 30,
-    );
-  }
-
-  // ── Build scene from manifest ────────────────────────────────────────────
-  function buildScene(manifest, layout) {
-    if (!layout) layout = layoutManifestFallback(manifest);
-    state.manifest = manifest;
-    state.layout = layout;
-
-    // Idempotent: clear any previous scene so a reconnect/restart rebuilds cleanly.
-    for (const node of state.nodes.values()) {
-      squirrelLayer.removeChild(node.actor.root);
-      node.actor.root.destroy();
-    }
-    state.nodes.clear();
-    state.phases.clear();
-    state.edges.length = 0;
-    branches.removeChildren().forEach((g) => g.destroy());
-    leafBloom.removeChildren().forEach((s) => s.destroy());
-
-    trunkGrowth.current = layout.trunkBottom;
-    trunkGrowth.target = layout.trunkTop;
-
-    for (const phase of layout.phases) {
-      const branch = new P.Graphics();
-      const knot = new P.Graphics();
-      branches.addChild(branch, knot);
-      state.phases.set(phase.id, { phase, branch, knot, sprouted: false, sproutT: 0 });
-    }
-
-    for (const task of layout.tasks) {
-      const hue = task.ownerAgent ? hashString(task.ownerAgent) % 360 : 210;
-      const actor = createSquirrel(task.x, task.y, hue, squirrelName(task.ownerAgent));
-      squirrelLayer.addChild(actor.root);
-      actor.root.on("pointerover", () => showTooltip(task, actor));
-      actor.root.on("pointerout", hideTooltip);
-      actor.root.on("pointertap", (e) => {
-        e.stopPropagation();
-        showPanel(task, actor);
-      });
-
-      const leaf = new P.Sprite(leafTexture(0x5ed36a));
-      leaf.anchor.set(0.5, 1);
-      leaf.position.set(task.x, task.y - 42);
-      leaf.visible = false;
-      leaf.rotation = rand(-0.4, 0.4);
-      leafBloom.addChild(leaf);
-
-      state.nodes.set(task.id, {
-        task,
-        actor,
-        leaf,
-        status: "pending",
-        gauge: 0,
-      });
-    }
-
-    for (const edge of layout.edges) state.edges.push(edge);
-
-    const byAgent = new Map();
-    for (const task of layout.tasks) {
-      if (!task.ownerAgent) continue;
-      byAgent.set(task.ownerAgent, state.nodes.get(task.id).actor.hue);
-    }
-
-    drawEdges();
-    drawTree();
-    fitCamera();
-  }
-
-  // Fallback layout when the server doesn't ship one (should not happen).
-  function layoutManifestFallback(manifest) {
-    const phases = manifest.phases.map((p, i) => ({ id: p.id, title: p.title, index: i }));
-    const tasks = [];
-    manifest.phases.forEach((p, pi) => {
-      p.tasks.forEach((t, ti) => {
-        tasks.push({
-          id: t.id, title: t.title, ownerAgent: t.ownerAgent,
-          phaseId: p.id, phaseIndex: pi,
-          x: 640 + (ti / Math.max(1, p.tasks.length - 1) - 0.5) * 900,
-          y: 700 - pi * 180,
-          produces: t.produces, inputs: t.inputs ?? [], dependencies: t.dependencies,
-        });
-      });
-    });
-    return {
-      width: 1280, height: 800, trunkX: 640,
-      trunkTop: tasks.length ? Math.min(...tasks.map((t) => t.y)) - 60 : 100,
-      trunkBottom: 700,
-      phases, tasks, edges: [],
-    };
-  }
-
-  // ── Tooltip / panel ──────────────────────────────────────────────────────
-  const STATUS_LABEL = {
-    pending: "pending", running: "running", complete: "complete", failed: "failed", skipped: "skipped",
-  };
-
+  // ── Tooltip / panel ───────────────────────────────────────────────────────
   function statusHtml(status) {
     return `<span class="status-label status-${status}">${STATUS_LABEL[status]}</span>`;
   }
 
-  function showTooltip(task, actor) {
+  function showTooltip(entry) {
     const tt = $id("tooltip");
+    const task = entry.task;
     tt.innerHTML =
       `<div class="tt-title">${esc(task.title)}</div>` +
-      `<div class="tt-sub">${esc(task.id)}${task.ownerAgent ? " · " + esc(actor.name) + " (" + esc(task.ownerAgent) + ")" : ""}</div>` +
-      `<div class="tt-status">${statusHtml(state.nodes.get(task.id).status)}</div>`;
+      `<div class="tt-sub">${esc(task.id)}${task.ownerAgent ? " · " + esc(task.ownerAgent) : ""}</div>` +
+      `<div class="tt-status">${statusHtml(entry.status)}</div>` +
+      (entry.artifactId ? `<div class="tt-sub">artifact: ${esc(entry.artifactId)}</div>` : "");
     tt.classList.remove("hidden");
     tt.dataset.task = task.id;
   }
@@ -726,106 +761,59 @@ function createBurstLayer() {
     $id("tooltip").classList.add("hidden");
   }
 
-  function showPanel(task, actor) {
-    const node = state.nodes.get(task.id);
-    const files = node.files || [];
+  function showPanel(entry) {
+    const task = entry.task;
+    const files = entry.files || [];
     const panel = $id("panel");
     $id("panel-body").innerHTML =
-      `<h3>${esc(actor.name)} — ${esc(task.title)}</h3>` +
+      `<h3>${esc(task.ownerAgent || "unassigned")} — ${esc(task.title)}</h3>` +
       `<div class="kv"><span class="k">Task</span><span>${esc(task.id)}</span></div>` +
       `<div class="kv"><span class="k">Phase</span><span>${esc(task.phaseId)}</span></div>` +
       `<div class="kv"><span class="k">Agent</span><span>${task.ownerAgent ? esc(task.ownerAgent) : "unassigned"}</span></div>` +
-      `<div class="kv"><span class="k">Status</span><span>${statusHtml(node.status)}</span></div>` +
-      (node.durationMs ? `<div class="kv"><span class="k">Duration</span><span>${Math.round(node.durationMs / 1000)}s</span></div>` : "") +
-      (node.errorMessage ? `<div class="kv"><span class="k">Error</span><span style="color:#ff8f8f">${esc(node.errorMessage)}</span></div>` : "") +
-      (node.artifactId ? `<div class="kv"><span class="k">Artifact</span><span>${esc(node.artifactId)}</span></div>` : "") +
+      `<div class="kv"><span class="k">Status</span><span>${statusHtml(entry.status)}</span></div>` +
+      (entry.durationMs ? `<div class="kv"><span class="k">Duration</span><span>${Math.round(entry.durationMs / 1000)}s</span></div>` : "") +
+      (entry.errorMessage ? `<div class="kv"><span class="k">Error</span><span style="color:#ff8f8f">${esc(entry.errorMessage)}</span></div>` : "") +
+      (entry.artifactId ? `<div class="kv"><span class="k">Artifact</span><span>${esc(entry.artifactId)}</span></div>` : "") +
+      (task.inputs?.length ? `<div class="kv"><span class="k">Inputs</span><span>${task.inputs.map(esc).join(", ")}</span></div>` : "") +
       (files.length ? `<div class="files">Files:<div>${files.map((f) => esc(f)).join("<div>")}</div></div>` : "");
     panel.classList.remove("hidden");
   }
 
   $id("panel-close").addEventListener("click", () => $id("panel").classList.add("hidden"));
-  panArea.on("pointertap", () => $id("panel").classList.add("hidden"));
+  background.on("pointertap", () => $id("panel").classList.add("hidden"));
+  boardGfx.on("pointertap", () => $id("panel").classList.add("hidden"));
 
-  function esc(s) {
-    return String(s ?? "").replace(/[&<>"']/g, (c) => ({
-      "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;",
-    }[c]));
+  // ── Overlays / banners ────────────────────────────────────────────────────
+  function showBanner(title, sub, kind) {
+    const b = $id("banner");
+    b.innerHTML = `${esc(title)}<div class="sub">${esc(sub)}</div>`;
+    b.className = kind;
+    b.classList.remove("hidden");
   }
 
-  // ── Squirrel name helper (mirror of the engine's names.ts) ───────────────
-  const ROLE_NAMES = {
-    "project-orchestrator": "Acornius", "project-architect": "Twigby", architect: "Twigby",
-    "api-engineer": "Tailor", "ui-engineer": "Pixie", "game-engineer": "Hopper",
-    "qa-engineer": "Nutsy", "infrastructure-engineer": "Chip", "devops-engineer": "Scamp",
-    "data-engineer": "Grommet", "backend-engineer": "Bramble", "frontend-engineer": "Sassafras",
-    "full-stack-engineer": "Buster", "security-engineer": "Rusty", "content-designer": "Fern",
-    "village-content-designer": "Fern", writer: "Quill", researcher: "Zigzag", reviewer: "Judge Nut",
-  };
-  const FALLBACK_NAMES = [
-    "Acornius", "Twigby", "Tailor", "Pixie", "Hopper", "Nutsy", "Chip", "Scamp", "Grommet",
-    "Bramble", "Buster", "Rusty", "Fern", "Quill", "Zigzag", "Skitter", "Whiskers", "Pebble",
-    "Mossy", "Thistle", "Sable", "Hazel", "Rattle", "Dart", "Willow", "Gus", "Mabel", "Ollie",
-    "Pip", "Squeak",
-  ];
-  function squirrelName(agent) {
-    const normalized = String(agent ?? "").trim().toLowerCase();
-    if (!normalized) return "Scout";
-    if (ROLE_NAMES[normalized]) return ROLE_NAMES[normalized];
-    return FALLBACK_NAMES[hashString(normalized) % FALLBACK_NAMES.length];
+  function hideBanner() {
+    $id("banner").classList.add("hidden");
   }
 
-  // ── Acorn handoffs ───────────────────────────────────────────────────────
-  function launchAcornHandoff(taskId) {
-    const from = state.nodes.get(taskId);
-    if (!from) return;
-    const targets = state.edges
-      .filter((e) => e.kind === "artifact" && e.from === taskId)
-      .map((e) => state.nodes.get(e.to))
-      .filter(Boolean);
-    for (const to of targets) {
-      const path = edgePath(from.task, to.task, 70);
-      const acorn = new P.Sprite(acornTexture());
-      acorn.anchor.set(0.5, 1);
-      acorn.position.set(from.task.x, from.task.y);
-      acorn.scale.set(0.8);
-      acornLayer.addChild(acorn);
-      const traveller = { acorn, path, t: 0, speed: rand(1.1, 1.5) };
-      animateTravellers.push(traveller);
-    }
-    // spark along dependency edges too
-    const deps = state.edges.filter((e) => e.kind === "dependency" && e.from === taskId);
-    for (const edge of deps) {
-      const to = state.nodes.get(edge.to);
-      if (!to) continue;
-      const path = edgePath(from.task, to.task, 70);
-      const dot = new P.Sprite(softGlowTexture(6, 0x55c8e6));
-      dot.anchor.set(0.5);
-      dot.position.set(from.task.x, from.task.y);
-      acornLayer.addChild(dot);
-      animateTravellers.push({ acorn: dot, path, t: 0, speed: rand(1.2, 1.6), spark: true });
-    }
+  function flashFailure() {
+    const tint = $id("failed-tint");
+    tint.classList.remove("hidden");
+    void tint.offsetWidth;
+    tint.style.animation = "none";
+    void tint.offsetWidth;
+    tint.style.animation = "";
   }
 
-  const animateTravellers = [];
-
-  function updateTravellers(dt) {
-    for (let i = animateTravellers.length - 1; i >= 0; i -= 1) {
-      const t = animateTravellers[i];
-      t.t += dt * t.speed;
-      if (t.t >= 1) {
-        acornLayer.removeChild(t.acorn);
-        t.acorn.destroy();
-        animateTravellers.splice(i, 1);
-        continue;
-      }
-      const k = easeOutCubic(t.t);
-      const pos = bezier(k, t.path.p0, t.path.p1, t.path.p2, t.path.p3);
-      t.acorn.position.set(pos.x, pos.y);
-      if (!t.spark) t.acorn.rotation = t.t * Math.PI * 4;
-    }
+  function showFailure() {
+    document.body.classList.add("failed");
+    showBanner("Run Failed", "Some tasks failed. Check the audit log and `replay` the failed tasks.", "failed");
   }
 
-  // ── Event application ────────────────────────────────────────────────────
+  function showComplete() {
+    showBanner("Run Complete", "All tasks finished.", "done");
+  }
+
+  // ── Event application ─────────────────────────────────────────────────────
   function applySnapshot(snapshot) {
     if (!state.manifest && snapshot.manifest) buildScene(snapshot.manifest, snapshot.layout);
     if (snapshot.state) applyState(snapshot.state);
@@ -839,77 +827,79 @@ function createBurstLayer() {
   function applyState(ws) {
     state.startedAt = ws.startedAt || state.startedAt;
     state.status = ws.status;
+    if (ws.currentPhase && state.phases.has(ws.currentPhase)) {
+      state.currentPhase = ws.currentPhase;
+      drawBoard();
+    }
     if (ws.tasks) {
       for (const record of Object.values(ws.tasks)) {
-        const node = state.nodes.get(record.taskId);
-        if (node) {
-          if (record.status === "complete") node.files = record.outputFiles || [];
-          if (record.completedAt && record.status === "complete") {
-            node.durationMs = record.startedAt ? Date.parse(record.completedAt) - Date.parse(record.startedAt) : undefined;
-          }
-          node.artifactId = record.artifactId;
-          node.errorMessage = record.errorMessage;
-          applyStatusToNode(node, record.status);
+        const entry = state.cards.get(record.taskId);
+        if (!entry) continue;
+        if (record.status === "complete") entry.files = record.outputFiles || [];
+        if (record.completedAt && record.status === "complete") {
+          entry.durationMs = record.startedAt
+            ? Date.parse(record.completedAt) - Date.parse(record.startedAt)
+            : undefined;
         }
+        if (record.artifactId) entry.artifactId = record.artifactId;
+        entry.errorMessage = record.errorMessage;
+        if (entry.status !== record.status) applyStatusToCard(entry, record.status);
       }
-      computeCounts();
-      updateHud();
-      drawEdges();
     }
     setStatus(`connected · run ${ws.runId ?? "—"} · ${ws.status ?? state.status}`, ws.status === "failed" ? "warn" : "live");
-    if (ws.status === "complete") showFinale();
+    if (ws.status === "complete") showComplete();
     if (ws.status === "failed") showFailure();
     if (ws.status === "paused") showBanner("Paused", "Run is paused. Resume with `workflow-engine -- run`.", "paused");
   }
 
   function applyAuditEvent(event) {
     const action = event.action;
-    const node = event.taskId ? state.nodes.get(event.taskId) : undefined;
+    const entry = event.taskId ? state.cards.get(event.taskId) : undefined;
 
     switch (action) {
       case "run.started":
         state.startedAt = event.timestamp || state.startedAt;
         break;
       case "phase.started":
-        if (event.phaseId) sproutWhorl(event.phaseId);
-        if (event.phaseId) moonlightSweep(event.phaseId);
+        if (event.phaseId && state.phases.has(event.phaseId)) {
+          state.currentPhase = event.phaseId;
+          drawBoard();
+        }
         break;
       case "task.started":
-        if (node) { node.actor.setPose("busy"); node.gauge = 0; }
+        if (entry && entry.status !== "running") applyStatusToCard(entry, "running");
         break;
       case "context.projected":
-        if (node && typeof event.reductionPercent === "number") node.gauge = event.reductionPercent;
+        if (entry && typeof event.reductionPercent === "number") {
+          entry.ctxPct = event.reductionPercent;
+          paintCard(entry);
+        }
         break;
       case "artifact.created":
-        if (event.taskId) launchAcornHandoff(event.taskId);
+        if (event.taskId) {
+          if (entry) { entry.artifactId = event.artifactId || entry.artifactId; paintCard(entry); }
+          launchArtifactHandoff(event.taskId);
+        }
         break;
       case "task.complete":
-        if (node) {
-          applyStatusToNode(node, "complete");
-          node.durationMs = event.durationMs;
-          node.files = event.outputFiles || node.files || [];
-          effectsLayer.spawn(node.task.x, node.task.y, "leaf", 8);
-          computeCounts();
-          updateHud();
-          drawEdges();
+        if (entry) {
+          entry.durationMs = event.durationMs;
+          entry.files = event.outputFiles || entry.files || [];
+          applyStatusToCard(entry, "complete");
         }
         break;
       case "task.failed":
-        if (node) {
-          applyStatusToNode(node, "failed");
-          node.errorMessage = event.note || "task failed";
-          effectsLayer.spawn(node.task.x, node.task.y, "leaf", 4);
+        if (entry) {
+          entry.errorMessage = event.note || "task failed";
+          applyStatusToCard(entry, "failed");
           flashFailure();
-          computeCounts();
-          updateHud();
-          drawEdges();
         }
         break;
       case "task.retrying":
-        if (node) { node.actor.setPose("busy"); node.actor.root.rotation = 0; }
+        if (entry && entry.status === "running") { entry.root.alpha = 0.6; }
         break;
       case "task.skipped":
-        if (node) { applyStatusToNode(node, "skipped"); computeCounts(); updateHud(); drawEdges(); }
+        if (entry) applyStatusToCard(entry, "skipped");
         break;
       case "run.paused":
         showBanner("Paused", "Run is paused.", "paused");
@@ -928,221 +918,31 @@ function createBurstLayer() {
     }
   }
 
-  function moonlightSweep(phaseId) {
-    const entry = state.phases.get(phaseId);
-    if (!entry) return;
-    const band = new P.Graphics();
-    band.eventMode = "none";
-    const y = entry.phase.y;
-    const fromX = state.layout.trunkX - 320;
-    const toX = state.layout.trunkX + 320;
-    band.moveTo(fromX, y - 60).lineTo(toX, y - 60).lineTo(toX, y + 60).lineTo(fromX, y + 60)
-      .closePath().fill({ color: 0xdbe4ff, alpha: 0.22 });
-    world.addChild(band);
-    const start = performance.now();
-    const sweep = { band, fromX, toX, y, start };
-    animateSweeps.push(sweep);
-  }
-
-  const animateSweeps = [];
-
-  function updateSweeps(dt) {
-    const now = performance.now();
-    for (let i = animateSweeps.length - 1; i >= 0; i -= 1) {
-      const s = animateSweeps[i];
-      const t = (now - s.start) / 1400;
-      if (t >= 1) {
-        world.removeChild(s.band);
-        s.band.destroy();
-        animateSweeps.splice(i, 1);
-        continue;
-      }
-      const k = easeOutCubic(t);
-      const alpha = Math.sin(Math.PI * k) * 0.22;
-      s.band.clear();
-      const x = lerp(s.fromX, s.toX, k);
-      const w = 200;
-      s.band.moveTo(x - w, s.y - 60).lineTo(x + w, s.y - 60).lineTo(x + w, s.y + 60).lineTo(x - w, s.y + 60)
-        .closePath().fill({ color: 0xdbe4ff, alpha });
-    }
-  }
-
-  function flashFailure() {
-    const tint = $id("failed-tint");
-    tint.classList.remove("hidden");
-    void tint.offsetWidth; // restart the CSS animation
-    tint.style.animation = "none";
-    void tint.offsetWidth;
-    tint.style.animation = "";
-  }
-
-  function showFailure() {
-    document.body.classList.add("failed");
-    showBanner("The Forge Stumbled", "Some tasks failed. Check the audit log and `replay` the failed tasks.", "failed");
-  }
-
-  function showFinale() {
-    if (state.finaleShown) return;
-    state.finaleShown = true;
-    // gather squirrels at the top whorl center
-    const layout = state.layout;
-    const top = layout.phases[layout.phases.length - 1];
-    const targetX = layout.trunkX;
-    const targetY = top ? top.y + 20 : 100;
-    for (const node of state.nodes.values()) {
-      node.actor.state.gather = { x: targetX, y: targetY };
-      node.actor.setPose("gather");
-    }
-    // golden acorn hoisted above the gathering
-    const golden = new P.Sprite(acornTexture());
-    golden.tint = 0xf5c542;
-    golden.anchor.set(0.5, 1);
-    golden.position.set(targetX, targetY - 70);
-    golden.scale.set(0);
-    golden.alpha = 0;
-    acornLayer.addChild(golden);
-    animateGolden = { sprite: golden, t: 0 };
-    showBanner("The Forge is Complete", "All tasks forged. The canopy is in full bloom.", "done");
-  }
-
-  let animateGolden = null;
-
-  function showBanner(title, sub, kind) {
-    const b = $id("banner");
-    b.innerHTML = `${esc(title)}<div class="sub">${esc(sub)}</div>`;
-    b.className = kind;
-    b.classList.remove("hidden");
-  }
-
-  function hideBanner() {
-    $id("banner").classList.add("hidden");
-  }
-
-  // ── Squirrel animation ───────────────────────────────────────────────────
-  function updateSquirrels(dt, now) {
-    for (const node of state.nodes.values()) {
-      const actor = node.actor;
-      const st = actor.state;
-      const t = st.t += dt;
-      const body = actor.root.children[0];
-      const tail = actor.root.children[1];
-      const eye = actor.root.children[2];
-
-      // gather (finale)
-      if (st.gather) {
-        const k = 1 - Math.exp(-dt * 2.2);
-        actor.root.position.x = lerp(actor.root.position.x, st.gather.x, k);
-        actor.root.position.y = lerp(actor.root.position.y, st.gather.y, k);
-        actor.root.rotation = Math.sin(t * 3) * 0.06;
-        body.y = Math.sin(t * 6) * 3;
-        tail.rotation = Math.sin(t * 5) * 0.15 + 0.3;
-        continue;
-      }
-
-      switch (st.pose) {
-        case "busy": {
-          const bob = Math.sin(t * 14) * 3;
-          actor.root.position.y = node.task.y + bob;
-          actor.root.position.x = node.task.x + Math.sin(t * 11) * 1.5;
-          body.y = bob * 0.5;
-          body.rotation = Math.sin(t * 12) * 0.04;
-          tail.rotation = Math.sin(t * 16) * 0.5 + 0.4;
-          eye.scale.set(1 + Math.sin(t * 9) * 0.05);
-          break;
-        }
-        case "complete": {
-          const bounce = Math.abs(Math.sin(t * 5));
-          actor.root.position.y = node.task.y - bounce * 12;
-          body.y = -bounce * 4;
-          tail.rotation = Math.sin(t * 4) * 0.2 + 0.4;
-          body.rotation = Math.sin(t * 6) * 0.03;
-          break;
-        }
-        case "failed": {
-          actor.root.position.y = node.task.y + 6;
-          actor.root.rotation = 0.14;
-          tail.rotation = -0.2 + Math.sin(t * 2) * 0.05;
-          eye.alpha = 0.4 + Math.sin(t * 3) * 0.2;
-          break;
-        }
-        case "skip": {
-          actor.root.position.y = node.task.y + 8;
-          actor.root.alpha = 0.45;
-          tail.rotation = Math.sin(t * 2) * 0.1 + 0.1;
-          break;
-        }
-        default: {
-          actor.root.position.y = node.task.y + Math.sin(t * 2) * 2;
-          actor.root.rotation = 0;
-          body.rotation = 0;
-          tail.rotation = Math.sin(t * 2.5) * 0.18 + 0.25;
-          actor.root.alpha = 1;
-          eye.alpha = 1;
-          break;
-        }
-      }
-    }
-  }
-
-  // ── Ticker ───────────────────────────────────────────────────────────────
+  // ── Ticker ────────────────────────────────────────────────────────────────
   let elapsedStart = null;
 
   app.ticker.add((ticker) => {
     const dt = ticker.deltaMS / 1000;
     const now = performance.now();
 
-    // background motion
-    for (let i = 0; i < fireflyState.length; i += 1) {
-      const f = fireflyState[i];
-      f.phase += dt * f.speed * 0.03;
-      f.p.x = f.base + Math.sin(f.phase) * f.amp;
-      f.p.y += Math.sin(f.phase * 1.7) * dt * 8;
-      if (f.p.y > 1240) f.p.y = -20;
-      const flicker = 0.4 + 0.6 * Math.abs(Math.sin(f.phase * 0.7 + i));
-      f.p.alpha = flicker;
-    }
-    fireflies.update();
-    for (let i = 0; i < fallState.length; i += 1) {
-      const f = fallState[i];
-      f.p.y += f.drift * dt;
-      f.p.x += Math.sin(now / 900 + i * 7) * 0.4;
-      f.p.rotation += f.rot * dt;
-      if (f.p.y > 1240) { f.p.y = -20; f.p.x = rand(0, 1600); }
-    }
-    fallingLeaves.update();
-    moon.x += dt * 2;
-    if (moon.x > screenW() + 200) moon.x = -100;
-
-    // tree growth
-    const growthStep = Math.max(1, (state.layout?.trunkBottom - state.layout?.trunkTop ?? 1) * 0.4) * dt;
-    if (trunkGrowth.current < trunkGrowth.target) {
-      trunkGrowth.current = Math.min(trunkGrowth.current + growthStep, trunkGrowth.target);
-      drawTree();
-    }
-    for (const entry of state.phases.values()) {
-      if (entry.sprouted && entry.sproutT < 1) {
-        entry.sproutT = Math.min(1, entry.sproutT + dt * 0.9);
-        drawWhorlBranch(entry);
+    // Cards glide to their column/stack position.
+    let moving = false;
+    for (const entry of state.ordered) {
+      const k = 1 - Math.exp(-dt * 8);
+      const nx = lerp(entry.root.x, entry.targetX, k);
+      const ny = lerp(entry.root.y, entry.targetY, k);
+      if (Math.abs(nx - entry.targetX) > 0.5 || Math.abs(ny - entry.targetY) > 0.5) moving = true;
+      entry.root.position.set(nx, ny);
+      if (entry.status === "running") {
+        const pulse = 0.55 + 0.45 * Math.abs(Math.sin(now / 300));
+        entry.ribbon.alpha = pulse;
+      } else {
+        entry.ribbon.alpha = 1;
       }
     }
 
-    updateSweeps(dt);
     updateTravellers(dt);
-    effectsLayer.update(dt);
-    updateSquirrels(dt, now);
-
-    if (animateGolden) {
-      animateGolden.t += dt;
-      const t = animateGolden.t;
-      const k = Math.min(1, t / 1.4);
-      animateGolden.sprite.scale.set(easeOutCubic(k) * 1.1);
-      animateGolden.sprite.alpha = clamp(k * 1.5, 0, 1);
-      animateGolden.sprite.y -= dt * 6;
-      if (t > 1.6 && !animateGolden.burst) {
-        animateGolden.burst = true;
-        effectsLayer.spawn(animateGolden.sprite.x, animateGolden.sprite.y, "gold", 18);
-      }
-    }
+    if (moving) drawEdges();
 
     // elapsed clock
     if (state.startedAt) {
@@ -1155,9 +955,6 @@ function createBurstLayer() {
   });
 
   // ── Data wiring ──────────────────────────────────────────────────────────
-  let manifestData = null;
-  let stateData = null;
-
   async function fetchSnapshot() {
     try {
       const [m, s, l] = await Promise.all([
@@ -1165,11 +962,8 @@ function createBurstLayer() {
         fetch("/api/state").then((r) => r.json()),
         fetch("/api/layout").then((r) => r.json()),
       ]);
-      manifestData = m;
-      stateData = s;
       applySnapshot({ manifest: m, state: s, layout: l });
     } catch {
-      // Server may not be ready yet; the EventSource snapshot will re-sync.
       setStatus("waiting for the engine server…", "warn");
     }
   }

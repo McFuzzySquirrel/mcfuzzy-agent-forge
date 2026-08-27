@@ -151,8 +151,8 @@ test("serves manifest, state, and layout JSON endpoints", async () => {
     const state = await getJson(`${server.url}/api/state`) as { status: string };
     assert.equal(state.status, "running");
 
-    const layout = await getJson(`${server.url}/api/layout`) as { trunkX: number; tasks: unknown[] };
-    assert.equal(typeof layout.trunkX, "number");
+    const layout = await getJson(`${server.url}/api/layout`) as { columns: unknown[]; tasks: unknown[] };
+    assert.equal(layout.columns.length, 4);
     assert.equal(layout.tasks.length, 2);
   });
 });

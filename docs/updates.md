@@ -54,8 +54,35 @@ the same Windows blind spot as the launcher:
   opening the SSE connection. `index.html` now normalizes the global
   (`window.Pixi = window.PIXI || window.Pixi`), so the tree renders and the
   dashboard connects.
-- **Tests.** The engine suite stays at **26** `node --test` cases and typechecks
-  clean; the launcher suite remains at **36**.
+- **Kanban dashboard theme.** The oak-tree-and-squirrel metaphor is gone. The
+  build now renders as a **kanban board**: one band per phase stacked
+  top-to-bottom (bands **auto-size** so stacked cards never overlap the next
+  band), with tasks as cards flowing left-to-right through
+  **To Do · In Progress · Done · Failed**. Cards are colored by their owning
+  agent (deterministic accent + legend), re-position themselves smoothly as
+  their status changes, and dependency/artifact edges connect them (brightening
+  on hover) with artifact hand-offs shown as dots. Long titles are trimmed to
+  fit the card, context-projection and artifact badges sit on each card, and
+  the HUD counts *done / total* tasks. Pan/zoom (from the board/background),
+  hover tooltips, and the click detail panel all work as before; the fireflies,
+  leaves, and squirrel animations were removed in favor of a calm, legible
+  board.
+- **Cards are name tags with agent faces.** Each task renders as a **name tag**
+  badge: a status-colored header ribbon, an avatar circle holding a
+  procedurally-drawn **agent face** (deterministic skin/hair tinted per agent,
+  with a mouth that reacts — neutral, working, smiling on complete, frowning on
+  failure), the agent's readable name, the task title, and the task id. Agent
+  identity is the ring/border color, so the legend and the cards agree at a
+  glance.
+- **In Progress is live, not stale.** The engine now **persists a task's
+  `running` status when it starts**, so snapshots and dashboard reconnects show
+  in-flight work instead of a stale "pending" (previously the state was only
+  saved after a task finished). A crash that leaves a task "running" is
+  recovered on restart: `runEngine` resets such tasks to `pending` so they run
+  instead of deadlocking.
+- **Tests.** The engine suite is now **23** `node --test` cases (kanban layout
+  replaces the whorl-tree layout, squirrel-name module removed, plus a crash-
+  recovery regression test); the launcher suite remains at **36**.
 
 ---
 

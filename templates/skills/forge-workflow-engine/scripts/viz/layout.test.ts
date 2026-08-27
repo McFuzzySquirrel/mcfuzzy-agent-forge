@@ -48,43 +48,45 @@ function makeManifest(phases: ManifestPhase[]): ExecutionManifest {
   };
 }
 
-test("layout places each task in its phase and spreads tasks along the branch line", () => {
-  const manifest = makeManifest([
-    makePhase("1", [makeTask("1.1"), makeTask("1.2"), makeTask("1.3")]),
-  ]);
-  const layout = layoutManifest(manifest, { width: 1000, height: 600, phaseHeight: 180, branchSpan: 300 });
+test("layout has four equal, ordered status columns after the label rail", () => {
+  const manifest = makeManifest([makePhase("1", [makeTask("1.1")])]);
+  const layout = layoutManifest(manifest, { width: 1000, height: 600, labelWidth: 150, padX: 10 });
 
-  assert.equal(layout.phases.length, 1);
-  assert.equal(layout.tasks.length, 3);
-  assert.equal(layout.trunkX, 500);
-
-  // First and last tasks sit on opposite ends of the branch line.
-  const [a, b, c] = layout.tasks;
-  assert.ok(a.x < b.x && b.x < c.x);
-  assert.ok(a.x < layout.trunkX && c.x > layout.trunkX);
-  // All tasks in the same phase share the same y (branch line + offset).
-  assert.equal(a.y, b.y);
-  assert.equal(b.y, c.y);
+  assert.equal(layout.columns.length, 4);
+  assert.deepEqual(
+    layout.columns.map((c) => c.key),
+    ["pending", "running", "complete", "failed"],
+  );
+  assert.deepEqual(
+    layout.columns.map((c) => c.label),
+    ["To Do", "In Progress", "Done", "Failed"],
+  );
+  assert.ok(layout.columns[0]!.x >= 150, "first column starts after the label rail");
+  for (let i = 1; i < layout.columns.length; i += 1) {
+    assert.ok(layout.columns[i]!.x > layout.columns[i - 1]!.x, "columns are ordered left-to-right");
+  }
+  const widths = new Set(layout.columns.map((c) => c.width));
+  assert.equal(widths.size, 1, "all columns share the same width");
 });
 
-test("layout grows upward: later phases are above earlier phases", () => {
+test("layout creates one band per phase, stacked top-to-bottom", () => {
   const manifest = makeManifest([
     makePhase("1", [makeTask("1.1")]),
     makePhase("2", [makeTask("2.1")], ["1"]),
   ]);
-  const layout = layoutManifest(manifest, { width: 1000, height: 600, phaseHeight: 180, bottomMargin: 100 });
+  const layout = layoutManifest(manifest, { width: 1000, height: 600, topMargin: 80 });
 
+  assert.equal(layout.phases.length, 2);
   const p1 = layout.phases.find((p) => p.id === "1")!;
   const p2 = layout.phases.find((p) => p.id === "2")!;
-  assert.ok(p2.y < p1.y, "phase 2 should sit above phase 1");
-
-  const t1 = layout.tasks.find((t) => t.id === "1.1")!;
-  const t2 = layout.tasks.find((t) => t.id === "2.1")!;
-  assert.ok(t2.y < t1.y);
-  assert.equal(layout.trunkBottom, 500);
+  assert.ok(p2.y > p1.y, "phase 2 band sits below phase 1 band");
+  assert.equal(p1.height, p2.height);
+  assert.equal(layout.tasks.length, 2);
+  assert.equal(layout.tasks[0]!.phaseId, "1");
+  assert.equal(layout.tasks[1]!.phaseId, "2");
 });
 
-test("layout emits dependency, artifact, and phase edges", () => {
+test("layout emits dependency and artifact edges and skips phase edges", () => {
   const manifest = makeManifest([
     makePhase("1", [
       makeTask("1.1", [], { produces: "work.1.1" }),
@@ -95,15 +97,14 @@ test("layout emits dependency, artifact, and phase edges", () => {
   const layout = layoutManifest(manifest);
 
   const kinds = layout.edges.map((e) => e.kind).sort();
-  assert.deepEqual(kinds, ["artifact", "dependency", "dependency", "phase"]);
+  assert.deepEqual(kinds, ["artifact", "dependency", "dependency"]);
 
   const artifact = layout.edges.find((e) => e.kind === "artifact")!;
   assert.equal(artifact.from, "1.1");
   assert.equal(artifact.to, "1.2");
 
-  const phase = layout.edges.find((e) => e.kind === "phase")!;
-  assert.equal(phase.from, "1.2");
-  assert.equal(phase.to, "2.1");
+  const dep = layout.edges.find((e) => e.from === "1.2")!;
+  assert.equal(dep.to, "2.1");
 });
 
 test("layout ignores dependencies that reference unknown tasks", () => {

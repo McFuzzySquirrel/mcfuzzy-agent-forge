@@ -76,10 +76,18 @@ html, body {
   min-width: 170px;
 }
 
-#acorn-count {
+#done-count {
   font-size: 20px;
   font-weight: 800;
   color: var(--accent);
+}
+
+#done-label {
+  margin-top: 2px;
+  font-size: 10px;
+  color: var(--text-dim);
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
 }
 
 #progress-bar {
