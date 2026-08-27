@@ -56,6 +56,8 @@ interface LauncherState {
     concurrency: string;
     taskTimeoutMs: string;
     maxRetries: string;
+    viz: boolean;
+    vizPort: string;
   };
 }
 
@@ -77,6 +79,8 @@ const state: LauncherState = {
     concurrency: process.env.FORGE_ENGINE_CONCURRENCY ?? "",
     taskTimeoutMs: process.env.FORGE_ENGINE_TASK_TIMEOUT_MS ?? "",
     maxRetries: process.env.FORGE_ENGINE_MAX_RETRIES ?? "",
+    viz: envFlag("FORGE_ENGINE_VIZ"),
+    vizPort: process.env.FORGE_ENGINE_VIZ_PORT ?? "",
   },
 };
 
@@ -407,6 +411,10 @@ function engineRunArgs(): string[] {
   if (cfg.concurrency) args.push("--concurrency", cfg.concurrency);
   if (cfg.taskTimeoutMs) args.push("--task-timeout-ms", cfg.taskTimeoutMs);
   if (cfg.maxRetries) args.push("--max-retries", cfg.maxRetries);
+  if (cfg.viz) {
+    args.push("--viz");
+    if (cfg.vizPort) args.push("--viz-port", cfg.vizPort);
+  }
   args.push("--yes");
   return args;
 }
@@ -468,6 +476,18 @@ async function configureEngineOptions(opts: LauncherOptions): Promise<void> {
       await prompt("Max retries per task", cfg.maxRetries || "2"),
       cfg.maxRetries || "2",
     );
+
+    const vizAnswer = await promptYesNo(
+      "Launch the live Squirrel Forge dashboard during the run?",
+      cfg.viz ? "y" : "y",
+    );
+    cfg.viz = vizAnswer === "y";
+    if (cfg.viz) {
+      cfg.vizPort = cleanPositiveInt(
+        await prompt("Dashboard port (blank = 4299)", cfg.vizPort || "4299"),
+        cfg.vizPort || "",
+      );
+    }
   } catch {
     info("Engine options cancelled; using the current defaults.");
   }
@@ -479,6 +499,12 @@ async function runEngineDetached(opts: LauncherOptions): Promise<void> {
     printEngineCommand();
     return;
   }
+  if (!hasPrd()) {
+    warn("No PRD found yet (docs/PRD.md or docs/product-vision.md).");
+    warn("The engine compiles the manifest from the PRD, so the detached run will");
+    warn("fail at the compile step until a PRD exists. Generate one with forge-auto-build-prd first.");
+    out("");
+  }
   const logDir = path.join(state.repoDir, "docs");
   fs.mkdirSync(logDir, { recursive: true });
   const logFile = path.join(logDir, "engine-run.log");
@@ -486,6 +512,7 @@ async function runEngineDetached(opts: LauncherOptions): Promise<void> {
   spawnDetached(cmd, args, {
     cwd: state.repoDir,
     logFile,
+    outFile: logFile,
   });
   state.engineStarted = true;
   ok(`Engine started detached. Log: ${logFile}`);
@@ -494,6 +521,11 @@ async function runEngineDetached(opts: LauncherOptions): Promise<void> {
   info("Monitor progress from another terminal with:");
   command(`tail -f ${logFile}`);
   command(`tail -f ${path.join(state.repoDir, "docs", "PROGRESS.md")}`);
+  if (state.engineConfig.viz) {
+    out("");
+    info("The Squirrel Forge dashboard starts when the engine starts");
+    info("(after the manifest is prepared). The URL is printed to the log above.");
+  }
 }
 
 async function engineDecision(opts: LauncherOptions): Promise<void> {
@@ -1077,6 +1109,11 @@ function completionSummary(): void {
     out(`  3. Re-run or resume the engine later if needed:`);
     out("");
     out(`       npx forge-launcher engine-run --repo "${state.repoDir}" --harness ${engineHarness} --yes`);
+    if (state.engineConfig.viz) {
+      out("");
+      out("  The Squirrel Forge dashboard launches with the engine run; its URL");
+      out("  is printed in docs/engine-run.log once the manifest is prepared.");
+    }
   } else {
     out("  1. Open the project in your agent harness.");
     out("  2. Run the queued pipeline command:");

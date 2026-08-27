@@ -1,4 +1,4 @@
-import { spawn } from "node:child_process";
+import spawn from "cross-spawn";
 import fs from "node:fs";
 import path from "node:path";
 import { spinner as clackSpinner } from "@clack/prompts";
@@ -80,6 +80,18 @@ export interface RunResult {
   stderr: string;
 }
 
+/**
+ * Wraps a spawn failure with a human-readable message. ENOENT on Windows usually
+ * means a CLI installed as an npm .cmd/.bat shim that plain spawn cannot launch.
+ */
+export function describeSpawnError(cmd: string, err: Error): Error {
+  const hint =
+    (err as NodeJS.ErrnoException).code === "ENOENT"
+      ? " - is it installed and on PATH? (Windows: try `npm install -g <cli>` or add the shim dir to PATH)"
+      : "";
+  return new Error(`Failed to run '${cmd}': ${err.message}${hint}`);
+}
+
 /** Runs a command, capturing output. Resolves with the exit code. */
 export function runCommand(
   cmd: string,
@@ -100,7 +112,7 @@ export function runCommand(
     if (opts.capture && child.stderr) {
       child.stderr.on("data", (d: Buffer) => (stderr += d.toString()));
     }
-    child.on("error", reject);
+    child.on("error", (err) => reject(describeSpawnError(cmd, err)));
     child.on("close", (code) => resolve({ code: code ?? 0, stdout, stderr }));
   });
 }
@@ -118,7 +130,7 @@ export function runLogged(
         env: { ...process.env, ...opts.env },
         stdio: "inherit",
       });
-      child.on("error", reject);
+      child.on("error", (err) => reject(describeSpawnError(cmd, err)));
       child.on("close", (code) => resolve({ code: code ?? 0 }));
       return;
     }
@@ -133,7 +145,7 @@ export function runLogged(
     child.stderr?.on("data", (d: Buffer) => stream.write(d));
     child.on("error", (err) => {
       stream.end();
-      reject(err);
+      reject(describeSpawnError(cmd, err));
     });
     child.on("close", (code) => {
       stream.end();
@@ -163,20 +175,24 @@ export function spawnDetached(
   args: string[],
   opts: { cwd?: string; outFile?: string; errFile?: string; logFile?: string },
 ): { pid: number | undefined } {
-  const stdio = ["ignore"] as const;
-  const extra: Array<"ignore" | "inherit" | number> = [...stdio];
-  if (opts.outFile) {
-    const outStream = fs.openSync(opts.outFile, "a");
-    const errStream = opts.logFile ? fs.openSync(opts.logFile, "a") : outStream;
-    extra.push(outStream, errStream);
+  // Capture stdout+stderr into a log when one is supplied. `logFile` alone is
+  // sufficient (it opens the same file for both streams); `outFile`/`errFile`
+  // allow splitting them. Without any file, both streams go to /dev/null.
+  const outTarget = opts.logFile ?? opts.outFile;
+  const stdio: Array<"ignore" | number> = ["ignore"];
+  if (outTarget) {
+    const outStream = fs.openSync(outTarget, "a");
+    const errStream = opts.logFile ? fs.openSync(opts.logFile, "a")
+      : (opts.errFile ? fs.openSync(opts.errFile, "a") : outStream);
+    stdio.push(outStream, errStream);
   } else {
-    extra.push("ignore", "ignore");
+    stdio.push("ignore", "ignore");
   }
-  const child = spawn(cmd, args, { cwd: opts.cwd, detached: true, stdio: extra as never });
+  const child = spawn(cmd, args, { cwd: opts.cwd, detached: true, stdio: stdio as never });
   child.on("error", (err) => {
     try {
       const logFile = opts.logFile ?? opts.outFile;
-      const msg = `[forge-launcher] failed to start detached process: ${cmd} ${args.join(" ")} → ${err.message}`;
+      const msg = `[forge-launcher] failed to start detached process: ${describeSpawnError(cmd, err).message}`;
       if (logFile) fs.appendFileSync(logFile, msg + "\n");
       else console.error(msg);
     } catch {

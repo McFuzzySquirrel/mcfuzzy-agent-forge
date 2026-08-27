@@ -5,11 +5,14 @@
   "description": "Dynamic workflow orchestration engine for Agent Forge repositories - executes EXECUTION-MANIFEST.json tasks through a pluggable harness adapter",
   "scripts": {
     "workflow-engine": "tsx scripts/cli.ts",
-    "test": "node --import tsx --test scripts/*.test.ts",
+    "test": "node --import tsx --test 'scripts/**/*.test.ts'",
     "typecheck": "tsc --noEmit"
   },
-  "dependencies": {},
+  "dependencies": {
+    "cross-spawn": "^7.0.6"
+  },
   "devDependencies": {
+    "@types/cross-spawn": "^6.0.6",
     "@types/node": "^22.10.0",
     "tsx": "^4.19.0",
     "typescript": "^5.7.0"

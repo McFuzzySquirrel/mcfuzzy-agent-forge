@@ -273,6 +273,37 @@ test("effective task timeout falls back to the engine taskTimeoutMs when a task 
   assert.deepEqual(harness.timeouts, [9_999]);
 });
 
+test("runEngine recovers a leftover 'running' task as pending (crash recovery)", async () => {
+  const fixture = makeEngineFixture();
+  const statePath = join(fixture.root, "docs", "WORKFLOW-STATE.json");
+  // Simulate a run that died mid-task: task 1.1 was persisted as "running".
+  const stale: WorkflowState = {
+    runId: "crashed-run",
+    startedAt: new Date().toISOString(),
+    lastUpdatedAt: new Date().toISOString(),
+    manifestPath: fixture.manifestPath,
+    manifestVersion: "1.0",
+    harness: "recording",
+    status: "running",
+    tasks: {
+      "1.1": {
+        taskId: "1.1", status: "running", attempt: 1, outputFiles: [],
+        startedAt: new Date().toISOString(),
+      },
+    },
+    blockers: [],
+    auditLog: [],
+  };
+  writeFileSync(statePath, JSON.stringify(stale), "utf8");
+
+  const harness = new RecordingHarness();
+  const state = await runEngine(engineOptionsFor(fixture, harness, 1_000));
+
+  assert.equal(state.status, "complete");
+  assert.equal(state.tasks["1.1"]?.status, "complete");
+  assert.equal(harness.timeouts.length, 1, "the recovered task should actually run, not deadlock");
+});
+
 test("runCommand kills a child that exceeds a custom timeout and reports it", async () => {
   const start = Date.now();
   const result = await runCommand(

@@ -1,0 +1,44 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>The Squirrel Forge - workflow engine dashboard</title>
+  <link rel="stylesheet" href="/style.css" />
+</head>
+<body>
+  <div id="canvas-host"></div>
+
+  <div id="hud-top">
+    <div id="hud-left">
+      <div id="title">The Squirrel Forge</div>
+      <div id="meta">connecting&hellip;</div>
+    </div>
+    <div id="hud-right">
+      <div id="done-count">0 / 0</div>
+      <div id="done-label">tasks</div>
+      <div id="progress-bar"><div id="progress-fill"></div></div>
+      <div id="elapsed">0s</div>
+    </div>
+  </div>
+
+  <div id="hud-bottom">
+    <div id="legend"></div>
+    <div id="status-chips"></div>
+  </div>
+
+  <div id="tooltip" class="hidden"></div>
+
+  <div id="panel" class="hidden">
+    <div id="panel-close">×</div>
+    <div id="panel-body"></div>
+  </div>
+
+  <div id="banner" class="hidden"></div>
+  <div id="failed-tint" class="hidden"></div>
+
+  <script src="/vendor/pixi.min.js"></script>
+  <script>window.Pixi = window.PIXI || window.Pixi;</script>
+  <script src="/app.js"></script>
+</body>
+</html>

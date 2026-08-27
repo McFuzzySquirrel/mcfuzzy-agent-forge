@@ -4,6 +4,160 @@ Detailed release and change notes for McFuzzy Agent Forge.
 
 ---
 
+## August 2026 - v3.17
+
+### Cross-platform `forge-launcher` fixes for Windows
+
+The `forge-launcher` npm package (`1.0.0-beta.2`) is now reliable on Windows,
+where the interactive TUI and CLI spawning previously misbehaved:
+
+- **Directory picker that works on Windows.** `@clack/prompts`' `path`
+  autocomplete hardcodes `/` and does case-sensitive full-path prefix matching,
+  so on Windows the "Parent directory" step listed nothing and typing a name to
+  search found nothing. The launcher now uses its own cross-platform picker
+  (a clack `select` list over a directory listing): subfolders show immediately,
+  `..` goes up (disabled at a drive root), and a "Type a path…" entry accepts
+  either `\` or `/` case-insensitively. The readline/Tab-completion fallback
+  shares the fix.
+- **No more `spawn opencode ENOENT`.** CLIs installed via `npm install -g`
+  (opencode, copilot, claude) are `.cmd` shims on Windows, which plain
+  `child_process.spawn` cannot launch. Spawning now goes through `cross-spawn`,
+  which resolves shims with correct argument quoting. A failed spawn reports
+  `Failed to run '<cmd>': … — is it installed and on PATH?` instead of a cryptic
+  ENOENT. The terminal auto-launch code also gets correct PATH detection
+  (`;`-delimited, `.exe`/`.cmd`/`.bat`) and Windows Terminal detection via
+  `WT_SESSION`.
+- **Friendlier pre-publish install guidance.** The README and
+  `docs/forge-launcher.md` document a simple local install
+  (`npm install` → `npm pack` → `npm install -g <tarball>`), a dev symlink
+  (`npm link`), and the matching uninstall/unlink cleanup — no temp-workspace
+  ceremony for day-to-day testing.
+- **Update check.** On startup, `forge-launcher` checks the npm registry once a
+  day (honoring the configured registry, so a local Verdaccio works) and prints
+  a notice when a newer version exists — prereleases check the `beta` tag,
+  releases check `latest`. The result is cached in a user-level file, the
+  fetch is timeout-bounded and fails silently offline, and it can be disabled
+  with `--no-update-check` or `FORGE_SKIP_UPDATE_CHECK=1` (also skipped in CI).
+
+### Cross-platform `forge-workflow-engine` fixes
+
+The workflow engine (the separate package bootstrapped into target repos) had
+the same Windows blind spot as the launcher:
+
+- **Engine tasks spawn correctly on Windows.** The engine's per-task harness
+  (`opencode`, `copilot`, and flowforge-kernel adapters) now spawns through
+  `cross-spawn`, resolving npm-installed `.cmd`/`.bat` shims — so `opencode run`
+  tasks no longer fail with `spawn opencode ENOENT` during an engine run.
+- **Squirrel Forge dashboard renders and connects.** The vendored PixiJS v8
+  build exposes the `PIXI` global, but `app.js` referenced `Pixi`, so the
+  dashboard script aborted with `ReferenceError: Pixi is not defined` before
+  opening the SSE connection. `index.html` now normalizes the global
+  (`window.Pixi = window.PIXI || window.Pixi`), so the tree renders and the
+  dashboard connects.
+- **Kanban dashboard theme.** The oak-tree-and-squirrel metaphor is gone. The
+  build now renders as a **kanban board**: one band per phase stacked
+  top-to-bottom (bands **auto-size** so stacked cards never overlap the next
+  band), with tasks as cards flowing left-to-right through
+  **To Do · In Progress · Done · Failed**. Cards are colored by their owning
+  agent (deterministic accent + legend), re-position themselves smoothly as
+  their status changes, and dependency/artifact edges connect them (brightening
+  on hover) with artifact hand-offs shown as dots. Long titles are trimmed to
+  fit the card, context-projection and artifact badges sit on each card, and
+  the HUD counts *done / total* tasks. Pan/zoom (from the board/background),
+  hover tooltips, and the click detail panel all work as before; the fireflies,
+  leaves, and squirrel animations were removed in favor of a calm, legible
+  board.
+- **Cards are name tags with agent faces.** Each task renders as a **name tag**
+  badge: a status-colored header ribbon, an avatar circle holding a
+  procedurally-drawn **agent face** (deterministic skin/hair tinted per agent,
+  with a mouth that reacts — neutral, working, smiling on complete, frowning on
+  failure), the agent's readable name, the task title, and the task id. Agent
+  identity is the ring/border color, so the legend and the cards agree at a
+  glance.
+- **In Progress is live, not stale.** The engine now **persists a task's
+  `running` status when it starts**, so snapshots and dashboard reconnects show
+  in-flight work instead of a stale "pending" (previously the state was only
+  saved after a task finished). A crash that leaves a task "running" is
+  recovered on restart: `runEngine` resets such tasks to `pending` so they run
+  instead of deadlocking.
+- **Tests.** The engine suite is now **23** `node --test` cases (kanban layout
+  replaces the whorl-tree layout, squirrel-name module removed, plus a crash-
+  recovery regression test); the launcher suite remains at **36**.
+
+---
+
+## August 2026 - v3.16
+
+### Live visualization: The Squirrel Forge
+
+Watching "dark orchestration" used to mean tailing
+`docs/WORKFLOW-STATE.json` or the audit log. The workflow engine now ships a
+live, localhost **PixiJS dashboard** that renders the build as a single oak
+tree which **grows over the course of the run**:
+
+- **`--viz` on `workflow-engine run`.** Starts a dependency-free `node:http`
+  server before the main loop, broadcasts every audit event in-process over
+  **SSE** (a single hook inside `writeAuditEvent` - no engine rework), auto-opens
+  the browser at `http://127.0.0.1:4299` (next free port if busy), and shuts
+  down shortly after the run so the finale renders. Pass `--no-open` to skip
+  auto-opening.
+- **The scene.** Phases are whorls up the trunk; tasks hang from each whorl's
+  branch line. Every agent is a **named squirrel** (deterministic names -
+  `api-engineer` → Tailor, `qa-engineer` → Nutsy - with a seeded hash fallback
+  for arbitrary agents) whose pose maps to status: dozing = pending, scurrying =
+  running, celebration bounce = complete, tumble = failed, faded = skipped. On
+  `artifact.created` an **acorn rolls up the trunk** to the consuming squirrel,
+  and `context.projected` shows a knapsack-arc gauge of token reduction on a
+  busy squirrel. The canopy fills with leaves as tasks complete, browns on
+  failure, and blooms when all squirrels gather and hoist a golden acorn at the
+  end.
+- **Interactions.** Hover for a tooltip, click a squirrel for the task panel
+  (title, owner, status, duration, output files, artifact), drag to pan, scroll
+  to zoom. A snapshot replays on every (re)connect.
+- **`workflow-engine viz` attach mode.** Tails `docs/EXECUTION-AUDIT.jsonl` and
+  serves the same dashboard, so you can watch an **already-running or detached**
+  engine run (e.g. the `forge-auto-build` path) from any terminal.
+- **Launcher pass-through.** `forge-launcher engine-run --viz` (and
+  `--viz-port <n>` / `--no-open`) forwards to the engine; `FORGE_ENGINE_VIZ=1`
+  and `FORGE_ENGINE_VIZ_PORT` set the same defaults.
+- **Zero new runtime dependencies.** PixiJS v8 is vendored
+  (`viz/dashboard/vendor/pixi.min.js`, ~0.8 MB); events stream over SSE via
+  `node:http`; no WebSocket or npm dependency was added to the engine.
+- **Tests.** The engine suite grew to **26** `node --test` cases (new:
+  whorl-tree layout, deterministic squirrel naming, and the viz server's
+  manifest/state/layout endpoints, SSE snapshot + in-process broadcast, tail
+  source, `done`-on-shutdown, and port binding). Launcher suite stays at 16.
+  All packages typecheck clean.
+
+### Live dashboard: TUI toggle, detached-run logging, and connection feedback
+
+- **Viz option in the engine decision.** The launcher's engine configuration
+  now asks whether to **launch the live Squirrel Forge dashboard** during the
+  run (default on, optional port), and the detached run / printed command carry
+  `--viz` / `--viz-port` (`FORGE_ENGINE_VIZ`, `FORGE_ENGINE_VIZ_PORT`).
+- **Detached runs are actually observable.** `spawnDetached` now tees the
+  detached child's stdout+stderr into `docs/engine-run.log` even when only a
+  log file is configured (previously the streams went to `/dev/null`, so a
+  silent failure looked like "it never started"). A no-PRD warning appears
+  before starting detached, since the engine can't compile a manifest without
+  one. The dashboard starts once the engine starts (after manifest prep) and
+  its URL is printed to the log.
+- **The dashboard can't look "unconnected" anymore.** The HUD status line is
+  now driven by the live connection: `connected · run <id> · <status>` on
+  snapshot/state, "connection lost · retrying…" / "disconnected" via an
+  `onerror` handler, and "run finished" on shutdown. Render errors are caught
+  and surfaced instead of silently killing the event handlers, and the scene
+  rebuilds cleanly on reconnect. The engine also starts the dashboard before
+  the pre-run gate so the URL is available while you review the summary.
+
+Related architecture decision:
+
+- [ADR-025](adr/025-squirrel-forge-live-workflow-viz.md): the Squirrel Forge
+  visualization - design, event streaming, the two launch modes, and the
+  zero-dependency PixiJS vendoring.
+
+---
+
 ## August 2026 - v3.15
 
 ### Feature-based manifest compilation, team validation, and the responsibility matrix

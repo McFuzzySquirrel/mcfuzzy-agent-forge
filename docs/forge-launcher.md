@@ -43,14 +43,46 @@
 
 ### npm package (recommended, cross-platform)
 
+> The npm package is a **pre-release** (`forge-launcher@beta`, v1.0.0-beta.2).
+> Until it is published, install it locally from the clone (see the README
+> "Try the npm launcher locally" section) or use the legacy wrappers below.
+
 ```bash
-npx forge-launcher [--non-interactive] [--headless] [--draft] [--dry-run] [--debug]
-npx forge-launcher bootstrap [TARGET_DIR] [--harness agents|github|claude|opencode] [--force]
-npx forge-launcher engine-run [--repo <path>] [--harness <h>] [--concurrency <n>]
-                             [--task-timeout-ms <ms>] [--yes] [--dry-run]
+npx forge-launcher@beta [--non-interactive] [--headless] [--draft] [--dry-run] [--debug]
+npx forge-launcher@beta bootstrap [TARGET_DIR] [--harness agents|github|claude|opencode] [--force]
+npx forge-launcher@beta engine-run [--repo <path>] [--harness <h>] [--concurrency <n>]
+                              [--task-timeout-ms <ms>] [--yes] [--dry-run]
 ```
 
-When installed globally (`npm install -g forge-launcher`), drop the `npx`.
+When installed globally (`npm install -g forge-launcher@beta`), drop the `npx`.
+
+#### Install locally before publishing
+
+From the clone, install the packed tarball as a global command, or symlink for
+development:
+
+```bash
+cd scripts/forge-launcher
+npm install                               # build deps
+npm pack                                  # build + stage templates → forge-launcher-1.0.0-beta.2.tgz
+npm install -g ./forge-launcher-1.0.0-beta.2.tgz   # global `forge-launcher`
+
+# dev alternative (once dist/ is built): global symlink
+npm run build && npm link
+```
+
+Remove either install with:
+
+```bash
+npm uninstall -g forge-launcher            # removes a tarball install (or link)
+cd scripts/forge-launcher && npm unlink    # drops the `npm link` symlink
+```
+
+**Update check.** On startup, `forge-launcher` checks the npm registry (honoring
+your configured registry, e.g. a local Verdaccio) once a day and prints a notice
+when a newer version is available — prereleases check the `beta` tag, releases
+check `latest`. Disable it with `--no-update-check` or
+`FORGE_SKIP_UPDATE_CHECK=1` (also skipped in CI).
 
 ### Linux / macOS (legacy script)
 
@@ -213,20 +245,33 @@ step — a set of defaults you can press Enter through:
   [ADR-021](adr/021-parallel-task-dispatch.md)).
 - **Per-task timeout (ms)** — default `600000`.
 - **Max retries per task** — default `2`.
+- **Live Squirrel Forge dashboard** — launch the visualization during the run
+  (default on). A port prompt follows (blank = `4299`). The dashboard starts
+  when the engine starts — after the manifest is prepared — and its URL is
+  printed in `docs/engine-run.log`.
 
 Esc/Ctrl+C keeps the current defaults. The configured values are written into
 both the detached run and the printed command, and all have env-var equivalents
 (`FORGE_ENGINE_HARNESS`, `FORGE_ENGINE_GRANULARITY`,
 `FORGE_ENGINE_CONCURRENCY`, `FORGE_ENGINE_TASK_TIMEOUT_MS`,
 `FORGE_ENGINE_MAX_RETRIES`, `FORGE_ENGINE_RETRY_DELAY_MS`,
-`FORGE_ENGINE_HEARTBEAT_MS`).
+`FORGE_ENGINE_HEARTBEAT_MS`, `FORGE_ENGINE_VIZ`, `FORGE_ENGINE_VIZ_PORT`).
 
 Use `--draft` to pre-answer "yes" to both auto-draft prompts (interactive), or
 set `FORGE_AUTO_DRAFT=1` in non-interactive runs. The workflow-engine run later:
 
 ```bash
 forge-launcher engine-run --repo "<repo-dir>" --harness opencode --yes
+forge-launcher engine-run --repo "<repo-dir>" --harness opencode --yes --viz  # live dashboard
 ```
+
+Pass `--viz` (or `--viz-port <n>`) to `forge-launcher engine-run` to launch the
+**live Squirrel Forge dashboard** (a growing oak tree of named-squirrel agents
+performing the build) alongside the engine run. Add `--no-open` to skip
+auto-opening the browser. `FORGE_ENGINE_VIZ=1` and `FORGE_ENGINE_VIZ_PORT` set
+the same defaults. To attach the dashboard to an already-running or detached
+engine run instead, use `npm run workflow-engine -- viz --repo "<repo-dir>"`
+inside the repo's engine package.
 
 The engine run honours parallel dispatch too: set `FORGE_ENGINE_CONCURRENCY=<n>`
 (or pass `--concurrency <n>` to `forge-launcher engine-run`) to run ready tasks in
@@ -434,7 +479,7 @@ Generate the agent team from the PRD automatically now (headless)? [y/N]: y
     2) Print the engine command to run later
     3) Skip - I will launch the CLI / build manually
 Select [1-3] [2]: 2
-    npx forge-launcher engine-run --repo "/home/user/projects/my-cool-app" --harness opencode --yes
+    npx forge-launcher@beta engine-run --repo "/home/user/projects/my-cool-app" --harness opencode --yes
 ```
 
 Choosing **1) Run the workflow-engine build now (detached)** starts the engine in the
@@ -538,7 +583,7 @@ reflect the running build (monitor + resume) rather than the manual
 
   3. Re-run or resume the engine later if needed:
 
-      npx forge-launcher engine-run --repo "/home/user/projects/my-cool-app" --harness opencode --yes
+      npx forge-launcher@beta engine-run --repo "/home/user/projects/my-cool-app" --harness opencode --yes
 ```
 
 ---
@@ -578,7 +623,9 @@ reflect the running build (monitor + resume) rather than the manual
  | `FORGE_ENGINE_RETRY_DELAY_MS` | 8 | Delay between task retries in ms (default `5000`) |
  | `FORGE_ENGINE_HEARTBEAT_MS` | 8 | Engine heartbeat interval in ms while a task runs (default `15000`; `0` disables) |
  | `FORGE_WORKFLOW_ENGINE` | 8 | `1` to append `GO --workflow-engine` to the queued headless command (build executes via the workflow engine) |
- | `FORGE_ENGINE_HARNESS` | 8 | Per-task harness for the workflow engine: `opencode` (default), `copilot`, `openai`, `stub`, or `flowforge-kernel` |
+  | `FORGE_ENGINE_HARNESS` | 8 | Per-task harness for the workflow engine: `opencode` (default), `copilot`, `openai`, `stub`, or `flowforge-kernel` |
+  | `FORGE_ENGINE_VIZ` | 8 | `1` to launch the live Squirrel Forge dashboard with the engine run |
+  | `FORGE_ENGINE_VIZ_PORT` | 8 | Dashboard port when `FORGE_ENGINE_VIZ=1` (default `4299`) |
 
 All other step inputs (repo name, description, visibility, parent directory) use their defaults in non-interactive mode. Override them by setting the variables before running:
 

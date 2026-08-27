@@ -9,7 +9,7 @@
 
 **McFuzzy Agent Forge** turns your requirements into a team of specialist agents that plan, implement, and validate a project. The PRD is the quality gate: you deliberately review it, then the pipeline generates the team and drives the build - either interactively or fully autonomously ("dark orchestration").
 
-**Latest: v3.15** - the launcher is now a cross-platform **`forge-launcher` npm package** with an interactive TUI (`@clack/prompts`): `npx forge-launcher`, plus `bootstrap` / `engine-run` subcommands, replacing the six shell scripts. v3.15 adds engine configuration in the TUI (harness, task granularity, parallelism, timeout, retries) and feature-based workflow-engine compilation with team validation and a generated `docs/agent-responsibility-matrix.md`. See [docs/updates.md](docs/updates.md) and [docs/adr/023-forge-launcher-npm-package.md](docs/adr/023-forge-launcher-npm-package.md).
+**Latest: v3.17** - the `forge-launcher` npm package is now reliable on Windows: the TUI's directory picker works (no more empty "search"), spawned CLIs resolve npm `.cmd` shims (no more `spawn opencode ENOENT`), and pre-publish local install/uninstall is documented. See [docs/updates.md](docs/updates.md). (v3.16: the workflow engine now ships a live **Squirrel Forge dashboard**: add `--viz` to `workflow-engine run` (or `forge-launcher engine-run --viz`) and a PixiJS oak tree grows as the build executes - each agent a named squirrel, artifacts rolled as acorns between tasks, hover/click for task detail, pan/zoom - with a standalone `workflow-engine viz` attach mode for watching detached runs. See [docs/updates.md](docs/updates.md) and [ADR-025](docs/adr/025-squirrel-forge-live-workflow-viz.md). (v3.15: the cross-platform `forge-launcher` npm package with its interactive TUI, engine configuration, and feature-based manifest compilation.))
 
 ---
 
@@ -19,7 +19,7 @@ One command, zero to running - no PRD needed. The launcher creates your repo, bo
 
 ```bash
 # Anywhere (npm package - requires Node.js 18+):
-npx forge-launcher
+npx forge-launcher@beta          # v1.0.0-beta.2 pre-release (once published)
 
 # Or from a clone (legacy shell wrappers, no install):
 git clone https://github.com/McFuzzySquirrel/mcfuzzy-agent-forge.git
@@ -27,23 +27,73 @@ cd mcfuzzy-agent-forge
 ./scripts/forge-launcher.sh          # PowerShell: .\scripts\forge-launcher.ps1
 ```
 
+The npm package is currently a **pre-release** (`1.0.0-beta.2`). Until it is
+published, install the packed tarball locally (below).
+
 Answer the prompts, then open the repo in your agent harness and run the queued command it prints. Full reference: [docs/forge-launcher.md](docs/forge-launcher.md).
 
 > The launcher is implemented as the cross-platform **`forge-launcher` npm package** (`scripts/forge-launcher/`). The `.sh` / `.ps1` scripts are thin delegating wrappers kept for compatibility (see [ADR-023](docs/adr/023-forge-launcher-npm-package.md)).
 
 ### Try the npm launcher locally (pre-publish)
 
-`npx forge-launcher` needs the package published to npm. Until then, test the
-exact end-user experience — install the packed package like a normal global
-install and run the interactive TUI from any empty directory:
+`npx forge-launcher@beta` needs the package published to npm. Until then, install
+it locally from your clone:
+
+```bash
+# 1. Install build deps + build the package (compiles dist/ + stages templates)
+cd scripts/forge-launcher
+npm install
+npm pack                                   # → forge-launcher-1.0.0-beta.2.tgz
+
+# 2. Install the tarball exactly like a published package (global `forge-launcher`)
+npm install -g ./forge-launcher-1.0.0-beta.2.tgz
+```
+
+> **Stale install?** After `git pull`, always re-run `npm install` before
+> `npm run build`/`npm pack` — new dependencies are added over time. If `npm run
+> build` fails with *"Cannot find module 'cross-spawn' / 'semver' or its
+> corresponding type declarations"*, your `node_modules` predates those
+> dependencies. Fix it with a clean reinstall:
+>
+> ```powershell
+> cd scripts/forge-launcher
+> Remove-Item -Recurse -Force node_modules
+> npm install          # or: npm ci   (deterministic install from the lockfile)
+> npm run build
+> ```
+
+`forge-launcher` (or `npx forge-launcher`) now works from any directory.
+
+**Developing (symlink instead of tarball).** Once `dist/` is built, link the
+package globally so edits take effect after each rebuild:
+
+```bash
+cd scripts/forge-launcher
+npm run build && npm link                 # global symlink → `forge-launcher`
+```
+
+**Remove the local install:**
+
+```bash
+npm uninstall -g forge-launcher            # removes a tarball install (or link)
+cd scripts/forge-launcher && npm unlink    # drops the symlink created by `npm link`
+```
+
+> **Update check.** On startup, `forge-launcher` checks the npm registry once a
+> day and prints a notice when a newer version is available. Disable it with
+> `--no-update-check` or `FORGE_SKIP_UPDATE_CHECK=1` (also skipped in CI).
+
+To also verify the exact end-user experience — a clean, unrelated workspace
+where the launcher runs on its **bundled** templates — install into an isolated
+prefix and run from a fresh directory:
 
 ```bash
 # 1. Build the package (compiles dist/ + stages templates as resources)
 cd scripts/forge-launcher
-npm pack                                   # → forge-launcher-1.0.0.tgz
+npm pack                                   # → forge-launcher-1.0.0-beta.2.tgz
 
-# 2. Install it like `npm install -g forge-launcher` would (isolated prefix)
-npm install -g --prefix /tmp/forge-user/install ./forge-launcher-1.0.0.tgz
+# 2. Install it like `npm install -g forge-launcher@beta` would (isolated prefix)
+npm install -g --prefix /tmp/forge-user/install ./forge-launcher-1.0.0-beta.2.tgz
 
 # 3. Be the new user: run the TUI in a fresh, unrelated workspace
 mkdir -p /tmp/forge-user/workspace
@@ -63,7 +113,7 @@ The whole suite can be checked without the TUI too:
 
 ```bash
 cd scripts/forge-launcher
-npm test          # 11 node --test cases (typecheck + non-interactive E2E)
+npm test          # 16 node --test cases (typecheck + non-interactive E2E)
 npm run typecheck
 ```
 
@@ -83,6 +133,7 @@ npm run typecheck
 | **Add a feature to a finished project** | `@workspace /forge-build-feature-prd I want to add [feature]` | Feature PRD → targeted team update → execute feature phases |
 | **Per-agent model selection** | `@workspace /forge-assign-models …` | Discover → recommend (`docs/MODEL-PLAN.md`) → apply `model:` frontmatter |
 | **Fully terminal-driven (no chat)** | `forge-launcher --headless` | Kicks off the queued skill via `opencode run --auto` or `copilot -p --yolo` - never opens an interactive CLI |
+| **Watch a build live** | `workflow-engine run --viz` | The Squirrel Forge dashboard: a growing oak tree of named-squirrel agents performing the build, with live acorn artifact handoffs |
 
 > **`forge-auto-build` requires an existing PRD** (`docs/PRD.md`, or the decomposed `docs/product-vision.md` + `docs/features/*.md`). It never generates one - if no PRD exists it stops and directs you to `forge-auto-build-prd` or `forge-build-prd`. PRD creation is a deliberate stage; execution is a separate, deliberate stage.
 
@@ -185,6 +236,8 @@ cd .agents/skills/forge-execution-adapter && npm install && npm run forge-execut
 cd ../forge-workflow-engine && npm install && npm run workflow-engine -- run --harness opencode --yes
 # Parallel dispatch (opt-in, harness-gated): run up to N ready tasks concurrently
 npm run workflow-engine -- run --harness opencode --concurrency 3 --yes
+# Live dashboard: watch the build as a growing oak tree of squirrel agents
+npm run workflow-engine -- run --harness opencode --viz --yes
 ```
 
 Or drive it conversationally via the companion agent:
@@ -194,6 +247,8 @@ Or drive it conversationally via the companion agent:
 ```
 
 Dark orchestration means one pre-run gate, then unattended dispatch - no approvals between tasks. Resume with `run` after interruption; replay a failed task with `replay <task-id>`. Dry-run first with `--harness stub` to validate setup without spending tokens.
+
+**Watch the build live (The Squirrel Forge).** Add `--viz` to a run (or `forge-launcher engine-run --viz`) and a PixiJS dashboard opens in your browser at `http://127.0.0.1:4299`: the build DAG renders as a single oak tree that **grows** as the run progresses, each agent is a **named squirrel** doing its tasks (dozing = pending, scurrying = running, bounce = complete, tumble = failed), and artifacts roll up the trunk as acorns on every handoff. Hover for a tooltip, click a squirrel for its task detail, drag to pan, scroll to zoom. The tree blooms green on completion and browns on failure. To watch a **detached** run instead, run `npm run workflow-engine -- viz --repo <repo-dir>` from any terminal - it tails the audit log and serves the same dashboard. Pass `--no-open` to skip auto-opening the browser.
 
 ### Path D - Fully terminal-driven (no chat session)
 
@@ -217,6 +272,7 @@ forge-launcher engine-run --harness opencode --yes          # per-task: opencode
 forge-launcher engine-run --harness copilot --yes           # per-task: copilot -p --yolo
 forge-launcher engine-run --harness opencode --concurrency 3 --yes  # parallel dispatch
 forge-launcher engine-run --harness opencode --task-timeout-ms 900000 --yes  # 15-min task budget
+forge-launcher engine-run --harness opencode --viz --yes    # live Squirrel Forge dashboard
 ```
 
 - `opencode run` / `copilot -p` are non-interactive; `--auto` / `--yolo` auto-approve tool permissions.

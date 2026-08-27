@@ -4,6 +4,7 @@ import { randomUUID } from "node:crypto";
 
 import type { AuditEvent, TaskRecord, WorkflowState } from "./types.ts";
 import type { ExecutionManifest } from "./types.ts";
+import { broadcastAudit } from "./viz/bus.ts";
 
 // ─── State file helpers ───────────────────────────────────────────────────────
 
@@ -243,6 +244,9 @@ export function syncProgressMd(
 export function writeAuditEvent(auditPath: string, event: AuditEvent): void {
   mkdirSync(dirname(auditPath), { recursive: true });
   appendFileSync(auditPath, `${JSON.stringify(event)}\n`, "utf8");
+  // Broadcast the same event to the live visualization server (no-op unless a
+  // dashboard is running in this process).
+  broadcastAudit(event);
 }
 
 // ─── Manifest traversal helpers ──────────────────────────────────────────────

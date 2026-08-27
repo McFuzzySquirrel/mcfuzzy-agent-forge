@@ -1,4 +1,4 @@
-import { spawn } from "node:child_process";
+import spawn from "cross-spawn";
 
 export interface RunCommandOptions {
   cwd: string;
@@ -18,10 +18,12 @@ export interface RunCommandResult {
 }
 
 /**
- * Runs a command without a shell, capturing stdout/stderr asynchronously.
+ * Runs a command, capturing stdout/stderr asynchronously.
  *
- * Unlike `spawnSync` (which blocks the event loop), this yields while the child
- * runs, so the engine can emit heartbeat output during long-running tasks.
+ * Uses `cross-spawn` so npm-installed CLIs (opencode, copilot, claude), which
+ * are `.cmd`/`.bat` shims on Windows, launch correctly. Unlike `spawnSync`
+ * (which blocks the event loop), this yields while the child runs, so the
+ * engine can emit heartbeat output during long-running tasks.
  */
 export function runCommand(
   bin: string,

@@ -212,6 +212,11 @@ async function executeTask(
     attempt: currentState.tasks[task.id]?.attempt,
   });
 
+  // Persist the "running" status so snapshots/dashboards (and reconnects) see
+  // in-flight work instead of a stale "pending". Safe on restart: runEngine
+  // normalizes any leftover "running" tasks back to "pending" on load.
+  saveState(opts.statePath, currentState);
+
   console.log(`[engine] Starting task ${task.id}: ${task.title} (@${agent.name})`);
 
   for (let attempt = 0; attempt <= opts.maxRetries; attempt += 1) {
@@ -327,6 +332,20 @@ export async function runEngine(opts: EngineOptions): Promise<WorkflowState> {
 
   let state = loadState(opts.statePath)
     ?? initState(manifest, opts.manifestPath, opts.harness.name);
+
+  // A previous run that died mid-task may have left tasks marked "running".
+  // Reset those to "pending" so they are picked up again instead of deadlocking.
+  if (state.tasks) {
+    const tasks: WorkflowState["tasks"] = {};
+    let changed = false;
+    for (const [id, record] of Object.entries(state.tasks)) {
+      tasks[id] = record.status === "running"
+        ? { ...record, status: "pending", startedAt: undefined }
+        : record;
+      if (tasks[id] !== record) changed = true;
+    }
+    if (changed) state = { ...state, tasks };
+  }
 
   if (state.status === "complete") {
     console.log("[engine] Workflow already complete. Nothing to do.");

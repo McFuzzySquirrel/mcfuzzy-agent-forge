@@ -1,6 +1,7 @@
-import { spawn } from "node:child_process";
+import spawn from "cross-spawn";
 import fs from "node:fs";
 import os from "node:os";
+import path from "node:path";
 import { command, warn } from "./format.ts";
 
 /**
@@ -71,7 +72,7 @@ function launchWindows(cliName: string, repoDir: string, args: string[]): Promis
   const argStr = args.map((a) => `'${a.replace(/'/g, "''")}'`).join(" ");
   const launchScript = `Set-Location '${escapedDir}'; & '${escapedExe}' ${argStr}`;
 
-  const wt = process.env.WINDOWSTEMP ? "wt" : undefined; // wt exists on Win11+ terminals
+  const wt = process.env.WT_SESSION ? "wt" : undefined; // Windows Terminal (Win11+) sessions set WT_SESSION
   const pwsh = commandExists("pwsh");
   const ps5 = commandExists("powershell");
 
@@ -90,14 +91,18 @@ function launchWindows(cliName: string, repoDir: string, args: string[]): Promis
 }
 
 function commandExists(cmd: string): string | undefined {
-  const pathVar = process.env.PATH ?? "";
-  for (const dir of pathVar.split(":")) {
-    const full = `${dir}/${cmd}`;
-    try {
-      fs.accessSync(full);
-      return full;
-    } catch {
-      // continue
+  const isWin = process.platform === "win32";
+  const exts = isWin ? ["", ".exe", ".cmd", ".bat"] : [""];
+  for (const dir of (process.env.PATH ?? "").split(path.delimiter)) {
+    if (!dir) continue;
+    for (const ext of exts) {
+      const full = path.join(dir, cmd + ext);
+      try {
+        fs.accessSync(full);
+        return full;
+      } catch {
+        // continue
+      }
     }
   }
   return undefined;
