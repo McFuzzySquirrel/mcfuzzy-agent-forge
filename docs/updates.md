@@ -31,6 +31,20 @@ phases - then fill any gaps. Headless/auto-draft PRD runs skipped that pass:
 - **Tests.** The launcher suite is now **40** `node --test` cases (new: the
   headless PRD message documents the gap check). All packages typecheck clean.
 
+### Forge Board: crisp zoom and in-place expanding cards
+
+- **Crisp text at any zoom.** The dashboard bakes all text at **2× resolution**
+  (a shared text-style factory) and bakes the small dot/glow textures at 2×, so
+  zooming in no longer upscales soft rasters. Max zoom is clamped to 2× to match
+  the bake ceiling.
+- **Click a card to expand it in place.** Instead of a side panel, clicking a
+  card expands it on the board (floating above its neighbors) with the task's
+  detail: description, status, owner, phase, duration, timeout, artifact, error,
+  inputs, dependencies, output files, and validation commands. Click the card
+  again, the board, or press Escape to collapse it; it animates open/closed and
+  stays live as the task's status changes mid-run. The DOM side panel was
+  removed.
+
 ---
 
 ## August 2026 - v3.18

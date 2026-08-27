@@ -185,9 +185,12 @@ task title, and the task id. Dependency and artifact **edges** connect the
 cards (brightening on hover), artifact hand-offs animate as glowing dots, and
 `context.projected` shows a `ctx −N%` badge on the producing card.
 
-Interactions: hover a card for a tooltip, click for the task detail panel
-(title, owner, status, duration, files, artifact, inputs), drag to pan, scroll
-to zoom. Events stream over Server-Sent Events; a snapshot is replayed on every
+Interactions: hover a card for a tooltip, **click a card to expand it in place**
+with task detail (description, status, owner, phase, duration, artifact, inputs,
+dependencies, output files, validation commands, errors), click it again, the
+board, or press Escape to collapse it. Drag to pan, scroll to zoom (text stays
+crisp up to 2× — the dashboard bakes text at 2× resolution). Events stream over
+Server-Sent Events; a snapshot is replayed on every
 (re)connect, and the engine persists a task's `running` status so the In
 Progress column reflects in-flight work even on a mid-run refresh.
 
