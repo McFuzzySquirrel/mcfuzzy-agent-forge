@@ -38,10 +38,24 @@ where the interactive TUI and CLI spawning previously misbehaved:
   releases check `latest`. The result is cached in a user-level file, the
   fetch is timeout-bounded and fails silently offline, and it can be disabled
   with `--no-update-check` or `FORGE_SKIP_UPDATE_CHECK=1` (also skipped in CI).
-- **Tests.** The `forge-launcher` suite is now **36** `node --test` cases (new:
-  the path-picker helpers, spawn error handling, and the update check's
-  dist-tag heuristic, version comparison, cache freshness, registry URL, and
-  fetch paths); the package builds and typechecks clean.
+
+### Cross-platform `forge-workflow-engine` fixes
+
+The workflow engine (the separate package bootstrapped into target repos) had
+the same Windows blind spot as the launcher:
+
+- **Engine tasks spawn correctly on Windows.** The engine's per-task harness
+  (`opencode`, `copilot`, and flowforge-kernel adapters) now spawns through
+  `cross-spawn`, resolving npm-installed `.cmd`/`.bat` shims — so `opencode run`
+  tasks no longer fail with `spawn opencode ENOENT` during an engine run.
+- **Squirrel Forge dashboard renders and connects.** The vendored PixiJS v8
+  build exposes the `PIXI` global, but `app.js` referenced `Pixi`, so the
+  dashboard script aborted with `ReferenceError: Pixi is not defined` before
+  opening the SSE connection. `index.html` now normalizes the global
+  (`window.Pixi = window.PIXI || window.Pixi`), so the tree renders and the
+  dashboard connects.
+- **Tests.** The engine suite stays at **26** `node --test` cases and typechecks
+  clean; the launcher suite remains at **36**.
 
 ---
 
