@@ -478,7 +478,7 @@ async function configureEngineOptions(opts: LauncherOptions): Promise<void> {
     );
 
     const vizAnswer = await promptYesNo(
-      "Launch the live Squirrel Forge dashboard during the run?",
+      "Launch the live Forge Board dashboard during the run?",
       cfg.viz ? "y" : "y",
     );
     cfg.viz = vizAnswer === "y";
@@ -523,7 +523,7 @@ async function runEngineDetached(opts: LauncherOptions): Promise<void> {
   command(`tail -f ${path.join(state.repoDir, "docs", "PROGRESS.md")}`);
   if (state.engineConfig.viz) {
     out("");
-    info("The Squirrel Forge dashboard starts when the engine starts");
+    info("The Forge Board dashboard starts when the engine starts");
     info("(after the manifest is prepared). The URL is printed to the log above.");
   }
 }
@@ -1111,7 +1111,7 @@ function completionSummary(): void {
     out(`       npx forge-launcher engine-run --repo "${state.repoDir}" --harness ${engineHarness} --yes`);
     if (state.engineConfig.viz) {
       out("");
-      out("  The Squirrel Forge dashboard launches with the engine run; its URL");
+      out("  The Forge Board dashboard launches with the engine run; its URL");
       out("  is printed in docs/engine-run.log once the manifest is prepared.");
     }
   } else {
