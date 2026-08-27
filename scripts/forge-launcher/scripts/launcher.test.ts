@@ -110,6 +110,28 @@ test("auto-draft engine command enables the live dashboard from env", async () =
   assert.ok(out.includes("--yes"), out);
 });
 
+test("auto-draft engine command carries keep-alive/attach from env", async () => {
+  const parent = tmpDir();
+  const { code, out } = await runCli(["--non-interactive"], {
+    FORGE_HARNESS_CHOICE: "4",
+    FORGE_REPO_NAME: "engine-keepalive-app",
+    FORGE_REPO_PARENT_DIR: parent,
+    FORGE_IDEA: "A todo list app",
+    FORGE_YN_DEFAULT: "n",
+    FORGE_AUTO_DRAFT: "1",
+    FORGE_RUN_WITH: "stub",
+    FORGE_ENGINE_ATTACH: "1",
+    FORGE_ENGINE_ATTACH_URL: "http://127.0.0.1:4096",
+  });
+
+  assert.equal(code, 0, out);
+  const repo = path.join(parent, "engine-keepalive-app");
+  assert.ok(out.includes(`engine-run --repo ${repo}`), out);
+  assert.ok(out.includes("--keep-alive"), out);
+  assert.ok(out.includes("--attach http://127.0.0.1:4096"), out);
+  assert.ok(out.includes("--yes"), out);
+});
+
 test("spawnDetached tees child output to the log even with only logFile", async () => {
   const dir = tmpDir();
   const logFile = path.join(dir, "detached.log");

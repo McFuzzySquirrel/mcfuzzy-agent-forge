@@ -58,6 +58,8 @@ interface LauncherState {
     maxRetries: string;
     viz: boolean;
     vizPort: string;
+    keepAlive: boolean;
+    attach: string;
   };
 }
 
@@ -81,6 +83,8 @@ const state: LauncherState = {
     maxRetries: process.env.FORGE_ENGINE_MAX_RETRIES ?? "",
     viz: envFlag("FORGE_ENGINE_VIZ"),
     vizPort: process.env.FORGE_ENGINE_VIZ_PORT ?? "",
+    keepAlive: envFlag("FORGE_ENGINE_ATTACH"),
+    attach: process.env.FORGE_ENGINE_ATTACH_URL ?? "",
   },
 };
 
@@ -415,6 +419,8 @@ function engineRunArgs(): string[] {
     args.push("--viz");
     if (cfg.vizPort) args.push("--viz-port", cfg.vizPort);
   }
+  if (cfg.keepAlive) args.push("--keep-alive");
+  if (cfg.attach) args.push("--attach", cfg.attach);
   args.push("--yes");
   return args;
 }
