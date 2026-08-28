@@ -311,6 +311,32 @@ test("auto-draft PRD succeeds via the stub skill runner", async () => {
   assert.ok(log.includes("feat: generate auto-drafted agent team"));
 });
 
+test("plan & validate step saves an execution plan after team creation", async () => {
+  const parent = tmpDir();
+  const prd = path.join(parent, "prd.md");
+  fs.writeFileSync(prd, "# PRD\n\nBuild a thing.\n");
+
+  const { code, out } = await runCli(["--non-interactive"], {
+    FORGE_HARNESS_CHOICE: "4",
+    FORGE_REPO_NAME: "plan-step-app",
+    FORGE_REPO_PARENT_DIR: parent,
+    FORGE_IDEA: "A thing",
+    FORGE_PRD_FILE: prd,
+    FORGE_YN_DEFAULT: "n",
+    FORGE_AUTO_DRAFT: "1",
+    FORGE_RUN_WITH: "stub",
+  });
+
+  assert.equal(code, 0, out);
+  const repo = path.join(parent, "plan-step-app");
+  assert.ok(fs.existsSync(path.join(repo, "docs", "PROGRESS.md")), "execution plan should exist");
+  assert.ok(out.includes("Execution plan saved to docs/PROGRESS.md"), out);
+  const log = execFileSync("git", ["-C", repo, "log", "--oneline"], { encoding: "utf8" });
+  assert.ok(log.includes("docs: add execution plan"), log);
+  // The engine decision still runs after the plan step.
+  assert.ok(out.includes("engine-run --repo"), out);
+});
+
 test("auto-draft PRD failure is diagnosed with log tail and no commit", async () => {
   const parent = tmpDir();
   const { code, out } = await runCli(["--non-interactive"], {

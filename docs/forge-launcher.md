@@ -237,6 +237,36 @@ command **conditional**: when a team already exists it queues
 keeps queueing `/forge-auto-build` (which generates the team in-chat). Headless
 runs keep using `/forge-auto-build` as the terminal fast-path.
 
+### Stop here and resume later
+
+After each launcher checkpoint — idea captured, PRD added/drafted, team
+generated, execution plan drafted, build configured — the interactive flow asks
+**"Stop here and resume later?"** and, when you say yes, prints the resume
+command and stops at the "where to pick up" summary:
+
+```
+  Stopped. Resume later from anywhere with:
+    forge-launcher resume --repo "/home/user/projects/my-cool-app"
+```
+
+The repo keeps everything it has so far (committed per stage), so coming back is
+just re-running that command. Non-interactive runs skip the prompts.
+
+### Post-team plan & validate step
+
+After the agent team is generated, the launcher runs project-orchestrator (via
+`forge-orchestrate-build`, headless) with the prompt-playbook 5a prompt to
+produce the **execution plan** in `docs/PROGRESS.md`:
+
+- The monolithic or feature-based 5a prompt is selected from the repo layout
+  (`docs/PRD.md` vs. `docs/product-vision.md` + `docs/features/`).
+- The plan is committed (`docs: add execution plan`) and the launcher stops for
+  review — a "Stop here and resume later?" checkpoint — before offering the
+  engine build.
+- If the headless run fails or writes no plan document, the launcher prints the
+  manual `@project-orchestrator` command (and offers to open the harness CLI)
+  instead.
+
 ### Auto-draft (optional): idea → PRD → team, with review boundaries
 
 The **auto-draft** option lets you run the authoring stages non-interactively

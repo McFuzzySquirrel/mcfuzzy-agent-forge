@@ -85,9 +85,11 @@ verifies every successful call before marking the task complete:
   requires exit 0 before completion.
 
 The final run summary and `workflow-engine status` flag tasks completed with no
-recorded output files, so a hollow "complete" run is visible. On the opencode
-harness, `FORGE_ENGINE_NATIVE_AGENT=0` forces the inline-persona prompt instead
-of `--agent <name>` (the pre-v3.21 behavior).
+recorded output files, so a hollow "complete" run is visible. Both the opencode
+(`--agent <name>`) and copilot (`/agent <name>`) harnesses select forge agents
+natively when their files live under the harness's agents directory;
+`FORGE_ENGINE_NATIVE_AGENT=0` forces the inline-persona prompt (the pre-v3.21
+behavior) on either harness.
 
 ---
 

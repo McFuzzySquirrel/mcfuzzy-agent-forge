@@ -1,4 +1,5 @@
 import { existsSync, readFileSync } from "node:fs";
+import { relative } from "node:path";
 
 import { runCommand } from "./run.ts";
 import { DEFAULT_TASK_TIMEOUT_MS, type AgentDescriptor, type HarnessAdapter, type ManifestTask, type TaskResult, type WorkflowState } from "../types.ts";
@@ -6,16 +7,19 @@ import { DEFAULT_TASK_TIMEOUT_MS, type AgentDescriptor, type HarnessAdapter, typ
 /**
  * GitHub Copilot CLI harness adapter.
  *
- * Invokes `copilot -p` with the agent's context inlined into the prompt and
- * auto-approves tool permissions with `--yolo`, captures stdout/stderr, and
- * returns a structured TaskResult.
+ * Invokes `copilot -p` per task, captures stdout/stderr, and returns a
+ * structured TaskResult.
  *
- * Unlike the opencode adapter, `copilot -p` has no `--system-prompt` flag, so
- * the agent file contents are prepended to the user prompt as an inline
- * "You are..." context block.
+ * Agent selection is native when possible: if the owning agent's file lives
+ * under the project's `.github/agents/` directory, the adapter prepends the
+ * `/agent <name>` directive to the prompt so the Copilot CLI loads the persona
+ * itself and the persona is not inlined. For other harness roots (`.agents`,
+ * `.claude`, `.opencode`) Copilot cannot discover the agent files, so the agent
+ * file body is prepended to the user prompt as an inline context block instead.
  *
- * Expected CLI shape:
- *   copilot -p "<system prompt + task prompt>" --yolo
+ * Expected CLI shapes:
+ *   copilot -p "/agent <name>\n\n<task prompt>" --yolo
+ *   copilot -p "<agent body + task prompt>" --yolo
  *
  * Set COPILOT_BIN env var to override the copilot binary path.
  * Set COPILOT_EXTRA_FLAGS env var to inject extra flags (e.g. "--model gpt-4o").
@@ -45,7 +49,8 @@ export class CopilotAdapter implements HarnessAdapter {
   ): Promise<TaskResult> {
     const start = Date.now();
 
-    const prompt = this.buildPrompt(agent, task, contextBlock);
+    const native = this.canSelectAgent(agent, repoRoot);
+    const prompt = this.buildPrompt(agent, task, contextBlock, !native);
     const args = ["-p", prompt, ...this.extraFlags];
 
     const result = await runCommand(this.bin, args, {
@@ -92,8 +97,30 @@ export class CopilotAdapter implements HarnessAdapter {
     };
   }
 
-  private buildPrompt(agent: AgentDescriptor, task: ManifestTask, contextBlock?: string): string {
-    const agentBody = existsSync(agent.path) ? readFileSync(agent.path, "utf8") : agent.rawBody;
+  /**
+   * True when the Copilot CLI can select this agent natively: it must have a
+   * name and its file must live under the project's `.github/agents/` directory
+   * - the only harness root Copilot scans for repo agent definitions. For
+   * `.agents`, `.claude`, and `.opencode` roots the adapter falls back to
+   * inlining the persona into the prompt (see `buildPrompt`). Set
+   * FORGE_ENGINE_NATIVE_AGENT=0 to force the inline-persona fallback even for
+   * `.github` agents.
+   */
+  private canSelectAgent(agent: AgentDescriptor, repoRoot: string): boolean {
+    if (process.env["FORGE_ENGINE_NATIVE_AGENT"] === "0") return false;
+    if (!agent.name) return false;
+    return relative(repoRoot, agent.path).split(/[\\/]/).includes(".github");
+  }
+
+  private buildPrompt(
+    agent: AgentDescriptor,
+    task: ManifestTask,
+    contextBlock?: string,
+    inlinePersona = true,
+  ): string {
+    const agentBlock = inlinePersona
+      ? (existsSync(agent.path) ? readFileSync(agent.path, "utf8") : agent.rawBody)
+      : `/agent ${agent.name}`;
 
     const contextHints = task.expectedOutputs.length > 0
       ? `\n\nExpected output files: ${task.expectedOutputs.join(", ")}`
@@ -108,7 +135,7 @@ export class CopilotAdapter implements HarnessAdapter {
       "create or modify the files required, then list the files you created or changed.";
 
     return [
-      agentBody,
+      agentBlock,
       "",
       contextBlock ?? "",
       `Task: ${task.title}`,

@@ -214,7 +214,7 @@ The engine is harness-agnostic. Select the backend with `--harness`:
 | Adapter | Flag | How it invokes agents |
 |---|---|---|
 | **OpenCode CLI** (default) | `--harness opencode` | `opencode run --model <m> [--agent <name>] --dir <repo> "<task prompt>"` |
-| **GitHub Copilot CLI** | `--harness copilot` | `copilot -p "<agent context + task prompt>" --yolo` |
+| **GitHub Copilot CLI** | `--harness copilot` | `copilot -p "/agent <name> <task prompt>" --yolo` (native for `.github/agents/`; inline-persona fallback otherwise) |
 | **OpenAI API** | `--harness openai` | `POST /v1/chat/completions` with agent rawBody as system prompt |
 | **Stub** | `--harness stub` | Returns synthetic success; no real calls (for testing) |
 | **FlowForge Kernel CLI** | `--harness flowforge-kernel` | Hands off task execution to `flowforge run` against a compiled `.workforce` package |
@@ -236,9 +236,13 @@ The engine is harness-agnostic. Select the backend with `--harness`:
 | `COPILOT_BIN` | `copilot` | Path to the GitHub Copilot CLI binary |
 | `COPILOT_EXTRA_FLAGS` | *(empty)* | Extra flags appended to every `copilot -p` call (e.g. `--model gpt-4o`) |
 
-The copilot adapter inlines the agent file contents into the prompt (there is no
-`--system-prompt` flag on `copilot -p`) and auto-approves tool permissions with
-`--yolo`, mirroring the opencode adapter's `--auto`.
+The copilot adapter selects the forge agent **natively** when its file lives
+under the project's `.github/agents/` directory: it prepends the `/agent <name>`
+directive to the prompt so the Copilot CLI loads the persona itself, and the
+persona is **not** inlined. For other harness roots (`.agents`, `.claude`,
+`.opencode`) Copilot cannot discover the agent files, so it falls back to
+inlining the agent file body into the prompt. Tool permissions are auto-approved
+with `--yolo`, mirroring the opencode adapter's `--auto`.
 
 The opencode adapter selects the forge agent natively when its file lives under
 the project's `.opencode/agents/` directory: it passes `--agent <name>` so
@@ -247,6 +251,10 @@ default build agent) and does **not** inline it. For other harness roots
 (`.agents`, `.claude`, `.github`) opencode cannot discover the agent files, so it
 falls back to inlining the persona (`agent.rawBody`) as an inline context block.
 Tool permissions are auto-approved with `--auto` in both cases.
+
+Set **`FORGE_ENGINE_NATIVE_AGENT=0`** on either harness to force the
+inline-persona fallback instead of native agent selection (`--agent` /
+`/agent`).
 
 ### OpenAI adapter environment variables
 

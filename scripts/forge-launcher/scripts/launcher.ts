@@ -323,6 +323,22 @@ async function runStubSkill(msg: string, opts: LauncherOptions): Promise<boolean
     return true;
   }
 
+  if (skillName.includes("forge-orchestrate-build")) {
+    const progress = path.join(state.repoDir, "docs", "PROGRESS.md");
+    fs.mkdirSync(path.dirname(progress), { recursive: true });
+    fs.writeFileSync(progress, [
+      "# Project Progress",
+      "",
+      "> Auto-drafted execution plan by the forge-launcher stub skill runner.",
+      "",
+      "## Phase 1: stub",
+      "- [ ] Task 1: stub",
+      "",
+    ].join("\n"));
+    fs.appendFileSync(logFile, "[stub] wrote docs/PROGRESS.md\n");
+    return true;
+  }
+
   fs.appendFileSync(logFile, `[stub] no canned artifact for ${skillName}\n`);
   return true;
 }
@@ -338,6 +354,115 @@ async function draftCommit(message: string): Promise<void> {
   }
   await runCommand("git", ["-C", state.repoDir, "commit", "-m", message]);
   ok(`Committed: '${message}'`);
+}
+
+// --- stop-here-and-resume-later checkpoints ---------------------------------
+
+/** Set when the user chooses "stop here and resume later" at a checkpoint. */
+let stopped = false;
+
+/**
+ * Interactive "stop here and resume later" checkpoint. When the user chooses to
+ * stop, prints the resume command so the run can be picked up later with
+ * `forge-launcher resume`. No-op in non-interactive / dry-run mode.
+ */
+async function pauseForResume(opts: LauncherOptions, stage: string): Promise<void> {
+  if (opts.nonInteractive || opts.dryRun) return;
+  const answer = await promptYesNo(`Stop here and resume later (after ${stage})?`, "n");
+  if (answer !== "y") return;
+  stopped = true;
+  out("");
+  info("Stopped. Resume later from anywhere with:");
+  command(`forge-launcher resume --repo "${state.repoDir}"`);
+  out("");
+}
+
+// --- post-team plan & validate step (playbook 5a) ----------------------------
+
+/** True when the repo uses the decomposed vision + features layout. */
+function hasDecomposedLayout(): boolean {
+  return (
+    fs.existsSync(path.join(state.repoDir, "docs", "product-vision.md")) &&
+    fs.existsSync(path.join(state.repoDir, "docs", "features")) &&
+    fs.readdirSync(path.join(state.repoDir, "docs", "features")).some((f) => f.endsWith(".md"))
+  );
+}
+
+const PLAN_MONOLITHIC_MSG =
+  "Analyze docs/PRD.md and produce an execution plan only. Do not implement anything yet. " +
+  "List each phase, the agents involved, their tasks, and the dependencies between phases. " +
+  "Save the plan to docs/PROGRESS.md. Headless mode: auto-proceed and stop after saving the plan.";
+
+const PLAN_FEATURES_MSG =
+  "Analyze docs/product-vision.md and all feature documents in docs/features/. " +
+  "Build a feature dependency graph and produce an execution plan showing which features will be " +
+  "built in which order and why. Save the plan to docs/PROGRESS.md. Do not implement anything yet. " +
+  "Headless mode: auto-proceed and stop after saving the plan.";
+
+/** Offers to open the harness CLI to run project-orchestrator's plan step manually. */
+async function offerPlanManualRun(opts: LauncherOptions): Promise<void> {
+  const manual = "Run it manually in the harness: @project-orchestrator Analyze docs/PRD.md and produce an execution plan only. Save the plan to docs/PROGRESS.md.";
+  if (opts.nonInteractive) {
+    out(`    ${manual}`);
+    return;
+  }
+  const answer = await promptYesNo("Open the harness CLI to run project-orchestrator manually?", "n");
+  if (answer === "n") {
+    info("To run it manually:");
+    out(`    cd "${state.repoDir}"`);
+    out(`    ${manual}`);
+    return;
+  }
+  const cli = state.harness === "github" ? "copilot" : state.harness === "claude" ? "claude" : "opencode";
+  const launched = await launchCliInTerminal(cli, state.repoDir, state.harness === "github" ? [] : ["."]);
+  if (launched) ok(`${cli} launched. Run @project-orchestrator in the session.`);
+  else {
+    warn(`${cli} did not open automatically. Run:`);
+    out(`    cd "${state.repoDir}" && ${cli} .`);
+  }
+}
+
+/**
+ * Post-team "plan & validate" step (prompt-playbook 5a). Runs project-orchestrator
+ * through the forge-orchestrate-build skill headlessly to produce the execution
+ * plan in docs/PROGRESS.md, commits it, and stops for review before the build.
+ * Falls back to the manual @project-orchestrator command when the headless run
+ * fails or produces no plan document.
+ */
+async function planAndValidateStep(opts: LauncherOptions): Promise<void> {
+  const skill = "forge-orchestrate-build";
+  const planMsg = hasDecomposedLayout() ? PLAN_FEATURES_MSG : PLAN_MONOLITHIC_MSG;
+
+  if (opts.nonInteractive) {
+    if (!envFlag("FORGE_AUTO_DRAFT")) return;
+  } else {
+    const def = opts.draft ? "y" : "n";
+    const answer = await promptYesNo(
+      "Generate the execution plan now (project-orchestrator, headless; saved to docs/PROGRESS.md)?",
+      def,
+    );
+    if (answer === "n") return;
+  }
+
+  out("");
+  info("Generating the execution plan via project-orchestrator (headless) …");
+  const ran = await runSkillHeadless(`/${skill} ${planMsg}`, opts);
+  if (!ran) {
+    await offerPlanManualRun(opts);
+    return;
+  }
+  await draftCommit("docs: add execution plan");
+
+  if (fs.existsSync(path.join(state.repoDir, "docs", "PROGRESS.md"))) {
+    ok("Execution plan saved to docs/PROGRESS.md.");
+    out("");
+    out("  Review the plan before building:");
+    out(`    - ${link(path.join(state.repoDir, "docs", "PROGRESS.md"))}`);
+    await pauseForResume(opts, "execution plan drafted");
+  } else {
+    warn("No execution plan document detected after the run.");
+    await offerPlanManualRun(opts);
+  }
 }
 
 /** Prints diagnostics when an auto-draft stage finishes without its artifact. */
@@ -418,6 +543,7 @@ async function autoDraftPrd(opts: LauncherOptions): Promise<void> {
     } else {
       out("    - docs/PRD.md is monolithic (no decomposition)");
     }
+    await pauseForResume(opts, "PRD drafted");
   } else {
     await diagnoseAutoDraftFail(skill);
     await offerManualRun(skill, opts);
@@ -573,8 +699,10 @@ async function engineDecision(opts: LauncherOptions): Promise<void> {
   );
   switch (choice) {
     case "1": await configureEngineOptions(opts); await runEngineDetached(opts); break;
-    case "2": await configureEngineOptions(opts); printEngineCommand(); break;
-    default: info("Skipping the engine for now. Run the build manually or use the printed command later.");
+    case "2": await configureEngineOptions(opts); printEngineCommand(); await pauseForResume(opts, "build configured"); break;
+    default:
+      info("Skipping the engine for now. Run the build manually or use the printed command later.");
+      await pauseForResume(opts, "build configured");
   }
 }
 
@@ -608,6 +736,10 @@ async function autoDraftTeam(opts: LauncherOptions): Promise<void> {
     out("  Review the generated team before building:");
     out(`    - Agents : ${link(harnessAgentsDir() + "/")}`);
     out(`    - Skills : ${link(path.dirname(harnessAgentsDir()) + "/skills/")}`);
+    await pauseForResume(opts, "team generated");
+    if (stopped) return;
+    await planAndValidateStep(opts);
+    if (stopped) return;
   } else {
     await diagnoseAutoDraftFail(skill);
   }
@@ -617,6 +749,7 @@ async function autoDraftTeam(opts: LauncherOptions): Promise<void> {
 async function autoDraftMenu(opts: LauncherOptions): Promise<void> {
   if (!fs.existsSync(path.join(state.repoDir, "docs", "IDEA.md"))) return;
   await autoDraftPrd(opts);
+  if (stopped) return;
   await autoDraftTeam(opts);
 }
 
@@ -1040,6 +1173,7 @@ async function launchAutobuild(opts: LauncherOptions): Promise<void> {
   }
 
   await autoDraftMenu(opts);
+  if (stopped) return;
 
   if (state.engineStarted) {
     out("");
@@ -1567,6 +1701,7 @@ function completionSummary(): void {
 
 export async function runLauncher(opts: LauncherOptions = {}): Promise<number> {
   prompts.nonInteractive = Boolean(opts.nonInteractive);
+  stopped = false;
 
   header();
   try {
@@ -1575,9 +1710,14 @@ export async function runLauncher(opts: LauncherOptions = {}): Promise<number> {
     await createRepo(opts);
     await bootstrapForge(opts);
     await captureIdea(opts);
+    await pauseForResume(opts, "idea captured");
+    if (stopped) { resumeSummary(); return 0; }
     await addPrdAndResearch(opts);
+    await pauseForResume(opts, "PRD added or skipped");
+    if (stopped) { resumeSummary(); return 0; }
     await commitBootstrap();
     await launchAutobuild(opts);
+    if (stopped) { resumeSummary(); return 0; }
     completionSummary();
     return 0;
   } catch (err) {

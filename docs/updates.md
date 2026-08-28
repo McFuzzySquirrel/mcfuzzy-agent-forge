@@ -4,6 +4,53 @@ Detailed release and change notes for McFuzzy Agent Forge.
 
 ---
 
+## August 2026 - v3.25
+
+### Launcher: "stop and resume later" checkpoints + post-team execution plan
+
+- **Stop here and resume later.** After each launcher checkpoint — idea captured,
+  PRD added/drafted, team generated, execution plan drafted, build configured —
+  the interactive flow asks "Stop here and resume later?" and, when you say yes,
+  prints `forge-launcher resume --repo "<path>"` and stops at the "where to pick
+  up" summary. Pick the run back up any time with `forge-launcher resume`.
+- **Post-team plan & validate step.** After the agent team is generated, the
+  launcher now runs project-orchestrator (via `forge-orchestrate-build`, headless)
+  with the prompt-playbook 5a prompt to produce the **execution plan** in
+  `docs/PROGRESS.md`, commits it (`docs: add execution plan`), and stops for
+  review before the build. It selects the monolithic vs. feature-based 5a prompt
+  from the repo layout; if the headless run fails or writes no plan, it prints
+  the manual `@project-orchestrator` command instead.
+- Non-interactive auto-draft (`FORGE_AUTO_DRAFT=1`) runs the plan step
+  automatically; stub mode writes a canned `docs/PROGRESS.md` so the flow is
+  testable offline.
+- Covered by new launcher tests (plan step + checkpoints are interactive-only,
+  so non-interactive coverage asserts the plan doc, commit, and engine decision).
+  Launcher suite green.
+
+---
+
+## August 2026 - v3.24
+
+### Copilot harness selects the forge agent natively via `/agent`
+
+The copilot adapter previously inlined every agent file into the `copilot -p`
+prompt. The Copilot CLI supports an inline `/agent <name>` directive that loads
+a repo agent natively — the same idea as opencode's `--agent <name>` (v3.21).
+
+- **Native selection.** When the owning agent's file lives under the project's
+  `.github/agents/` directory, the adapter now prepends `/agent <name>` to the
+  prompt and lets Copilot load the persona itself; the persona is no longer
+  inlined. For other harness roots (`.agents`, `.claude`, `.opencode`) Copilot
+  cannot discover the agent files, so the inline-persona fallback is kept.
+- **Shared escape hatch.** `FORGE_ENGINE_NATIVE_AGENT=0` forces the inline
+  fallback on the copilot harness too (already supported by opencode).
+- Covered by a new `harness/copilot-adapter.test.ts` (native, fallback, no-name,
+  env-escape, and the execute-now directive). Engine suite green.
+
+- [ADR-030](adr/030-copilot-native-agent-selection.md): copilot `/agent` selection.
+
+---
+
 ## August 2026 - v3.23
 
 ### Workflow engine output verification gate (no more hollow "complete" runs)
