@@ -307,10 +307,16 @@ npm run workflow-engine -- run --harness stub --concurrency 3 --yes
 ```
 
 Parallelism only applies when the selected harness declares
-`supportsConcurrency` (all current adapters do). Repo-editing harnesses rely on
-the manifest dependency graph for file isolation - so declare dependencies
-correctly before raising `n`. `FORGE_ENGINE_CONCURRENCY` sets the default, and
-`forge-launcher engine-run` (or the legacy
+`supportsConcurrency` (all current adapters do). **Same-owner tasks are always
+serialized**: within a wave the engine keeps at most one task per owning agent,
+so tasks sharing a subsystem (project dir, build outputs, ports) never run
+concurrently even when the dependency graph considers them independent.
+Different-owner tasks still parallelize up to `n`. Repo-editing harnesses rely on
+the manifest dependency graph plus the same-owner guard for file isolation - so
+declare dependencies correctly before raising `n`, and be aware that cross-owner
+tasks on shared paths (e.g. one task scaffolding a directory while another
+builds inside it) are still the operator's responsibility. `FORGE_ENGINE_CONCURRENCY`
+sets the default, and `forge-launcher engine-run` (or the legacy
 `scripts/forge-engine-run.sh` / `.ps1`) accepts `--concurrency <n>` /
 `-Concurrency <n>` to pass it through. See [ADR-021](adr/021-parallel-task-dispatch.md).
 
