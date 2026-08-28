@@ -16,6 +16,7 @@ Usage:
                             [--retry-delay-ms <ms>] [--heartbeat-ms <ms>] [--yes] [--dry-run]
                             [--viz [--viz-port <n>]] [--no-open]
                             [--keep-alive [--keep-alive-port <n>]] [--no-keep-alive] [--attach <url>]
+                            [--stop] [--pause]
   forge-launcher resume [--repo <path>] [--non-interactive] [--dry-run]
 
 Launcher options:
@@ -27,6 +28,11 @@ Launcher options:
   --debug             Print the skill-run log tail after headless runs (also FORGE_LAUNCHER_DEBUG=1).
   --no-update-check   Skip the daily npm update check.
   -h, --help          Show this help.
+
+engine-run control:
+  --stop              Stop a running detached engine after the current task
+                      (writes docs/engine-control.json + SIGTERMs docs/engine.pid).
+  --pause             Pause a running engine after the current task (same, no signal).
 
 Resume options:
   --repo <path>       Repository to resume (default: current directory).

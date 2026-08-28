@@ -394,6 +394,12 @@ export async function runEngine(opts: EngineOptions): Promise<WorkflowState> {
     if (changed) state = { ...state, tasks };
   }
 
+  // A fresh `run` is authoritative: discard any stale pause/stop request left
+  // over by a killed engine (its SIGTERM handler never got to clear it). A live
+  // engine polls this file at each wave; only pause/stop issued while it runs
+  // should take effect.
+  clearControl(opts.controlPath);
+
   if (state.status === "complete") {
     console.log("[engine] Workflow already complete. Nothing to do.");
     return state;

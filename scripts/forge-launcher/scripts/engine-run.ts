@@ -1,6 +1,6 @@
 import fs from "node:fs";
 import path from "node:path";
-import { out } from "./format.ts";
+import { out, info } from "./format.ts";
 import { runCommand } from "./format.ts";
 import { detectRepoRoot } from "./paths.ts";
 
@@ -24,6 +24,8 @@ export interface EngineRunOptions {
   attach?: string;
   allowNoop?: boolean;
   runValidation?: boolean;
+  stop?: boolean;
+  pause?: boolean;
 }
 
 const HARNESS_ROOTS = [".agents", ".opencode", ".claude", ".github"];
@@ -55,6 +57,8 @@ export async function engineRun(opts: EngineRunOptions = {}): Promise<number> {
   const attach = opts.attach ?? process.env.FORGE_ENGINE_ATTACH_URL ?? "";
   const allowNoop = opts.allowNoop ?? process.env.FORGE_ENGINE_ALLOW_NOOP === "1";
   const runValidation = opts.runValidation ?? process.env.FORGE_ENGINE_RUN_VALIDATION === "1";
+  const stop = opts.stop ?? false;
+  const pause = opts.pause ?? false;
 
   if (granularity && granularity !== "fine" && granularity !== "coarse") {
     throw new Error(`Invalid --granularity '${granularity}'. Choose 'fine' or 'coarse'.`);
@@ -83,6 +87,27 @@ export async function engineRun(opts: EngineRunOptions = {}): Promise<number> {
     throw new Error(
       `Error: forge-workflow-engine not found under ${repo} (looked in .agents/.opencode/.claude/.github skills dirs).`,
     );
+  }
+
+  // `--stop` / `--pause` request a graceful stop of a running engine (write
+  // docs/engine-control.json; `stop` also SIGTERMs the PID in docs/engine.pid)
+  // instead of starting a run. They don't need the manifest or a compile.
+  if (stop || pause) {
+    const command = stop ? "stop" : "pause";
+    out(`forge-engine-${command}: repo=${repo}`);
+    out(`  engine : ${engineDir}`);
+    if (dryRun) {
+      out(`  [dry-run] (cd '${engineDir}' && npm run workflow-engine -- ${command} --repo "${repo}")`);
+      return 0;
+    }
+    const code = await run("npm", ["run", "workflow-engine", "--", command, "--repo", repo], dryRun, engineDir);
+    if (code !== 0) {
+      throw new Error(`Engine ${command} command failed (exit ${code}).`);
+    }
+    out("");
+    info(`The engine will ${stop ? "stop" : "pause"} after the current task and save state as paused.`);
+    info(`Resume later with: npx forge-launcher engine-run --repo "${repo}"`);
+    return 0;
   }
 
   const manifest = path.join(repo, "docs", "EXECUTION-MANIFEST.json");
@@ -178,6 +203,8 @@ export function engineRunCli(args: string[]): Promise<number> {
       case "--attach": opts.attach = args[++i]; break;
       case "--allow-noop": opts.allowNoop = true; break;
       case "--run-validation": opts.runValidation = true; break;
+      case "--stop": opts.stop = true; break;
+      case "--pause": opts.pause = true; break;
       default: throw new Error(`Unknown option: ${a}`);
     }
   }

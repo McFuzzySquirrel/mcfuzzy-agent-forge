@@ -294,14 +294,17 @@ async function runWithServer(
   // Stop signal: Ctrl+C / SIGTERM set an in-process flag the engine checks at
   // the top of each task wave (alongside the docs/engine-control.json file).
   // The engine finishes the current task, saves state as `paused`, and exits.
+  // `on` (not `once`) so a repeated signal never hits Node's default terminate
+  // behavior — the flag is idempotent and the process must survive until the
+  // engine has finished its graceful-pause cleanup.
   let signalStopped = false;
   const onStopSignal = (signal: string) => {
     if (signalStopped) return;
     signalStopped = true;
     console.log(`[engine] Received ${signal} - stopping after the current task.`);
   };
-  process.once("SIGINT", () => onStopSignal("SIGINT"));
-  process.once("SIGTERM", () => onStopSignal("SIGTERM"));
+  process.on("SIGINT", () => onStopSignal("SIGINT"));
+  process.on("SIGTERM", () => onStopSignal("SIGTERM"));
 
   writePid(opts.pidPath, process.pid);
 
@@ -469,28 +472,30 @@ async function cmdStop(args: string[]): Promise<void> {
   const repoArg = flag(args, "--repo");
   const repoRoot = repoArg ? resolve(repoArg) : detectRepoRoot();
   const controlPath_ = controlPath(repoRoot);
-
-  writeControl(controlPath_, "stop");
-  console.log("Stop requested. The engine will stop after the current task.");
-
-  // If a live engine is running (it wrote docs/engine.pid), nudge it with a
-  // SIGTERM so the in-process flag trips even mid-wave; it finishes the current
-  // task, saves state as paused, and exits. The control file is the fallback.
   const pid = readPid(pidPath(repoRoot));
+
+  // If a live engine is running (it wrote docs/engine.pid), write the stop
+  // request and nudge it with a SIGTERM so the in-process flag trips even
+  // mid-wave; it finishes the current task, saves state as paused, and exits.
   if (pid !== null) {
+    writeControl(controlPath_, "stop");
+    console.log("Stop requested. The engine will stop after the current task.");
     try {
       process.kill(pid, "SIGTERM");
       console.log(`Sent SIGTERM to engine process ${pid}.`);
     } catch (error) {
       const err = error as NodeJS.ErrnoException;
       if (err.code === "ESRCH") {
-        console.log(`Engine process ${pid} is no longer running; the control file will be honored on the next run.`);
+        console.log(`Engine process ${pid} is no longer running; nothing to stop.`);
       } else {
         console.warn(`Could not signal engine process ${pid}: ${err.message}`);
       }
     }
   } else {
-    console.log("No engine PID found (docs/engine.pid). The control file will be honored on the next run.");
+    // Nothing running: leave no control file behind (a fresh `run` would clear
+    // it anyway). Use `pause` to flip an existing run's state for a clean
+    // stop/resume cycle.
+    console.log("No running engine found (docs/engine.pid is empty). Nothing to stop.");
   }
 }
 

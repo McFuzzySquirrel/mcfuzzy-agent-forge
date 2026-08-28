@@ -355,18 +355,19 @@ test("runEngine recovers a leftover 'running' task as pending (crash recovery)",
   assert.equal(harness.timeouts.length, 1, "the recovered task should actually run, not deadlock");
 });
 
-test("a stop request in the control file pauses the run before any task executes", async () => {
+test("a fresh run clears a stale stop request left by a killed engine", async () => {
   const fixture = makeEngineFixture();
   const controlPath = join(fixture.root, "docs", "engine-control.json");
+  // Simulate an engine that was SIGKILLed mid-run leaving a stop request behind.
   writeControl(controlPath, "stop");
 
   const harness = new RecordingHarness();
   const state = await runEngine(engineOptionsFor(fixture, harness, 1_000));
 
-  assert.equal(state.status, "paused");
-  assert.equal(state.tasks["1.1"]?.status, "pending", "no task should run before the stop");
-  assert.equal(harness.timeouts.length, 0, "the harness should never be invoked");
-  assert.equal(readControl(controlPath), null, "the control file should be cleared after honoring it");
+  assert.equal(state.status, "complete", "the stale stop must not halt a fresh run");
+  assert.equal(state.tasks["1.1"]?.status, "complete");
+  assert.equal(harness.timeouts.length, 1, "the task should actually run");
+  assert.equal(readControl(controlPath), null, "the stale control file should be cleared");
 });
 
 test("a stop request written mid-run pauses after the current task wave", async () => {
