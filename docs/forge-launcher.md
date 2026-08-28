@@ -52,7 +52,7 @@ npx forge-launcher@beta [--non-interactive] [--headless] [--draft] [--dry-run] [
 npx forge-launcher@beta bootstrap [TARGET_DIR] [--harness agents|github|claude|opencode] [--force]
 npx forge-launcher@beta engine-run [--repo <path>] [--harness <h>] [--concurrency <n>]
                               [--task-timeout-ms <ms>] [--yes] [--dry-run]
-                              [--keep-alive [--keep-alive-port <n>]] [--attach <url>]
+                              [--keep-alive [--keep-alive-port <n>]] [--no-keep-alive] [--attach <url>]
                               [--allow-noop] [--run-validation]
 npx forge-launcher@beta resume [--repo <path>] [--non-interactive] [--dry-run]
 ```
@@ -229,7 +229,7 @@ links to `docs/IDEA.md`, `docs/PRD.md`, the agent/skills dirs, and
 - Idea, no PRD → auto-draft the PRD headlessly, or open the harness to draft it manually.
 - PRD, no team → auto-draft the agent team headlessly, or open the harness for `forge-build-agent-team`.
 - Team, no manifest → start the engine (`engine-run`), print the command, or open the harness for the orchestrator.
-- Manifest + engine state → report the run status (running / paused / complete / failed, task counts, failed tasks, blockers) and offer to **resume the engine run**, tail the logs, or open the harness CLI. A `running` run warns against starting a second one; a `complete` run points you at monitoring rather than resuming.
+- Manifest + engine state → report the run status (running / paused / complete / failed, task counts, failed tasks, blockers) and offer to **resume the engine run**, tail the logs, or open the harness CLI. A `running` run warns against starting a second one and offers **"Stop the engine after the current task"** (writes `docs/engine-control.json` and SIGTERMs the PID in `docs/engine.pid` — the engine finishes the in-flight task, saves state as `paused`, and exits; resume with `engine-run`). A `complete` run points you at monitoring rather than resuming.
 
 The same "where am I / what's next" checks make the launcher's queued in-harness
 command **conditional**: when a team already exists it queues
@@ -311,8 +311,10 @@ step — a set of defaults you can press Enter through:
   printed in `docs/engine-run.log`.
 
 Esc/Ctrl+C keeps the current defaults. The configured values are written into
-both the detached run and the printed command, and all have env-var equivalents
-(`FORGE_ENGINE_HARNESS`, `FORGE_ENGINE_GRANULARITY`,
+both the detached run and the printed command, and persisted to
+`docs/engine-config.json` so `forge-launcher resume` and monitor commands reuse
+them (env vars still win over the persisted file). All options also have
+env-var equivalents (`FORGE_ENGINE_HARNESS`, `FORGE_ENGINE_GRANULARITY`,
 `FORGE_ENGINE_CONCURRENCY`, `FORGE_ENGINE_TASK_TIMEOUT_MS`,
 `FORGE_ENGINE_MAX_RETRIES`, `FORGE_ENGINE_RETRY_DELAY_MS`,
 `FORGE_ENGINE_HEARTBEAT_MS`, `FORGE_ENGINE_VIZ`, `FORGE_ENGINE_VIZ_PORT`).
@@ -335,10 +337,13 @@ already-running or detached engine run instead, use
 `npm run workflow-engine -- viz --repo "<repo-dir>"`
 inside the repo's engine package.
 
-**Cut per-task cold boots with `--keep-alive`.** By default every `opencode run`
+**Cut per-task cold boots with keep-alive.** By default every `opencode run`
 task cold-starts its own project instance (config, AGENTS.md, skills, and every
-MCP server). Pass `--keep-alive` (or `FORGE_ENGINE_ATTACH=1`) to boot one
-headless `opencode serve` for the run and attach every task to it
+MCP server). The engine now defaults to **adaptive keep-alive**: it boots one
+headless `opencode serve` for the run and attaches every task to it when more
+than one task remains, and cold-starts a single remaining task (short resumes
+don't pay the server boot). Force the behavior with `--keep-alive` /
+`FORGE_ENGINE_ATTACH=1`, or `--no-keep-alive` / `FORGE_ENGINE_ATTACH=0`
 (`--keep-alive-port <n>` pins the port; each task still gets a fresh, isolated
 session). To reuse a server you already keep running, pass `--attach <url>` (or
 `FORGE_ENGINE_ATTACH_URL`). See the workflow-engine

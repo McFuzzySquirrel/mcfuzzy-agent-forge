@@ -23,7 +23,7 @@ Guidance for AI coding agents working in this repository (McFuzzy Agent Forge).
 - **Changelog:** every user-visible change adds a new
   `## <Month> <Year> - v<ver>` section at the top of `docs/updates.md` and bumps
   the README's `**Latest:**` line. Notable features also get an ADR under
-  `docs/adr/NNN-*.md` (increment the number; ADR-027 is the latest).
+  `docs/adr/NNN-*.md` (increment the number; ADR-032 is the latest).
 - **Doc-as-you-build:** `SKILL.md`, deep-dives, and the README are updated in the
   same change as the code they describe — docs and changelog are part of the
   feature, not a follow-up.

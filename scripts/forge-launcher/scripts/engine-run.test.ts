@@ -51,3 +51,41 @@ test("engine-run reads keep-alive/attach from FORGE_ENGINE_ATTACH[_URL]", async 
   assert.ok(out.includes("--keep-alive"), out);
   assert.ok(out.includes("--attach http://127.0.0.1:4096"), out);
 });
+
+test("engine-run forwards --no-keep-alive and reads it from FORGE_ENGINE_ATTACH=0", async () => {
+  const repo = tmpRepo();
+
+  const viaFlag = await runCli([
+    "engine-run", "--repo", repo, "--harness", "opencode", "--no-keep-alive", "--yes", "--dry-run",
+  ]);
+  assert.equal(viaFlag.code, 0, viaFlag.out);
+  assert.ok(viaFlag.out.includes("--no-keep-alive"), viaFlag.out);
+
+  const viaEnv = await runCli(
+    ["engine-run", "--repo", repo, "--harness", "opencode", "--yes", "--dry-run"],
+    { FORGE_ENGINE_ATTACH: "0" },
+  );
+  assert.equal(viaEnv.code, 0, viaEnv.out);
+  assert.ok(viaEnv.out.includes("--no-keep-alive"), viaEnv.out);
+});
+
+test("engine-run --stop delegates to the engine stop command (no manifest needed)", async () => {
+  const repo = tmpRepo();
+  const { code, out } = await runCli([
+    "engine-run", "--repo", repo, "--stop", "--dry-run",
+  ]);
+  assert.equal(code, 0, out);
+  assert.ok(out.includes("forge-engine-stop"), out);
+  assert.ok(out.includes("workflow-engine -- stop --repo"), out);
+  assert.ok(!out.includes("EXECUTION-MANIFEST"), out);
+});
+
+test("engine-run --pause delegates to the engine pause command", async () => {
+  const repo = tmpRepo();
+  const { code, out } = await runCli([
+    "engine-run", "--repo", repo, "--pause", "--dry-run",
+  ]);
+  assert.equal(code, 0, out);
+  assert.ok(out.includes("forge-engine-pause"), out);
+  assert.ok(out.includes("workflow-engine -- pause --repo"), out);
+});

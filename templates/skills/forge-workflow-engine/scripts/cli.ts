@@ -6,13 +6,14 @@ import * as readline from "node:readline";
 import { runEngine, replayTask } from "./engine.ts";
 import { loadState, statePath, auditPath } from "./state.ts";
 import { startVizServer, type VizServer } from "./viz/server.ts";
+import { controlPath, pidPath, readPid, removePid, writeControl, writePid } from "./control.ts";
 import { DEFAULT_TASK_TIMEOUT_MS, type ExecutionManifest, type HarnessAdapter, type EngineOptions } from "./types.ts";
 import { OpenCodeAdapter } from "./harness/opencode-adapter.ts";
 import { CopilotAdapter } from "./harness/copilot-adapter.ts";
 import { OpenAIAdapter } from "./harness/openai-adapter.ts";
 import { StubAdapter } from "./harness/stub-adapter.ts";
 import { FlowForgeKernelAdapter } from "./harness/flowforge-kernel-adapter.ts";
-import { startAttachServer, type AttachServer } from "./harness/opencode-server.ts";
+import { startAttachServer } from "./harness/opencode-server.ts";
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -24,10 +25,11 @@ Usage:
                                      [--max-retries <n>] [--retry-delay-ms <ms>] [--heartbeat-ms <ms>] [--concurrency <n>] [--task-timeout-ms <ms>] [--yes]
                                      [--allow-noop] [--run-validation]
                                      [--viz [port]] [--no-open]
-                                     [--keep-alive] [--keep-alive-port <port>] [--attach <url>]
+                                     [--keep-alive] [--keep-alive-port <port>] [--attach <url>] [--no-keep-alive]
   npm run workflow-engine -- status  [--repo <path>]
   npm run workflow-engine -- replay  <task-id> [--repo <path>] [--harness opencode|copilot|openai|stub|flowforge-kernel]
   npm run workflow-engine -- pause   [--repo <path>]
+  npm run workflow-engine -- stop    [--repo <path>]
   npm run workflow-engine -- viz     [--repo <path>] [--port <port>] [--no-open]
 
 Environment variables:
@@ -39,8 +41,17 @@ Environment variables:
                                  trivial agent output to count as complete (bypasses the no-op output gate)
   FORGE_ENGINE_RUN_VALIDATION    "1" to execute each task's manifest validationCommands and require them to pass
                                  before the task is marked complete
-  FORGE_ENGINE_ATTACH   "1" to auto-start an opencode attach server for the run (same as --keep-alive)
+  FORGE_ENGINE_ATTACH   "1" to force the opencode keep-alive server for the run (same as --keep-alive);
+                        "0" to force cold start per task (same as --no-keep-alive); unset = adaptive
+                        (keep-alive when more than one task remains, cold start otherwise)
   FORGE_ENGINE_ATTACH_URL   Attach tasks to an existing opencode serve instance instead of cold-starting per task
+
+Pause & stop:
+  pause writes a pause request (docs/engine-control.json) - a live engine stops after
+  the current task and saves state as paused; run resumes from the last completed task.
+  stop does the same and additionally sends SIGTERM to the engine PID recorded in
+  docs/engine.pid, so a live run stops even mid-task (still gracefully after the current task).
+
   OPENCODE_BIN           Path to opencode binary (default: opencode)
   OPENCODE_EXTRA_FLAGS   Extra flags passed to opencode run
   COPILOT_BIN            Path to copilot binary (default: copilot)
@@ -113,6 +124,8 @@ function detectRepoRoot(start = process.cwd()): string {
   return resolve(start);
 }
 
+import { shouldKeepAlive, remainingTaskCount, type KeepAliveDecision } from "./keepalive.ts";
+
 function resolveHarness(name: string | undefined, attachUrl?: string): HarnessAdapter {
   switch (name ?? "opencode") {
     case "opencode": return new OpenCodeAdapter({ attachUrl });
@@ -147,6 +160,8 @@ function buildOptions(
     progressPath: join(repoRoot, "docs", "PROGRESS.md"),
     auditPath: auditPath(repoRoot),
     artifactsPath: join(repoRoot, "docs", "artifacts"),
+    controlPath: controlPath(repoRoot),
+    pidPath: pidPath(repoRoot),
     harness: resolveHarness(harnessName ?? flag(args, "--harness"), attachUrl),
     maxRetries: Number(flag(args, "--max-retries") ?? "2"),
     retryDelayMs: Number(flag(args, "--retry-delay-ms") ?? "5000"),
@@ -163,10 +178,22 @@ function buildOptions(
 
 // Presents the pre-run gate. Skipped when `--yes` or FORGE_ENGINE_YES=1 is set,
 // or when stdin is not a TTY (CI / headless) - the gate is interactive-only.
-async function confirmPreRun(opts: EngineOptions, args: string[]): Promise<void> {
+async function confirmPreRun(opts: EngineOptions, args: string[], keepAlive?: KeepAliveDecision): Promise<void> {
   const manifest = JSON.parse(readFileSync(opts.manifestPath, "utf8")) as ExecutionManifest;
   const taskCount = manifest.phases.reduce((n, p) => n + (p.tasks?.length ?? 0), 0);
   const skip = hasFlag(args, "--yes") || process.env["FORGE_ENGINE_YES"] === "1";
+
+  const keepAliveLabel = keepAlive
+    ? keepAlive.mode === "attach"
+      ? "attach to existing server"
+      : keepAlive.mode === "keep-alive"
+        ? "keep-alive (forced)"
+        : keepAlive.mode === "adaptive"
+          ? `adaptive (keep-alive, ${keepAlive.remaining} tasks remaining)`
+          : keepAlive.remaining > 1
+            ? `cold start per task (${keepAlive.remaining} tasks remaining)`
+            : "cold start (single task remaining)"
+    : "n/a";
 
   console.log("Forge Workflow Engine - Pre-run Summary");
   console.log(`  Harness : ${opts.harness.name}`);
@@ -174,6 +201,9 @@ async function confirmPreRun(opts: EngineOptions, args: string[]): Promise<void>
   console.log(`  Phases  : ${manifest.phases.length}`);
   console.log(`  Tasks   : ${taskCount}`);
   console.log(`  Timeout : ${opts.taskTimeoutMs}ms per task (--task-timeout-ms / per-task timeoutMs overrides)`);
+  console.log(`  Retries : ${opts.maxRetries} max, ${opts.retryDelayMs}ms between attempts (--max-retries / --retry-delay-ms)`);
+  console.log(`  Concurrency: ${opts.maxConcurrency} (--concurrency; sequential unless the harness opts in)`);
+  console.log(`  Keep-alive: ${keepAliveLabel}`);
   console.log(`  Output gate: ${opts.allowNoop ? "relaxed (--allow-noop: no-op tasks allowed)" : "strict (missing outputs / no-op tasks are retried then failed)"}`);
   if (opts.runValidation) console.log("  Validation: running manifest validationCommands per task (--run-validation)");
   console.log(`  Manifest: ${opts.manifestPath}`);
@@ -206,32 +236,77 @@ async function cmdRun(args: string[]): Promise<void> {
   const repoArg = flag(args, "--repo");
   const repoRoot = repoArg ? resolve(repoArg) : detectRepoRoot();
   const harnessName = flag(args, "--harness") ?? process.env["FORGE_ENGINE_HARNESS"] ?? "opencode";
+  const manifestPath = join(repoRoot, "docs", "EXECUTION-MANIFEST.json");
+
+  if (!existsSync(manifestPath)) {
+    console.error(`Execution manifest not found at ${manifestPath}`);
+    console.error(`Run the forge-execution-adapter first: npm run forge-execution-adapter -- compile`);
+    process.exit(1);
+  }
 
   // Attach mode: `--attach <url>` reuses an existing opencode serve instance;
   // `--keep-alive` has the engine boot one for the run and tear it down after.
+  // Otherwise the engine defaults adaptively: keep-alive when more than one
+  // task remains, cold start per task otherwise. `--no-keep-alive` (or
+  // FORGE_ENGINE_ATTACH=0) forces the cold-start fallback.
   const attachUrl = flag(args, "--attach") ?? process.env["FORGE_ENGINE_ATTACH_URL"];
   const keepAlive = hasFlag(args, "--keep-alive") || process.env["FORGE_ENGINE_ATTACH"] === "1";
+  const noKeepAlive = hasFlag(args, "--no-keep-alive") || process.env["FORGE_ENGINE_ATTACH"] === "0";
 
-  let server: AttachServer | undefined;
-  let effectiveAttachUrl = attachUrl;
+  const decision = shouldKeepAlive({
+    attachUrl,
+    keepAlive,
+    noKeepAlive,
+    harness: harnessName,
+    remaining: remainingTaskCount(manifestPath, statePath(repoRoot)),
+  });
 
-  if (keepAlive && !attachUrl) {
-    if (harnessName !== "opencode") {
-      console.warn("[engine] --keep-alive only applies to the opencode harness; ignoring.");
-    } else {
-      const port = Number(flag(args, "--keep-alive-port") ?? "0") || undefined;
-      const startedAt = Date.now();
-      server = await startAttachServer({
-        bin: process.env["OPENCODE_BIN"] ?? "opencode",
-        repoRoot,
-        port,
-      });
-      effectiveAttachUrl = server.url;
-      console.log(`[engine] opencode attach server ready at ${server.url} in ${Date.now() - startedAt}ms`);
-    }
+  if (decision.mode === "keep-alive" && harnessName !== "opencode") {
+    console.warn("[engine] --keep-alive only applies to the opencode harness; ignoring.");
   }
 
-  const opts = buildOptions(args, repoRoot, harnessName, effectiveAttachUrl);
+  if (decision.startServer) {
+    const port = Number(flag(args, "--keep-alive-port") ?? "0") || undefined;
+    const startedAt = Date.now();
+    const server = await startAttachServer({
+      bin: process.env["OPENCODE_BIN"] ?? "opencode",
+      repoRoot,
+      port,
+    });
+    console.log(`[engine] opencode attach server ready at ${server.url} in ${Date.now() - startedAt}ms`);
+    await runWithServer(args, repoRoot, harnessName, server.url, decision);
+    await server.stop();
+    return;
+  }
+
+  await runWithServer(args, repoRoot, harnessName, attachUrl, decision);
+}
+
+async function runWithServer(
+  args: string[],
+  repoRoot: string,
+  harnessName: string,
+  attachUrl: string | undefined,
+  decision: KeepAliveDecision,
+): Promise<void> {
+  const opts = buildOptions(args, repoRoot, harnessName, attachUrl);
+
+  // Stop signal: Ctrl+C / SIGTERM set an in-process flag the engine checks at
+  // the top of each task wave (alongside the docs/engine-control.json file).
+  // The engine finishes the current task, saves state as `paused`, and exits.
+  // `on` (not `once`) so a repeated signal never hits Node's default terminate
+  // behavior — the flag is idempotent and the process must survive until the
+  // engine has finished its graceful-pause cleanup.
+  let signalStopped = false;
+  const onStopSignal = (signal: string) => {
+    if (signalStopped) return;
+    signalStopped = true;
+    console.log(`[engine] Received ${signal} - stopping after the current task.`);
+  };
+  process.on("SIGINT", () => onStopSignal("SIGINT"));
+  process.on("SIGTERM", () => onStopSignal("SIGTERM"));
+
+  writePid(opts.pidPath, process.pid);
 
   let viz: VizServer | undefined;
   try {
@@ -247,9 +322,9 @@ async function cmdRun(args: string[]): Promise<void> {
       });
     }
 
-    await confirmPreRun(opts, args);
+    await confirmPreRun(opts, args, decision);
 
-    const state = await runEngine(opts);
+    const state = await runEngine({ ...opts, stopRequested: () => signalStopped });
 
     console.log(`\nRun ${state.runId} finished with status: ${state.status}`);
     const completed = Object.values(state.tasks).filter((t) => t.status === "complete").length;
@@ -269,7 +344,7 @@ async function cmdRun(args: string[]): Promise<void> {
       for (const b of state.blockers) console.log(`  - ${b}`);
     }
   } finally {
-    if (server) await server.stop();
+    removePid(opts.pidPath);
     if (viz) await viz.stop();
   }
 }
@@ -372,6 +447,11 @@ async function cmdPause(args: string[]): Promise<void> {
     process.exit(1);
   }
 
+  // Write the control file so a live engine picks up the pause at the top of
+  // its next task wave (after the current task), then flip the state status for
+  // resume-ability even if no engine is running.
+  writeControl(controlPath(repoRoot), "pause");
+
   const { saveState, writeAuditEvent, auditPath: ap, syncProgressMd } = await import("./state.ts");
   const manifestPath = join(repoRoot, "docs", "EXECUTION-MANIFEST.json");
   const manifest = JSON.parse(readFileSync(manifestPath, "utf8"));
@@ -385,7 +465,38 @@ async function cmdPause(args: string[]): Promise<void> {
     note: "Pause requested via CLI",
   });
   syncProgressMd(join(repoRoot, "docs", "PROGRESS.md"), paused, manifest);
-  console.log(`Workflow ${paused.runId} paused.`);
+  console.log(`Pause requested for workflow ${paused.runId}. The engine will stop after the current task.`);
+}
+
+async function cmdStop(args: string[]): Promise<void> {
+  const repoArg = flag(args, "--repo");
+  const repoRoot = repoArg ? resolve(repoArg) : detectRepoRoot();
+  const controlPath_ = controlPath(repoRoot);
+  const pid = readPid(pidPath(repoRoot));
+
+  // If a live engine is running (it wrote docs/engine.pid), write the stop
+  // request and nudge it with a SIGTERM so the in-process flag trips even
+  // mid-wave; it finishes the current task, saves state as paused, and exits.
+  if (pid !== null) {
+    writeControl(controlPath_, "stop");
+    console.log("Stop requested. The engine will stop after the current task.");
+    try {
+      process.kill(pid, "SIGTERM");
+      console.log(`Sent SIGTERM to engine process ${pid}.`);
+    } catch (error) {
+      const err = error as NodeJS.ErrnoException;
+      if (err.code === "ESRCH") {
+        console.log(`Engine process ${pid} is no longer running; nothing to stop.`);
+      } else {
+        console.warn(`Could not signal engine process ${pid}: ${err.message}`);
+      }
+    }
+  } else {
+    // Nothing running: leave no control file behind (a fresh `run` would clear
+    // it anyway). Use `pause` to flip an existing run's state for a clean
+    // stop/resume cycle.
+    console.log("No running engine found (docs/engine.pid is empty). Nothing to stop.");
+  }
 }
 
 // ─── Entry point ──────────────────────────────────────────────────────────────
@@ -399,6 +510,7 @@ async function main(): Promise<void> {
     case "status": await cmdStatus(args); break;
     case "replay": await cmdReplay(args); break;
     case "pause": await cmdPause(args); break;
+    case "stop": await cmdStop(args); break;
     case "viz": await cmdViz(args); break;
     default: usage();
   }

@@ -1,6 +1,6 @@
 import fs from "node:fs";
 import path from "node:path";
-import { out } from "./format.ts";
+import { out, info } from "./format.ts";
 import { runCommand } from "./format.ts";
 import { detectRepoRoot } from "./paths.ts";
 
@@ -20,9 +20,12 @@ export interface EngineRunOptions {
   noOpen?: boolean;
   keepAlive?: boolean;
   keepAlivePort?: string;
+  noKeepAlive?: boolean;
   attach?: string;
   allowNoop?: boolean;
   runValidation?: boolean;
+  stop?: boolean;
+  pause?: boolean;
 }
 
 const HARNESS_ROOTS = [".agents", ".opencode", ".claude", ".github"];
@@ -50,9 +53,12 @@ export async function engineRun(opts: EngineRunOptions = {}): Promise<number> {
   const noOpen = opts.noOpen ?? false;
   const keepAlive = opts.keepAlive ?? process.env.FORGE_ENGINE_ATTACH === "1";
   const keepAlivePort = opts.keepAlivePort ?? "";
+  const noKeepAlive = opts.noKeepAlive ?? process.env.FORGE_ENGINE_ATTACH === "0";
   const attach = opts.attach ?? process.env.FORGE_ENGINE_ATTACH_URL ?? "";
   const allowNoop = opts.allowNoop ?? process.env.FORGE_ENGINE_ALLOW_NOOP === "1";
   const runValidation = opts.runValidation ?? process.env.FORGE_ENGINE_RUN_VALIDATION === "1";
+  const stop = opts.stop ?? false;
+  const pause = opts.pause ?? false;
 
   if (granularity && granularity !== "fine" && granularity !== "coarse") {
     throw new Error(`Invalid --granularity '${granularity}'. Choose 'fine' or 'coarse'.`);
@@ -83,9 +89,30 @@ export async function engineRun(opts: EngineRunOptions = {}): Promise<number> {
     );
   }
 
+  // `--stop` / `--pause` request a graceful stop of a running engine (write
+  // docs/engine-control.json; `stop` also SIGTERMs the PID in docs/engine.pid)
+  // instead of starting a run. They don't need the manifest or a compile.
+  if (stop || pause) {
+    const command = stop ? "stop" : "pause";
+    out(`forge-engine-${command}: repo=${repo}`);
+    out(`  engine : ${engineDir}`);
+    if (dryRun) {
+      out(`  [dry-run] (cd '${engineDir}' && npm run workflow-engine -- ${command} --repo "${repo}")`);
+      return 0;
+    }
+    const code = await run("npm", ["run", "workflow-engine", "--", command, "--repo", repo], dryRun, engineDir);
+    if (code !== 0) {
+      throw new Error(`Engine ${command} command failed (exit ${code}).`);
+    }
+    out("");
+    info(`The engine will ${stop ? "stop" : "pause"} after the current task and save state as paused.`);
+    info(`Resume later with: npx forge-launcher engine-run --repo "${repo}"`);
+    return 0;
+  }
+
   const manifest = path.join(repo, "docs", "EXECUTION-MANIFEST.json");
 
-  out(`forge-engine-run: repo=${repo} harness=${harness}${granularity ? ` granularity=${granularity}` : ""}${concurrency ? ` concurrency=${concurrency}` : ""}${taskTimeoutMs ? ` task-timeout=${taskTimeoutMs}` : ""}${maxRetries ? ` max-retries=${maxRetries}` : ""}${viz ? ` viz=${vizPort || "default"}` : ""}${keepAlive ? ` keep-alive${keepAlivePort ? `=${keepAlivePort}` : ""}` : ""}${attach ? ` attach=${attach}` : ""}`);
+  out(`forge-engine-run: repo=${repo} harness=${harness}${granularity ? ` granularity=${granularity}` : ""}${concurrency ? ` concurrency=${concurrency}` : ""}${taskTimeoutMs ? ` task-timeout=${taskTimeoutMs}` : ""}${maxRetries ? ` max-retries=${maxRetries}` : ""}${viz ? ` viz=${vizPort || "default"}` : ""}${keepAlive ? ` keep-alive${keepAlivePort ? `=${keepAlivePort}` : ""}` : ""}${noKeepAlive ? ` no-keep-alive` : ""}${attach ? ` attach=${attach}` : ""}`);
   out(`  engine : ${engineDir}`);
   out(`  adapter: ${adapterDir || "<not bootstrapped; manifest must already exist>"}`);
 
@@ -139,6 +166,7 @@ export async function engineRun(opts: EngineRunOptions = {}): Promise<number> {
   if (noOpen) engineFlags.push("--no-open");
   if (keepAlive) engineFlags.push("--keep-alive");
   if (keepAlivePort) engineFlags.push("--keep-alive-port", keepAlivePort);
+  if (noKeepAlive) engineFlags.push("--no-keep-alive");
   if (attach) engineFlags.push("--attach", attach);
   if (allowNoop) engineFlags.push("--allow-noop");
   if (runValidation) engineFlags.push("--run-validation");
@@ -171,9 +199,12 @@ export function engineRunCli(args: string[]): Promise<number> {
       case "--no-open": opts.noOpen = true; break;
       case "--keep-alive": opts.keepAlive = true; break;
       case "--keep-alive-port": opts.keepAlivePort = args[++i]; break;
+      case "--no-keep-alive": opts.noKeepAlive = true; break;
       case "--attach": opts.attach = args[++i]; break;
       case "--allow-noop": opts.allowNoop = true; break;
       case "--run-validation": opts.runValidation = true; break;
+      case "--stop": opts.stop = true; break;
+      case "--pause": opts.pause = true; break;
       default: throw new Error(`Unknown option: ${a}`);
     }
   }

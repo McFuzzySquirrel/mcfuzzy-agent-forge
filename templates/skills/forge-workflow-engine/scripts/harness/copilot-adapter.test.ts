@@ -137,3 +137,23 @@ test("prompt includes the execute-now directive in both native and inline modes"
   const inlinePrompt = recordedPrompt(shim);
   assert.ok(inlinePrompt.includes("Perform the task now"), inlinePrompt);
 });
+
+test("prompt surfaces the per-task timeout and retry budget when provided", async () => {
+  const root = mkdtempSync(join(tmpdir(), "forge-budget-repo-"));
+  const agent = makeAgent(join(root, ".agents", "agents", "discovery-engineer.md"));
+  const shim = makeShim();
+  const original = process.env.COPILOT_BIN;
+  process.env.COPILOT_BIN = shim.bin;
+  try {
+    const adapter = new CopilotAdapter();
+    const result = await adapter.invoke(agent, makeTask(), {} as WorkflowState, root, undefined, 30_000, 3);
+    assert.equal(result.success, true);
+  } finally {
+    if (original === undefined) delete process.env.COPILOT_BIN;
+    else process.env.COPILOT_BIN = original;
+  }
+
+  const prompt = recordedPrompt(shim);
+  assert.ok(prompt.includes("Per-task timeout: 30s"), prompt);
+  assert.ok(prompt.includes("retried up to 3 time(s)"), prompt);
+});

@@ -34,6 +34,7 @@ export class OpenAIAdapter implements HarnessAdapter {
     _repoRoot: string,
     contextBlock?: string,
     timeoutMs?: number,
+    _maxRetries?: number,
   ): Promise<TaskResult> {
     const start = Date.now();
     const model = agent.model ?? this.defaultModel;

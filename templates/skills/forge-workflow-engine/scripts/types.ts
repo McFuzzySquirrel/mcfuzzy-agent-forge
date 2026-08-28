@@ -80,6 +80,12 @@ export interface HarnessAdapter {
      * of a hardcoded timeout; `undefined` means "use the adapter default".
      */
     timeoutMs?: number,
+    /**
+     * Maximum retries the engine allows for this task before marking it failed
+     * (`opts.maxRetries`). Provided so prompt-building adapters can tell the
+     * agent its retry budget (e.g. that hollow/invalid results are re-run).
+     */
+    maxRetries?: number,
   ): Promise<TaskResult>;
 }
 
@@ -93,6 +99,10 @@ export interface EngineOptions {
   auditPath: string;
   /** Absolute path to docs/artifacts directory (artifact store root) */
   artifactsPath: string;
+  /** Absolute path to docs/engine-control.json (pause/stop request channel). */
+  controlPath: string;
+  /** Absolute path to docs/engine.pid (the engine's own PID, for `stop`). */
+  pidPath: string;
   harness: HarnessAdapter;
   maxRetries: number;
   retryDelayMs: number;
@@ -125,6 +135,13 @@ export interface EngineOptions {
    */
   runValidation: boolean;
   pauseRequested: boolean;
+  /**
+   * In-process stop flag (e.g. set by SIGINT/SIGTERM handlers). The engine
+   * checks this alongside the control file at the top of each task wave and
+   * stops gracefully (state saved as `paused`) when true. When absent, the
+   * control file alone drives stopping.
+   */
+  stopRequested?: () => boolean;
 }
 
 // ─── Audit ────────────────────────────────────────────────────────────────────

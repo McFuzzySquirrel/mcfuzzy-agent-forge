@@ -34,6 +34,7 @@ export class StubAdapter implements HarnessAdapter {
     repoRoot: string,
     _contextBlock?: string,
     _timeoutMs?: number,
+    _maxRetries?: number,
   ): Promise<TaskResult> {
     const start = Date.now();
 
