@@ -15,12 +15,12 @@ const GIT_ENV = {
   GIT_COMMITTER_EMAIL: "test@example.com",
 };
 
-function runCli(args: string[]): Promise<{ code: number; out: string }> {
+function runCli(args: string[], env: Record<string, string> = {}): Promise<{ code: number; out: string }> {
   return new Promise((resolve, reject) => {
     execFile(
       "node",
       ["--import", "tsx", CLI, ...args],
-      { env: { ...process.env, ...GIT_ENV } },
+      { env: { ...process.env, ...GIT_ENV, ...env } },
       (err, stdout, stderr) => {
         if (err) {
           resolve({ code: (err as { code?: number }).code ?? 1, out: stdout + stderr });
@@ -90,7 +90,7 @@ test("resume with a team but no manifest queues an engine-run", async () => {
   write(repo, ".agents/agents/api-engineer.md", "---\nname: api-engineer\ndescription: API specialist.\n---\n");
   const { code, out } = await runCli(["resume", "--repo", repo, "--non-interactive"]);
   assert.equal(code, 0, out);
-  assert.ok(out.includes(`engine-run --repo \"${repo}\"`), out);
+  assert.ok(out.includes(`engine-run --repo ${repo}`), out);
   assert.ok(out.includes("--harness opencode"), out);
   assert.ok(out.includes("--yes"), out);
 });
@@ -110,7 +110,72 @@ test("resume with a paused engine run queues a resume", async () => {
   const { code, out } = await runCli(["resume", "--repo", repo, "--non-interactive"]);
   assert.equal(code, 0, out);
   assert.ok(out.includes("Status   : paused"), out);
-  assert.ok(out.includes(`engine-run --repo \"${repo}\"`), out);
+  assert.ok(out.includes(`engine-run --repo ${repo}`), out);
+});
+
+test("resume carries persisted engine config (concurrency/keep-alive/retries/viz)", async () => {
+  const repo = makeRepo();
+  write(repo, "docs/PRD.md", "# PRD\n\nBuild a thing.\n");
+  write(repo, ".agents/agents/api-engineer.md", "---\nname: api-engineer\ndescription: API specialist.\n---\n");
+  write(repo, "docs/WORKFLOW-STATE.json", JSON.stringify({
+    runId: "run-1",
+    status: "paused",
+    harness: "opencode",
+    currentPhase: "1",
+    tasks: { "1.1": { taskId: "1.1", status: "complete" }, "1.2": { taskId: "1.2", status: "pending" } },
+    blockers: [],
+  }));
+  write(repo, "docs/engine-config.json", JSON.stringify({
+    harness: "opencode",
+    granularity: "coarse",
+    concurrency: "4",
+    taskTimeoutMs: "300000",
+    maxRetries: "3",
+    viz: true,
+    vizPort: "4300",
+    keepAlive: true,
+    attach: "",
+  }));
+  const { code, out } = await runCli(["resume", "--repo", repo, "--non-interactive"]);
+  assert.equal(code, 0, out);
+  assert.ok(out.includes(`engine-run --repo ${repo}`), out);
+  assert.ok(out.includes("--concurrency 4"), out);
+  assert.ok(out.includes("--keep-alive"), out);
+  assert.ok(out.includes("--max-retries 3"), out);
+  assert.ok(out.includes("--task-timeout-ms 300000"), out);
+  assert.ok(out.includes("--viz"), out);
+});
+
+test("explicit env overrides persisted engine config on resume", async () => {
+  const repo = makeRepo();
+  write(repo, "docs/PRD.md", "# PRD\n\nBuild a thing.\n");
+  write(repo, ".agents/agents/api-engineer.md", "---\nname: api-engineer\ndescription: API specialist.\n---\n");
+  write(repo, "docs/WORKFLOW-STATE.json", JSON.stringify({
+    runId: "run-1",
+    status: "paused",
+    harness: "opencode",
+    currentPhase: "1",
+    tasks: { "1.1": { taskId: "1.1", status: "complete" } },
+    blockers: [],
+  }));
+  write(repo, "docs/engine-config.json", JSON.stringify({
+    harness: "opencode",
+    granularity: "",
+    concurrency: "4",
+    taskTimeoutMs: "",
+    maxRetries: "",
+    viz: false,
+    vizPort: "",
+    keepAlive: true,
+    attach: "",
+  }));
+  const { code, out } = await runCli(["resume", "--repo", repo, "--non-interactive"], {
+    FORGE_ENGINE_CONCURRENCY: "2",
+    FORGE_ENGINE_ATTACH: "0",
+  });
+  assert.equal(code, 0, out);
+  assert.ok(out.includes("--concurrency 2"), out);
+  assert.ok(!out.includes("--keep-alive"), out);
 });
 
 test("resume with a complete engine run suggests monitoring, not a resume", async () => {

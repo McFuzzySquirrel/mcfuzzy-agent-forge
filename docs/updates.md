@@ -4,6 +4,57 @@ Detailed release and change notes for McFuzzy Agent Forge.
 
 ---
 
+## August 2026 - v3.27
+
+### Engine pause & stop (graceful), launcher config persistence
+
+- **`workflow-engine stop`** (and a fixed `pause`) now actually stop a running
+  detached engine. The engine polls `docs/engine-control.json` at the top of
+  each task wave and writes its PID to `docs/engine.pid` at startup. `stop`
+  writes a stop request **and** SIGTERMs the PID; Ctrl+C / SIGTERM on the engine
+  process triggers the same graceful stop via an in-process flag. Either way the
+  in-flight task finishes, state is saved as `paused`, and `run` resumes from the
+  last completed task. Previously `pause` only flipped the state file and the
+  loop never re-read it, so a live run could not be stopped.
+- **`forge-launcher resume`** offers **"Stop the engine after the current task"**
+  when it detects a live run, and its resume/monitor commands now reuse the last
+  configured engine options instead of the minimal `--harness`-only command.
+- **Engine options persist**: the launcher writes the menu choices
+  (harness, granularity, concurrency, timeout, retries, viz, keep-alive, attach)
+  to `docs/engine-config.json`; resume loads them (explicit env vars still win).
+- New tests: control-file round-trip, stop-before-any-task, stop-mid-run after
+  the current task, the SIGINT/SIGTERM flag path, resume carrying persisted
+  config, and env-overrides-persisted. See ADR-032.
+
+---
+
+## August 2026 - v3.26
+
+### Workflow engine: adaptive keep-alive default + timeout/retry surfacing
+
+- **Keep-alive is now the adaptive default.** The opencode harness boots a warm
+  `opencode serve` and attaches every task to it when **more than one task
+  remains**, and cold-starts per task when ≤1 remains (short resumes don't pay a
+  server boot). This replaces the previous all-cold-start default for multi-task
+  dark runs (see ADR-027 for the keep-alive mechanics).
+- **New escape hatches.** `--no-keep-alive` (or `FORGE_ENGINE_ATTACH=0`) forces
+  cold start per task; `--keep-alive` / `FORGE_ENGINE_ATTACH=1` still force
+  keep-alive; `--attach <url>` / `FORGE_ENGINE_ATTACH_URL` still reuse an
+  existing server. Precedence: attach → no-keep-alive → keep-alive → adaptive.
+- **Pre-run summary** now shows max retries, retry delay, concurrency, and the
+  keep-alive mode (not just the per-task timeout).
+- **Agents learn their execution budget.** `HarnessAdapter.invoke` now receives
+  `maxRetries`, and the opencode/copilot adapters render an **Execution budget**
+  hint (per-task timeout in seconds + retry count + "don't rely on retries to fix
+  hollow output") in the task prompt.
+- `forge-launcher engine-run` forwards `--no-keep-alive` (flag and
+  `FORGE_ENGINE_ATTACH=0`).
+- New tests: `shouldKeepAlive` precedence table, `remainingTaskCount` (fresh /
+  complete / skipped / leftover-running), engine→harness `maxRetries` threading,
+  and budget-hint rendering. See ADR-031.
+
+---
+
 ## August 2026 - v3.25
 
 ### Launcher: "stop and resume later" checkpoints + post-team execution plan

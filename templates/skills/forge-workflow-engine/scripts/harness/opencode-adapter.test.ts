@@ -116,6 +116,39 @@ test("prompt includes the execute-now directive so agents do not just acknowledg
   assert.ok(prompt.includes("list the files you created or changed"), prompt);
 });
 
+test("prompt surfaces the per-task timeout and retry budget when provided", async () => {
+  const root = mkdtempSync(join(tmpdir(), "forge-budget-repo-"));
+  const agent = makeAgent(join(root, ".agents", "agents", "discovery-engineer.md"));
+  const shim = makeShim();
+  const original = process.env.OPENCODE_BIN;
+  process.env.OPENCODE_BIN = shim.bin;
+  try {
+    const adapter = new OpenCodeAdapter();
+    const result = await adapter.invoke(agent, makeTask(), {} as WorkflowState, root, undefined, 60_000, 2);
+    assert.equal(result.success, true);
+  } finally {
+    if (original === undefined) delete process.env.OPENCODE_BIN;
+    else process.env.OPENCODE_BIN = original;
+  }
+
+  const recorded = JSON.parse(readFileSync(shim.argsFile, "utf8")) as string[];
+  const prompt = recorded[recorded.length - 1] ?? "";
+  assert.ok(prompt.includes("Per-task timeout: 60s"), prompt);
+  assert.ok(prompt.includes("retried up to 2 time(s)"), prompt);
+});
+
+test("prompt omits the budget hint when timeout and retries are not provided", async () => {
+  const root = mkdtempSync(join(tmpdir(), "forge-nobudget-repo-"));
+  const agent = makeAgent(join(root, ".agents", "agents", "discovery-engineer.md"));
+  const shim = makeShim();
+
+  await invokeWith(shim, agent, root);
+
+  const recorded = JSON.parse(readFileSync(shim.argsFile, "utf8")) as string[];
+  const prompt = recorded[recorded.length - 1] ?? "";
+  assert.ok(!prompt.includes("Execution budget"), prompt);
+});
+
 test("FORGE_ENGINE_NATIVE_AGENT=0 forces the inline-persona fallback for .opencode agents", async () => {
   const root = mkdtempSync(join(tmpdir(), "forge-nonative-repo-"));
   const agent = makeAgent(join(root, ".opencode", "agents", "discovery-engineer.md"));

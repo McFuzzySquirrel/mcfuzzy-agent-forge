@@ -8,6 +8,7 @@ import { command, fail, header, info, link, ok, out, printLogTail, runCommand, r
 import { detectRepoRoot, expandPath, resolveInputFile } from "./paths.ts";
 import { prompt, promptMultiline, promptPath, promptPathLoop, promptSelect, promptYesNo, prompts } from "./prompts.ts";
 import { launchCliInTerminal } from "./terminal.ts";
+import { loadEngineConfig, saveEngineConfig } from "./engine-config.ts";
 
 const nodeRequire = createRequire(import.meta.url);
 
@@ -115,6 +116,11 @@ function envFlag(name: string): boolean {
   return process.env[name] === "1";
 }
 
+/** Returns the env flag when the variable is set, else undefined (unset). */
+function envFlagOrUndefined(name: string): boolean | undefined {
+  return process.env[name] !== undefined ? process.env[name] === "1" : undefined;
+}
+
 function hasPrd(): boolean {
   return (
     state.prdAdded ||
@@ -138,6 +144,15 @@ function harnessRootDir(): string {
 
 function skillPathFor(skillName: string): string {
   return path.join(state.repoDir, harnessRootDir(), "skills", skillName, "SKILL.md");
+}
+
+/** Locates the bootstrapped forge-workflow-engine package dir (any harness root). */
+function findEngineDir(repoDir: string): string | null {
+  for (const root of [".agents", ".opencode", ".claude", ".github"]) {
+    const candidate = path.join(repoDir, root, "skills", "forge-workflow-engine");
+    if (fs.existsSync(candidate)) return candidate;
+  }
+  return null;
 }
 
 function debugMode(): boolean {
@@ -639,6 +654,27 @@ async function configureEngineOptions(opts: LauncherOptions): Promise<void> {
     }
   } catch {
     info("Engine options cancelled; using the current defaults.");
+  }
+  // Persist the chosen options so `forge-launcher resume` (and future runs) can
+  // rebuild the engine command with the same settings instead of the minimal
+  // `--harness`-only invocation.
+  saveEngineConfig(state.repoDir, state.engineConfig);
+}
+
+async function stopEngine(_opts: LauncherOptions): Promise<void> {
+  const engineDir = findEngineDir(state.repoDir);
+  if (!engineDir) {
+    warn("forge-workflow-engine not found under the repo; cannot stop the engine from here.");
+    warn(`Stop it manually: write {"request":"stop"} to ${path.join(state.repoDir, "docs", "engine-control.json")} and SIGTERM the engine process.`);
+    return;
+  }
+  info("Requesting a graceful stop after the current task …");
+  const result = await runCommand("npm", ["run", "workflow-engine", "--", "stop", "--repo", state.repoDir], { cwd: engineDir });
+  if (result.code !== 0) {
+    warn("The engine stop command did not exit cleanly; the control file may still be honored on its next wave.");
+  } else {
+    info("Stop requested. The engine saves state as paused after the current task; resume with the command below.");
+    command(`npx forge-launcher ${engineRunArgs().join(" ")}`);
   }
 }
 
@@ -1295,15 +1331,18 @@ function setupStateForRepo(repoDir: string): void {
   state.prdAdded = fs.existsSync(path.join(repoDir, "docs", "PRD.md"));
   state.researchAdded = fs.existsSync(path.join(repoDir, "docs", "research"));
   state.engineStarted = false;
-  state.engineConfig.harness = process.env.FORGE_ENGINE_HARNESS ?? "opencode";
-  state.engineConfig.granularity = process.env.FORGE_ENGINE_GRANULARITY ?? "";
-  state.engineConfig.concurrency = process.env.FORGE_ENGINE_CONCURRENCY ?? "";
-  state.engineConfig.taskTimeoutMs = process.env.FORGE_ENGINE_TASK_TIMEOUT_MS ?? "";
-  state.engineConfig.maxRetries = process.env.FORGE_ENGINE_MAX_RETRIES ?? "";
-  state.engineConfig.viz = envFlag("FORGE_ENGINE_VIZ");
-  state.engineConfig.vizPort = process.env.FORGE_ENGINE_VIZ_PORT ?? "";
-  state.engineConfig.keepAlive = envFlag("FORGE_ENGINE_ATTACH");
-  state.engineConfig.attach = process.env.FORGE_ENGINE_ATTACH_URL ?? "";
+  // Start from any persisted engine config (docs/engine-config.json), then let
+  // explicit environment variables win over it.
+  const persisted = loadEngineConfig(repoDir);
+  state.engineConfig.harness = process.env.FORGE_ENGINE_HARNESS ?? persisted?.harness ?? "opencode";
+  state.engineConfig.granularity = process.env.FORGE_ENGINE_GRANULARITY ?? persisted?.granularity ?? "";
+  state.engineConfig.concurrency = process.env.FORGE_ENGINE_CONCURRENCY ?? persisted?.concurrency ?? "";
+  state.engineConfig.taskTimeoutMs = process.env.FORGE_ENGINE_TASK_TIMEOUT_MS ?? persisted?.taskTimeoutMs ?? "";
+  state.engineConfig.maxRetries = process.env.FORGE_ENGINE_MAX_RETRIES ?? persisted?.maxRetries ?? "";
+  state.engineConfig.viz = envFlagOrUndefined("FORGE_ENGINE_VIZ") ?? persisted?.viz ?? false;
+  state.engineConfig.vizPort = process.env.FORGE_ENGINE_VIZ_PORT ?? persisted?.vizPort ?? "";
+  state.engineConfig.keepAlive = envFlagOrUndefined("FORGE_ENGINE_ATTACH") ?? persisted?.keepAlive ?? false;
+  state.engineConfig.attach = process.env.FORGE_ENGINE_ATTACH_URL ?? persisted?.attach ?? "";
 }
 
 function readEngineState(): ResumeEngineState | null {
@@ -1503,7 +1542,7 @@ function printMonitorCommands(): void {
   info("Monitor the build from another terminal:");
   command(`tail -f ${path.join(state.repoDir, "docs", "engine-run.log")}`);
   command(`tail -f ${path.join(state.repoDir, "docs", "PROGRESS.md")}`);
-  command(`forge-launcher engine-run --repo "${state.repoDir}" --harness ${state.engineConfig.harness || "opencode"} --yes`);
+  command(`npx forge-launcher ${engineRunArgs().join(" ")}`);
   out("");
 }
 
@@ -1522,7 +1561,6 @@ async function openCliFor(cmd: string): Promise<void> {
 /** Stage: start/resume the build via the engine or hand off to the harness. */
 async function resumeEngineStep(opts: ResumeOptions): Promise<void> {
   const engine = readEngineState();
-  const engineHarness = state.engineConfig.harness || "opencode";
 
   if (engine) {
     printEngineStatus(engine);
@@ -1535,7 +1573,7 @@ async function resumeEngineStep(opts: ResumeOptions): Promise<void> {
         printMonitorCommands();
       } else {
         out("  Next: resume the engine run from WORKFLOW-STATE.json:");
-        command(`forge-launcher engine-run --repo "${state.repoDir}" --harness ${engineHarness} --yes`);
+        command(`npx forge-launcher ${engineRunArgs().join(" ")}`);
       }
       return;
     }
@@ -1547,8 +1585,16 @@ async function resumeEngineStep(opts: ResumeOptions): Promise<void> {
     }
     if (engine.status === "running") {
       warn("The engine is currently running in the background.");
-      info("Monitor it from another terminal, or wait for it to finish before resuming.");
-      printMonitorCommands();
+      const stopChoice = await promptSelect("The engine is running. What would you like to do?", [
+        { value: "monitor", label: "Monitor the build (print commands)", hint: "default" },
+        { value: "stop", label: "Stop the engine after the current task" },
+        { value: "back", label: "Go back" },
+      ], { initial: "monitor" });
+      if (stopChoice === "stop") {
+        await stopEngine(opts);
+      } else if (stopChoice === "monitor") {
+        printMonitorCommands();
+      }
       return;
     }
     const choice = await promptSelect("What would you like to do?", [
@@ -1568,7 +1614,7 @@ async function resumeEngineStep(opts: ResumeOptions): Promise<void> {
   // No engine run yet (the team-absent case is handled by the earlier stages).
   if (opts.nonInteractive) {
     out("  Next: compile the manifest and start the engine:");
-    command(`forge-launcher engine-run --repo "${state.repoDir}" --harness ${engineHarness} --yes`);
+    command(`npx forge-launcher ${engineRunArgs().join(" ")}`);
     return;
   }
   await engineDecision(opts);
@@ -1600,7 +1646,7 @@ function resumeSummary(): void {
   } else if (!hasGeneratedTeam()) {
     out(`  1. Generate the agent team: open the harness and run /forge-build-agent-team`);
   } else {
-    out(`  1. Build: forge-launcher engine-run --repo "${state.repoDir}" --harness ${state.engineConfig.harness || "opencode"} --yes`);
+    out(`  1. Build: npx forge-launcher ${engineRunArgs().join(" ")}`);
     out(`  2. Or in the harness: ${autobuildCommand()}`);
   }
   out("");
@@ -1664,7 +1710,7 @@ function completionSummary(): void {
     out("");
     out(`  3. Re-run or resume the engine later if needed:`);
     out("");
-    out(`       npx forge-launcher engine-run --repo "${state.repoDir}" --harness ${engineHarness} --yes`);
+    out(`       npx forge-launcher ${engineRunArgs().join(" ")}`);
     if (state.engineConfig.viz) {
       out("");
       out("  The Forge Board dashboard launches with the engine run; its URL");

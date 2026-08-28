@@ -82,14 +82,22 @@ npm run workflow-engine -- run --heartbeat-ms 0            # disable
 
 ### Keep-alive attach mode (opencode harness)
 
-By default the opencode adapter cold-starts a fresh `opencode run` process for
-every task - each one re-boots the project instance: config, AGENTS.md, skills,
-agent files, and every MCP server (the biggest chunk of per-task overhead). For
-multi-task runs, pass `--keep-alive` to instead boot a single headless
-`opencode serve` instance once and attach every task to it:
+Cold-starting a fresh `opencode run` for every task re-boots the project
+instance each time: config, AGENTS.md, skills, agent files, and every MCP server
+(the biggest chunk of per-task overhead). To avoid that, the engine keeps a
+single headless `opencode serve` warm and attaches every task to it.
+
+**By default the engine is adaptive:** when more than one task remains, it boots
+one `opencode serve` for the run and attaches every task to it; when a single
+task remains (e.g. a short resume), it cold-starts that one task instead so it
+does not pay the server boot cost. This applies to the `opencode` harness only.
+
+You can override the default:
 
 ```bash
-npm run workflow-engine -- run --harness opencode --keep-alive
+npm run workflow-engine -- run --harness opencode                 # adaptive (default)
+npm run workflow-engine -- run --harness opencode --keep-alive    # force keep-alive
+npm run workflow-engine -- run --harness opencode --no-keep-alive # force cold start per task
 npm run workflow-engine -- run --harness opencode --keep-alive --keep-alive-port 4096
 ```
 
@@ -103,8 +111,9 @@ point tasks at it:
 npm run workflow-engine -- run --harness opencode --attach http://127.0.0.1:4096
 ```
 
-`--keep-alive` and `--attach` also have env equivalents: `FORGE_ENGINE_ATTACH=1`
-(auto-start) and `FORGE_ENGINE_ATTACH_URL=<url>` (reuse an existing server).
+`--keep-alive`, `--no-keep-alive`, and `--attach` also have env equivalents:
+`FORGE_ENGINE_ATTACH=1` (force keep-alive), `FORGE_ENGINE_ATTACH=0` (force cold
+start), and `FORGE_ENGINE_ATTACH_URL=<url>` (reuse an existing server).
 
 ### Live visualization (The Forge Board)
 
@@ -197,13 +206,32 @@ npm run workflow-engine -- replay P1-T1
 npm run workflow-engine -- replay P2.3 --harness opencode
 ```
 
-### Graceful pause after the current task
+### Pause & stop the engine
+
+The engine runs detached, so it stops **gracefully after the current task** —
+the in-flight task finishes, state is saved as `paused`, and `run` resumes from
+the last completed task. Two commands request it:
 
 ```bash
-npm run workflow-engine -- pause
+npm run workflow-engine -- pause   # write a pause request (docs/engine-control.json)
+npm run workflow-engine -- stop    # pause + SIGTERM the engine PID (docs/engine.pid)
 ```
 
-Resume the run at any time with `run` - the engine reads `docs/WORKFLOW-STATE.json` and continues from the last completed task.
+`pause` writes a request to `docs/engine-control.json`; the engine polls it at
+the top of each task wave and stops. `stop` does the same and additionally sends
+`SIGTERM` to the PID the engine recorded in `docs/engine.pid` at startup, so a
+live run stops even while a task is executing (still after that task completes).
+Ctrl+C / SIGTERM on the engine process itself triggers the same graceful stop via
+an in-process signal flag.
+
+Resume the run at any time with `run` - the engine reads `docs/WORKFLOW-STATE.json`
+and continues from the last completed task. If no engine is running, `pause`/`stop`
+flip the state status so the next `run` honors the request (stop is a no-op when
+the workflow is complete).
+
+`forge-launcher resume` offers "Stop the engine after the current task" when it
+detects a live run, and its resume/monitor commands reuse the last configured
+engine options (see `docs/engine-config.json`).
 
 ---
 
@@ -225,7 +253,7 @@ The engine is harness-agnostic. Select the backend with `--harness`:
 |---|---|---|
 | `OPENCODE_BIN` | `opencode` | Path to the opencode binary |
 | `OPENCODE_EXTRA_FLAGS` | *(empty)* | Extra flags appended to every `opencode run` call |
-| `FORGE_ENGINE_ATTACH` | *(empty)* | `1` to auto-start an `opencode serve` instance for the run (`--keep-alive`) |
+| `FORGE_ENGINE_ATTACH` | *(empty)* | `1` to force the `opencode serve` keep-alive for the run (`--keep-alive`); `0` to force cold start per task (`--no-keep-alive`); unset = adaptive (keep-alive when >1 task remains) |
 | `FORGE_ENGINE_ATTACH_URL` | *(empty)* | Attach tasks to an existing `opencode serve` URL instead of cold-starting per task (`--attach`) |
 | `FORGE_ENGINE_NATIVE_AGENT` | *(empty)* | `0` to force the inline-persona fallback instead of `--agent <name>` for `.opencode/` agents |
 
@@ -387,8 +415,8 @@ cd .agents/skills/forge-workflow-engine   && npm install && npm run workflow-eng
 - **Manifest must exist first.** The engine reads `docs/EXECUTION-MANIFEST.json` - it does not re-parse the PRD. If the PRD changes after a compile, re-run `forge-execution-adapter compile` and then start a fresh run.
 - **State is tied to a run ID.** Compiling a new manifest after a partial run will produce a manifest that no longer matches the in-progress state. Start a new run (`rm docs/WORKFLOW-STATE.json`) rather than mixing them.
 - **OpenCode must be in `$PATH`.** The `opencode` adapter shells out to the binary. If OpenCode is installed at a non-standard path, set `OPENCODE_BIN`.
-- **Per-task cold start is the main harness overhead.** Without `--keep-alive`/`--attach`, every task spawns a fresh `opencode run` that re-boots config, skills, and all MCP servers. Use attach mode for multi-task runs; the opencode CLI documents this as the way to "avoid MCP server cold boot times on every run".
-- **Attach mode needs a healthy server.** `--keep-alive` polls `GET /global/health` before dispatching and fails fast if `opencode serve` cannot start. Reusing `--attach` against a dead URL fails per task - start the server first.
+- **Per-task cold start is the main harness overhead.** Every fresh `opencode run` re-boots config, skills, and all MCP servers. The engine now defaults to adaptive keep-alive (warm `opencode serve` when >1 task remains) to avoid this; pass `--no-keep-alive` to force cold starts.
+- **Attach mode needs a healthy server.** Keep-alive (forced or adaptive) polls `GET /global/health` before dispatching and fails fast if `opencode serve` cannot start. Reusing `--attach` against a dead URL fails per task - start the server first.
 - **Agent file paths must be absolute or resolvable from the repo root.** Discovery reads the agent `.md` file and sets `agent.path`. For `.opencode/agents/` files the adapter passes `--agent <name>` and skips the inline persona; for other harness roots it inlines `agent.rawBody` into the prompt.
 - **Parallelism is opt-in and harness-gated.** The engine executes the ready-task frontier concurrently up to `--concurrency <n>` (default `1` = sequential). Only harness adapters that declare `supportsConcurrency` are parallelized; repo-editing harnesses still rely on the dependency graph for file isolation. See ADR-021.
 

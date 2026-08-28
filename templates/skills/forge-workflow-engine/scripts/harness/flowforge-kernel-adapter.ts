@@ -43,6 +43,7 @@ export class FlowForgeKernelAdapter implements HarnessAdapter {
     repoRoot: string,
     _contextBlock?: string,
     timeoutMs?: number,
+    _maxRetries?: number,
   ): Promise<TaskResult> {
     const start = Date.now();
 

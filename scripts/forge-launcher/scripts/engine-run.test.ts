@@ -51,3 +51,20 @@ test("engine-run reads keep-alive/attach from FORGE_ENGINE_ATTACH[_URL]", async 
   assert.ok(out.includes("--keep-alive"), out);
   assert.ok(out.includes("--attach http://127.0.0.1:4096"), out);
 });
+
+test("engine-run forwards --no-keep-alive and reads it from FORGE_ENGINE_ATTACH=0", async () => {
+  const repo = tmpRepo();
+
+  const viaFlag = await runCli([
+    "engine-run", "--repo", repo, "--harness", "opencode", "--no-keep-alive", "--yes", "--dry-run",
+  ]);
+  assert.equal(viaFlag.code, 0, viaFlag.out);
+  assert.ok(viaFlag.out.includes("--no-keep-alive"), viaFlag.out);
+
+  const viaEnv = await runCli(
+    ["engine-run", "--repo", repo, "--harness", "opencode", "--yes", "--dry-run"],
+    { FORGE_ENGINE_ATTACH: "0" },
+  );
+  assert.equal(viaEnv.code, 0, viaEnv.out);
+  assert.ok(viaEnv.out.includes("--no-keep-alive"), viaEnv.out);
+});

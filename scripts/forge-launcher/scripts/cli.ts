@@ -15,7 +15,7 @@ Usage:
                             [--concurrency <n>] [--task-timeout-ms <ms>] [--max-retries <n>]
                             [--retry-delay-ms <ms>] [--heartbeat-ms <ms>] [--yes] [--dry-run]
                             [--viz [--viz-port <n>]] [--no-open]
-                            [--keep-alive [--keep-alive-port <n>]] [--attach <url>]
+                            [--keep-alive [--keep-alive-port <n>]] [--no-keep-alive] [--attach <url>]
   forge-launcher resume [--repo <path>] [--non-interactive] [--dry-run]
 
 Launcher options:

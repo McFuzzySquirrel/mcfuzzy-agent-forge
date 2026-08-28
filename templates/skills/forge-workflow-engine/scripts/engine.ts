@@ -31,6 +31,7 @@ import {
 
 import { ArtifactStore } from "./artifacts.ts";
 import { captureWorktree, runTaskValidation, verifyTaskResult } from "./verify.ts";
+import { clearControl, readControl } from "./control.ts";
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -149,9 +150,17 @@ async function executeTask(
   state: WorkflowState,
   opts: EngineOptions,
   store: ArtifactStore,
+  shouldStop: () => boolean,
 ): Promise<WorkflowState> {
   const { task } = entry;
   const agent = findAgentForTask(agents, task.ownerAgent);
+
+  // A stop/pause was requested while this task was queued in the current wave.
+  // Leave it pending so `run` resumes it later instead of starting it.
+  if (shouldStop()) {
+    console.log(`[engine] Stop requested before task ${task.id} started; leaving it pending.`);
+    return state;
+  }
 
   if (!agent) {
     console.warn(`[engine] No agent found for task ${task.id} (owner: ${task.ownerAgent ?? "unassigned"}). Skipping.`);
@@ -228,6 +237,13 @@ async function executeTask(
 
   for (let attempt = 0; attempt <= opts.maxRetries; attempt += 1) {
     if (attempt > 0) {
+      // A stop/pause arrived during the failed attempt. Do not start another
+      // retry; reset the task back to pending so `run` resumes it later.
+      if (shouldStop()) {
+        console.log(`[engine] Stop requested between attempts for task ${task.id}; leaving it pending.`);
+        const pendingTask = { ...currentState.tasks[task.id]!, status: "pending" as const, startedAt: undefined };
+        return { ...currentState, tasks: { ...currentState.tasks, [task.id]: pendingTask } };
+      }
       console.log(`[engine] Retrying task ${task.id} (attempt ${attempt + 1}/${opts.maxRetries + 1})`);
       writeAuditEvent(opts.auditPath, {
         timestamp: new Date().toISOString(),
@@ -258,6 +274,7 @@ async function executeTask(
         opts.repoRoot,
         contextBlock,
         task.timeoutMs ?? opts.taskTimeoutMs,
+        opts.maxRetries,
       );
     } finally {
       if (heartbeat) clearInterval(heartbeat);
@@ -411,7 +428,13 @@ export async function runEngine(opts: EngineOptions): Promise<WorkflowState> {
     : 1;
   let currentPhaseId: string | undefined;
 
-  while (!isComplete(manifest, state) && !opts.pauseRequested) {
+  // Stop signal: the in-process flag (SIGINT/SIGTERM) OR a pause/stop request
+  // written to the control file by `workflow-engine pause|stop`. Checked at the
+  // top of each wave so a running task finishes before the run pauses.
+  const shouldStop = (): boolean =>
+    Boolean(opts.pauseRequested || opts.stopRequested?.() || readControl(opts.controlPath) !== null);
+
+  while (!isComplete(manifest, state) && !shouldStop()) {
     if (hasFailed(state)) {
       console.error("[engine] Stopping: one or more tasks failed.");
       state = { ...state, status: "failed" };
@@ -446,7 +469,7 @@ export async function runEngine(opts: EngineOptions): Promise<WorkflowState> {
     // derived from the same base state and returns only its own task's
     // transition, which is merged back deterministically below.
     const results = await mapLimit(ready, concurrency, (entry) =>
-      executeTask(entry, agents, state, opts, store),
+      executeTask(entry, agents, state, opts, store, shouldStop),
     );
 
     for (let i = 0; i < ready.length; i += 1) {
@@ -465,14 +488,26 @@ export async function runEngine(opts: EngineOptions): Promise<WorkflowState> {
     syncProgressMd(opts.progressPath, state, manifest);
   }
 
-  if (opts.pauseRequested && !isComplete(manifest, state) && !hasFailed(state)) {
+  if (shouldStop() && !isComplete(manifest, state)) {
+    // Stop/pause wins over a failed task in the same wave: record the run as
+    // paused (resume-able) rather than failed, and always clear the request.
     state = { ...state, status: "paused" };
     writeAuditEvent(opts.auditPath, {
       timestamp: new Date().toISOString(),
       action: "run.paused",
       runId: state.runId,
+      note: "Stop/pause requested (control file or signal)",
     });
     console.log("[engine] Paused after current task.");
+  } else if (hasFailed(state)) {
+    state = { ...state, status: "failed" };
+    writeAuditEvent(opts.auditPath, {
+      timestamp: new Date().toISOString(),
+      action: "run.failed",
+      runId: state.runId,
+      note: "One or more tasks failed",
+    });
+    console.log("[engine] Run ended in failure.");
   } else if (isComplete(manifest, state)) {
     state = { ...state, status: "complete" };
     writeAuditEvent(opts.auditPath, {
@@ -482,6 +517,10 @@ export async function runEngine(opts: EngineOptions): Promise<WorkflowState> {
     });
     console.log("[engine] Workflow complete.");
   }
+
+  // Always clear a pending stop/pause request: the run ended (paused, failed,
+  // or complete) and the next `run` must start clean.
+  clearControl(opts.controlPath);
 
   saveState(opts.statePath, state);
   syncProgressMd(opts.progressPath, state, manifest);
@@ -523,7 +562,7 @@ export async function replayTask(taskId: string, opts: EngineOptions): Promise<W
   if (!task || !phaseId) throw new Error(`Task '${taskId}' not found in manifest.`);
 
   const entry = { phaseId, phaseIndex: manifest.phases.findIndex((p) => p.id === phaseId), task };
-  state = await executeTask(entry, agents, state, opts, store);
+  state = await executeTask(entry, agents, state, opts, store, () => false);
   if (!hasFailed(state) && isComplete(manifest, state)) {
     state = { ...state, status: "complete" };
   }

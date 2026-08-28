@@ -1,13 +1,14 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { execFileSync } from "node:child_process";
-import { mkdtempSync, mkdirSync, writeFileSync } from "node:fs";
+import { mkdtempSync, mkdirSync, writeFileSync, readFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
 import { allDepsComplete, isComplete, isTaskDone, mapLimit, nextReadyTasks, runEngine } from "./engine.ts";
 import { runCommand } from "./harness/run.ts";
-import type { EngineOptions, ExecutionManifest, HarnessAdapter, ManifestTask, TaskStatus, WorkflowState } from "./types.ts";
+import { readControl, writeControl } from "./control.ts";
+import type { EngineOptions, ExecutionManifest, HarnessAdapter, ManifestTask, TaskResult, TaskStatus, WorkflowState } from "./types.ts";
 
 type ManifestPhase = ExecutionManifest["phases"][number];
 
@@ -154,6 +155,7 @@ class RecordingHarness implements HarnessAdapter {
   readonly name = "recording";
   readonly supportsConcurrency = false;
   timeouts: number[] = [];
+  retries: number[] = [];
 
   async invoke(
     _agent: Parameters<HarnessAdapter["invoke"]>[0],
@@ -162,8 +164,10 @@ class RecordingHarness implements HarnessAdapter {
     _repoRoot: string,
     _contextBlock?: string,
     timeoutMs?: number,
+    maxRetries?: number,
   ) {
     this.timeouts.push(timeoutMs ?? -1);
+    this.retries.push(maxRetries ?? -1);
     return {
       success: true,
       outputFiles: [],
@@ -171,6 +175,31 @@ class RecordingHarness implements HarnessAdapter {
       stderr: "",
       durationMs: 1,
     };
+  }
+}
+
+/** Harness that calls `onInvoke` when a task starts and blocks until released. */
+class GatedHarness implements HarnessAdapter {
+  readonly name = "gated";
+  readonly supportsConcurrency = false;
+  private release: (() => void) | undefined;
+
+  constructor(private readonly onInvoke: () => void) {}
+
+  async invoke(): Promise<TaskResult> {
+    this.onInvoke();
+    await new Promise<void>((resolve) => { this.release = resolve; });
+    return {
+      success: true,
+      outputFiles: [],
+      stdout: "[gated] ok",
+      stderr: "",
+      durationMs: 1,
+    };
+  }
+
+  releaseNow(): void {
+    this.release?.();
   }
 }
 
@@ -251,6 +280,8 @@ function engineOptionsFor(
     progressPath: join(fixture.root, "docs", "PROGRESS.md"),
     auditPath: join(fixture.root, "docs", "EXECUTION-AUDIT.jsonl"),
     artifactsPath: join(fixture.root, "docs", "artifacts"),
+    controlPath: join(fixture.root, "docs", "engine-control.json"),
+    pidPath: join(fixture.root, "docs", "engine.pid"),
     harness,
     maxRetries: 0,
     retryDelayMs: 0,
@@ -284,6 +315,15 @@ test("effective task timeout falls back to the engine taskTimeoutMs when a task 
   assert.deepEqual(harness.timeouts, [9_999]);
 });
 
+test("engine forwards maxRetries to the harness invoke call", async () => {
+  const fixture = makeEngineFixture();
+  const harness = new RecordingHarness();
+  const state = await runEngine(engineOptionsFor(fixture, harness, 1_000, { maxRetries: 3 }));
+
+  assert.equal(state.status, "complete");
+  assert.deepEqual(harness.retries, [3]);
+});
+
 test("runEngine recovers a leftover 'running' task as pending (crash recovery)", async () => {
   const fixture = makeEngineFixture();
   const statePath = join(fixture.root, "docs", "WORKFLOW-STATE.json");
@@ -313,6 +353,115 @@ test("runEngine recovers a leftover 'running' task as pending (crash recovery)",
   assert.equal(state.status, "complete");
   assert.equal(state.tasks["1.1"]?.status, "complete");
   assert.equal(harness.timeouts.length, 1, "the recovered task should actually run, not deadlock");
+});
+
+test("a stop request in the control file pauses the run before any task executes", async () => {
+  const fixture = makeEngineFixture();
+  const controlPath = join(fixture.root, "docs", "engine-control.json");
+  writeControl(controlPath, "stop");
+
+  const harness = new RecordingHarness();
+  const state = await runEngine(engineOptionsFor(fixture, harness, 1_000));
+
+  assert.equal(state.status, "paused");
+  assert.equal(state.tasks["1.1"]?.status, "pending", "no task should run before the stop");
+  assert.equal(harness.timeouts.length, 0, "the harness should never be invoked");
+  assert.equal(readControl(controlPath), null, "the control file should be cleared after honoring it");
+});
+
+test("a stop request written mid-run pauses after the current task wave", async () => {
+  const fixture = makeEngineFixture({
+    dependencies: [],
+  });
+  // Two sequential tasks so the stop lands between waves.
+  const manifestPath = fixture.manifestPath;
+  const manifest = JSON.parse(readFileSync(manifestPath, "utf8")) as ExecutionManifest;
+  manifest.phases[0]!.tasks.push({
+    id: "1.2",
+    title: "Build a second thing",
+    description: "Build another thing",
+    ownerAgent: "worker",
+    dependencies: ["1.1"],
+    expectedOutputs: [],
+    validationCommands: [],
+    approvalRequired: false,
+    sourceLines: ["- Task 1.2: Build a second thing"],
+  });
+  writeFileSync(manifestPath, JSON.stringify(manifest), "utf8");
+
+  const controlPath = join(fixture.root, "docs", "engine-control.json");
+  // Block the first task until the control file has been written, so the stop
+  // arrives mid-run (while task 1.1 is executing) rather than before any task.
+  let release: () => void;
+  const gate = new Promise<void>((resolve) => { release = resolve; });
+  const harness = new GatedHarness(() => {
+    if (!readControl(controlPath)) writeControl(controlPath, "stop");
+    release();
+  });
+
+  const runPromise = runEngine(engineOptionsFor(fixture, harness, 1_000));
+  await gate;
+  writeControl(controlPath, "stop");
+  harness.releaseNow();
+  const state = await runPromise;
+
+  assert.equal(state.status, "paused");
+  assert.equal(state.tasks["1.1"]?.status, "complete", "the in-flight task finishes before pausing");
+  assert.equal(state.tasks["1.2"]?.status, "pending", "the second task must not start after the stop");
+  assert.equal(readControl(controlPath), null);
+});
+
+test("the in-process stopRequested flag pauses the run (SIGINT/SIGTERM path)", async () => {
+  const fixture = makeEngineFixture();
+  const harness = new RecordingHarness();
+  const opts = engineOptionsFor(fixture, harness, 1_000);
+  opts.stopRequested = () => true;
+
+  const state = await runEngine(opts);
+
+  assert.equal(state.status, "paused");
+  assert.equal(state.tasks["1.1"]?.status, "pending");
+  assert.equal(harness.timeouts.length, 0);
+});
+
+test("a stop during a wave leaves same-wave siblings pending (per-task check)", async () => {
+  const fixture = makeEngineFixture({
+    dependencies: [],
+  });
+  // Two independent tasks: both are ready in the SAME wave. The stop arrives
+  // while 1.1 runs; 1.2 must not start, even though it shares the wave.
+  const manifestPath = fixture.manifestPath;
+  const manifest = JSON.parse(readFileSync(manifestPath, "utf8")) as ExecutionManifest;
+  manifest.phases[0]!.tasks.push({
+    id: "1.2",
+    title: "Build a second thing",
+    description: "Build another thing",
+    ownerAgent: "worker",
+    dependencies: [],
+    expectedOutputs: [],
+    validationCommands: [],
+    approvalRequired: false,
+    sourceLines: ["- Task 1.2: Build a second thing"],
+  });
+  writeFileSync(manifestPath, JSON.stringify(manifest), "utf8");
+
+  const controlPath = join(fixture.root, "docs", "engine-control.json");
+  let release: () => void;
+  const gate = new Promise<void>((resolve) => { release = resolve; });
+  const harness = new GatedHarness(() => {
+    if (!readControl(controlPath)) writeControl(controlPath, "stop");
+    release();
+  });
+
+  const runPromise = runEngine(engineOptionsFor(fixture, harness, 1_000, { maxConcurrency: 1 }));
+  await gate;
+  harness.releaseNow();
+  const state = await runPromise;
+
+  assert.equal(state.status, "paused");
+  assert.equal(state.tasks["1.1"]?.status, "complete");
+  assert.equal(state.tasks["1.2"]?.status, "pending", "the same-wave sibling must not start after the stop");
+  assert.equal(readControl(controlPath), null);
 });
 
 test("runCommand kills a child that exceeds a custom timeout and reports it", async () => {

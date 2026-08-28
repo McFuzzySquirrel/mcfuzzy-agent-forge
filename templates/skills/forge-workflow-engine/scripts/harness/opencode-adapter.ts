@@ -60,13 +60,14 @@ export class OpenCodeAdapter implements HarnessAdapter {
     repoRoot: string,
     contextBlock?: string,
     timeoutMs?: number,
+    maxRetries?: number,
   ): Promise<TaskResult> {
     const start = Date.now();
 
     const modelFlag = agent.model ? ["--model", agent.model] : [];
     const agentFlag = this.canSelectAgent(agent, repoRoot) ? ["--agent", agent.name] : [];
 
-    const prompt = this.buildPrompt(agent, task, contextBlock, agentFlag.length === 0);
+    const prompt = this.buildPrompt(agent, task, contextBlock, agentFlag.length === 0, timeoutMs, maxRetries);
     // `--dir` pins the project directory explicitly: `opencode run` resolves its
     // working directory from its parent process, not the child's spawn `cwd`, so
     // relying on `cwd: repoRoot` alone runs tasks in the wrong project when the
@@ -147,6 +148,8 @@ export class OpenCodeAdapter implements HarnessAdapter {
     task: ManifestTask,
     contextBlock?: string,
     inlinePersona = true,
+    timeoutMs?: number,
+    maxRetries?: number,
   ): string {
     const personaBlock = inlinePersona ? agent.rawBody : null;
 
@@ -156,6 +159,20 @@ export class OpenCodeAdapter implements HarnessAdapter {
 
     const validationHint = task.validationCommands.length > 0
       ? `\n\nValidation commands to run after completion: ${task.validationCommands.join("; ")}`
+      : "";
+
+    const budgetHints: string[] = [];
+    if (timeoutMs !== undefined) {
+      budgetHints.push(`Per-task timeout: ${Math.round(timeoutMs / 1000)}s`);
+    }
+    if (maxRetries !== undefined) {
+      budgetHints.push(`results failing verification are retried up to ${maxRetries} time(s)`);
+    }
+    const budgetHint = budgetHints.length > 0
+      ? `\n\nExecution budget: ${budgetHints.join("; ")}.` +
+        (maxRetries !== undefined
+          ? " Do not rely on retries to fix hollow output - deliver complete results first."
+          : "")
       : "";
 
     const executeDirective =
@@ -171,6 +188,7 @@ export class OpenCodeAdapter implements HarnessAdapter {
       task.description,
       contextHints,
       validationHint,
+      budgetHint,
       executeDirective,
     ].filter(Boolean).join("\n").trim();
   }

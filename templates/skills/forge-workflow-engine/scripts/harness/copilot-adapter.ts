@@ -46,11 +46,12 @@ export class CopilotAdapter implements HarnessAdapter {
     repoRoot: string,
     contextBlock?: string,
     timeoutMs?: number,
+    maxRetries?: number,
   ): Promise<TaskResult> {
     const start = Date.now();
 
     const native = this.canSelectAgent(agent, repoRoot);
-    const prompt = this.buildPrompt(agent, task, contextBlock, !native);
+    const prompt = this.buildPrompt(agent, task, contextBlock, !native, timeoutMs, maxRetries);
     const args = ["-p", prompt, ...this.extraFlags];
 
     const result = await runCommand(this.bin, args, {
@@ -117,6 +118,8 @@ export class CopilotAdapter implements HarnessAdapter {
     task: ManifestTask,
     contextBlock?: string,
     inlinePersona = true,
+    timeoutMs?: number,
+    maxRetries?: number,
   ): string {
     const agentBlock = inlinePersona
       ? (existsSync(agent.path) ? readFileSync(agent.path, "utf8") : agent.rawBody)
@@ -128,6 +131,20 @@ export class CopilotAdapter implements HarnessAdapter {
 
     const validationHint = task.validationCommands.length > 0
       ? `\n\nValidation commands to run after completion: ${task.validationCommands.join("; ")}`
+      : "";
+
+    const budgetHints: string[] = [];
+    if (timeoutMs !== undefined) {
+      budgetHints.push(`Per-task timeout: ${Math.round(timeoutMs / 1000)}s`);
+    }
+    if (maxRetries !== undefined) {
+      budgetHints.push(`results failing verification are retried up to ${maxRetries} time(s)`);
+    }
+    const budgetHint = budgetHints.length > 0
+      ? `\n\nExecution budget: ${budgetHints.join("; ")}.` +
+        (maxRetries !== undefined
+          ? " Do not rely on retries to fix hollow output - deliver complete results first."
+          : "")
       : "";
 
     const executeDirective =
@@ -143,6 +160,7 @@ export class CopilotAdapter implements HarnessAdapter {
       task.description,
       contextHints,
       validationHint,
+      budgetHint,
       executeDirective,
     ].filter(Boolean).join("\n").trim();
   }
