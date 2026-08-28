@@ -157,6 +157,33 @@ The pre-run summary prints the effective timeout. Adapters that shell out
 (`opencode`, `copilot`, `flowforge-kernel`) enforce it on the child process; the
 `openai` adapter enforces it on the API call via `AbortController`.
 
+### Output verification gate (strict by default)
+
+A harness call that exits 0 is **not** proof that a task did anything — a model
+can reply "Ready for the task." and produce no files. The engine therefore
+verifies a successful call before marking the task complete:
+
+- **Expected outputs.** If a task declares `expectedOutputs`, every one must
+  exist after the harness call. Missing outputs → the attempt is treated as
+  failed, retried up to `--max-retries`, then marked `failed` with the missing
+  list as the error.
+- **No-op detection.** Tasks that declare no `expectedOutputs` must show evidence
+  of work: file changes in the git working tree (diffed before/after the call,
+  engine-owned `docs/` files excluded) **or** a substantive agent response. A
+  task with no changes and only trivial output ("Ready for the task.") is a
+  failed attempt, not a completion.
+- **Relax it** with `--allow-noop` / `FORGE_ENGINE_ALLOW_NOOP=1` to skip the
+  no-op heuristic (the expected-output check stays).
+- **Validation commands.** Pass `--run-validation` /
+  `FORGE_ENGINE_RUN_VALIDATION=1` to execute each task's manifest
+  `validationCommands` (cwd = repo root) and require them all to exit 0 before
+  the task counts as complete. Tasks that declare validation are gated on it
+  rather than the no-op heuristic. (The commands are otherwise only *shown* in
+  the task prompt.)
+
+The pre-run summary prints the gate mode. The final summary and `status` also
+flag tasks completed with no recorded output files, so a hollow run is visible.
+
 ### Check status
 
 ```bash
@@ -200,6 +227,7 @@ The engine is harness-agnostic. Select the backend with `--harness`:
 | `OPENCODE_EXTRA_FLAGS` | *(empty)* | Extra flags appended to every `opencode run` call |
 | `FORGE_ENGINE_ATTACH` | *(empty)* | `1` to auto-start an `opencode serve` instance for the run (`--keep-alive`) |
 | `FORGE_ENGINE_ATTACH_URL` | *(empty)* | Attach tasks to an existing `opencode serve` URL instead of cold-starting per task (`--attach`) |
+| `FORGE_ENGINE_NATIVE_AGENT` | *(empty)* | `0` to force the inline-persona fallback instead of `--agent <name>` for `.opencode/` agents |
 
 ### Copilot adapter environment variables
 

@@ -22,6 +22,7 @@ function usage(): never {
 Usage:
   npm run workflow-engine -- run     [--repo <path>] [--harness opencode|copilot|openai|stub|flowforge-kernel]
                                      [--max-retries <n>] [--retry-delay-ms <ms>] [--heartbeat-ms <ms>] [--concurrency <n>] [--task-timeout-ms <ms>] [--yes]
+                                     [--allow-noop] [--run-validation]
                                      [--viz [port]] [--no-open]
                                      [--keep-alive] [--keep-alive-port <port>] [--attach <url>]
   npm run workflow-engine -- status  [--repo <path>]
@@ -34,6 +35,10 @@ Environment variables:
   FORGE_ENGINE_HEARTBEAT_MS  Heartbeat interval in ms while a task runs (default: 15000)
   FORGE_ENGINE_CONCURRENCY   Max ready tasks to run in parallel (default: 1; ignored unless harness supports concurrency)
   FORGE_ENGINE_TASK_TIMEOUT_MS   Per-task timeout in ms (default: 600000 / 10 min; per-task manifest timeoutMs overrides)
+  FORGE_ENGINE_ALLOW_NOOP        "1" to allow tasks that produce no expected outputs, no file changes, and only
+                                 trivial agent output to count as complete (bypasses the no-op output gate)
+  FORGE_ENGINE_RUN_VALIDATION    "1" to execute each task's manifest validationCommands and require them to pass
+                                 before the task is marked complete
   FORGE_ENGINE_ATTACH   "1" to auto-start an opencode attach server for the run (same as --keep-alive)
   FORGE_ENGINE_ATTACH_URL   Attach tasks to an existing opencode serve instance instead of cold-starting per task
   OPENCODE_BIN           Path to opencode binary (default: opencode)
@@ -148,6 +153,8 @@ function buildOptions(
     heartbeatMs: Number(flag(args, "--heartbeat-ms") ?? process.env["FORGE_ENGINE_HEARTBEAT_MS"] ?? "15000"),
     maxConcurrency: Number(flag(args, "--concurrency") ?? process.env["FORGE_ENGINE_CONCURRENCY"] ?? "1"),
     taskTimeoutMs: Number(flag(args, "--task-timeout-ms") ?? process.env["FORGE_ENGINE_TASK_TIMEOUT_MS"] ?? String(DEFAULT_TASK_TIMEOUT_MS)),
+    allowNoop: hasFlag(args, "--allow-noop") || process.env["FORGE_ENGINE_ALLOW_NOOP"] === "1",
+    runValidation: hasFlag(args, "--run-validation") || process.env["FORGE_ENGINE_RUN_VALIDATION"] === "1",
     pauseRequested: false,
   };
 }
@@ -167,6 +174,8 @@ async function confirmPreRun(opts: EngineOptions, args: string[]): Promise<void>
   console.log(`  Phases  : ${manifest.phases.length}`);
   console.log(`  Tasks   : ${taskCount}`);
   console.log(`  Timeout : ${opts.taskTimeoutMs}ms per task (--task-timeout-ms / per-task timeoutMs overrides)`);
+  console.log(`  Output gate: ${opts.allowNoop ? "relaxed (--allow-noop: no-op tasks allowed)" : "strict (missing outputs / no-op tasks are retried then failed)"}`);
+  if (opts.runValidation) console.log("  Validation: running manifest validationCommands per task (--run-validation)");
   console.log(`  Manifest: ${opts.manifestPath}`);
   if (manifest.featureOrder) console.log(`  Features: ${manifest.featureOrder.join(" → ")}`);
   if (manifest.responsibilityMatrixPath) console.log(`  Matrix  : ${manifest.responsibilityMatrixPath}`);
@@ -247,6 +256,14 @@ async function cmdRun(args: string[]): Promise<void> {
     const total = Object.keys(state.tasks).length;
     console.log(`Tasks: ${completed}/${total} complete`);
 
+    const hollow = Object.values(state.tasks).filter(
+      (t) => t.status === "complete" && (!t.outputFiles || t.outputFiles.length === 0),
+    );
+    if (hollow.length > 0) {
+      console.warn(`Warning: ${hollow.length} task(s) completed with no recorded output files: ${hollow.map((t) => t.taskId).join(", ")}`);
+      console.warn("Verify these tasks actually produced their deliverables before relying on the result.");
+    }
+
     if (state.blockers.length > 0) {
       console.log(`Blockers:`);
       for (const b of state.blockers) console.log(`  - ${b}`);
@@ -277,6 +294,8 @@ async function cmdStatus(args: string[]): Promise<void> {
     skipped: tasks.filter((t) => t.status === "skipped").length,
   };
 
+  const hollow = tasks.filter((t) => t.status === "complete" && (!t.outputFiles || t.outputFiles.length === 0));
+
   console.log(JSON.stringify({
     runId: state.runId,
     status: state.status,
@@ -285,6 +304,7 @@ async function cmdStatus(args: string[]): Promise<void> {
     lastUpdatedAt: state.lastUpdatedAt,
     currentPhase: state.currentPhase,
     taskSummary: byStatus,
+    completedWithoutOutput: hollow.map((t) => t.taskId),
     failedTasks: tasks.filter((t) => t.status === "failed").map((t) => ({
       taskId: t.taskId,
       attempt: t.attempt,

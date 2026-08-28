@@ -53,6 +53,7 @@ npx forge-launcher@beta bootstrap [TARGET_DIR] [--harness agents|github|claude|o
 npx forge-launcher@beta engine-run [--repo <path>] [--harness <h>] [--concurrency <n>]
                               [--task-timeout-ms <ms>] [--yes] [--dry-run]
                               [--keep-alive [--keep-alive-port <n>]] [--attach <url>]
+                              [--allow-noop] [--run-validation]
 npx forge-launcher@beta resume [--repo <path>] [--non-interactive] [--dry-run]
 ```
 
@@ -677,6 +678,8 @@ reflect the running build (monitor + resume) rather than the manual
   | `FORGE_ENGINE_HARNESS` | 8 | Per-task harness for the workflow engine: `opencode` (default), `copilot`, `openai`, `stub`, or `flowforge-kernel` |
   | `FORGE_ENGINE_VIZ` | 8 | `1` to launch the live Forge Board dashboard with the engine run |
   | `FORGE_ENGINE_VIZ_PORT` | 8 | Dashboard port when `FORGE_ENGINE_VIZ=1` (default `4299`) |
+  | `FORGE_ENGINE_ALLOW_NOOP` | 8 | `1` to relax the engine's output-verification no-op heuristic (`engine-run --allow-noop`) |
+  | `FORGE_ENGINE_RUN_VALIDATION` | 8 | `1` to run each task's manifest `validationCommands` before marking it complete (`engine-run --run-validation`) |
 
 All other step inputs (repo name, description, visibility, parent directory) use their defaults in non-interactive mode. Override them by setting the variables before running:
 

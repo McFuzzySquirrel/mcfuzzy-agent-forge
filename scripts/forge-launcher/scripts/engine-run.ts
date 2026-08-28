@@ -21,6 +21,8 @@ export interface EngineRunOptions {
   keepAlive?: boolean;
   keepAlivePort?: string;
   attach?: string;
+  allowNoop?: boolean;
+  runValidation?: boolean;
 }
 
 const HARNESS_ROOTS = [".agents", ".opencode", ".claude", ".github"];
@@ -49,6 +51,8 @@ export async function engineRun(opts: EngineRunOptions = {}): Promise<number> {
   const keepAlive = opts.keepAlive ?? process.env.FORGE_ENGINE_ATTACH === "1";
   const keepAlivePort = opts.keepAlivePort ?? "";
   const attach = opts.attach ?? process.env.FORGE_ENGINE_ATTACH_URL ?? "";
+  const allowNoop = opts.allowNoop ?? process.env.FORGE_ENGINE_ALLOW_NOOP === "1";
+  const runValidation = opts.runValidation ?? process.env.FORGE_ENGINE_RUN_VALIDATION === "1";
 
   if (granularity && granularity !== "fine" && granularity !== "coarse") {
     throw new Error(`Invalid --granularity '${granularity}'. Choose 'fine' or 'coarse'.`);
@@ -136,6 +140,8 @@ export async function engineRun(opts: EngineRunOptions = {}): Promise<number> {
   if (keepAlive) engineFlags.push("--keep-alive");
   if (keepAlivePort) engineFlags.push("--keep-alive-port", keepAlivePort);
   if (attach) engineFlags.push("--attach", attach);
+  if (allowNoop) engineFlags.push("--allow-noop");
+  if (runValidation) engineFlags.push("--run-validation");
 
   if (dryRun) {
     out(`  [dry-run] (cd '${engineDir}' && npm run workflow-engine -- run ${engineFlags.join(" ")})`);
@@ -166,6 +172,8 @@ export function engineRunCli(args: string[]): Promise<number> {
       case "--keep-alive": opts.keepAlive = true; break;
       case "--keep-alive-port": opts.keepAlivePort = args[++i]; break;
       case "--attach": opts.attach = args[++i]; break;
+      case "--allow-noop": opts.allowNoop = true; break;
+      case "--run-validation": opts.runValidation = true; break;
       default: throw new Error(`Unknown option: ${a}`);
     }
   }

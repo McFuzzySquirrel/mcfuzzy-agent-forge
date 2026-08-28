@@ -103,6 +103,10 @@ export class CopilotAdapter implements HarnessAdapter {
       ? `\n\nValidation commands to run after completion: ${task.validationCommands.join("; ")}`
       : "";
 
+    const executeDirective =
+      "\n\nPerform the task now. Do not merely acknowledge it or say you are ready - " +
+      "create or modify the files required, then list the files you created or changed.";
+
     return [
       agentBody,
       "",
@@ -112,6 +116,7 @@ export class CopilotAdapter implements HarnessAdapter {
       task.description,
       contextHints,
       validationHint,
+      executeDirective,
     ].filter(Boolean).join("\n").trim();
   }
 }

@@ -133,9 +133,11 @@ export class OpenCodeAdapter implements HarnessAdapter {
    * its file must live under the project's `.opencode/agents/` directory - the
    * only harness root opencode scans for agent definitions. For `.agents`,
    * `.claude`, and `.github` roots the adapter falls back to inlining the
-   * persona into the prompt (see `buildPrompt`).
+   * persona into the prompt (see `buildPrompt`). Set FORGE_ENGINE_NATIVE_AGENT=0
+   * to force the inline-persona fallback even for `.opencode` agents.
    */
   private canSelectAgent(agent: AgentDescriptor, repoRoot: string): boolean {
+    if (process.env["FORGE_ENGINE_NATIVE_AGENT"] === "0") return false;
     if (!agent.name) return false;
     return relative(repoRoot, agent.path).split(/[\\/]/).includes(".opencode");
   }
@@ -156,6 +158,10 @@ export class OpenCodeAdapter implements HarnessAdapter {
       ? `\n\nValidation commands to run after completion: ${task.validationCommands.join("; ")}`
       : "";
 
+    const executeDirective =
+      "\n\nPerform the task now. Do not merely acknowledge it or say you are ready - " +
+      "create or modify the files required, then list the files you created or changed.";
+
     return [
       personaBlock,
       "",
@@ -165,6 +171,7 @@ export class OpenCodeAdapter implements HarnessAdapter {
       task.description,
       contextHints,
       validationHint,
+      executeDirective,
     ].filter(Boolean).join("\n").trim();
   }
 }

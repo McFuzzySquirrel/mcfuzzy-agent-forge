@@ -102,3 +102,34 @@ test("never passes --agent when the agent has no name", async () => {
   assert.ok(!recorded.includes("--agent"));
   assert.ok(recorded.some((arg) => arg.includes("You are a Discovery Engineer")));
 });
+
+test("prompt includes the execute-now directive so agents do not just acknowledge", async () => {
+  const root = mkdtempSync(join(tmpdir(), "forge-directive-repo-"));
+  const agent = makeAgent(join(root, ".agents", "agents", "discovery-engineer.md"));
+  const shim = makeShim();
+
+  await invokeWith(shim, agent, root);
+
+  const recorded = JSON.parse(readFileSync(shim.argsFile, "utf8")) as string[];
+  const prompt = recorded[recorded.length - 1] ?? "";
+  assert.ok(prompt.includes("Perform the task now"), prompt);
+  assert.ok(prompt.includes("list the files you created or changed"), prompt);
+});
+
+test("FORGE_ENGINE_NATIVE_AGENT=0 forces the inline-persona fallback for .opencode agents", async () => {
+  const root = mkdtempSync(join(tmpdir(), "forge-nonative-repo-"));
+  const agent = makeAgent(join(root, ".opencode", "agents", "discovery-engineer.md"));
+  const shim = makeShim();
+  const original = process.env.FORGE_ENGINE_NATIVE_AGENT;
+  process.env.FORGE_ENGINE_NATIVE_AGENT = "0";
+  try {
+    await invokeWith(shim, agent, root);
+  } finally {
+    if (original === undefined) delete process.env.FORGE_ENGINE_NATIVE_AGENT;
+    else process.env.FORGE_ENGINE_NATIVE_AGENT = original;
+  }
+
+  const recorded = JSON.parse(readFileSync(shim.argsFile, "utf8")) as string[];
+  assert.ok(!recorded.includes("--agent"));
+  assert.ok(recorded.some((arg) => arg.includes("You are a Discovery Engineer")));
+});

@@ -67,6 +67,65 @@ At `forge-auto-build`'s pre-flight gate, type `GO --workflow-engine`. The team i
 
 ---
 
+## Output verification gate
+
+A harness call that exits 0 is **not** proof a task did anything. The engine
+verifies every successful call before marking the task complete:
+
+- **Expected outputs** — every `task.expectedOutputs` must exist after the call.
+  Missing → the attempt fails, retries, then the task is marked `failed`.
+- **No-op detection** — tasks with no `expectedOutputs` must show file changes in
+  the git working tree (diffed before/after the call) or a substantive response.
+  A task that changed nothing and replied only "Ready for the task." is a failed
+  attempt, never a completion.
+- **Relax** with `--allow-noop` / `FORGE_ENGINE_ALLOW_NOOP=1` (expected-output
+  check stays).
+- **Validation commands** — `--run-validation` / `FORGE_ENGINE_RUN_VALIDATION=1`
+  executes each task's manifest `validationCommands` (cwd = repo root) and
+  requires exit 0 before completion.
+
+The final run summary and `workflow-engine status` flag tasks completed with no
+recorded output files, so a hollow "complete" run is visible. On the opencode
+harness, `FORGE_ENGINE_NATIVE_AGENT=0` forces the inline-persona prompt instead
+of `--agent <name>` (the pre-v3.21 behavior).
+
+---
+
+## Upgrading the engine in an existing project
+
+The gate (and this fix) lives entirely in the forge skill code — the PRD,
+feature documents, generated agent team, and `docs/EXECUTION-MANIFEST.json` do
+**not** need to change. To upgrade a project that was bootstrapped with an older
+forge, refresh the skills and reset the run state:
+
+```bash
+# 1. Get the fixed forge code (e.g. the release/main branch once merged).
+git clone -b <branch> https://github.com/McFuzzySquirrel/mcfuzzy-agent-forge.git ~/forge-fixed
+
+# 2. Refresh the forge skills in the existing project. --force overwrites only
+#    the forge *template* agents and skills (including this engine); generated
+#    agents, PRD, features, and the manifest are untouched.
+cd ~/forge-fixed/scripts/forge-launcher
+npm install && npm run build
+node dist/cli.js bootstrap ~/path/to/project --harness <copilot|opencode|claude|agents> --force
+
+# 3. Reset the old run: a completed WORKFLOW-STATE.json makes the engine a no-op.
+cd ~/path/to/project
+rm -f docs/WORKFLOW-STATE.json
+rm -rf docs/artifacts && rm -f docs/EXECUTION-AUDIT.jsonl   # optional cleanup
+
+# 4. Re-run with the strict output gate (default on).
+cd ~/forge-fixed/scripts/forge-launcher
+node dist/cli.js engine-run --repo ~/path/to/project --harness <copilot|opencode> --yes
+```
+
+A hollow task (no expected outputs produced, no file changes, only trivial
+output) is now retried then marked `failed` with a reason instead of being
+reported complete. Use `--allow-noop` only if the old lenient behavior is
+wanted (the expected-output check still applies).
+
+---
+
 ## Harness adapters
 
 The engine is harness-agnostic. Select the backend with `--harness`:

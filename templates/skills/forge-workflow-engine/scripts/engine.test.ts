@@ -1,12 +1,13 @@
 import assert from "node:assert/strict";
 import test from "node:test";
+import { execFileSync } from "node:child_process";
 import { mkdtempSync, mkdirSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
 import { allDepsComplete, isComplete, isTaskDone, mapLimit, nextReadyTasks, runEngine } from "./engine.ts";
 import { runCommand } from "./harness/run.ts";
-import type { ExecutionManifest, HarnessAdapter, ManifestTask, TaskStatus, WorkflowState } from "./types.ts";
+import type { EngineOptions, ExecutionManifest, HarnessAdapter, ManifestTask, TaskStatus, WorkflowState } from "./types.ts";
 
 type ManifestPhase = ExecutionManifest["phases"][number];
 
@@ -237,7 +238,12 @@ description: Builds things.
   return { root, manifestPath };
 }
 
-function engineOptionsFor(fixture: EngineFixture, harness: HarnessAdapter, taskTimeoutMs: number) {
+function engineOptionsFor(
+  fixture: EngineFixture,
+  harness: HarnessAdapter,
+  taskTimeoutMs: number,
+  overrides: Partial<EngineOptions> = {},
+) {
   return {
     repoRoot: fixture.root,
     manifestPath: fixture.manifestPath,
@@ -251,7 +257,12 @@ function engineOptionsFor(fixture: EngineFixture, harness: HarnessAdapter, taskT
     heartbeatMs: 0,
     maxConcurrency: 1,
     taskTimeoutMs,
+    // These tests target other behaviour (timeout precedence, crash recovery),
+    // so the output-verification gate is relaxed unless a test opts into it.
+    allowNoop: true,
+    runValidation: false,
     pauseRequested: false,
+    ...overrides,
   };
 }
 
@@ -315,4 +326,135 @@ test("runCommand kills a child that exceeds a custom timeout and reports it", as
   assert.equal(result.status, null);
   assert.match(result.error ?? "", /timed out after 150ms/);
   assert.ok(Date.now() - start < 5_000, "runCommand should not wait for the child's own sleep");
+});
+
+// ─── Output verification gate ────────────────────────────────────────────────
+
+/** A harness that always "succeeds" without producing files or real output. */
+class HollowHarness implements HarnessAdapter {
+  readonly name = "hollow";
+  readonly supportsConcurrency = false;
+  readonly stdout: string;
+
+  constructor(stdout = "Ready for the task.") {
+    this.stdout = stdout;
+  }
+
+  async invoke(
+    _agent: Parameters<HarnessAdapter["invoke"]>[0],
+    _task: ManifestTask,
+    _context: WorkflowState,
+    _repoRoot: string,
+    _contextBlock?: string,
+    _timeoutMs?: number,
+  ) {
+    return {
+      success: true,
+      outputFiles: [],
+      stdout: this.stdout,
+      stderr: "",
+      durationMs: 1,
+    };
+  }
+}
+
+/** A harness that writes a file into the repo, so a git diff detects the work. */
+class FileWritingHarness implements HarnessAdapter {
+  readonly name = "file-writing";
+  readonly supportsConcurrency = false;
+
+  async invoke(
+    _agent: Parameters<HarnessAdapter["invoke"]>[0],
+    _task: ManifestTask,
+    _context: WorkflowState,
+    repoRoot: string,
+    _contextBlock?: string,
+    _timeoutMs?: number,
+  ) {
+    mkdirSync(join(repoRoot, "src"), { recursive: true });
+    writeFileSync(join(repoRoot, "src", "thing.ts"), "export const thing = 1;\n", "utf8");
+    return {
+      success: true,
+      outputFiles: ["src/thing.ts"],
+      stdout: "[file-writing] wrote src/thing.ts",
+      stderr: "",
+      durationMs: 1,
+    };
+  }
+}
+
+function initGit(root: string): void {
+  execFileSync("git", ["init", "-q"], { cwd: root });
+}
+
+test("output gate: a task whose expectedOutputs are missing is marked failed, not complete", async () => {
+  const fixture = makeEngineFixture({ expectedOutputs: ["src/out.ts"] });
+  const harness = new HollowHarness();
+  const state = await runEngine(engineOptionsFor(fixture, harness, 1_000, { allowNoop: false }));
+
+  assert.equal(state.status, "failed");
+  assert.equal(state.tasks["1.1"]?.status, "failed");
+  assert.match(state.tasks["1.1"]?.errorMessage ?? "", /expected outputs missing: src\/out\.ts/);
+});
+
+test("output gate: a no-op task (no changes, trivial output) is marked failed", async () => {
+  const fixture = makeEngineFixture();
+  const harness = new HollowHarness("Ready for the task.");
+  const state = await runEngine(engineOptionsFor(fixture, harness, 1_000, { allowNoop: false }));
+
+  assert.equal(state.status, "failed");
+  assert.equal(state.tasks["1.1"]?.status, "failed");
+  assert.match(state.tasks["1.1"]?.errorMessage ?? "", /produced no changes and no substantive output/);
+});
+
+test("output gate: --allow-noop relaxes the no-op heuristic", async () => {
+  const fixture = makeEngineFixture();
+  const harness = new HollowHarness("Ready for the task.");
+  const state = await runEngine(engineOptionsFor(fixture, harness, 1_000, { allowNoop: true }));
+
+  assert.equal(state.status, "complete");
+  assert.equal(state.tasks["1.1"]?.status, "complete");
+});
+
+test("output gate: a substantive agent response passes the no-op heuristic", async () => {
+  const fixture = makeEngineFixture();
+  const substantive = [
+    "Implemented the task end to end.",
+    "src/foo.ts: added the scanner; test/foo.test.ts: added unit coverage;",
+    "typecheck passes, all 42 tests green. This is a long response.",
+  ].join("\n");
+  const harness = new HollowHarness(substantive);
+  const state = await runEngine(engineOptionsFor(fixture, harness, 1_000, { allowNoop: false }));
+
+  assert.equal(state.status, "complete");
+  assert.equal(state.tasks["1.1"]?.status, "complete");
+});
+
+test("output gate: a file change detected via git diff passes, even with trivial output", async () => {
+  const fixture = makeEngineFixture();
+  initGit(fixture.root);
+  const harness = new FileWritingHarness();
+  const state = await runEngine(engineOptionsFor(fixture, harness, 1_000, { allowNoop: false }));
+
+  assert.equal(state.status, "complete");
+  assert.equal(state.tasks["1.1"]?.status, "complete");
+});
+
+test("output gate: a failing manifest validation command marks the task failed", async () => {
+  const fixture = makeEngineFixture({ validationCommands: ["exit 1"] });
+  const harness = new HollowHarness();
+  const state = await runEngine(engineOptionsFor(fixture, harness, 1_000, { allowNoop: false, runValidation: true }));
+
+  assert.equal(state.status, "failed");
+  assert.equal(state.tasks["1.1"]?.status, "failed");
+  assert.match(state.tasks["1.1"]?.errorMessage ?? "", /validation command failed/);
+});
+
+test("output gate: a passing manifest validation command allows completion", async () => {
+  const fixture = makeEngineFixture({ validationCommands: ["true"] });
+  const harness = new HollowHarness();
+  const state = await runEngine(engineOptionsFor(fixture, harness, 1_000, { allowNoop: false, runValidation: true }));
+
+  assert.equal(state.status, "complete");
+  assert.equal(state.tasks["1.1"]?.status, "complete");
 });

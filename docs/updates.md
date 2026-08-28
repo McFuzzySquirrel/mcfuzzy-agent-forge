@@ -4,6 +4,43 @@ Detailed release and change notes for McFuzzy Agent Forge.
 
 ---
 
+## August 2026 - v3.23
+
+### Workflow engine output verification gate (no more hollow "complete" runs)
+
+A run could previously report **complete** with no code: every harness adapter
+returned `success` on a zero-exit call, and the engine marked the task complete
+without checking that anything was produced. A model replying "Ready for the
+task." exited 0, the engine synthesized an artifact with `filesChanged: []` for
+every task, and the run finished "successfully" with no solution.
+
+- **Expected-output gate.** A task declaring `expectedOutputs` now requires every
+  one to exist after the harness call. Missing → the attempt fails, retries, then
+  the task is marked `failed` with the missing list.
+- **No-op detection.** Tasks declaring no `expectedOutputs` must show evidence of
+  work: a git working-tree diff before/after the call (engine-owned `docs/` files
+  excluded) or a substantive agent response. "Ready for the task." with no file
+  changes is a failed attempt, never a completion.
+- **`--allow-noop` / `FORGE_ENGINE_ALLOW_NOOP=1`** relaxes the no-op heuristic
+  (the expected-output check stays).
+- **`--run-validation` / `FORGE_ENGINE_RUN_VALIDATION=1`** executes each task's
+  manifest `validationCommands` (cwd = repo root) and requires them all to pass
+  before the task completes. Tasks with validation are gated on it.
+- **Hollow-run visibility.** The final summary and `status` flag tasks completed
+  with no recorded output files; `forge-launcher resume` does too.
+- **Prompt hardening.** Both the opencode and copilot adapters append an explicit
+  "perform the task now, then list the files you changed" directive, so agents
+  stop merely acknowledging tasks.
+- **`FORGE_ENGINE_NATIVE_AGENT=0`** restores the pre-v3.21 opencode behavior
+  (inline the persona instead of `--agent <name>`) for `.opencode/` harnesses.
+- New `scripts/verify.ts` (gate + git-diff + validation runner) with unit tests;
+  engine tests cover the gate, `--allow-noop`, and validation-command failure.
+  Engine suite green; `forge-launcher engine-run` passes the new flags through.
+
+- [ADR-029](adr/029-output-verification-gate.md): the engine's output-verification gate.
+
+---
+
 ## August 2026 - v3.22
 
 ### Launcher as the single entry point: `forge-launcher resume`, review links, conditional in-harness command

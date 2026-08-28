@@ -1122,7 +1122,7 @@ interface ResumeEngineState {
   status?: string;
   harness?: string;
   currentPhase?: string;
-  tasks?: Record<string, { taskId?: string; status?: string; errorMessage?: string }>;
+  tasks?: Record<string, { taskId?: string; status?: string; errorMessage?: string; outputFiles?: string[] }>;
   blockers?: string[];
 }
 
@@ -1351,6 +1351,10 @@ function printEngineStatus(engine: ResumeEngineState): void {
   const counts: Record<string, number> = {};
   for (const t of tasks) counts[t.status ?? "pending"] = (counts[t.status ?? "pending"] ?? 0) + 1;
   out(`    - Tasks    : ${Object.entries(counts).map(([k, v]) => `${k}: ${v}`).join(", ") || "0"}`);
+  const hollow = tasks.filter((t) => t.status === "complete" && (!t.outputFiles || t.outputFiles.length === 0));
+  if (hollow.length) {
+    out(`    - Completed without outputs : ${hollow.map((t) => t.taskId).join(", ")} (verify these actually delivered)`);
+  }
   const failed = tasks.filter((t) => t.status === "failed");
   if (failed.length) {
     out(`    - Failed   : ${failed.map((t) => `${t.taskId ?? "?"}${t.errorMessage ? ` (${t.errorMessage})` : ""}`).join("; ")}`);
