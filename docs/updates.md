@@ -16,6 +16,9 @@ Detailed release and change notes for McFuzzy Agent Forge.
   in-flight task finishes, state is saved as `paused`, and `run` resumes from the
   last completed task. Previously `pause` only flipped the state file and the
   loop never re-read it, so a live run could not be stopped.
+- **`forge-launcher engine-run --stop` / `--pause`** request the same graceful
+  stop/pause from the launcher (no manifest or recompile needed) — the terminal
+  counterpart to `workflow-engine stop`.
 - **`forge-launcher resume`** offers **"Stop the engine after the current task"**
   when it detects a live run, and its resume/monitor commands now reuse the last
   configured engine options instead of the minimal `--harness`-only command.
@@ -23,8 +26,9 @@ Detailed release and change notes for McFuzzy Agent Forge.
   (harness, granularity, concurrency, timeout, retries, viz, keep-alive, attach)
   to `docs/engine-config.json`; resume loads them (explicit env vars still win).
 - New tests: control-file round-trip, stop-before-any-task, stop-mid-run after
-  the current task, the SIGINT/SIGTERM flag path, resume carrying persisted
-  config, and env-overrides-persisted. See ADR-032.
+  the current task, the SIGINT/SIGTERM flag path, launcher `--stop`/`--pause`
+  delegation, resume carrying persisted config, and env-overrides-persisted.
+  See ADR-032.
 
 ---
 
