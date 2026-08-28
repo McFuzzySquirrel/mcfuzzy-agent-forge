@@ -109,6 +109,21 @@ export interface EngineOptions {
    * its own `timeoutMs`. Defaults to `DEFAULT_TASK_TIMEOUT_MS`.
    */
   taskTimeoutMs: number;
+  /**
+   * Output-verification gate. When `false` (default, strict) a task whose
+   * `expectedOutputs` are missing, or (when it declares none) that produced no
+   * file changes and only trivial agent output, is treated as a failed attempt
+   * and retried / marked failed — it is never reported complete. Set `true`
+   * (`--allow-noop` / `FORGE_ENGINE_ALLOW_NOOP=1`) to skip the no-op heuristic
+   * (the expected-output check stays).
+   */
+  allowNoop: boolean;
+  /**
+   * When `true` (`--run-validation` / `FORGE_ENGINE_RUN_VALIDATION=1`), execute
+   * each task's manifest `validationCommands` (cwd = repo root) after the
+   * harness call and require them to pass before the task is marked complete.
+   */
+  runValidation: boolean;
   pauseRequested: boolean;
 }
 

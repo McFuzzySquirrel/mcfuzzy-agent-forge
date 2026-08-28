@@ -20,21 +20,14 @@ git init
 
 ## Step 1 - Bootstrap Agent Forge into Your Project
 
-Run the bootstrap script from the Agent Forge repo, pointing it at your new project:
+Copy the agent and skill templates into your project's harness directory with the launcher (Node, cross-platform):
 
-**Bash (Linux/macOS):**
 ```bash
-./scripts/bootstrap.sh ~/Projects/my-new-project
-```
-
-**PowerShell (Windows):**
-```powershell
-.\scripts\bootstrap.ps1 -Target C:\Projects\my-new-project
-```
-
-**Force overwrite if re-bootstrapping:**
-```bash
-./scripts/bootstrap.sh ~/Projects/my-new-project --force
+forge-launcher bootstrap ~/Projects/my-new-project           # default → .agents/
+forge-launcher bootstrap ~/Projects/my-new-project --harness github   # GitHub Copilot → .github/
+forge-launcher bootstrap ~/Projects/my-new-project --harness claude   # Claude Code → .claude/
+forge-launcher bootstrap ~/Projects/my-new-project --harness opencode # opencode → .opencode/
+forge-launcher bootstrap ~/Projects/my-new-project --force   # force overwrite when re-bootstrapping
 ```
 
 After bootstrapping, commit the templates so your harness can detect them:
@@ -59,32 +52,22 @@ If you want to go from a one-liner idea to a **reviewed, confirmed PRD** without
 @workspace /forge-auto-build-prd I want to build [describe your idea in one sentence].
 ```
 
-`forge-build-prd` presents its PRD review checklist before the document is saved. Reply `revise: <notes>` to iterate on the PRD, or approve to finish. Once `docs/PRD.md` exists (plus `docs/product-vision.md` + `docs/features/*.md` when decomposed), hand off to `forge-auto-build` for the agent team and build execution.
+`forge-build-prd` presents its PRD review checklist before the document is saved. Reply `revise: <notes>` to iterate on the PRD, or approve to finish. Once `docs/PRD.md` exists (plus `docs/product-vision.md` + `docs/features/*.md` when decomposed), generate the team and build — `forge-launcher resume` from the terminal, or in the harness `/forge-build-agent-team` then `@project-orchestrator` / `@workflow-orchestrator`.
 
 If you prefer to drive the PRD yourself, use `forge-build-prd` directly (Step 2 below).
 
 ---
 
-## Full Auto Build - One Command, Entire Pipeline (Requires an Existing PRD)
+## Full Auto Build - Terminal Fast-Path (Requires an Existing PRD)
 
-`forge-auto-build` is the **execution fast-path**: it takes an existing, reviewed PRD and runs the entire build pipeline with no manual hand-offs. It does **not** generate a PRD - that is a deliberate, separate stage. Use it once `docs/PRD.md` exists (or the decomposed `docs/product-vision.md` + `docs/features/*.md` layout):
+`forge-auto-build` is the **terminal/headless execution fast-path**: it takes an existing, reviewed PRD and runs the entire build pipeline with no manual hand-offs. It does **not** generate a PRD - that is a deliberate, separate stage. It is driven by `forge-launcher` (`--headless`, or the auto-draft flow) rather than invoked as an in-harness slash command — inside a chat harness use `@project-orchestrator` (interactive) or `@workflow-orchestrator` (autonomous) instead.
 
 `forge-build-agent-team` → *(optional)* `forge-assign-models` → `forge-orchestrate-build` **(all phases, with validation + commit after each phase)**
 
 ```
-@workspace /forge-auto-build docs/PRD.md
-```
-
-From a decomposed PRD (Product Vision + Features):
-
-```
-@workspace /forge-auto-build
-```
-
-With per-agent model assignment:
-
-```
-@workspace /forge-auto-build docs/PRD.md GO --assign-models
+# Terminal / headless (recommended entry):
+forge-launcher --headless
+opencode run --auto "/forge-auto-build Use docs/PRD.md as the project PRD. GO"
 ```
 
 > If no PRD exists yet, `forge-auto-build` stops at its pre-flight check and directs you to `forge-auto-build-prd` or `forge-build-prd` first. It will not interview you for a one-line idea.
@@ -99,7 +82,7 @@ With per-agent model assignment:
 
 > **Using the workflow engine:** at the pre-flight gate, type `GO --workflow-engine` to execute Stage 3 through `forge-workflow-engine` instead of the prompt-driven `forge-orchestrate-build`. That path installs the execution packages, compiles `docs/EXECUTION-MANIFEST.json`, and runs the engine (default harness: OpenCode).
 
-> **Resuming after interruption:** If the run is interrupted, re-invoke `forge-auto-build` in the same repo. It reads `docs/PROGRESS.md` and resumes from the last completed task without re-running already-committed stages.
+> **Resuming after interruption:** If the run is interrupted, re-invoke the same flow — `forge-launcher resume` picks up at the current stage, or re-run `forge-auto-build` headless in the same repo (it reads `docs/PROGRESS.md` / `docs/WORKFLOW-STATE.json` and resumes from the last completed task).
 
 ---
 
@@ -440,18 +423,17 @@ Only modify skills I've approved in the audit report.
 |------|-----------------|
 | **Build reviewed PRD from idea** | `@workspace /forge-auto-build-prd I want to build [idea]` |
 | **Headless PRD from idea** | `opencode run --auto --dir "<repo>" "/forge-auto-build-prd Use docs/IDEA.md as the project idea. Headless mode: auto-proceed with default assumptions and approve the PRD. After drafting, run a PRD gap check: every major component must have clear acceptance criteria, a defined tech stack, non-functional requirements (performance, security, privacy), and implementation phases; fill any gaps before approving."` |
-| **Full auto build (from existing PRD)** | `@workspace /forge-auto-build docs/PRD.md` |
-| **Headless full auto build** | `opencode run --auto --dir "<repo>" "/forge-auto-build Use docs/PRD.md as the project PRD. GO"` or `copilot -p "..." --yolo` |
-| **Full auto build (with model assignment)** | `@workspace /forge-auto-build docs/PRD.md GO --assign-models` |
-| **Full auto build (workflow-engine path)** | `@workspace /forge-auto-build docs/PRD.md GO --workflow-engine` |
-| **Headless build via workflow engine** | `opencode run --auto --dir "<repo>" "/forge-auto-build Use docs/PRD.md as the project PRD. GO --workflow-engine"` |
-| **Launcher headless (whole pipeline)** | `./scripts/forge-launcher.sh --headless` (add `--dry-run` to print the command) |
-| **Launcher auto-draft (idea → PRD → team)** | `./scripts/forge-launcher.sh --draft` (non-interactive: set `FORGE_AUTO_DRAFT=1`) |
-| Bootstrap (Bash, default) | `./scripts/bootstrap.sh ~/Projects/my-project` |
-| Bootstrap (Bash, GitHub) | `./scripts/bootstrap.sh ~/Projects/my-project --harness github` |
-| Bootstrap (Bash, Claude) | `./scripts/bootstrap.sh ~/Projects/my-project --harness claude` |
-| Bootstrap (PowerShell) | `.\scripts\bootstrap.ps1 -Target C:\Projects\my-project` |
-| Bootstrap (PowerShell, harness) | `.\scripts\bootstrap.ps1 -Target C:\Projects\my-project -Harness github` |
+| **Interactive build in the harness** | `@workspace @project-orchestrator Execute the full build` |
+| **Autonomous engine build** | `forge-launcher engine-run --harness opencode --yes` or `@workspace @workflow-orchestrator Run the workflow` |
+| **Pick up where you left off** | `forge-launcher resume` (or `--repo <path>`) |
+| **Full auto build (terminal/headless, requires PRD)** | `forge-launcher --headless` (drives `opencode run --auto "/forge-auto-build Use docs/PRD.md as the project PRD. GO"` / `copilot -p "..." --yolo`) |
+| **Full auto build (workflow-engine path)** | `opencode run --auto --dir "<repo>" "/forge-auto-build Use docs/PRD.md as the project PRD. GO --workflow-engine"` |
+| **Launcher headless (whole pipeline)** | `forge-launcher --headless` (add `--dry-run` to print the command) |
+| **Launcher auto-draft (idea → PRD → team)** | `forge-launcher --draft` (non-interactive: set `FORGE_AUTO_DRAFT=1`) |
+| Bootstrap (default) | `forge-launcher bootstrap ~/Projects/my-project` |
+| Bootstrap (GitHub Copilot) | `forge-launcher bootstrap ~/Projects/my-project --harness github` |
+| Bootstrap (Claude Code) | `forge-launcher bootstrap ~/Projects/my-project --harness claude` |
+| Bootstrap (opencode) | `forge-launcher bootstrap ~/Projects/my-project --harness opencode` |
 | Build PRD from seed docs | `@workspace /forge-build-prd Build a complete PRD using docs/...` |
 | Build PRD from idea | `@workspace /forge-build-prd I want to build [idea]...` |
 | PRD quality pass | `@workspace /forge-build-prd Review docs/PRD.md for gaps...` |
@@ -492,7 +474,7 @@ Only modify skills I've approved in the audit report.
 - **One phase at a time** - resist asking the orchestrator to "build everything". Phases are checkpoints; review each one.
 - **Commit after each phase** - the orchestrator will prompt you, but make a habit of it. `git add . && git commit -m "feat: complete Phase N"`.
 - **The PRD is the source of truth** - if something looks wrong, fix the PRD first, then re-run the affected steps.
-- **Re-bootstrap safely** - run `bootstrap.sh --force` any time you want to pull in updated Agent Forge templates without losing your generated agents.
+- **Re-bootstrap safely** - run `forge-launcher bootstrap . --force` any time you want to pull in updated Agent Forge templates without losing your generated agents.
 - **Optimize generated skills** - after the initial build, run `@workspace /forge-optimize-skills` to audit your skills against best practices. The audit surfaces specific improvements you can apply immediately.
 - **Full auto build** - use `forge-auto-build` when a reviewed PRD already exists (`docs/PRD.md`, or the decomposed layout) and you want a single command to take you from that PRD to committed, validated code. One pre-flight gate, then fully autonomous. If no PRD exists yet, run `forge-auto-build-prd` first. If the run is interrupted, just re-invoke it -it resumes from `docs/PROGRESS.md`.
 - **Dark orchestration** - use `workflow-orchestrator` + the workflow engine for fully autonomous execution through a real harness (OpenCode or OpenAI API). Dry-run first with `--harness stub` to verify the engine setup before spending tokens.

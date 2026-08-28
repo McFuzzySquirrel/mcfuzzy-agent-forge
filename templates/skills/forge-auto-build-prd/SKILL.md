@@ -1,6 +1,6 @@
 ---
 name: forge-auto-build-prd
-description: "Meta-skill that takes a project idea and produces a reviewed, confirmed PRD - with automatic decomposition when the PRD qualifies - then stops before team generation. Chains: idea confirmation → forge-build-prd (interview, review, save) → automatic decomposition check → hand off to forge-auto-build. Use this skill when you are starting a new project from an idea and no docs/PRD.md (or decomposed product vision + features) exists yet."
+description: "Meta-skill that takes a project idea and produces a reviewed, confirmed PRD - with automatic decomposition when the PRD qualifies - then stops before team generation. Chains: idea confirmation → forge-build-prd (interview, review, save) → automatic decomposition check → hand off to team generation and build execution (forge-launcher resume / forge-build-agent-team, then @project-orchestrator or @workflow-orchestrator; forge-auto-build remains the terminal/headless fast-path). Use this skill when you are starting a new project from an idea and no docs/PRD.md (or decomposed product vision + features) exists yet."
 ---
 
 # Skill: Build a PRD from an Idea (Meta-Skill)
@@ -9,8 +9,10 @@ You are running the **PRD-creation stage** of the Agent Forge pipeline on behalf
 of the user. Your job is to take a project idea and produce a confirmed,
 reviewed PRD in `docs/PRD.md` - automatically decomposing it into a Product
 Vision + Feature documents when the objective criteria are met - and then stop.
-Team generation and build execution are deliberately out of scope here; that is
-`forge-auto-build`'s job, and it requires the PRD to exist first.
+Team generation and build execution are deliberately out of scope here; they
+start from the reviewed PRD (via `forge-launcher resume`, `forge-build-agent-team`,
+then `@project-orchestrator` / `@workflow-orchestrator`, or the terminal
+fast-path `forge-auto-build`).
 
 You do not re-implement what the underlying skills do. You **invoke**
 `forge-build-prd` and let it own its full process. Your value is confirming the
@@ -21,8 +23,8 @@ idea up front, verifying the outputs, and making the hand-off explicit.
 ## Operating Principles
 
 - **PRD creation is a deliberate stage.** Do not start team generation or any
-  build work. This skill ends with a reviewed PRD and a clear pointer to
-  `forge-auto-build`.
+  build work. This skill ends with a reviewed PRD and a clear pointer to the
+  next stage (team generation + build execution).
 - **Invoke, do not re-implement.** The PRD interview, drafting, review, and
   automatic decomposition belong to `forge-build-prd`. You sequence and verify,
   never duplicate its logic.
@@ -66,16 +68,18 @@ any of the following is true:
    understood it.
 2. **Check the repo state:**
    - Does `docs/PRD.md` already exist? If yes, tell the user the PRD is already
-     there and offer to run `forge-auto-build` against it instead.
+     there and offer to proceed to team generation (via `forge-launcher resume`
+     or `/forge-build-agent-team`) instead.
    - Does `docs/product-vision.md` with `docs/features/*.md` exist? If yes,
-     tell the user a decomposed PRD is already present and offer to run
-     `forge-auto-build` against it instead.
+     tell the user a decomposed PRD is already present and offer to proceed to
+     team generation instead.
 3. **State the flow** explicitly:
    - Step 1: `forge-build-prd` → interview, draft, review, save `docs/PRD.md`
    - Step 2 (automatic): decomposition check → `forge-decompose-prd` when the
      PRD qualifies (15+ functional requirements or 3+ implementation phases)
-   - Step 3: verification and hand-off → `forge-auto-build` for the agent team
-     and build execution
+   - Step 3: verification and hand-off → team generation (`forge-launcher
+     resume` / `forge-build-agent-team`), then `@project-orchestrator`
+     (interactive) or `@workflow-orchestrator` (autonomous)
 4. **Wait for confirmation.** Do not proceed until the user confirms the idea
    is right.
 
@@ -84,7 +88,7 @@ any of the following is true:
 1. **Echo the idea** (from `docs/IDEA.md` if the invocation references it, or
    from the invocation text).
 2. **Check the repo state** as above; if a PRD already exists, stop and report
-   that `forge-auto-build` is the correct next step instead.
+   that team generation is the correct next step instead.
 3. **Skip the confirmation pause and the clarifying-question interview.** Do
    not stop for answers. Build the PRD from `docs/IDEA.md` plus anything in
    `docs/research/`, stating a default assumption for every unknown and listing
@@ -141,18 +145,21 @@ verification before continuing.
 
 ---
 
-### Step 3: Hand Off to `forge-auto-build`
+### Step 3: Hand Off to Team Generation + Build
 
 Report the outcome and stop. Present:
 
 - The path(s) produced: `docs/PRD.md` (and `docs/product-vision.md` +
   `docs/features/*.md` when decomposed).
-- The recommended next step: run `forge-auto-build` to generate the agent team
-  and execute the build. Note that `forge-auto-build` requires this PRD and
-  will not generate one itself.
+- The recommended next steps:
+  1. Generate the agent team: `forge-launcher resume` (auto-draft) or
+     `/forge-build-agent-team`.
+  2. Execute the build: `@project-orchestrator` (interactive, in-harness),
+     `@workflow-orchestrator` (autonomous), or the terminal fast-path
+     `forge-auto-build`.
 - If the user did not fully review the PRD, point them back to
   `docs/PRD.md` (or the product vision + features) and let them review before
-  running `forge-auto-build`.
+  continuing.
 
 Do **not** proceed to team generation, model assignment, or build execution.
 
@@ -161,8 +168,9 @@ Do **not** proceed to team generation, model assignment, or build execution.
 ## Gotchas
 
 - **Do not start the build.** This skill ends at the PRD hand-off. Team
-  generation and execution belong to `forge-auto-build`, which requires the PRD
-  to exist first.
+  generation and execution start from the reviewed PRD (via `forge-launcher
+  resume`, `/forge-build-agent-team`, then `@project-orchestrator` /
+  `@workflow-orchestrator`).
 - **Do not present a decomposition opt-in question.** When the PRD qualifies
   (15+ functional requirements or 3+ implementation phases), decomposition runs
   automatically inside `forge-build-prd`. Only non-qualifying PRDs stay

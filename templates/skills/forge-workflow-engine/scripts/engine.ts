@@ -30,6 +30,7 @@ import {
 } from "./state.ts";
 
 import { ArtifactStore } from "./artifacts.ts";
+import { captureWorktree, runTaskValidation, verifyTaskResult } from "./verify.ts";
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -217,6 +218,12 @@ async function executeTask(
   // normalizes any leftover "running" tasks back to "pending" on load.
   saveState(opts.statePath, currentState);
 
+  // Output-verification baseline: a snapshot of the working tree taken before
+  // the harness runs, so a "successful" call that changed nothing can be
+  // detected as a no-op instead of being reported complete. Only needed when
+  // the no-op heuristic is active (--allow-noop disables it).
+  const baseline = opts.allowNoop ? null : await captureWorktree(opts.repoRoot);
+
   console.log(`[engine] Starting task ${task.id}: ${task.title} (@${agent.name})`);
 
   for (let attempt = 0; attempt <= opts.maxRetries; attempt += 1) {
@@ -256,7 +263,42 @@ async function executeTask(
       if (heartbeat) clearInterval(heartbeat);
     }
 
+    // Record a failed attempt (either the harness failed or the output gate
+    // rejected a hollow "success"). Exhausting retries marks the task failed.
+    const failTask = (msg: string): WorkflowState => {
+      console.error(`[engine] Task ${task.id} FAILED after ${attempt + 1} attempt(s): ${msg}`);
+      currentState = markTaskFailed(currentState, task.id, msg);
+      writeAuditEvent(opts.auditPath, {
+        timestamp: new Date().toISOString(),
+        action: "task.failed",
+        runId: currentState.runId,
+        taskId: task.id,
+        phaseId: entry.phaseId,
+        durationMs: result.durationMs,
+        note: msg,
+      });
+      return currentState;
+    };
+
     if (result.success) {
+      // ── Output verification: never report a task complete with no evidence ─
+      const verified = await verifyTaskResult(task, result, baseline, {
+        repoRoot: opts.repoRoot,
+        allowNoop: opts.allowNoop,
+        runValidation: opts.runValidation,
+      });
+      let failReason = verified.ok ? undefined : verified.reason;
+
+      if (!failReason && opts.runValidation) {
+        const validation = await runTaskValidation(task, opts.repoRoot, task.timeoutMs ?? opts.taskTimeoutMs);
+        if (!validation.ok) failReason = validation.reason;
+      }
+
+      if (failReason) {
+        if (attempt === opts.maxRetries) return failTask(failReason);
+        continue; // hollow success → retry
+      }
+
       // ── Artifact creation ─────────────────────────────────────────────────
       let artifactId: string | undefined;
 
@@ -306,19 +348,7 @@ async function executeTask(
     }
 
     if (attempt === opts.maxRetries) {
-      const msg = result.errorMessage ?? result.stderr;
-      console.error(`[engine] Task ${task.id} FAILED after ${attempt + 1} attempt(s): ${msg}`);
-      currentState = markTaskFailed(currentState, task.id, msg);
-      writeAuditEvent(opts.auditPath, {
-        timestamp: new Date().toISOString(),
-        action: "task.failed",
-        runId: currentState.runId,
-        taskId: task.id,
-        phaseId: entry.phaseId,
-        durationMs: result.durationMs,
-        note: msg,
-      });
-      return currentState;
+      return failTask(result.errorMessage ?? result.stderr);
     }
   }
 

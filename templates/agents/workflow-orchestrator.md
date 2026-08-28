@@ -13,14 +13,14 @@ All execution logic - DAG ordering, retry handling, harness dispatch, state pers
 
 Use this agent when:
 
-- The project PRD and agent team are already generated (post `forge-auto-build` Stage 1 or `forge-build-agent-team`)
+- The project PRD and agent team are already generated (via `forge-build-agent-team`, the launcher's auto-draft, or `forge-launcher resume`)
 - `docs/EXECUTION-MANIFEST.json` exists (post `forge-execution-adapter compile`)
 - You want **fully autonomous execution** - no phase approvals, no per-task prompts
 - You are running in a CI/CD context or scheduled pipeline
 
 Do **not** use this agent if:
 - The PRD does not exist yet - use `forge-auto-build-prd` or `forge-build-prd` first
-- The agent team does not exist yet - use `forge-build-agent-team` (or `forge-auto-build`) first
+- The agent team does not exist yet - use `forge-build-agent-team` (or `forge-launcher resume`) first
 - You want per-phase review and approval - use `@project-orchestrator` instead
 - The manifest has not been compiled - run `forge-execution-adapter compile` first
 
@@ -130,7 +130,7 @@ You are **not** responsible for:
 - **forge-execution-adapter** - Must compile the manifest before this agent can run
 - **forge-assign-models** - Assigns `model:` frontmatter to agents so the harness uses the right model
 - **project-orchestrator** - The interactive alternative; both can be used on the same project
-- **forge-auto-build** - Can select this agent's engine path as its Stage 4 build executor when the user chooses `--workflow-engine`
+- **forge-launcher** - The terminal on-ramp: `forge-launcher engine-run` is the canonical way to start/resume the engine, and `forge-launcher resume` re-enters a project at its current stage
 - **The user** - Receives status reports and resolves blockers that the engine flags
 
 ---

@@ -26,26 +26,27 @@ Agent Forge has several deliberately different paths. Which one you exercise in 
 | Manual PRD authoring | `forge-build-prd` | `docs/PRD.md` | Parts 1, 2 |
 | Automatic decomposition of a qualifying PRD | `forge-build-prd` Step 5 (auto-invokes `forge-decompose-prd`) | `docs/product-vision.md` + `docs/features/*.md` | see note in Part 1 |
 | Manual decomposition of any PRD | `forge-decompose-prd` | decomposed layout | — |
-| PRD → team → build, hands-free | `forge-auto-build` (default: `forge-orchestrate-build`) | agent files, skills, built project | Parts 2, 3 |
-| Same, but harness-driven (dark orchestration) | `forge-auto-build` + `GO --workflow-engine`, or `workflow-orchestrator` directly | compiled manifest + engine-driven build | Parts 2, 3, 4, 6 |
+| PRD → team → build, hands-free | `forge-auto-build` (terminal/headless fast-path) | agent files, skills, built project | Parts 2, 3 |
+| Same, but harness-driven (dark orchestration) | `forge-launcher engine-run` / `workflow-orchestrator` | compiled manifest + engine-driven build | Parts 2, 3, 4, 6 |
 | Same, but with parallel dispatch | engine `--concurrency <n>` / `FORGE_ENGINE_CONCURRENCY` (harness-gated) | ready tasks run in bounded waves; wall-clock = critical path | Part 9 |
-| Manual, phase-by-phase control | `forge-build-agent-team` → `project-orchestrator` | incremental phases reviewed one at a time | Part 1 |
+| Interactive build in the harness | `project-orchestrator` (`/forge-orchestrate-build`) | incremental phases reviewed one at a time | Part 1 |
 | Add a feature to a finished project | `forge-build-feature-prd` → `forge-build-agent-team` (Feature Increment) | feature PRD + targeted team update | — |
 | Per-agent model selection | `forge-assign-models` | `docs/MODEL-PLAN.md`, `model:`/`modelFallback:` frontmatter | — |
+| Pick up where you left off | `forge-launcher resume` | re-enters at idea/PRD/team/build stage | Part 8 |
 
 ### Prompt-driven vs. dark orchestration (the execution fork)
 
 There are two ways to run the build, and you must choose one per run:
 
-- **Prompt-driven (`forge-orchestrate-build`)** – invoked through `project-orchestrator` or as `forge-auto-build`'s default Stage 3. A human confirms each phase before the next starts; validation runs and a commit is made after every phase. Use this when you want per-phase review.
-- **Dark orchestration (`forge-workflow-engine`)** – selected with `GO --workflow-engine` inside `forge-auto-build`, or invoked directly by `workflow-orchestrator`. One pre-run gate, then the engine dispatches every task unattended through a harness adapter (`opencode`, `openai`, `stub`, or `flowforge-kernel`). Use this when you want zero human input between tasks.
+- **Prompt-driven (`forge-orchestrate-build`)** – invoked through `@project-orchestrator` inside a chat harness (or as `forge-auto-build`'s default Stage 3 on the terminal fast-path). A human confirms each phase before the next starts; validation runs and a commit is made after every phase. Use this when you want per-phase review.
+- **Dark orchestration (`forge-workflow-engine`)** – started with `forge-launcher engine-run`, invoked by `@workflow-orchestrator`, or selected with `GO --workflow-engine` inside `forge-auto-build`. One pre-run gate, then the engine dispatches every task unattended through a harness adapter (`opencode`, `openai`, `stub`, or `flowforge-kernel`). Use this when you want zero human input between tasks.
 
 Both write `docs/PROGRESS.md` in the same format, so you can switch between them on the same project.
 
 ### Quick orientation for the tests below
 
 - **Parts 1–2** build the team from a hand-written PRD (`forge-build-agent-team` + `forge-orchestrate-build`/engine), so the PRD must already exist. This matches the new lifecycle: the PRD is a deliberate, reviewed artifact and the build never manufactures it.
-- **Part 3** exercises the whole launcher journey: no PRD → the launcher queues `forge-auto-build-prd` to produce one, then `forge-auto-build` runs the team and the build.
+- **Part 3** exercises the whole launcher journey: no PRD → the launcher queues `forge-auto-build-prd` to produce one, then the auto-draft/engine flow runs the team and the build.
 
 ---
 
@@ -74,8 +75,8 @@ This is the explicit opposite of the interactive `project-orchestrator` flow, wh
 ```bash
 mkdir ~/forge-test && cd ~/forge-test
 git init
-# Run the bootstrap from your Agent Forge clone
-bash /path/to/mcfuzzy-agent-forge/scripts/bootstrap.sh
+# Run the bootstrap (from a forge-launcher install or your Agent Forge clone)
+forge-launcher bootstrap .
 git add -A && git commit -m "bootstrap"
 ```
 
@@ -224,7 +225,7 @@ This part verifies the autonomous execution layer. Recall: **dark orchestration 
 **Step 1 – Prepare a workflow-engine-ready project**
 
 Either:
-- run `forge-auto-build` from an existing PRD (`docs/PRD.md`, or the decomposed layout) and choose the engine path with `GO --workflow-engine` at its pre-flight gate, or
+- run `forge-launcher engine-run` from an existing PRD — it installs the adapter, compiles `docs/EXECUTION-MANIFEST.json`, and starts the engine, or
 - use the team you generated in Part 1 and compile a manifest manually.
 
 The manifest must exist at `docs/EXECUTION-MANIFEST.json` before the engine can start.
@@ -387,15 +388,16 @@ This confirms the idea, invokes `forge-build-prd` (interview → draft → revie
 
 **Check ✓** `docs/PRD.md` exists and contains the reviewed requirements. If the PRD qualified, `docs/product-vision.md` and `docs/features/*.md` also exist.
 
-Now start the build pipeline against the reviewed PRD:
+Now start the build pipeline against the reviewed PRD. From the terminal (recommended), the launcher compiles the manifest and starts the engine:
+
+```
+forge-launcher engine-run --harness opencode --yes
+```
+
+Or, on the terminal fast-path via `forge-auto-build`, choose the workflow-engine path at its pre-flight gate:
 
 ```
 /forge-auto-build docs/PRD.md
-```
-
-At the pre-flight gate, choose the workflow-engine path:
-
-```
 GO --workflow-engine
 ```
 
@@ -487,7 +489,7 @@ npm test --prefix scripts/forge-launcher
 | Harness directory and templates exist in the correct location | ✅ |
 | `docs/IDEA.md` contains the entered idea text | ✅ |
 | `forge-auto-build-prd` produced a reviewed `docs/PRD.md` (decomposed when qualifying) | ✅ |
-| `forge-auto-build` ran against the existing PRD (no PRD generation inside the build) | ✅ |
+| The build ran against the existing PRD (no PRD generation inside the build) | ✅ |
 | `EXECUTION-MANIFEST.json` compiled successfully | ✅ |
 | `skill-creator` interview ran for each skill; `skill-review` ≥ 2.0 on all axes | ✅ |
 | Pre-run gate shown before any tasks fire | ✅ |
@@ -1085,7 +1087,7 @@ The engine must be runnable as a standalone process from outside any CLI session
 
 **Step 4d – Engine starts detached on the auto-build engine path**
 
-In `templates/skills/forge-auto-build/SKILL.md`, the `--workflow-engine` path must start the engine with `nohup … &`, log to `docs/engine-run.log`, and poll `docs/WORKFLOW-STATE.json` rather than blocking the session:
+In `templates/skills/forge-auto-build/SKILL.md` (the terminal/headless fast-path), the `--workflow-engine` path must start the engine with `nohup … &`, log to `docs/engine-run.log`, and poll `docs/WORKFLOW-STATE.json` rather than blocking the session:
 
 **Check ✓** The SKILL Path B Step 3b uses `nohup npm run workflow-engine -- run --harness "$FORGE_ENGINE_HARNESS" --yes >> docs/engine-run.log 2>&1 &` and Step 3c polls to completion; `FORGE_ENGINE_HARNESS` (default `opencode`) selects the per-task harness.
 

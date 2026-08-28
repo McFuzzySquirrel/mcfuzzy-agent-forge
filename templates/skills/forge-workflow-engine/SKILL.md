@@ -5,9 +5,9 @@ description: Dynamic workflow orchestration engine that reads docs/EXECUTION-MAN
 
 # Skill: Forge Workflow Engine
 
-You are the **runtime execution layer** for an Agent Forge repository. Where `forge-auto-build` and `project-orchestrator` operate as prompt-driven orchestrators inside a chat harness, this skill runs **outside** the chat session - it reads the structured execution contract produced by `forge-execution-adapter` and drives every agent task through a real execution backend until the workflow is complete.
+You are the **runtime execution layer** for an Agent Forge repository. Where `project-orchestrator` operates as a prompt-driven orchestrator inside a chat harness, this skill runs **outside** the chat session - it reads the structured execution contract produced by `forge-execution-adapter` and drives every agent task through a real execution backend until the workflow is complete.
 
-This skill is the autonomous execution alternative to the prompt-driven flows. Teams use it when they want **dark orchestration**: a background process that fires agent invocations autonomously, persists state across interruptions, and requires no human intervention between tasks. In `forge-auto-build`, choosing `GO --workflow-engine` selects this skill as the Stage 4 executor instead of `forge-orchestrate-build`.
+This skill is the autonomous execution alternative to the prompt-driven flows. Teams use it when they want **dark orchestration**: a background process that fires agent invocations autonomously, persists state across interruptions, and requires no human intervention between tasks. Start it from the terminal with `forge-launcher engine-run`, or drive it from inside a chat with `@workflow-orchestrator`.
 
 ---
 
@@ -37,9 +37,9 @@ npm run forge-execution-adapter -- compile
 
 > **Runtime requirement:** this skill is a Node package and requires `node >= 18`
 > and `npm` at *build time*. `npm install` (the "node module bootstrap") is not
-> run by `bootstrap.sh` - it is deferred to engine prep time (when
-> `forge-auto-build` compiles and starts the engine, or when you run the engine
-> manually via `scripts/forge-engine-run.sh`). The installed `node_modules/` is
+> run by `bootstrap.sh` - it is deferred to engine prep time (when you run the
+> engine via `forge-launcher engine-run`, or manually via
+> `scripts/forge-engine-run.sh`). The installed `node_modules/` is
 > gitignored in target repos and must never be committed.
 
 ```bash
@@ -157,6 +157,33 @@ The pre-run summary prints the effective timeout. Adapters that shell out
 (`opencode`, `copilot`, `flowforge-kernel`) enforce it on the child process; the
 `openai` adapter enforces it on the API call via `AbortController`.
 
+### Output verification gate (strict by default)
+
+A harness call that exits 0 is **not** proof that a task did anything — a model
+can reply "Ready for the task." and produce no files. The engine therefore
+verifies a successful call before marking the task complete:
+
+- **Expected outputs.** If a task declares `expectedOutputs`, every one must
+  exist after the harness call. Missing outputs → the attempt is treated as
+  failed, retried up to `--max-retries`, then marked `failed` with the missing
+  list as the error.
+- **No-op detection.** Tasks that declare no `expectedOutputs` must show evidence
+  of work: file changes in the git working tree (diffed before/after the call,
+  engine-owned `docs/` files excluded) **or** a substantive agent response. A
+  task with no changes and only trivial output ("Ready for the task.") is a
+  failed attempt, not a completion.
+- **Relax it** with `--allow-noop` / `FORGE_ENGINE_ALLOW_NOOP=1` to skip the
+  no-op heuristic (the expected-output check stays).
+- **Validation commands.** Pass `--run-validation` /
+  `FORGE_ENGINE_RUN_VALIDATION=1` to execute each task's manifest
+  `validationCommands` (cwd = repo root) and require them all to exit 0 before
+  the task counts as complete. Tasks that declare validation are gated on it
+  rather than the no-op heuristic. (The commands are otherwise only *shown* in
+  the task prompt.)
+
+The pre-run summary prints the gate mode. The final summary and `status` also
+flag tasks completed with no recorded output files, so a hollow run is visible.
+
 ### Check status
 
 ```bash
@@ -187,7 +214,7 @@ The engine is harness-agnostic. Select the backend with `--harness`:
 | Adapter | Flag | How it invokes agents |
 |---|---|---|
 | **OpenCode CLI** (default) | `--harness opencode` | `opencode run --model <m> [--agent <name>] --dir <repo> "<task prompt>"` |
-| **GitHub Copilot CLI** | `--harness copilot` | `copilot -p "<agent context + task prompt>" --yolo` |
+| **GitHub Copilot CLI** | `--harness copilot` | `copilot -p "/agent <name> <task prompt>" --yolo` (native for `.github/agents/`; inline-persona fallback otherwise) |
 | **OpenAI API** | `--harness openai` | `POST /v1/chat/completions` with agent rawBody as system prompt |
 | **Stub** | `--harness stub` | Returns synthetic success; no real calls (for testing) |
 | **FlowForge Kernel CLI** | `--harness flowforge-kernel` | Hands off task execution to `flowforge run` against a compiled `.workforce` package |
@@ -200,6 +227,7 @@ The engine is harness-agnostic. Select the backend with `--harness`:
 | `OPENCODE_EXTRA_FLAGS` | *(empty)* | Extra flags appended to every `opencode run` call |
 | `FORGE_ENGINE_ATTACH` | *(empty)* | `1` to auto-start an `opencode serve` instance for the run (`--keep-alive`) |
 | `FORGE_ENGINE_ATTACH_URL` | *(empty)* | Attach tasks to an existing `opencode serve` URL instead of cold-starting per task (`--attach`) |
+| `FORGE_ENGINE_NATIVE_AGENT` | *(empty)* | `0` to force the inline-persona fallback instead of `--agent <name>` for `.opencode/` agents |
 
 ### Copilot adapter environment variables
 
@@ -208,9 +236,13 @@ The engine is harness-agnostic. Select the backend with `--harness`:
 | `COPILOT_BIN` | `copilot` | Path to the GitHub Copilot CLI binary |
 | `COPILOT_EXTRA_FLAGS` | *(empty)* | Extra flags appended to every `copilot -p` call (e.g. `--model gpt-4o`) |
 
-The copilot adapter inlines the agent file contents into the prompt (there is no
-`--system-prompt` flag on `copilot -p`) and auto-approves tool permissions with
-`--yolo`, mirroring the opencode adapter's `--auto`.
+The copilot adapter selects the forge agent **natively** when its file lives
+under the project's `.github/agents/` directory: it prepends the `/agent <name>`
+directive to the prompt so the Copilot CLI loads the persona itself, and the
+persona is **not** inlined. For other harness roots (`.agents`, `.claude`,
+`.opencode`) Copilot cannot discover the agent files, so it falls back to
+inlining the agent file body into the prompt. Tool permissions are auto-approved
+with `--yolo`, mirroring the opencode adapter's `--auto`.
 
 The opencode adapter selects the forge agent natively when its file lives under
 the project's `.opencode/agents/` directory: it passes `--agent <name>` so
@@ -219,6 +251,10 @@ default build agent) and does **not** inline it. For other harness roots
 (`.agents`, `.claude`, `.github`) opencode cannot discover the agent files, so it
 falls back to inlining the persona (`agent.rawBody`) as an inline context block.
 Tool permissions are auto-approved with `--auto` in both cases.
+
+Set **`FORGE_ENGINE_NATIVE_AGENT=0`** on either harness to force the
+inline-persona fallback instead of native agent selection (`--agent` /
+`/agent`).
 
 ### OpenAI adapter environment variables
 
@@ -322,17 +358,20 @@ Each task is retried up to `--max-retries` times (default: 2) before being marke
 
 ---
 
-## Integration with forge-auto-build (alternative Stage 4 path)
+## Integration with forge-launcher (terminal-driven build path)
 
-`forge-auto-build` can optionally select this engine as its Stage 4 build path instead of `forge-orchestrate-build`:
+The launcher is the canonical terminal entry point. Its auto-draft stages run
+`forge-build-agent-team` headlessly and then offer to start the engine detached;
+`forge-launcher engine-run` compiles the manifest and runs/resumes the engine as
+a foreground or detached process:
 
 ```bash
-# Stage 4 alternative: harness-driven build path
-cd .agents/skills/forge-execution-adapter && npm install && npm run forge-execution-adapter -- compile
-cd .agents/skills/forge-workflow-engine  && npm install && npm run workflow-engine -- run --harness opencode
+forge-launcher engine-run --repo <repo> --harness opencode --yes        # run or resume
+forge-launcher engine-run --repo <repo> --harness opencode --yes --viz  # with the Forge Board
+forge-launcher resume --repo <repo>                                      # re-enter at the current stage
 ```
 
-This gives the same project two mutually exclusive execution modes for a given run: interactive/prompt-driven (via `project-orchestrator`) or autonomous/harness-driven (via the workflow engine).
+This gives the same project two mutually exclusive execution modes for a given run: interactive/prompt-driven (via `@project-orchestrator` in a chat harness) or autonomous/harness-driven (via this engine, from the terminal or `@workflow-orchestrator`).
 
 For FlowForge-kernel execution, compile a workforce package first:
 

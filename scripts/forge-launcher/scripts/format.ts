@@ -33,6 +33,25 @@ export const info = (msg: string) => out(`  ${msg}`);
 
 export const command = (msg: string) => out(`    ${BOLD}${msg}${RESET}`);
 
+/**
+ * Builds an OSC 8 terminal hyperlink (Ctrl/Cmd+click in supporting terminals).
+ * Pure so it is unit-testable; see `link` for the TTY-aware wrapper.
+ */
+export function hyperlink(filePath: string, label = filePath): string {
+  const uri = `file://${filePath}`;
+  return `\x1b]8;;${uri}\x1b\\${label}\x1b]8;;\x1b\\`;
+}
+
+/**
+ * Wraps a file path in an OSC 8 terminal hyperlink while keeping the plain
+ * path as visible text. Falls back to the bare path when stdout is not a TTY,
+ * so piped/CI output stays clean. Some terminals need the path percent-encoded
+ * in the URL; we leave it raw (most modern terminals accept raw file:// paths).
+ */
+export function link(filePath: string, label = filePath): string {
+  return useColor ? hyperlink(filePath, label) : filePath;
+}
+
 export function out(msg = "") {
   process.stdout.write(msg + "\n");
 }

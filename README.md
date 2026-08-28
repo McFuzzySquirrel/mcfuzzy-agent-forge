@@ -9,7 +9,7 @@
 
 **McFuzzy Agent Forge** turns your requirements into a team of specialist agents that plan, implement, and validate a project. The PRD is the quality gate: you deliberately review it, then the pipeline generates the team and drives the build - either interactively or fully autonomously ("dark orchestration").
 
-**Latest: v3.21** - the workflow engine's opencode harness now selects the forge agent natively: agents whose files live under `.opencode/agents/` are invoked with `opencode run --agent <name>` (persona no longer inlined), so opencode sessions are attributed to the real forge agents instead of the default build agent; other harness roots keep the inline-persona fallback. See [docs/updates.md](docs/updates.md). (v3.20: auto-drafted agent teams can no longer break the build with unquoted YAML frontmatter — `forge-build-agent-team` always double-quotes `description:`, ships a `validate-frontmatter.mjs` mechanical gate, and `forge-launcher engine-run` fails fast on compile failure. v3.19: headless PRD runs get the same gap check the manual flow does, `forge-build-agent-team` writes `docs/agent-responsibility-matrix.md`, and the Forge Board gained crisp zoom plus in-place expanding cards. v3.18: the workflow engine runs multi-task opencode builds against one warm `opencode serve` (`--keep-alive`/`--attach`). v3.17: the `forge-launcher` npm package is reliable on Windows.)
+**Latest: v3.25** - the launcher adds **"stop here and resume later" checkpoints** after every step (idea, PRD, team, execution plan, build), each printing the `forge-launcher resume --repo "<path>"` command, plus a **post-team plan & validate step** that runs project-orchestrator headlessly to produce the execution plan in `docs/PROGRESS.md` and pauses for review before the build. See [docs/updates.md](docs/updates.md). (v3.24: the Copilot harness selects forge agents natively via `/agent <name>`, mirroring opencode `--agent`; `FORGE_ENGINE_NATIVE_AGENT=0` forces the inline fallback. v3.23: the workflow engine's **output verification gate** stops hollow "complete" runs. v3.22: `forge-launcher` is the single terminal entry point with `resume`, OSC 8 review links, and a conditional in-harness command; `forge-auto-build` is the terminal/headless fast-path.)
 
 ---
 
@@ -113,7 +113,7 @@ The whole suite can be checked without the TUI too:
 
 ```bash
 cd scripts/forge-launcher
-npm test          # 16 node --test cases (typecheck + non-interactive E2E)
+npm test          # node --test suite (launcher, resume, engine-run, bootstrap, prompts, format, …)
 npm run typecheck
 ```
 
@@ -121,37 +121,59 @@ npm run typecheck
 
 ## Choose Your Path
 
-| You want… | Run this | What happens |
-|---|---|---|
-| **Guided onboarding, zero setup** | `forge-launcher` | Creates repo, bootstraps templates, captures your idea, queues the PRD stage or the build |
-| **Idea → PRD → team, auto-drafted** | `forge-launcher --draft` | Generates the PRD and/or agent team non-interactively (best answers, review boundaries), then offers the workflow-engine run now/later |
-| **Turn an idea into a reviewed PRD** | `@workspace /forge-auto-build-prd I want to build [idea]` | Confirms idea → builds and reviews `docs/PRD.md` → auto-decomposes qualifying PRDs → stops before the team |
-| **Build from an existing PRD, hands-free** | `@workspace /forge-auto-build docs/PRD.md` | PRD → agent team → (optional models) → build, with validation + commit after every phase |
-| **…using dark orchestration** | add `GO --workflow-engine` at the pre-flight gate | Compiles `EXECUTION-MANIFEST.json` and runs `forge-workflow-engine` unattended (detached process, log: `docs/engine-run.log`) |
-| **Manual, phase-by-phase control** | `forge-build-prd` → `forge-build-agent-team` → `@project-orchestrator` | A human reviews each phase before the next starts |
-| **Fully autonomous engine agent** | `@workspace @workflow-orchestrator Run the workflow` | One pre-run gate, then the engine dispatches every task unattended |
-| **Add a feature to a finished project** | `@workspace /forge-build-feature-prd I want to add [feature]` | Feature PRD → targeted team update → execute feature phases |
-| **Per-agent model selection** | `@workspace /forge-assign-models …` | Discover → recommend (`docs/MODEL-PLAN.md`) → apply `model:` frontmatter |
-| **Fully terminal-driven (no chat)** | `forge-launcher --headless` | Kicks off the queued skill via `opencode run --auto` or `copilot -p --yolo` - never opens an interactive CLI |
-| **Watch a build live** | `workflow-engine run --viz` | The Forge Board: a live kanban of agent name-tag cards flowing through To Do / In Progress / Done / Failed, with dependency and artifact edges |
+**Start with `forge-launcher`.** It creates the repo, bootstraps Agent Forge,
+captures your idea, and drafts the PRD + agent team (with a review boundary
+between each). Once the team exists, make exactly one choice: **how to run the
+build**.
 
-> **`forge-auto-build` requires an existing PRD** (`docs/PRD.md`, or the decomposed `docs/product-vision.md` + `docs/features/*.md`). It never generates one - if no PRD exists it stops and directs you to `forge-auto-build-prd` or `forge-build-prd`. PRD creation is a deliberate stage; execution is a separate, deliberate stage.
+| Build it… | Run this | What happens |
+|---|---|---|
+| **Interactively** (in your harness) | `@workspace @project-orchestrator Execute the full build` | Drives every phase with your approval between them |
+| **Autonomously** (dark orchestration) | `forge-launcher engine-run --harness opencode --yes`, or `@workspace @workflow-orchestrator Run the workflow` | One pre-run gate, then the engine runs every task unattended (log: `docs/engine-run.log`) and resumes after interruption |
+
+**Launcher variants** — same entry point, different levels of automation:
+
+| You want… | Run this |
+|---|---|
+| Guided onboarding, zero setup | `forge-launcher` |
+| Draft the PRD + team for you, keeping review boundaries | `forge-launcher --draft` |
+| No chat session at all — full terminal/headless pipeline | `forge-launcher --headless` |
+| Pick up where you left off (reviews take a while) | `forge-launcher resume` |
+
+**Deliberate, manual steps** — the building blocks `forge-launcher` automates:
+
+| You want… | Run this |
+|---|---|
+| Turn an idea into a reviewed `docs/PRD.md` | `@workspace /forge-auto-build-prd I want to build [idea]` |
+| Generate or update the agent team | `@workspace /forge-build-agent-team …` |
+| Add a feature to a finished project | `@workspace /forge-build-feature-prd I want to add [feature]` |
+| Choose per-agent models | `@workspace /forge-assign-models …` |
+| Watch a running build live (Forge Board) | `workflow-engine run --viz` |
+
+> **`forge-auto-build` is the terminal/headless fast-path** the launcher drives
+> (via `opencode run --auto`); it is not an in-harness slash command. It
+> requires an existing PRD (`docs/PRD.md`, or the decomposed
+> `docs/product-vision.md` + `docs/features/*.md`) and never generates one.
 
 ---
 
 ## How It Works
 
 ```
+ forge-launcher (single entry)
+      │
  Idea →  PRD  →  [auto-decompose]  →  Agent Team  →  [models]  →  Build
- │      └ forge-build-prd /            └ forge-build-       └ forge-auto-build:
- │        forge-auto-build-prd           agent-team            forge-orchestrate-build
- │                                                             or forge-workflow-engine
+ │      └ forge-build-prd /            └ forge-build-       ├ @project-orchestrator
+ │        forge-auto-build-prd           agent-team          │   (interactive, in-harness)
+ │                                                            └ forge-workflow-engine
+ │                                                               (@workflow-orchestrator /
+ │                                                                forge-launcher engine-run)
 ```
 
 1. **PRD (quality gate).** `forge-build-prd` interviews you, drafts `docs/PRD.md`, and runs a review checklist before you confirm it. **Decomposition is automatic**: a qualifying PRD (15+ functional requirements or 3+ implementation phases) is split into `docs/product-vision.md` + `docs/features/*.md` with no opt-in question. `forge-auto-build-prd` wraps this whole stage for a one-liner idea.
 2. **Agent team.** `forge-build-agent-team` maps every requirement to a specialist agent, using `skill-creator` + `skill-review` so every generated skill meets a quality bar. It auto-detects Full Build, Vision + Features, and Feature Increment modes.
 3. **Models (optional).** `forge-assign-models` matches each agent to an appropriately sized model so lightweight agents don't default to the most expensive one.
-4. **Build.** `forge-auto-build` executes all phases - via `forge-orchestrate-build` (prompt-driven, per-phase commits) or `forge-workflow-engine` (dark orchestration: one gate, then unattended through a harness adapter).
+4. **Build.** Two execution modes over the same team: `@project-orchestrator` (interactive, per-phase approval, in the harness) or `forge-workflow-engine` (dark orchestration: one gate, then unattended through a harness adapter), started from the terminal with `forge-launcher engine-run`. `forge-auto-build` chains team generation → build as the terminal/headless fast-path the launcher drives.
 
 Two principles govern the pipeline: **automate mechanical gates** (like decomposition), and **preserve human gates** (like the PRD review) - see [ADR-018](docs/adr/018-auto-prd-decomposition-and-build-prerequisite.md).
 
@@ -161,60 +183,74 @@ Two principles govern the pipeline: **automate mechanical gates** (like decompos
 
 ### Prerequisites
 
+- Node.js 18+ (for the `forge-launcher` npm package)
 - An agent harness that reads agents/skills from a repo (GitHub Copilot, Claude Code, opencode, or any compatible runtime)
-- Git + Bash (Linux/macOS) or PowerShell 5.1+ (Windows)
+- `git`
 - Optional: `gh` (GitHub harness), `opencode`/`claude` CLIs (auto-launch), [Ollama](https://ollama.com/) (local models)
 
-### 1. Clone Agent Forge
+### 1. Install the launcher
+
+```bash
+npx forge-launcher@beta        # npm package (requires Node.js 18+)
+```
+
+The npm package is a **pre-release** (`1.0.0-beta.2`). Until it's published,
+install the packed tarball from a clone:
 
 ```bash
 git clone https://github.com/McFuzzySquirrel/mcfuzzy-agent-forge.git
-cd mcfuzzy-agent-forge
+cd mcfuzzy-agent-forge/scripts/forge-launcher
+npm install && npm pack && npm install -g ./forge-launcher-1.0.0-beta.2.tgz
+forge-launcher                 # the global command now works from anywhere
 ```
 
-### 2. Bootstrap into your project
+The legacy `./scripts/forge-launcher.sh` / `.\scripts\forge-launcher.ps1`
+wrappers still work from a clone with no install, but the npm package is the
+canonical cross-platform path.
 
-Copies agent and skill templates into your project's harness directory (default `.agents/`):
+For a **new project**, run `forge-launcher` and follow the prompts — it creates
+the repo, bootstraps the Agent Forge templates into your harness directory
+(default `.agents/`), captures your idea, and queues the next stage. Nothing
+else to set up.
+
+### 2. Add Agent Forge to an existing project
 
 ```bash
-# Bash
-./scripts/bootstrap.sh /path/to/your/project
-./scripts/bootstrap.sh /path/to/your/project --harness github   # GitHub Copilot
-./scripts/bootstrap.sh /path/to/your/project --harness claude   # Claude Code
-./scripts/bootstrap.sh /path/to/your/project --harness opencode # opencode
-
-# npm package (same subcommand)
-forge-launcher bootstrap /path/to/your/project --harness github
-
-# PowerShell
-.\scripts\bootstrap.ps1 -Target C:\path\to\project
-.\scripts\bootstrap.ps1 -Target C:\path\to\project -Harness github
+forge-launcher bootstrap /path/to/your/project --harness agents   # default
+forge-launcher bootstrap /path/to/your/project --harness github   # GitHub Copilot
+forge-launcher bootstrap /path/to/your/project --harness claude   # Claude Code
+forge-launcher bootstrap /path/to/your/project --harness opencode # opencode
 ```
 
-### 3. Commit and open the project
+`bootstrap` copies the agent and skill templates into the project's harness
+directory. Commit the templates, then open the project in your harness:
 
 ```bash
 cd /path/to/your/project
 git init && git add .agents/ && git commit -m "chore: bootstrap Agent Forge templates"
 ```
 
-Open the project in your harness, then pick a path.
+Then pick a path below.
 
 ### Path A - Full auto-build (requires a PRD)
 
-If `docs/PRD.md` doesn't exist yet, build it first:
+The launcher is the recommended entry point - it creates the repo, bootstraps the
+templates, captures the idea, and queues the right stage:
 
-```
-@workspace /forge-auto-build-prd I want to build [your idea]
-```
-
-Then run the build against the reviewed PRD:
-
-```
-@workspace /forge-auto-build docs/PRD.md
+```bash
+forge-launcher            # interactive; or --draft to auto-draft PRD + team
 ```
 
-Review the pre-flight summary and type `GO`. The pipeline runs autonomously: agent team → (optional models) → all build phases, with validation and a commit after each phase. Add `GO --workflow-engine` to execute the build through the workflow engine instead of the prompt-driven orchestrator.
+If you're already in a repo with a reviewed PRD, pick an execution mode:
+
+```
+@workspace @project-orchestrator Execute the full build     # interactive, per-phase
+forge-launcher engine-run --harness opencode --yes           # autonomous (dark orchestration)
+```
+
+`forge-auto-build` remains available as the **terminal/headless fast-path**
+(`forge-launcher --headless` or `opencode run --auto "/forge-auto-build … GO"`)
+that chains team generation → build in one go, with a single pre-flight gate.
 
 ### Path B - Manual, step-by-step
 
@@ -281,7 +317,7 @@ forge-launcher engine-run --harness opencode --viz --yes    # live Forge Board d
 ```
 
 - `opencode run` / `copilot -p` are non-interactive; `--auto` / `--yolo` auto-approve tool permissions.
-- `forge-auto-build`'s engine path (`GO --workflow-engine`) starts the engine **detached** (log: `docs/engine-run.log`) and polls `docs/WORKFLOW-STATE.json` to completion - the build survives the chat session and resumes with `run`.
+- The launcher's headless / auto-draft path drives `forge-auto-build` (the terminal fast-path) or `forge-auto-build-prd`, and `forge-launcher engine-run` starts the engine **detached** (log: `docs/engine-run.log`) - the build survives the session and resumes with `run` or `forge-launcher resume`.
 - While a task runs, the engine prints a heartbeat line (`…still working on task <id> …`) so a quiet terminal doesn't look hung. Tune it with `--heartbeat-ms <ms>` or `FORGE_ENGINE_HEARTBEAT_MS` (default 15s; `0` disables).
 - Each task runs under a per-task timeout (default 10 min). Raise it with `--task-timeout-ms <ms>` / `FORGE_ENGINE_TASK_TIMEOUT_MS`, or give a single heavy task its own budget via `timeoutMs` in `docs/EXECUTION-MANIFEST.json`. Compile with `--granularity fine` (default) to split tasks into smaller units.
 - With no PRD yet, the launcher queues `forge-auto-build-prd` in headless mode (auto-proceeds with default assumptions recorded in the PRD's Open Questions, and runs the same PRD gap check the manual flow does - acceptance criteria, tech stack, NFRs, phases - filling gaps before approving).
@@ -331,7 +367,7 @@ mcfuzzy-agent-forge/
 
 | Problem | Fix |
 |---|---|
-| Bootstrap `permission denied` | `chmod +x scripts/bootstrap.sh` |
+| Bootstrap `permission denied` | Use `forge-launcher bootstrap` (Node, no execute bit needed); the legacy `scripts/bootstrap.sh` needs `chmod +x` |
 | Agents not appearing in the harness | Commit the files; verify paths match your harness (`.github/agents/`, `.claude/agents/`, `.opencode/agents/`, `.agents/agents/`); `name:` must match the filename |
 | `forge-auto-build` stops asking for a PRD | That's correct - run `forge-auto-build-prd` (or `forge-build-prd`) to create the reviewed PRD first |
 | Wrong harness directory | Re-run bootstrap with the correct `--harness` flag |

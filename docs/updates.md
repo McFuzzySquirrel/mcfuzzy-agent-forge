@@ -4,6 +4,139 @@ Detailed release and change notes for McFuzzy Agent Forge.
 
 ---
 
+## August 2026 - v3.25
+
+### Launcher: "stop and resume later" checkpoints + post-team execution plan
+
+- **Stop here and resume later.** After each launcher checkpoint — idea captured,
+  PRD added/drafted, team generated, execution plan drafted, build configured —
+  the interactive flow asks "Stop here and resume later?" and, when you say yes,
+  prints `forge-launcher resume --repo "<path>"` and stops at the "where to pick
+  up" summary. Pick the run back up any time with `forge-launcher resume`.
+- **Post-team plan & validate step.** After the agent team is generated, the
+  launcher now runs project-orchestrator (via `forge-orchestrate-build`, headless)
+  with the prompt-playbook 5a prompt to produce the **execution plan** in
+  `docs/PROGRESS.md`, commits it (`docs: add execution plan`), and stops for
+  review before the build. It selects the monolithic vs. feature-based 5a prompt
+  from the repo layout; if the headless run fails or writes no plan, it prints
+  the manual `@project-orchestrator` command instead.
+- Non-interactive auto-draft (`FORGE_AUTO_DRAFT=1`) runs the plan step
+  automatically; stub mode writes a canned `docs/PROGRESS.md` so the flow is
+  testable offline.
+- Covered by new launcher tests (plan step + checkpoints are interactive-only,
+  so non-interactive coverage asserts the plan doc, commit, and engine decision).
+  Launcher suite green.
+
+---
+
+## August 2026 - v3.24
+
+### Copilot harness selects the forge agent natively via `/agent`
+
+The copilot adapter previously inlined every agent file into the `copilot -p`
+prompt. The Copilot CLI supports an inline `/agent <name>` directive that loads
+a repo agent natively — the same idea as opencode's `--agent <name>` (v3.21).
+
+- **Native selection.** When the owning agent's file lives under the project's
+  `.github/agents/` directory, the adapter now prepends `/agent <name>` to the
+  prompt and lets Copilot load the persona itself; the persona is no longer
+  inlined. For other harness roots (`.agents`, `.claude`, `.opencode`) Copilot
+  cannot discover the agent files, so the inline-persona fallback is kept.
+- **Shared escape hatch.** `FORGE_ENGINE_NATIVE_AGENT=0` forces the inline
+  fallback on the copilot harness too (already supported by opencode).
+- Covered by a new `harness/copilot-adapter.test.ts` (native, fallback, no-name,
+  env-escape, and the execute-now directive). Engine suite green.
+
+- [ADR-030](adr/030-copilot-native-agent-selection.md): copilot `/agent` selection.
+
+---
+
+## August 2026 - v3.23
+
+### Workflow engine output verification gate (no more hollow "complete" runs)
+
+A run could previously report **complete** with no code: every harness adapter
+returned `success` on a zero-exit call, and the engine marked the task complete
+without checking that anything was produced. A model replying "Ready for the
+task." exited 0, the engine synthesized an artifact with `filesChanged: []` for
+every task, and the run finished "successfully" with no solution.
+
+- **Expected-output gate.** A task declaring `expectedOutputs` now requires every
+  one to exist after the harness call. Missing → the attempt fails, retries, then
+  the task is marked `failed` with the missing list.
+- **No-op detection.** Tasks declaring no `expectedOutputs` must show evidence of
+  work: a git working-tree diff before/after the call (engine-owned `docs/` files
+  excluded) or a substantive agent response. "Ready for the task." with no file
+  changes is a failed attempt, never a completion.
+- **`--allow-noop` / `FORGE_ENGINE_ALLOW_NOOP=1`** relaxes the no-op heuristic
+  (the expected-output check stays).
+- **`--run-validation` / `FORGE_ENGINE_RUN_VALIDATION=1`** executes each task's
+  manifest `validationCommands` (cwd = repo root) and requires them all to pass
+  before the task completes. Tasks with validation are gated on it.
+- **Hollow-run visibility.** The final summary and `status` flag tasks completed
+  with no recorded output files; `forge-launcher resume` does too.
+- **Prompt hardening.** Both the opencode and copilot adapters append an explicit
+  "perform the task now, then list the files you changed" directive, so agents
+  stop merely acknowledging tasks.
+- **`FORGE_ENGINE_NATIVE_AGENT=0`** restores the pre-v3.21 opencode behavior
+  (inline the persona instead of `--agent <name>`) for `.opencode/` harnesses.
+- New `scripts/verify.ts` (gate + git-diff + validation runner) with unit tests;
+  engine tests cover the gate, `--allow-noop`, and validation-command failure.
+  Engine suite green; `forge-launcher engine-run` passes the new flags through.
+
+- [ADR-029](adr/029-output-verification-gate.md): the engine's output-verification gate.
+
+---
+
+## August 2026 - v3.22
+
+### Launcher as the single entry point: `forge-launcher resume`, review links, conditional in-harness command
+
+The launcher becomes the one terminal on-ramp, and "when to use what" collapses
+to a single mental model: **`forge-launcher` starts you, then you either drive
+the build interactively in the harness (`@project-orchestrator`) or hand it to
+the autonomous engine (`@workflow-orchestrator` / `forge-launcher engine-run`).**
+
+- **`forge-launcher resume [--repo]`** — re-enters an existing project at its
+  current stage (idea → PRD → team → build) as a full interactive wizard. It
+  detects what's already drafted, prints where you are with clickable review
+  links, and offers the right next action: capture an idea, auto-draft the PRD /
+  team headlessly, resume a paused or failed engine run, tail logs, or open the
+  harness CLI. `--non-interactive` prints the state plus the exact next commands
+  to run. This covers the "walk away to review and make changes, come back
+  later" gap in the previous linear 9-step flow.
+- **Review links** — the review boundaries (drafted PRD, generated team) and the
+  engine summary now emit OSC 8 terminal hyperlinks (Ctrl/Cmd+click to open the
+  file), falling back to plain paths on non-TTY output.
+- **Conditional in-harness command** — when the launcher opens the CLI (or prints
+  next steps) and the agent team already exists, it now queues
+  `/forge-orchestrate-build` (project-orchestrator) instead of
+  `/forge-auto-build`, honouring "in the harness = project-orchestrator". When
+  no team exists yet it keeps queueing `/forge-auto-build` (which generates the
+  team in-chat); headless runs keep using `/forge-auto-build` as the terminal
+  fast-path.
+- **`forge-auto-build` demoted, not removed** — it stays installed but is
+  repositioned as the **terminal/headless fast-path** (launcher-driven,
+  `opencode run --auto`), explicitly *not* the in-harness entry point. The
+  `project-orchestrator` and `workflow-orchestrator` agents now document their
+  in-harness roles and the launcher's `engine-run` / `resume` as the canonical
+  terminal entry.
+- **When to use what:**
+  - New project → `forge-launcher` (terminal).
+  - In the harness, interactive build → `@project-orchestrator`.
+  - Autonomous build → `forge-launcher engine-run` or `@workflow-orchestrator`.
+  - Lost your place → `forge-launcher resume`.
+  - Authoring only → `/forge-build-prd`, `/forge-auto-build-prd`,
+    `/forge-build-agent-team`.
+- New tests: `resume.test.ts` (state detection + next-action branches) and
+  conditional-queue coverage in `launcher.test.ts`; `format.test.ts` covers the
+  OSC 8 `hyperlink` helper. Launcher suite green.
+
+- [ADR-028](adr/028-launcher-entry-resume-and-auto-build-demotion.md): entry-point
+  consolidation, `forge-launcher resume`, and the `forge-auto-build` demotion.
+
+---
+
 ## August 2026 - v3.21
 
 ### OpenCode harness selects the forge agent natively
