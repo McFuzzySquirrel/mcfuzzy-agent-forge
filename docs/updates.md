@@ -26,6 +26,20 @@ Detailed release and change notes for McFuzzy Agent Forge.
   empty), same-owner serialization under concurrency 2, and different-owner
   concurrency under concurrency 2. See ADR-021 (amended).
 
+### Execution-adapter: framework names no longer mistaken for expected outputs
+
+- **`extractPaths` no longer treats framework/runtime names as file paths.**
+  A PRD bullet like "Build **ASP.NET** Core minimal API …" previously declared
+  `ASP.NET` as an expected output file, which can never exist on disk — so the
+  engine's output-verification gate failed the task on **every** attempt (and
+  each retry spawned a fresh identically-titled opencode session, looking like a
+  collision). A `NON_PATH_DOTTED_TOKENS` blocklist (`asp.net`, `.net`, `dotnet`,
+  `nuget`) now excludes these; real paths such as `src/HumanGateway.Core` are
+  still extracted.
+- Regression test added; recompiling a manifest drops the bogus `ASP.NET`
+  expected output, so affected tasks pass the output gate on the next
+  `replay`/`run`.
+
 ---
 
 ## August 2026 - v3.27
