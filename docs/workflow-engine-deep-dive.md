@@ -2,7 +2,7 @@
 
 ## What we're exploring
 
-Agent Forge lets you describe a software project as a Product Requirements Document (PRD), decompose it into agents and tasks, and then build it. The *workflow engine* is the piece that takes over once all the planning is done and actually **runs** the build — autonomously, without a human prompting each step. This guide walks through exactly how it does that.
+MyForge lets you describe a software project as a Product Requirements Document (PRD), decompose it into agents and tasks, and then build it. The *workflow engine* is the piece that takes over once all the planning is done and actually **runs** the build — autonomously, without a human prompting each step. This guide walks through exactly how it does that.
 
 ---
 

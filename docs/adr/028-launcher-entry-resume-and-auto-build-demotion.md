@@ -8,7 +8,7 @@
 
 ## Context
 
-Agent Forge grew multiple overlapping entry points: `forge-launcher`,
+MyForge grew multiple overlapping entry points: `forge-launcher`,
 `forge-auto-build`, `forge-auto-build-prd`, `@project-orchestrator`, and
 `@workflow-orchestrator` were all presented as peer ways to start a build. A user
 "just thinking about when to use what" hit three concrete problems:

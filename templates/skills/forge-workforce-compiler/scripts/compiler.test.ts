@@ -46,7 +46,7 @@ function fixtureRoot() {
 test("compileWorkforcePackage emits valid workforce artifacts", () => {
   const root = fixtureRoot();
   const repo = discoverForgeRepo(root);
-  const result = compileWorkforcePackage(repo, { packageId: "dev.agent-forge.fixture" });
+  const result = compileWorkforcePackage(repo, { packageId: "dev.myforge.fixture" });
 
   assert.equal(existsSync(result.workforceManifestPath), true);
   assert.equal(existsSync(result.workflowPath), true);

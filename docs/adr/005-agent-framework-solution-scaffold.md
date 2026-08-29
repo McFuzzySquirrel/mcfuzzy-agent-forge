@@ -7,7 +7,7 @@
 
 ## Context
 
-The McFuzzy Agent Forge pipeline produces a PRD (`forge-build-prd`) and a Copilot
+The MyForge pipeline produces a PRD (`forge-build-prd`) and a Copilot
 specialist agent team (`forge-build-agent-team`). When a PRD selects **Microsoft Agent
 Framework** as its technology choice, the pipeline stops there: no skill translates that
 decision into an actual, runnable project on disk. The specialist agents that follow are

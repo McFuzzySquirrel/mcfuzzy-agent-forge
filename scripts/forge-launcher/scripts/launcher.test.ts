@@ -265,7 +265,7 @@ test("commit step created the bootstrap commit", async () => {
   });
   assert.equal(code, 0);
   const out = execFileSync("git", ["-C", path.join(parent, "commit-app"), "log", "--oneline"], { encoding: "utf8" });
-  assert.ok(out.includes("chore: bootstrap agent forge"));
+  assert.ok(out.includes("chore: bootstrap MyForge"));
 });
 
 test("openCode harness bootstrap rewrites paths to .opencode", async () => {

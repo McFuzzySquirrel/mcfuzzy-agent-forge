@@ -1187,7 +1187,7 @@ And record that in your audit:
 
 ```
 That would turn your experiment from **“I think artifact-based orchestration is more efficient”** into something you can actually demonstrate.  
-And I think that’s a *very* worthwhile next experiment for Agent Forge.  
+And I think that’s a *very* worthwhile next experiment for MyForge.  
   
 Would this be good for small local agents?  
   
@@ -1231,7 +1231,7 @@ The workflow becomes the **memory and coordination layer**, while the small mode
 ## This opens up a really interesting architecture for your Pi/local AI work  
 Imagine a Raspberry Pi running several small models:  
 ```
-                    Agent Forge
+                    MyForge
                         │
                  Artifact Store
                         │
@@ -1303,7 +1303,7 @@ That is a much more interesting architecture.
 Your local setup could eventually look like:  
 ```
                  ┌────────────────────┐
-                 │    Agent Forge      │
+                 │    MyForge      │
                  │    Orchestrator     │
                  └─────────┬──────────┘
                            │
@@ -1338,7 +1338,7 @@ I’d aim for:
 For small models, I’d particularly favour:  
 **deterministic workflow + tiny context + specialised task + structured artifact**  
 rather than trying to make the small model itself act like a sophisticated autonomous agent.  
-And honestly, **this may be one of the strongest arguments for your Agent Forge experiment**: you’re effectively moving intelligence *out of the context window and into the workflow*.  
+And honestly, **this may be one of the strongest arguments for your MyForge experiment**: you’re effectively moving intelligence *out of the context window and into the workflow*.  
   
 About the work I am already doing:  
   
@@ -1586,12 +1586,12 @@ That gives you something I think is **more valuable than simply reducing token u
 And that fits *extremely* naturally with the Forge compiler/kernel work you’re already doing.  
 In fact, I’d say **ADR-016 is probably the right place to introduce this concept**, rather than creating an entirely separate ADR, because artifact contracts are directly related to what the compiler emits and what the kernel consumes. You could potentially make it **ADR-017: Workforce Artifact Contracts and Context Projection**.  
   
-So, this artifact change would apply to the orchestration engine rather that the flow-forge as the agent forge exports this to a .workforce as an option right?   
+So, this artifact change would apply to the orchestration engine rather that the flow-forge as the MyForge exports this to a .workforce as an option right?   
   
-Exactly. **I would put the artifact mechanism primarily in the orchestration/runtime layer, not in Agent Forge itself.**  
+Exactly. **I would put the artifact mechanism primarily in the orchestration/runtime layer, not in MyForge itself.**  
 Your existing separation actually makes this quite clean.  
 ```
-                    AGENT FORGE
+                    MYFORGE
                          │
                   Design / Compile
                          │
@@ -1620,7 +1620,7 @@ Your existing separation actually makes this quite clean.
 
 ```
 **The important distinction**  
-**Agent Forge says:**  
+**MyForge says:**  
 “Here is the workforce and how its tasks are related.”  
 The .workforce package can therefore *declare* artifact contracts:  
 ```
@@ -1639,7 +1639,7 @@ That keeps the responsibilities clean.
    
 ## So I’d split the responsibilities like this  
 
-| Concern                         | Agent Forge | FlowForge / Orchestrator |
+| Concern                         | MyForge | FlowForge / Orchestrator |
 | ------------------------------- | ----------- | ------------------------ |
 | Define agents                   | ✅           |                          |
 | Define skills                   | ✅           |                          |
@@ -1735,7 +1735,7 @@ The workforce doesn’t care.
 ## And this fits your Forge → Kernel handoff really well  
 You essentially end up with:  
 ```
-              McFuzzy Agent Forge
+              MyForge
                        │
                        │ compile
                        ▼
@@ -1763,7 +1763,7 @@ You essentially end up with:
 ```
 That makes **FlowForge more than an agent runner**.  
 It becomes the **execution and information-flow runtime for a compiled workforce**.  
-And I think that’s actually a stronger architectural story than putting all of this inside Agent Forge.  
+And I think that’s actually a stronger architectural story than putting all of this inside MyForge.  
 **Forge = compiler / workforce authoring**  
 ****.workforce = portable execution package****  
 **FlowForge = runtime/kernel**  
@@ -1773,10 +1773,10 @@ That separation also means you could eventually have *another* orchestration eng
 But what if the user wants to use a different harness, would it then not make more sense to have it in the orchestration engine?  
   
 Yes — **that’s the stronger architecture**.  
-If Agent Forge can export a .workforce that can be consumed by **different harnesses/runtimes**, then the artifact concept should be part of the **workforce/orchestration contract**, while the *implementation* of artifact storage/context projection belongs to whichever orchestration engine is executing it.  
+If MyForge can export a .workforce that can be consumed by **different harnesses/runtimes**, then the artifact concept should be part of the **workforce/orchestration contract**, while the *implementation* of artifact storage/context projection belongs to whichever orchestration engine is executing it.  
 The key is separating **contract from implementation**.  
 ```
-                    Agent Forge
+                    MyForge
                         │
                         │ compile
                         ▼
@@ -1794,7 +1794,7 @@ The key is separating **contract from implementation**.
 
 ```
 **So I would actually make three layers**  
-**1. Agent Forge — authoring/compiler**  
+**1. MyForge — authoring/compiler**  
 Defines:  
 * agents  
 * skills  
@@ -1920,7 +1920,7 @@ Different runtimes
 ```
 Your model becomes:  
 ```
-Agent Forge
+MyForge
     ↓
 Workforce Compiler
     ↓
@@ -1951,7 +1951,7 @@ That prevents your .workforce format from becoming accidentally coupled to your 
 **Forge defines what information must flow between tasks.**  
 **The harness determines how that information flows at runtime.**  
 That’s exactly what you want if someone says:  
-“I like Agent Forge, but I want to execute my workforce using LangGraph / Microsoft Agent Framework / Dapr / my own runtime.”  
+“I like MyForge, but I want to execute my workforce using LangGraph / Microsoft Agent Framework / Dapr / my own runtime.”  
 They shouldn’t have to adopt FlowForge’s storage or context-management architecture.  
 They consume the .workforce, implement the required runtime interfaces, and they’re good to go.  
 And **that makes the compiler/kernel handoff in ADR-016 even more important**, rather than less. The kernel is an *optional execution target*, while the .workforce is the portable representation of the workforce and its contracts.  

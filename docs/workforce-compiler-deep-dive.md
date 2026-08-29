@@ -2,7 +2,7 @@
 
 ## What we're exploring
 
-`forge-workforce-compiler` is the packaging boundary between Agent Forge artifacts and FlowForge-style kernel runtimes. It takes Forge outputs that already exist in your repo, compiles them into a `.workforce` package, validates that package shape, and writes bridge metadata so `forge-workflow-engine` can hand off execution through `--harness flowforge-kernel`.
+`forge-workforce-compiler` is the packaging boundary between MyForge artifacts and FlowForge-style kernel runtimes. It takes Forge outputs that already exist in your repo, compiles them into a `.workforce` package, validates that package shape, and writes bridge metadata so `forge-workflow-engine` can hand off execution through `--harness flowforge-kernel`.
 
 ---
 
@@ -17,7 +17,7 @@ At a high level, the compiler does four things:
 
 Think of it as **authoring/runtime separation**:
 
-- Agent Forge authoring produces plan + agents + skills.
+- MyForge authoring produces plan + agents + skills.
 - Workforce compiler produces runtime package + bridge.
 - Workflow engine (kernel harness mode) executes against that package.
 

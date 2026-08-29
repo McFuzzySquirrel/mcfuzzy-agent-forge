@@ -1,12 +1,12 @@
 # Forge Launcher
 
-> One command from zero to auto-build. Guides you through creating a repo, bootstrapping Agent Forge, capturing your idea, and launching the full pipeline.
+> One command from zero to auto-build. Guides you through creating a repo, bootstrapping MyForge, capturing your idea, and launching the full pipeline.
 
 ---
 
 ## Overview
 
-`forge-launcher` is an interactive terminal script that orchestrates the complete Agent Forge onboarding flow in a single session:
+`forge-launcher` is an interactive terminal script that orchestrates the complete MyForge onboarding flow in a single session:
 
 1. **Pre-flight** -checks that `git` and optional tools (`gh`, `copilot`, `opencode`, `claude`) are installed.
 2. **Harness selection** -choose GitHub Copilot, opencode, Claude Code, or generic `.agents`.
@@ -442,16 +442,16 @@ Remote URL (e.g. https://github.com/user/repo.git): https://github.com/user/my-c
   ✔  Remote 'origin' added
 ```
 
-### Step 4 -Bootstrap Agent Forge
+### Step 4 -Bootstrap MyForge
 
 Runs the bundled bootstrap with `--force` into the new repository, copying all
 agent and skill templates into the harness directory (shown here with a
 spinner in a terminal; output is also tee'd to a per-run log).
 
 ```
-▶ Step 4 of 9: Bootstrap Agent Forge
+▶ Step 4 of 9: Bootstrap MyForge
   Running bootstrap → /home/user/projects/my-cool-app (--harness github) …
-  ✔  Agent Forge templates bootstrapped.
+  ✔  MyForge templates bootstrapped.
 ```
 
 ### Step 5 -Capture your idea
@@ -519,7 +519,7 @@ If you skip this step, the pipeline queues `forge-auto-build-prd`, which builds 
 
 ```
 ▶ Step 7 of 9: Commit bootstrapped forge and idea
-  ✔  Committed: 'chore: bootstrap agent forge'
+  ✔  Committed: 'chore: bootstrap MyForge'
   Pushing to remote …
   ✔  Pushed to remote.
 ```

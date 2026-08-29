@@ -1,6 +1,6 @@
-# Agent Forge Prompt Playbook
+# MyForge Prompt Playbook
 
-A step-by-step command and prompt reference for anyone bootstrapping a new project with Agent Forge. Copy-paste each command or prompt in sequence.
+A step-by-step command and prompt reference for anyone bootstrapping a new project with MyForge. Copy-paste each command or prompt in sequence.
 
 ---
 
@@ -18,7 +18,7 @@ git init
 
 ---
 
-## Step 1 - Bootstrap Agent Forge into Your Project
+## Step 1 - Bootstrap MyForge into Your Project
 
 Copy the agent and skill templates into your project's harness directory with the launcher (Node, cross-platform):
 
@@ -35,7 +35,7 @@ After bootstrapping, commit the templates so your harness can detect them:
 ```bash
 cd ~/Projects/my-new-project
 git add .agents/
-git commit -m "chore: bootstrap Agent Forge agent and skill templates"
+git commit -m "chore: bootstrap MyForge agent and skill templates"
 ```
 
 > Open your target project before running the prompts below - your agent harness auto-detects agents and skills from `.agents/agents/` and `.agents/skills/` (or `.github/` / `.claude/` if bootstrapped with the matching `--harness` flag).
@@ -365,7 +365,7 @@ If you want the kernel handoff path, compile the workforce package first:
 cd .agents/skills/forge-workforce-compiler
 npm install
 npm run forge-workforce-compiler -- compile
-npm run forge-workforce-compiler -- validate --package dist/dev-agent-forge-project.workforce
+npm run forge-workforce-compiler -- validate --package dist/dev-myforge-project.workforce
 ```
 
 Or, use the `workflow-orchestrator` agent for a guided interactive experience:
@@ -474,7 +474,7 @@ Only modify skills I've approved in the audit report.
 - **One phase at a time** - resist asking the orchestrator to "build everything". Phases are checkpoints; review each one.
 - **Commit after each phase** - the orchestrator will prompt you, but make a habit of it. `git add . && git commit -m "feat: complete Phase N"`.
 - **The PRD is the source of truth** - if something looks wrong, fix the PRD first, then re-run the affected steps.
-- **Re-bootstrap safely** - run `forge-launcher bootstrap . --force` any time you want to pull in updated Agent Forge templates without losing your generated agents.
+- **Re-bootstrap safely** - run `forge-launcher bootstrap . --force` any time you want to pull in updated MyForge templates without losing your generated agents.
 - **Optimize generated skills** - after the initial build, run `@workspace /forge-optimize-skills` to audit your skills against best practices. The audit surfaces specific improvements you can apply immediately.
 - **Full auto build** - use `forge-auto-build` when a reviewed PRD already exists (`docs/PRD.md`, or the decomposed layout) and you want a single command to take you from that PRD to committed, validated code. One pre-flight gate, then fully autonomous. If no PRD exists yet, run `forge-auto-build-prd` first. If the run is interrupted, just re-invoke it -it resumes from `docs/PROGRESS.md`.
 - **Dark orchestration** - use `workflow-orchestrator` + the workflow engine for fully autonomous execution through a real harness (OpenCode or OpenAI API). Dry-run first with `--harness stub` to verify the engine setup before spending tokens.

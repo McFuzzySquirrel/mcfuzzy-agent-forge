@@ -1,8 +1,8 @@
-# Artifact Store Deep-Dive — Agent Forge
+# Artifact Store Deep-Dive — MyForge
 
 ## What this document covers
 
-This guide explains the **Task → Agent → Artifact → Task** pattern that is now built into Agent Forge's workflow engine. It covers why the pattern exists, how it is implemented, how to use it in a manifest, and how to extend it later.
+This guide explains the **Task → Agent → Artifact → Task** pattern that is now built into MyForge's workflow engine. It covers why the pattern exists, how it is implemented, how to use it in a manifest, and how to extend it later.
 
 ---
 
@@ -427,6 +427,6 @@ The artifact pattern is the answer to this question from the research:
 
 > *The optimisation isn't "use sequential agents." It's: make every agent consume the minimum artifact projection necessary to perform its task.*
 
-The implementation in Agent Forge is intentionally minimal: a file-based store, a projection function, a rendered markdown block, and two new audit event types. Everything else — the harness adapters, the state machine, the audit log — continues to work as before. The pattern is additive, not a rewrite.
+The implementation in MyForge is intentionally minimal: a file-based store, a projection function, a rendered markdown block, and two new audit event types. Everything else — the harness adapters, the state machine, the audit log — continues to work as before. The pattern is additive, not a rewrite.
 
 The `reductionPercent` field in `context.projected` audit events turns the hypothesis into a measurable claim. Track it across builds to understand the real-world impact on token efficiency and model quality for your specific workflows.

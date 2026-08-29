@@ -7,7 +7,7 @@
 
 ## Context
 
-The McFuzzy Agent Forge framework generates agent teams where every agent defaults to
+The MyForge framework generates agent teams where every agent defaults to
 whatever model the user has set globally (the VS Code model picker selection or the
 `COPILOT_MODEL` environment variable for Copilot CLI BYOK). This is convenient but
 suboptimal:

@@ -968,10 +968,10 @@ async function createRepo(opts: LauncherOptions): Promise<void> {
 // --- Step 4: Bootstrap -----------------------------------------------------
 
 async function bootstrapForge(opts: LauncherOptions): Promise<void> {
-  step("Step 4 of 9: Bootstrap Agent Forge");
+  step("Step 4 of 9: Bootstrap MyForge");
   info(`Running bootstrap → ${state.repoDir} (--harness ${state.harness}) …`);
   await runWithHeartbeat(
-    "Bootstrapping Agent Forge (copying templates)…",
+    "Bootstrapping MyForge (copying templates)…",
     () =>
       bootstrap({
         targetDir: state.repoDir,
@@ -985,7 +985,7 @@ async function bootstrapForge(opts: LauncherOptions): Promise<void> {
       }),
     { dryRun: opts.dryRun },
   );
-  ok("Agent Forge templates bootstrapped.");
+  ok("MyForge templates bootstrapped.");
 }
 
 // --- Step 5: Capture idea --------------------------------------------------
@@ -1159,8 +1159,8 @@ async function commitBootstrap(): Promise<void> {
   step("Step 7 of 9: Commit bootstrapped forge and idea");
 
   await runCommand("git", ["-C", state.repoDir, "add", "."]);
-  await runCommand("git", ["-C", state.repoDir, "commit", "-m", "chore: bootstrap agent forge"]);
-  ok("Committed: 'chore: bootstrap agent forge'");
+  await runCommand("git", ["-C", state.repoDir, "commit", "-m", "chore: bootstrap MyForge"]);
+  ok("Committed: 'chore: bootstrap MyForge'");
 
   if (state.remoteCreated) {
     info("Pushing to remote …");

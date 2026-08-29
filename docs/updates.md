@@ -1,6 +1,23 @@
 # Updates
 
-Detailed release and change notes for McFuzzy Agent Forge.
+Detailed release and change notes for MyForge.
+
+---
+
+## August 2026 - v3.30
+
+### Branding: "Agent Forge" is now "MyForge"
+
+- Rebranded the project from **McFuzzy Agent Forge** to **MyForge** across the
+  README, `docs/`, `plan.md`, `AGENTS.md`, agent templates, and skill templates.
+- Technical identifiers are unchanged: the `forge-*` package/CLI/skill names
+  (`forge-launcher`, `forge-workflow-engine`, `forge-execution-adapter`,
+  `forge-workforce-compiler`), `FORGE_*` environment variables, and the
+  **FlowForge** kernel name all keep their existing names.
+- The workforce compiler's default package ID root changed from
+  `dev.agent-forge.*` to `dev.myforge.*` (for example
+  `dev.myforge.my-project`), so freshly compiled workforce packages use the new
+  branding. See `docs/adr/033-brand-rename-to-myforge.md`.
 
 ---
 
@@ -966,7 +983,7 @@ Related architecture decision:
 
 Related architecture decision:
 
-- [ADR-011](adr/011-forge-execution-adapter.md): Adapter architecture, MVP scope, and rationale for keeping the bridge separate from Agent Forge authoring.
+- [ADR-011](adr/011-forge-execution-adapter.md): Adapter architecture, MVP scope, and rationale for keeping the bridge separate from MyForge authoring.
 
 ---
 
@@ -974,7 +991,7 @@ Related architecture decision:
 
 ### Forge Launcher - interactive CLI for the full lifecycle
 
-- `forge-launcher` (`scripts/forge-launcher.sh` and `scripts/forge-launcher.ps1`): one terminal command guides users from zero to auto-build by creating a repo, selecting a harness, bootstrapping Agent Forge, capturing project idea context, committing, and optionally spawning the harness CLI.
+- `forge-launcher` (`scripts/forge-launcher.sh` and `scripts/forge-launcher.ps1`): one terminal command guides users from zero to auto-build by creating a repo, selecting a harness, bootstrapping MyForge, capturing project idea context, committing, and optionally spawning the harness CLI.
 - Terminal launch hardening and fallback guidance for CLI harnesses.
 - PRD-first guidance and seed-document recommendations added to launcher flow docs.
 

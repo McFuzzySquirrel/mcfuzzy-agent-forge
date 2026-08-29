@@ -127,7 +127,7 @@ Faithful port of `forge-launcher.sh`:
 4. Bootstrap delegation → `bootstrap.ts`.
 5. Idea capture (multi-line; `FORGE_IDEA`; `docs/IDEA.md` + `IDEA.md`).
 6. PRD + research/seed docs (`FORGE_PRD_FILE`, `FORGE_RESEARCH_FILES`, paste).
-7. Commit + push (`chore: bootstrap agent forge`).
+7. Commit + push (`chore: bootstrap MyForge`).
 8. Auto-build launch: auto-draft menu (`--draft` / `FORGE_AUTO_DRAFT=1`),
    headless mode (`--headless` / `FORGE_RUN_WITH` / `FORGE_WORKFLOW_ENGINE`),
    engine decision (detached run / print command / skip), CLI spawn

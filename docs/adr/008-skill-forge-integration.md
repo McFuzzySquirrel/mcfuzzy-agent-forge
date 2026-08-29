@@ -7,7 +7,7 @@
 
 ## Context
 
-Two changes were requested to make McFuzzy Agent Forge more robust and framework-agnostic:
+Two changes were requested to make MyForge more robust and framework-agnostic:
 
 1. **Skill creation and review robustness.** The `forge-build-agent-team` skill generates project-specific skills, but the generation process had no structured quality gate. Skills were written from a template without a validation loop, meaning generated skills could score below 2.0 on the agentskills.io rubric before any agent used them. The companion repository [skill-forge](https://github.com/McFuzzySquirrel/skill-forge) solves this with three purpose-built skills: `skill-creator` (structured creation workflow), `skill-review` (automated six-axis audit with portable TypeScript tooling), and `skill-review-updater` (rubric maintenance).
 

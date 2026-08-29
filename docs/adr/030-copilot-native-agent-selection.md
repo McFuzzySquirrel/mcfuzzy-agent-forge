@@ -16,7 +16,7 @@ load the persona itself.
 
 Testing revealed the Copilot CLI supports the same idea inline: a prompt such as
 `copilot -p "/agent agent-name and the rest of the message"` loads the named
-agent natively. Since Agent Forge bootstraps GitHub Copilot harness agents into
+agent natively. Since MyForge bootstraps GitHub Copilot harness agents into
 `.github/agents/*.md` — the directory GitHub Copilot auto-detects (ADR-006) —
 `/agent <name>` resolves the forge-generated agents without any configuration.
 

@@ -1,12 +1,12 @@
 # Workflow Engine
 
-> The autonomous execution layer for Agent Forge. Reads a compiled `docs/EXECUTION-MANIFEST.json` and drives every task to completion through a pluggable harness — no human prompting between tasks.
+> The autonomous execution layer for MyForge. Reads a compiled `docs/EXECUTION-MANIFEST.json` and drives every task to completion through a pluggable harness — no human prompting between tasks.
 
 ---
 
 ## Overview
 
-`forge-workflow-engine` is the "dark orchestration" half of Agent Forge. Where `project-orchestrator` runs *inside* a chat harness as a prompt-driven orchestrator, this engine runs **outside** the chat session as a standalone Node process:
+`forge-workflow-engine` is the "dark orchestration" half of MyForge. Where `project-orchestrator` runs *inside* a chat harness as a prompt-driven orchestrator, this engine runs **outside** the chat session as a standalone Node process:
 
 1. Reads `docs/EXECUTION-MANIFEST.json` (the compiled build contract).
 2. Builds a task DAG and walks it phase-by-phase, task-by-task.

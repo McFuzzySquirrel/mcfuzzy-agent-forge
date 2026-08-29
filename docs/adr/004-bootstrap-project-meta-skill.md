@@ -7,7 +7,7 @@
 
 ## Context
 
-The standard Agent Forge "new project" flow is a fixed sequence of deterministic
+The standard MyForge "new project" flow is a fixed sequence of deterministic
 skills:
 
 1. `forge-build-prd` - interview the user, produce `docs/PRD.md`.

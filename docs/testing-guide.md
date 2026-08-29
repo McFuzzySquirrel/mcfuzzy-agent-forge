@@ -1,4 +1,4 @@
-# McFuzzy Agent Forge – Manual Testing Guide
+# MyForge – Manual Testing Guide
 
 This guide walks you through a concrete end-to-end scenario you can run by hand to verify that the forge pipeline works as expected.  It covers ten capabilities in sequence:
 
@@ -17,7 +17,7 @@ This guide walks you through a concrete end-to-end scenario you can run by hand 
 
 ## Choosing a Build Path
 
-Agent Forge has several deliberately different paths. Which one you exercise in a test depends on what you want to verify. The table below maps each situation to the path that serves it, what it produces, and which part of this guide covers it.
+MyForge has several deliberately different paths. Which one you exercise in a test depends on what you want to verify. The table below maps each situation to the path that serves it, what it produces, and which part of this guide covers it.
 
 | Situation | Path | What it produces | Verified in |
 |---|---|---|---|
@@ -52,7 +52,7 @@ Both write `docs/PROGRESS.md` in the same format, so you can switch between them
 
 ## A note on "dark orchestration"
 
-The term **dark orchestration** is used throughout Agent Forge documentation and is not a security concern or anything harmful. It simply means **background execution with no human in the loop**: once the pre-run gate is accepted, the workflow engine dispatches agent invocations, waits for results, retries failures, and advances the task graph on its own - you do not need to approve each step. Think of it the same way you would a CI/CD pipeline: it runs "in the dark" (unattended) until it finishes or hits a blocker that needs human input.
+The term **dark orchestration** is used throughout MyForge documentation and is not a security concern or anything harmful. It simply means **background execution with no human in the loop**: once the pre-run gate is accepted, the workflow engine dispatches agent invocations, waits for results, retries failures, and advances the task graph on its own - you do not need to approve each step. Think of it the same way you would a CI/CD pipeline: it runs "in the dark" (unattended) until it finishes or hits a blocker that needs human input.
 
 This is the explicit opposite of the interactive `project-orchestrator` flow, where a human confirms each phase before the next one starts.
 
@@ -75,7 +75,7 @@ This is the explicit opposite of the interactive `project-orchestrator` flow, wh
 ```bash
 mkdir ~/forge-test && cd ~/forge-test
 git init
-# Run the bootstrap (from a forge-launcher install or your Agent Forge clone)
+# Run the bootstrap (from a forge-launcher install or your MyForge clone)
 forge-launcher bootstrap .
 git add -A && git commit -m "bootstrap"
 ```

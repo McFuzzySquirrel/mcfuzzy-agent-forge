@@ -1,11 +1,11 @@
 ---
 layout: post
-title:  "The Story of Agent Forge, Part 2: From Framework to Factory"
+title:  "The Story of MyForge, Part 2: From Framework to Factory"
 date:   2026-08-11 19:00:00 +0200
 categories: personal update
 ---
 
-# The Story of (McFuzzy) Agent Forge, Part 2: From Framework to Factory
+# The Story of MyForge, Part 2: From Framework to Factory
 
 > *Part 1 ended with a methodology, a growing component library, and ten principles. Part 2 is about what happened when those foundations were stress-tested: when users wanted better quality gates, fewer manual steps, a one-command start, and - ultimately - a build pipeline that could run itself.*
 
@@ -23,7 +23,7 @@ The consequence was subtle but damaging. A skill that scored below 2.0 on the qu
 
 The answer was already sitting in a companion repository: **[skill-forge](https://github.com/McFuzzySquirrel/skill-forge)**.
 
-Skill-forge had developed three capabilities that Agent Forge was missing:
+Skill-forge had developed three capabilities that MyForge was missing:
 
 - **`skill-creator`**: a five-step guided creation workflow - interview, template selection, scaffold, pre-flight check, validation loop. Not a template you fill in; a *process* that won't let you finish until the skill is good.
 - **`skill-review`**: a six-axis automated audit with portable TypeScript tooling. It could run in CI, post comments on pull requests, and block merges if skills fell below a minimum score.
@@ -77,7 +77,7 @@ With `forge-auto-build` handling the pipeline, there was still a barrier that no
 
 Before you could run any skill, you needed:
 1. A Git repository, locally or on GitHub
-2. Agent Forge bootstrapped into that repository
+2. MyForge bootstrapped into that repository
 3. Knowledge of which harness to use
 4. The correct bootstrap flag for that harness
 5. The right incantation to start `forge-auto-build` in your chosen harness
@@ -114,13 +114,13 @@ One harness required an extra fix (ADR-015): the opencode bootstrap path had bee
 
 ---
 
-## Chapter 17: The Contract Problem - Bridging Agent Forge and the Outside World
+## Chapter 17: The Contract Problem - Bridging MyForge and the Outside World
 
-With `forge-auto-build` and `forge-launcher` in place, Agent Forge had become genuinely end-to-end: idea to shipped build in one session. But a new category of users started asking a question the framework had no answer to:
+With `forge-auto-build` and `forge-launcher` in place, MyForge had become genuinely end-to-end: idea to shipped build in one session. But a new category of users started asking a question the framework had no answer to:
 
-*"Can Agent Forge's output drive an external build system? Can I run the pipeline in CI, or hand it off to a FlowForge-style runner, or integrate it with a tool that isn't a conversational AI harness?"*
+*"Can MyForge's output drive an external build system? Can I run the pipeline in CI, or hand it off to a FlowForge-style runner, or integrate it with a tool that isn't a conversational AI harness?"*
 
-The problem was structural. Agent Forge's execution model was *conversational*: an orchestrator agent read the PRD, read the team files, and issued natural-language task instructions. That worked beautifully inside a chat harness. It was completely opaque to anything outside one.
+The problem was structural. MyForge's execution model was *conversational*: an orchestrator agent read the PRD, read the team files, and issued natural-language task instructions. That worked beautifully inside a chat harness. It was completely opaque to anything outside one.
 
 What was missing was a **neutral contract** - a machine-readable document that described the build graph in a way any system could understand.
 
@@ -155,7 +155,7 @@ Three gaps defined the problem (ADR-014):
 
 2. **No machine-readable run state.** `PROGRESS.md` was readable by humans. It was not readable by a process that needed to know, at boot, exactly which tasks were complete, which were pending, and how many retries remained.
 
-3. **No harness abstraction.** Teams running Agent Forge builds in CI pipelines, scheduled jobs, or non-chat contexts had no integration path.
+3. **No harness abstraction.** Teams running MyForge builds in CI pipelines, scheduled jobs, or non-chat contexts had no integration path.
 
 The solution was `forge-workflow-engine` (v3.5): a Node.js skill that read the manifest, built a live task DAG, and drove execution to completion.
 
@@ -179,11 +179,11 @@ The testing guide added to this release made the distinction concrete: a step-by
 
 ---
 
-## Chapter 19: The Whole Picture - What Agent Forge Became
+## Chapter 19: The Whole Picture - What MyForge Became
 
 Let's zoom out again, the way Part 1 did.
 
-Part 1 ended with Agent Forge as a **framework**: a set of principles, skills, and agents that turned ideas into coordinated agent teams. Part 2 added a **factory**: the automation, onboarding, quality gates, integration contracts, and autonomous runtime that make the framework work at scale.
+Part 1 ended with MyForge as a **framework**: a set of principles, skills, and agents that turned ideas into coordinated agent teams. Part 2 added a **factory**: the automation, onboarding, quality gates, integration contracts, and autonomous runtime that make the framework work at scale.
 
 Here is the full picture, extended from the Part 1 diagram:
 
@@ -257,7 +257,7 @@ Part 1 ended with ten principles. Part 2 adds to them.
 
 There's a recursive dimension to everything in Part 2 that's worth naming explicitly.
 
-Agent Forge v3.x uses `skill-creator` and `skill-review` to build and validate the skills that `forge-build-agent-team` generates. Those skills were themselves created and validated by the same tools. The `forge-workflow-engine` that drives autonomous builds was bootstrapped by the same `forge-launcher` experience it is now part of. The testing guide that verifies dark orchestration was written to cover the same workflow it describes.
+MyForge v3.x uses `skill-creator` and `skill-review` to build and validate the skills that `forge-build-agent-team` generates. Those skills were themselves created and validated by the same tools. The `forge-workflow-engine` that drives autonomous builds was bootstrapped by the same `forge-launcher` experience it is now part of. The testing guide that verifies dark orchestration was written to cover the same workflow it describes.
 
 The tools improved the tools. The framework built itself.
 

@@ -16,7 +16,7 @@ const RED = code(31);
 export const header = () => {
   out("");
   out(`${CYAN}${BOLD}════════════════════════════════════════════════════════${RESET}`);
-  out(`${CYAN}${BOLD}  McFuzzy Agent Forge -Launcher${RESET}`);
+  out(`${CYAN}${BOLD}  MyForge Launcher${RESET}`);
   out(`${CYAN}${BOLD}════════════════════════════════════════════════════════${RESET}`);
   out("");
 };

@@ -7,7 +7,7 @@
 
 ## Context
 
-The McFuzzy Agent Forge was originally designed solely for GitHub Copilot. Agent and skill templates were bootstrapped into `.github/agents/` and `.github/skills/` - directories that GitHub Copilot auto-detects. All template files, documentation, and the bootstrap scripts referenced these GitHub-specific paths.
+The MyForge was originally designed solely for GitHub Copilot. Agent and skill templates were bootstrapped into `.github/agents/` and `.github/skills/` - directories that GitHub Copilot auto-detects. All template files, documentation, and the bootstrap scripts referenced these GitHub-specific paths.
 
 Two developments prompted a migration:
 

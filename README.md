@@ -1,4 +1,4 @@
-# McFuzzy Agent Forge
+# MyForge
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 ![Bash](https://img.shields.io/badge/Bash-4EAA25?logo=gnubash&logoColor=fff)
@@ -7,15 +7,15 @@
 
 > Turn a reviewed PRD into a coordinated team of specialist agents and an autonomous build - in minutes. Works with any agent harness that reads agents and skills from a repo.
 
-**McFuzzy Agent Forge** turns your requirements into a team of specialist agents that plan, implement, and validate a project. The PRD is the quality gate: you deliberately review it, then the pipeline generates the team and drives the build - either interactively or fully autonomously ("dark orchestration").
+**MyForge** turns your requirements into a team of specialist agents that plan, implement, and validate a project. The PRD is the quality gate: you deliberately review it, then the pipeline generates the team and drives the build - either interactively or fully autonomously ("dark orchestration").
 
-**Latest: v3.29** - added a proposed **Forge Console** feature plan in `docs/research/forge-console-desktop-frontend-plan.md` to introduce a desktop/web UX for engine and launcher observability and controls, recommending a web-first expansion of the existing Forge Board before optional desktop packaging. See [docs/updates.md](docs/updates.md). (v3.28: the workflow engine now **serializes same-owner tasks** under parallelism (with `--concurrency > 1`, at most one task per agent runs per wave), and the execution-adapter compiler no longer mistakes framework names like **ASP.NET** for expected output files (which was failing tasks at the output gate on every retry). v3.27: the engine can be **stopped gracefully** — `workflow-engine stop`/`pause` or `forge-launcher engine-run --stop/--pause` write `docs/engine-control.json` and SIGTERM the PID in `docs/engine.pid`, so a detached run finishes the current task, saves state as `paused`, and resumes with `run`. v3.26: adaptive keep-alive default + execution-budget hints. v3.25: launcher adds "stop here and resume later" checkpoints and a post-team plan & validate step. v3.24: the Copilot harness selects forge agents natively via `/agent <name>`. v3.23: the workflow engine's **output verification gate** stops hollow "complete" runs. v3.22: `forge-launcher` is the single terminal entry point with `resume`.)
+**Latest: v3.30** - rebranded from **McFuzzy Agent Forge** to **MyForge** across the README, docs, and templates; technical `forge-*` names and the FlowForge kernel are unchanged, and the workforce compiler's default package ID root is now `dev.myforge.*` (see [docs/updates.md](docs/updates.md)). (v3.29: added a proposed **Forge Console** feature plan in `docs/research/forge-console-desktop-frontend-plan.md` to introduce a desktop/web UX for engine and launcher observability and controls, recommending a web-first expansion of the existing Forge Board before optional desktop packaging. v3.28: the workflow engine now **serializes same-owner tasks** under parallelism (with `--concurrency > 1`, at most one task per agent runs per wave), and the execution-adapter compiler no longer mistakes framework names like **ASP.NET** for expected output files (which was failing tasks at the output gate on every retry). v3.27: the engine can be **stopped gracefully** — `workflow-engine stop`/`pause` or `forge-launcher engine-run --stop/--pause` write `docs/engine-control.json` and SIGTERM the PID in `docs/engine.pid`, so a detached run finishes the current task, saves state as `paused`, and resumes with `run`. v3.26: adaptive keep-alive default + execution-budget hints. v3.25: launcher adds "stop here and resume later" checkpoints and a post-team plan & validate step. v3.24: the Copilot harness selects forge agents natively via `/agent <name>`. v3.23: the workflow engine's **output verification gate** stops hollow "complete" runs. v3.22: `forge-launcher` is the single terminal entry point with `resume`.)
 
 ---
 
 ## Quick Start (fastest path)
 
-One command, zero to running - no PRD needed. The launcher creates your repo, bootstraps Agent Forge, captures your idea, and queues the right pipeline stage:
+One command, zero to running - no PRD needed. The launcher creates your repo, bootstraps MyForge, captures your idea, and queues the right pipeline stage:
 
 ```bash
 # Anywhere (npm package - requires Node.js 18+):
@@ -106,7 +106,7 @@ repo name and your idea, and you land in a bootstrapped repo:
 
 ```bash
 ls my-todo-app/                      # .agents/, docs/, IDEA.md, README.md
-git -C my-todo-app log --oneline     # chore: bootstrap agent forge
+git -C my-todo-app log --oneline     # chore: bootstrap MyForge
 ```
 
 The whole suite can be checked without the TUI too:
@@ -121,7 +121,7 @@ npm run typecheck
 
 ## Choose Your Path
 
-**Start with `forge-launcher`.** It creates the repo, bootstraps Agent Forge,
+**Start with `forge-launcher`.** It creates the repo, bootstraps MyForge,
 captures your idea, and drafts the PRD + agent team (with a review boundary
 between each). Once the team exists, make exactly one choice: **how to run the
 build**.
@@ -209,11 +209,11 @@ wrappers still work from a clone with no install, but the npm package is the
 canonical cross-platform path.
 
 For a **new project**, run `forge-launcher` and follow the prompts — it creates
-the repo, bootstraps the Agent Forge templates into your harness directory
+the repo, bootstraps the MyForge templates into your harness directory
 (default `.agents/`), captures your idea, and queues the next stage. Nothing
 else to set up.
 
-### 2. Add Agent Forge to an existing project
+### 2. Add MyForge to an existing project
 
 ```bash
 forge-launcher bootstrap /path/to/your/project --harness agents   # default
@@ -227,7 +227,7 @@ directory. Commit the templates, then open the project in your harness:
 
 ```bash
 cd /path/to/your/project
-git init && git add .agents/ && git commit -m "chore: bootstrap Agent Forge templates"
+git init && git add .agents/ && git commit -m "chore: bootstrap MyForge templates"
 ```
 
 Then pick a path below.

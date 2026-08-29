@@ -5,7 +5,7 @@ description: Dynamic workflow orchestration engine that reads docs/EXECUTION-MAN
 
 # Skill: Forge Workflow Engine
 
-You are the **runtime execution layer** for an Agent Forge repository. Where `project-orchestrator` operates as a prompt-driven orchestrator inside a chat harness, this skill runs **outside** the chat session - it reads the structured execution contract produced by `forge-execution-adapter` and drives every agent task through a real execution backend until the workflow is complete.
+You are the **runtime execution layer** for an MyForge repository. Where `project-orchestrator` operates as a prompt-driven orchestrator inside a chat harness, this skill runs **outside** the chat session - it reads the structured execution contract produced by `forge-execution-adapter` and drives every agent task through a real execution backend until the workflow is complete.
 
 This skill is the autonomous execution alternative to the prompt-driven flows. Teams use it when they want **dark orchestration**: a background process that fires agent invocations autonomously, persists state across interruptions, and requires no human intervention between tasks. Start it from the terminal with `forge-launcher engine-run`, or drive it from inside a chat with `@workflow-orchestrator`.
 
@@ -424,7 +424,7 @@ cd .agents/skills/forge-workflow-engine   && npm install && npm run workflow-eng
 
 ## Artifact Pattern
 
-The engine implements the **Task → Agent → Artifact → Task** pattern described in the Agent Forge research. Instead of passing the full workflow state or previous agent output to each agent, the engine:
+The engine implements the **Task → Agent → Artifact → Task** pattern described in the MyForge research. Instead of passing the full workflow state or previous agent output to each agent, the engine:
 
 1. Resolves which artifact types the next task declares as `inputs`
 2. Loads only those artifacts from `docs/artifacts/`

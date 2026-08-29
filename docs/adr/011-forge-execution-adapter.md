@@ -1,4 +1,4 @@
-# ADR-011: Forge Execution Adapter -Contract-Driven Bridge from Agent Forge to External Runners
+# ADR-011: Forge Execution Adapter -Contract-Driven Bridge from MyForge to External Runners
 
 **Date:** 2026-08-06
 **Status:** Accepted
@@ -7,7 +7,7 @@
 
 ## Context
 
-Agent Forge already solves the **authoring** side of the lifecycle well:
+MyForge already solves the **authoring** side of the lifecycle well:
 
 1. It creates `docs/PRD.md`
 2. It generates specialist `.agent.md` files and `SKILL.md` packages
@@ -16,7 +16,7 @@ Agent Forge already solves the **authoring** side of the lifecycle well:
 
 What it does not provide is a portable, structured contract for handing those artifacts to an **external execution engine**. Existing build execution is still largely prompt/harness-driven.
 
-That creates four gaps for teams that want to execute Agent Forge builds on a backend such as FlowForge or another runtime-controlled runner:
+That creates four gaps for teams that want to execute MyForge builds on a backend such as FlowForge or another runtime-controlled runner:
 
 1. **No discovery contract.** There is no single component that resolves the active harness root (`.agents/`, `.github/`, `.claude/`) and loads the forge artifacts consistently.
 2. **No compilation contract.** The PRD phases and generated agents exist as markdown, but no structured execution manifest is produced for an engine to consume.
@@ -27,11 +27,11 @@ That creates four gaps for teams that want to execute Agent Forge builds on a ba
 
 ## Decision
 
-We introduce a new **`forge-execution-adapter` skill package** with embedded TypeScript tooling that acts as a thin runtime bridge between Agent Forge outputs and an external runner.
+We introduce a new **`forge-execution-adapter` skill package** with embedded TypeScript tooling that acts as a thin runtime bridge between MyForge outputs and an external runner.
 
 ### 1. Scope
 
-The adapter starts **after** Agent Forge authoring is complete enough to execute:
+The adapter starts **after** MyForge authoring is complete enough to execute:
 
 - `docs/PRD.md` exists
 - generated agent files exist under the active harness root

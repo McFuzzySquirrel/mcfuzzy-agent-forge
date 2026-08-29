@@ -7,7 +7,7 @@
 
 ## Context
 
-Agent Forge had several points where the user is asked to make decisions that are either mechanically derivable from project artifacts, or that let the build pipeline proceed without sufficient PRD review:
+MyForge had several points where the user is asked to make decisions that are either mechanically derivable from project artifacts, or that let the build pipeline proceed without sufficient PRD review:
 
 1. **PRD decomposition was unnecessarily opt-in.** ADR-002 introduced `forge-decompose-prd` as an opt-in, manually invoked skill. A user had to recognize that their PRD was large and separately run it after `forge-build-prd` completed. The qualifying criteria are objective (15+ functional requirements, or 3+ implementation phases) and calculable directly from the PRD, and decomposition is non-destructive -`docs/PRD.md` is preserved and `docs/product-vision.md` + `docs/features/*.md` are generated alongside it. Asking the user to confirm a mechanical threshold added friction without meaningful safety.
 
@@ -77,7 +77,7 @@ Artifact creation and validation are separated from execution: the PRD is an exp
 
 Two complementary principles:
 
-- **Automate deterministic decisions.** If a decision can be calculated objectively from an artifact and the operation is non-destructive, Agent Forge should perform it automatically rather than asking the user to confirm the calculation. PRD decomposition is the canonical example.
+- **Automate deterministic decisions.** If a decision can be calculated objectively from an artifact and the operation is non-destructive, MyForge should perform it automatically rather than asking the user to confirm the calculation. PRD decomposition is the canonical example.
 - **Require deliberate human ownership of high-leverage artifacts.** If an artifact defines what will be built, the user should explicitly enter the execution pipeline with that artifact available for review. The PRD is therefore a quality gate, not merely an intermediate file.
 
 Together these reduce unnecessary interaction while increasing the quality and predictability of autonomous builds.
