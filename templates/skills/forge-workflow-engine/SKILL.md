@@ -418,7 +418,7 @@ cd .agents/skills/forge-workflow-engine   && npm install && npm run workflow-eng
 - **Per-task cold start is the main harness overhead.** Every fresh `opencode run` re-boots config, skills, and all MCP servers. The engine now defaults to adaptive keep-alive (warm `opencode serve` when >1 task remains) to avoid this; pass `--no-keep-alive` to force cold starts.
 - **Attach mode needs a healthy server.** Keep-alive (forced or adaptive) polls `GET /global/health` before dispatching and fails fast if `opencode serve` cannot start. Reusing `--attach` against a dead URL fails per task - start the server first.
 - **Agent file paths must be absolute or resolvable from the repo root.** Discovery reads the agent `.md` file and sets `agent.path`. For `.opencode/agents/` files the adapter passes `--agent <name>` and skips the inline persona; for other harness roots it inlines `agent.rawBody` into the prompt.
-- **Parallelism is opt-in and harness-gated.** The engine executes the ready-task frontier concurrently up to `--concurrency <n>` (default `1` = sequential). Only harness adapters that declare `supportsConcurrency` are parallelized; repo-editing harnesses still rely on the dependency graph for file isolation. See ADR-021.
+- **Parallelism is opt-in and harness-gated.** The engine executes the ready-task frontier concurrently up to `--concurrency <n>` (default `1` = sequential). Only harness adapters that declare `supportsConcurrency` are parallelized; **same-owner tasks are always serialized** (at most one task per agent per wave), and repo-editing harnesses still rely on the dependency graph for file isolation. Cross-owner tasks on shared paths remain the operator's responsibility. See ADR-021.
 
 ---
 

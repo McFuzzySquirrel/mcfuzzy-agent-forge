@@ -86,10 +86,11 @@ Failure handling uses **drain** semantics: in-flight tasks in the current wave r
 - Per-harness `supportsConcurrency` gives a clear, documented escape hatch for future backends.
 - `flowforge-kernel` gains non-blocking execution and loses a hidden `execFileSync` event-loop stall.
 - Fully backward compatible: default concurrency `1` reproduces the exact previous sequential behavior and state files.
+- **Same-owner serialization (v3.28).** Tasks owned by the same agent are kept to at most one per wave (`ownerUniqueReady`), so a wave never runs two tasks that share a subsystem (project dir, build outputs, ports) even when the DAG considers them independent. Cross-owner tasks still parallelize up to `maxConcurrency`. This closes the most common real-world collision class (same agent editing the same project) without changing the DAG or the responsibility matrix.
 
 ### Negative
 
-- Parallel repo-editing harnesses can race if a manifest author declares insufficient dependencies. The mitigation is unchanged from sequential mode (the DAG), but the blast radius of a missing dependency is now a lost edit rather than a serialized-but-wrong edit.
+- Parallel repo-editing harnesses can race if a manifest author declares insufficient dependencies. The mitigation is unchanged from sequential mode (the DAG, plus the same-owner guard), but the blast radius of a missing dependency is now a lost edit rather than a serialized-but-wrong edit. Cross-owner tasks on shared paths (one task scaffolding a directory while another builds inside it) are still the operator's responsibility — a future file-overlap gate would close that.
 - The on-disk `WORKFLOW-STATE.json` no longer reflects a task's `running` status *during* a wave (it is persisted at wave boundaries). A process kill mid-wave re-runs the wave's tasks on resume, which is safe but not free.
 - "Current phase" is informational when multiple phases are in flight; `phase.started` events are emitted for each phase that enters a wave, but there is no single linear "current task" notion during a parallel wave.
 

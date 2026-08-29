@@ -132,6 +132,31 @@ export function nextReadyTasks(manifest: ExecutionManifest, state: WorkflowState
   return ready;
 }
 
+/**
+ * Restrict a ready frontier so that at most one task per owner runs in a single
+ * wave. Tasks owned by the same agent share a subsystem (project dir, build
+ * outputs, ports), so dispatching them concurrently can collide even when the
+ * dependency graph considers them independent. Cross-owner tasks still
+ * parallelize up to `--concurrency`; same-owner tasks drain one per wave.
+ *
+ * First task per owner wins (manifest order); later same-owner entries stay
+ * `pending` and re-enter the frontier on the next wave. Unassigned tasks share
+ * the `__unassigned__` bucket so they serialize too.
+ */
+export function ownerUniqueReady(ready: FlatTask[]): FlatTask[] {
+  const seenOwners = new Set<string>();
+  const unique: FlatTask[] = [];
+
+  for (const entry of ready) {
+    const owner = entry.task.ownerAgent ?? "__unassigned__";
+    if (seenOwners.has(owner)) continue;
+    seenOwners.add(owner);
+    unique.push(entry);
+  }
+
+  return unique;
+}
+
 export function isComplete(manifest: ExecutionManifest, state: WorkflowState): boolean {
   return flattenManifest(manifest).every(
     ({ task }) => isTaskDone(state.tasks[task.id]?.status),
@@ -447,7 +472,7 @@ export async function runEngine(opts: EngineOptions): Promise<WorkflowState> {
       break;
     }
 
-    const ready = nextReadyTasks(manifest, state);
+    const ready = ownerUniqueReady(nextReadyTasks(manifest, state));
 
     if (ready.length === 0) {
       if (hasFailed(state)) break;

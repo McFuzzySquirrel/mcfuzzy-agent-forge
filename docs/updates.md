@@ -4,6 +4,30 @@ Detailed release and change notes for McFuzzy Agent Forge.
 
 ---
 
+## August 2026 - v3.28
+
+### Workflow engine: same-owner task serialization under parallelism
+
+- **Same-owner tasks never run concurrently.** With `--concurrency > 1`, the
+  engine previously dispatched the whole ready frontier in parallel — including
+  tasks owned by the same agent, which share a subsystem (project dir, build
+  outputs, ports) and can collide even when the dependency graph sees them as
+  independent (e.g. a port-`Address already in use` clash between an Edge
+  scaffold task and an Edge build task).
+- The wave dispatcher now keeps **at most one task per owning agent** per wave
+  (`ownerUniqueReady`); same-owner tasks drain one per wave while cross-owner
+  tasks still parallelize up to `--concurrency`. Sequential runs (`--concurrency
+  1`) are unchanged. Unassigned tasks are bucketed together conservatively.
+- This is a dispatch-layer guard; the manifest dependency graph and the
+  responsibility matrix are untouched. Cross-owner tasks on shared paths (one
+  task scaffolding a directory while another builds inside it) remain the
+  operator's responsibility — a future file-overlap gate would close that.
+- New tests: `ownerUniqueReady` (per-owner first-wins, unassigned bucketing,
+  empty), same-owner serialization under concurrency 2, and different-owner
+  concurrency under concurrency 2. See ADR-021 (amended).
+
+---
+
 ## August 2026 - v3.27
 
 ### Engine pause & stop (graceful), launcher config persistence
