@@ -9,7 +9,7 @@
 
 **MyForge** turns your requirements into a team of specialist agents that plan, implement, and validate a project. The PRD is the quality gate: you deliberately review it, then the pipeline generates the team and drives the build - either interactively or fully autonomously ("dark orchestration").
 
-**Latest: v3.31** - new **Forge Console** (`forge-launcher console`): a self-contained local web UI that fronts `forge-launcher` (authoring) and `forge-launcher engine-run` (build) from one browser app — project picker, new-project wizard, run views (overview/board/tasks/logs/documents/artifacts/timeline), and run controls (pause/stop/replay/run/resume) — served loopback-only behind an `X-Forge-Token` CSRF guard, with a project registry at `~/.myforge/projects.json` (see [docs/updates.md](docs/updates.md)). (v3.30: rebranded from **McFuzzy Agent Forge** to **MyForge**; technical `forge-*` names and the FlowForge kernel are unchanged. v3.29: added a proposed **Forge Console** feature plan in `docs/research/forge-console-desktop-frontend-plan.md` to introduce a desktop/web UX for engine and launcher observability and controls, recommending a web-first expansion of the existing Forge Board before optional desktop packaging. v3.28: the workflow engine now **serializes same-owner tasks** under parallelism (with `--concurrency > 1`, at most one task per agent runs per wave), and the execution-adapter compiler no longer mistakes framework names like **ASP.NET** for expected output files (which was failing tasks at the output gate on every retry). v3.27: the engine can be **stopped gracefully** — `workflow-engine stop`/`pause` or `forge-launcher engine-run --stop/--pause` write `docs/engine-control.json` and SIGTERM the PID in `docs/engine.pid`, so a detached run finishes the current task, saves state as `paused`, and resumes with `run`. v3.26: adaptive keep-alive default + execution-budget hints. v3.25: launcher adds "stop here and resume later" checkpoints and a post-team plan & validate step. v3.24: the Copilot harness selects forge agents natively via `/agent <name>`. v3.23: the workflow engine's **output verification gate** stops hollow "complete" runs. v3.22: `forge-launcher` is the single terminal entry point with `resume`.)
+**Latest: v3.31** - new **Forge Console** (`forge-launcher console`): a self-contained local web UI that fronts `forge-launcher` (authoring) and `forge-launcher engine-run` (build) from one browser app - project picker, new-project wizard, run views (overview/board/tasks/logs/documents/artifacts/timeline), and run controls (pause/stop/replay/run/resume) - served loopback-only behind an `X-Forge-Token` CSRF guard, with a project registry at `~/.myforge/projects.json` (see [docs/updates.md](docs/updates.md)). (v3.30: rebranded from **McFuzzy Agent Forge** to **MyForge**; technical `forge-*` names and the FlowForge kernel are unchanged. v3.29: added a proposed **Forge Console** feature plan in `docs/research/forge-console-desktop-frontend-plan.md` to introduce a desktop/web UX for engine and launcher observability and controls, recommending a web-first expansion of the existing Forge Board before optional desktop packaging. v3.28: the workflow engine now **serializes same-owner tasks** under parallelism (with `--concurrency > 1`, at most one task per agent runs per wave), and the execution-adapter compiler no longer mistakes framework names like **ASP.NET** for expected output files (which was failing tasks at the output gate on every retry). v3.27: the engine can be **stopped gracefully** - `workflow-engine stop`/`pause` or `forge-launcher engine-run --stop/--pause` write `docs/engine-control.json` and SIGTERM the PID in `docs/engine.pid`, so a detached run finishes the current task, saves state as `paused`, and resumes with `run`. v3.26: adaptive keep-alive default + execution-budget hints. v3.25: launcher adds "stop here and resume later" checkpoints and a post-team plan & validate step. v3.24: the Copilot harness selects forge agents natively via `/agent <name>`. v3.23: the workflow engine's **output verification gate** stops hollow "complete" runs. v3.22: `forge-launcher` is the single terminal entry point with `resume`.)
 
 ---
 
@@ -50,7 +50,7 @@ npm install -g ./forge-launcher-1.0.0-beta.3.tgz
 ```
 
 > **Stale install?** After `git pull`, always re-run `npm install` before
-> `npm run build`/`npm pack` — new dependencies are added over time. If `npm run
+> `npm run build`/`npm pack` - new dependencies are added over time. If `npm run
 > build` fails with *"Cannot find module 'cross-spawn' / 'semver' or its
 > corresponding type declarations"*, your `node_modules` predates those
 > dependencies. Fix it with a clean reinstall:
@@ -83,8 +83,8 @@ cd scripts/forge-launcher && npm unlink    # drops the symlink created by `npm l
 > day and prints a notice when a newer version is available. Disable it with
 > `--no-update-check` or `FORGE_SKIP_UPDATE_CHECK=1` (also skipped in CI).
 
-To also verify the exact end-user experience — a clean, unrelated workspace
-where the launcher runs on its **bundled** templates — install into an isolated
+To also verify the exact end-user experience - a clean, unrelated workspace
+where the launcher runs on its **bundled** templates - install into an isolated
 prefix and run from a fresh directory:
 
 ```bash
@@ -131,30 +131,30 @@ build**.
 | **Interactively** (in your harness) | `@workspace @project-orchestrator Execute the full build` | Drives every phase with your approval between them |
 | **Autonomously** (dark orchestration) | `forge-launcher engine-run --harness opencode --yes`, or `@workspace @workflow-orchestrator Run the workflow` | One pre-run gate, then the engine runs every task unattended (log: `docs/engine-run.log`) and resumes after interruption |
 
-**Launcher variants** — same entry point, different levels of automation:
+**Launcher variants** - same entry point, different levels of automation:
 
 | You want… | Run this |
 |---|---|
 | Guided onboarding, zero setup | `forge-launcher` |
 | Draft the PRD + team for you, keeping review boundaries | `forge-launcher --draft` |
-| No chat session at all — full terminal/headless pipeline | `forge-launcher --headless` |
+| No chat session at all - full terminal/headless pipeline | `forge-launcher --headless` |
 | Pick up where you left off (reviews take a while) | `forge-launcher resume` |
 | A browser UI for authoring, build monitoring, and run controls | `forge-launcher console` |
 
 ### Forge Console (web UI)
 
 Prefer a browser over the terminal? **`forge-launcher console`** opens a local
-web UI (`http://127.0.0.1:4300`) that wraps everything above in one place —
+web UI (`http://127.0.0.1:4300`) that wraps everything above in one place -
 create a project or pick an existing one, then **draft the PRD**, **generate the
 agent team**, **start/stop the build**, and monitor it live (board, tasks, logs,
-artifacts, docs) — all point-and-click:
+artifacts, docs) - all point-and-click:
 
 ```bash
 forge-launcher console                 # opens the project picker
 forge-launcher console --repo my-app   # opens a specific project directly
 ```
 
-**Deliberate, manual steps** — the building blocks `forge-launcher` automates:
+**Deliberate, manual steps** - the building blocks `forge-launcher` automates:
 
 | You want… | Run this |
 |---|---|
@@ -222,7 +222,7 @@ The legacy `./scripts/forge-launcher.sh` / `.\scripts\forge-launcher.ps1`
 wrappers still work from a clone with no install, but the npm package is the
 canonical cross-platform path.
 
-For a **new project**, run `forge-launcher` and follow the prompts — it creates
+For a **new project**, run `forge-launcher` and follow the prompts - it creates
 the repo, bootstraps the MyForge templates into your harness directory
 (default `.agents/`), captures your idea, and queues the next stage. Nothing
 else to set up.

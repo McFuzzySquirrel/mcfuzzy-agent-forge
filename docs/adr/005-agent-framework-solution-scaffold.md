@@ -114,7 +114,7 @@ skill carries a hard requirement to check the current package names and a minima
 agent" snippet against the official docs
 (`https://learn.microsoft.com/en-us/agent-framework/` and the GitHub repo) before adding
 any package reference or writing any code. If the docs cannot be reached, the skill says
-so and asks the user to paste the relevant getting-started snippet. The alternative —
+so and asks the user to paste the relevant getting-started snippet. The alternative -
 encoding specific version numbers in the skill itself - would cause the skill to produce
 outdated scaffolds as Agent Framework evolves.
 

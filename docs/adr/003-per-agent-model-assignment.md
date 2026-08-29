@@ -105,7 +105,7 @@ The skill enforces two hard gates before emitting a model recommendation:
 ### 5. Optional Frontmatter Fields
 
 The `model:` and `modelFallback:` keys written by Apply mode are **optional** in the
-agent frontmatter schema. Agent files that lack them continue to work exactly as before —
+agent frontmatter schema. Agent files that lack them continue to work exactly as before -
 Copilot uses the user's current default model. This preserves full backward compatibility.
 
 ### 6. Honest Enforcement Boundary

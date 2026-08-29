@@ -1,4 +1,4 @@
-# ADR-034: Forge Console — a Local Web UI over the Launcher and Workflow Engine
+# ADR-034: Forge Console - a Local Web UI over the Launcher and Workflow Engine
 
 **Date:** 2026-08-29
 **Status:** Accepted
@@ -19,7 +19,7 @@ it.
 
 The research plan
 ([`docs/research/forge-console-desktop-frontend-plan.md`](../research/forge-console-desktop-frontend-plan.md))
-evaluated three options — desktop-first, web-first, IDE-extension — and
+evaluated three options - desktop-first, web-first, IDE-extension - and
 recommended the web-first path: evolve the existing local viz into a broader
 console, then consider desktop packaging only if adoption justifies it.
 
@@ -35,12 +35,12 @@ existing launcher npm package (ADR-023) rather than a separate project:
   (New Project wizard), resume a setup (draft PRD, generate team, start build),
   start/resume a build, and monitor/control a run.
 - **tsc-only TypeScript client.** The client is plain TypeScript compiled with
-  `tsc` — no React, no bundler — served as static assets from the same Node
+  `tsc` - no React, no bundler - served as static assets from the same Node
   server. Deliberately boring to keep the dependency footprint and build story
   minimal.
 - **The Forge Board is embedded, not reimplemented.** The existing PixiJS
   Forge Board (ADR-026) is embedded full-screen via an iframe at `/board`; the
-  board itself was **not** converted to TypeScript yet — it remains vendored
+  board itself was **not** converted to TypeScript yet - it remains vendored
   PixiJS.
 - **Project registry.** A `~/.myforge/projects.json` registry (honoring
   `FORGE_HOME` / `XDG_CONFIG_HOME`) remembers the projects the user has opened,
@@ -50,8 +50,8 @@ existing launcher npm package (ADR-023) rather than a separate project:
   shells out to `workflow-engine replay <task>`; Run/Resume shells out to
   `forge-launcher engine-run`.
 - **Loopback + CSRF token.** The server binds to loopback only, and
-  state-changing POST endpoints require an `X-Forge-Token` header — a per-server
-  random token embedded in the served HTML — to block cross-origin drive-by
+  state-changing POST endpoints require an `X-Forge-Token` header - a per-server
+  random token embedded in the served HTML - to block cross-origin drive-by
   requests. File reads are guarded against path traversal.
 - **CLI paths unchanged.** `forge-launcher`, `forge-launcher engine-run`, and
   `workflow-engine --viz` remain first-class and unchanged; the console is an
@@ -83,13 +83,13 @@ Negative:
 
 Trade-offs considered:
 
-- **Desktop app first (Electron/Tauri)** — deferred (Phase 4 of the research
+- **Desktop app first (Electron/Tauri)** - deferred (Phase 4 of the research
   plan) until the web console proves adoption and requirements; packaging adds
   release/runtime surface before fit is proven.
-- **React front end** — rejected for now: the console is a thin projection over
+- **React front end** - rejected for now: the console is a thin projection over
   existing files/commands, and tsc-only TypeScript keeps the toolchain aligned
   with the rest of the repo.
-- **Convert the Board to TypeScript in the same change** — rejected: embedding
+- **Convert the Board to TypeScript in the same change** - rejected: embedding
   the existing board via iframe delivers the console now, deferring the
   TypeScript conversion to a follow-up.
 

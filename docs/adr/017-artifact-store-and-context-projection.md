@@ -9,9 +9,9 @@
 
 ADR-016 (`forge-workforce-compiler`) and ADR-014 (`forge-workflow-engine`) provide autonomous, DAG-driven execution. However, each agent task was previously handed the full `WORKFLOW-STATE.json` as its input context. In multi-task workflows this creates three compounding problems:
 
-1. **Context bloat** — every agent pays a token tax for the full run history, even for work it has no relationship to.
-2. **Reduced focus** — large, undifferentiated context produces less precise agent outputs.
-3. **Cost at scale** — small local models (Ollama) and API-tier models both degrade as context grows.
+1. **Context bloat** - every agent pays a token tax for the full run history, even for work it has no relationship to.
+2. **Reduced focus** - large, undifferentiated context produces less precise agent outputs.
+3. **Cost at scale** - small local models (Ollama) and API-tier models both degrade as context grows.
 
 Research conducted during this feature's design confirmed that token savings come primarily from narrowing the hand-off boundary between agents, not from changing execution order.
 
@@ -27,9 +27,9 @@ Introduce a file-based **artifact store** in `forge-workflow-engine` and a compa
 
 - Persists every meaningful agent output as a compact, typed JSON artifact at `docs/artifacts/<type-prefix>/<artifact-id>.json`.
 - Supports three top-level artifact categories (mapped from `Artifact.type`):
-  - **decision** — `solution.requirement`, `solution.architecture`, ADRs; answers *what we are building and why*.
-  - **work** — `implementation.result`, `code.review`, `test.result`; answers *what has been done*.
-  - **evidence** — `build.output`, `lint.result`, `security.scan`; answers *how we know it is correct*.
+  - **decision** - `solution.requirement`, `solution.architecture`, ADRs; answers *what we are building and why*.
+  - **work** - `implementation.result`, `code.review`, `test.result`; answers *what has been done*.
+  - **evidence** - `build.output`, `lint.result`, `security.scan`; answers *how we know it is correct*.
 - Exposes `create`, `get`, `list`, and `project` operations through a typed `ArtifactStore` interface, enabling a future `SqliteArtifactStore` or `BlobArtifactStore` without changing engine code.
 - Is deliberately file-based so artifacts can be inspected, diffed, versioned in Git, and replayed without a database.
 
@@ -43,8 +43,8 @@ Each projected artifact is reduced to a minimal summary: `id`, `type`, `createdA
 
 `ManifestTask` gains two optional fields (in `forge-execution-adapter/scripts/types.ts`):
 
-- `inputs?: string[]` — artifact types the task consumes as input context.
-- `produces?: string` — artifact type the task must emit on success.
+- `inputs?: string[]` - artifact types the task consumes as input context.
+- `produces?: string` - artifact type the task must emit on success.
 
 These fields are purely advisory at the manifest level; the engine reads them to wire up the store and projection.
 
@@ -56,8 +56,8 @@ These fields are purely advisory at the manifest level; the engine reads them to
 
 Two new audit event actions are added to `AuditEvent.action`:
 
-- `artifact.created` — records `artifactId`, `artifactType`, and `inputArtifacts`.
-- `context.projected` — records token reduction telemetry.
+- `artifact.created` - records `artifactId`, `artifactType`, and `inputArtifacts`.
+- `context.projected` - records token reduction telemetry.
 
 ---
 

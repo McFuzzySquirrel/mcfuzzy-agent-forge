@@ -1,6 +1,6 @@
 # Workflow Engine
 
-> The autonomous execution layer for MyForge. Reads a compiled `docs/EXECUTION-MANIFEST.json` and drives every task to completion through a pluggable harness — no human prompting between tasks.
+> The autonomous execution layer for MyForge. Reads a compiled `docs/EXECUTION-MANIFEST.json` and drives every task to completion through a pluggable harness - no human prompting between tasks.
 
 ---
 
@@ -21,7 +21,7 @@ It is the execution alternative to the prompt-driven flows: start it from the te
 
 - A compiled manifest at `docs/EXECUTION-MANIFEST.json` (produced by `forge-execution-adapter`).
 - Agent `.md` files under the harness agents directory (`.opencode/agents/`, `.claude/agents/`, `.github/agents/`, or `.agents/agents/`).
-- A configured harness — the `opencode` CLI in `$PATH` (default), `copilot`, an `OPENAI_API_KEY`, or the FlowForge kernel.
+- A configured harness - the `opencode` CLI in `$PATH` (default), `copilot`, an `OPENAI_API_KEY`, or the FlowForge kernel.
 - `node >= 18` and `npm` at *build time* (the engine's `node_modules/` is installed on first run, not committed).
 
 If the manifest does not exist yet, compile it first:
@@ -37,7 +37,7 @@ npm run forge-execution-adapter -- compile
 compiles the features in dependency-graph order into feature-tagged phases
 (e.g. `BUDGETS-2`). It also runs a team-validation gate (unassigned tasks,
 duplicate file owners, orphan agents) and writes
-`docs/agent-responsibility-matrix.md` — the engine's pre-run summary prints the
+`docs/agent-responsibility-matrix.md` - the engine's pre-run summary prints the
 source layout, feature order, and matrix path.
 
 ---
@@ -62,7 +62,7 @@ forge-launcher engine-run --repo <repo-dir> --harness opencode --yes
 This installs the adapter and engine dependencies, compiles the manifest if missing, then runs the engine in the foreground. Add `--dry-run` to print the command sequence without executing it.
 
 > **Prefer a browser?** Run monitoring and control from the **Forge Console**
-> (`forge-launcher console`) — a local web UI that reads the same `docs/*`
+> (`forge-launcher console`) - a local web UI that reads the same `docs/*`
 > artifacts and embeds the Forge Board. See
 > [docs/forge-console.md](forge-console.md).
 
@@ -77,15 +77,15 @@ At `forge-auto-build`'s pre-flight gate, type `GO --workflow-engine`. The team i
 A harness call that exits 0 is **not** proof a task did anything. The engine
 verifies every successful call before marking the task complete:
 
-- **Expected outputs** — every `task.expectedOutputs` must exist after the call.
+- **Expected outputs** - every `task.expectedOutputs` must exist after the call.
   Missing → the attempt fails, retries, then the task is marked `failed`.
-- **No-op detection** — tasks with no `expectedOutputs` must show file changes in
+- **No-op detection** - tasks with no `expectedOutputs` must show file changes in
   the git working tree (diffed before/after the call) or a substantive response.
   A task that changed nothing and replied only "Ready for the task." is a failed
   attempt, never a completion.
 - **Relax** with `--allow-noop` / `FORGE_ENGINE_ALLOW_NOOP=1` (expected-output
   check stays).
-- **Validation commands** — `--run-validation` / `FORGE_ENGINE_RUN_VALIDATION=1`
+- **Validation commands** - `--run-validation` / `FORGE_ENGINE_RUN_VALIDATION=1`
   executes each task's manifest `validationCommands` (cwd = repo root) and
   requires exit 0 before completion.
 
@@ -100,7 +100,7 @@ behavior) on either harness.
 
 ## Upgrading the engine in an existing project
 
-The gate (and this fix) lives entirely in the forge skill code — the PRD,
+The gate (and this fix) lives entirely in the forge skill code - the PRD,
 feature documents, generated agent team, and `docs/EXECUTION-MANIFEST.json` do
 **not** need to change. To upgrade a project that was bootstrapped with an older
 forge, refresh the skills and reset the run state:
@@ -180,7 +180,7 @@ npm run workflow-engine -- viz     [--repo <path>] [--port <n>] [--no-open]
 | `--concurrency <n>` | `1` | Max ready tasks to run in parallel (see *Parallel dispatch* below) |
 | `--task-timeout-ms <ms>` | `600000` (10 min) | Per-task timeout before the harness call is killed; a task's own `timeoutMs` in the manifest overrides this |
 | `--yes` | *(off)* | Skip the interactive pre-run gate |
-| `--keep-alive` | adaptive | OpenCode harness only: boot one `opencode serve` for the run and attach every task to it, avoiding per-task cold boots (see *Keep-alive attach mode* below). **Default is adaptive** — on when more than one task remains, off for a single-task run |
+| `--keep-alive` | adaptive | OpenCode harness only: boot one `opencode serve` for the run and attach every task to it, avoiding per-task cold boots (see *Keep-alive attach mode* below). **Default is adaptive** - on when more than one task remains, off for a single-task run |
 | `--keep-alive-port <n>` | free port | Port for the engine-managed `opencode serve` instance |
 | `--no-keep-alive` | *(off)* | OpenCode harness only: force a cold-start `opencode run` per task (bypasses the adaptive default) |
 | `--attach <url>` | *(off)* | Attach tasks to an already-running `opencode serve` instance (e.g. `http://127.0.0.1:4096`) with no lifecycle management |
@@ -207,8 +207,8 @@ the engine prints a heartbeat line every `--heartbeat-ms`:
 ### Keep-alive attach mode (opencode harness)
 
 Cold-starting a fresh `opencode run` for **every task** re-boots the project
-instance each time — config, AGENTS.md, skills, agent files, and every MCP
-server — and on multi-task runs that per-task overhead can rival the actual model
+instance each time - config, AGENTS.md, skills, agent files, and every MCP
+server - and on multi-task runs that per-task overhead can rival the actual model
 work. The engine avoids it by attaching tasks to a single warm `opencode serve`
 instance. **This is the adaptive default**: keep-alive kicks in automatically
 when more than one task remains, and a single-task run (e.g. a short resume)
@@ -224,7 +224,7 @@ npm run workflow-engine -- run --harness opencode --keep-alive --keep-alive-port
 The engine boots one headless `opencode serve` bound to the repo, waits for
 `GET /global/health`, runs every task via `opencode run --attach`, and tears the
 server down when the run finishes (even on error). Each attach invocation still
-creates a **fresh, isolated session** — the server only keeps the shared project
+creates a **fresh, isolated session** - the server only keeps the shared project
 instance warm, so a task's context never leaks into the next. To reuse a server
 you already keep running (e.g. the TUI or a long-lived `opencode serve`), pass
 `--attach <url>` and skip the lifecycle management:
@@ -255,9 +255,9 @@ The dashboard renders the build as a **kanban board**. Each phase is a
 horizontal **band** (auto-sized to its tasks so cards never overlap), and tasks
 are **name-tag cards** that flow left-to-right through **To Do · In Progress ·
 Done · Failed** as their status changes. Each card carries a procedurally-drawn
-**agent face** — deterministic skin/hair tinted per agent (matching its
+**agent face** - deterministic skin/hair tinted per agent (matching its
 legend color) with a mouth that reacts: neutral when pending, working when
-running, a smile on complete, a frown on failure — plus the agent's name, the
+running, a smile on complete, a frown on failure - plus the agent's name, the
 task title, and the task id. Dependency and artifact **edges** connect the
 cards (brightening on hover), artifact hand-offs animate as glowing dots, and
 `context.projected` shows a `ctx −N%` badge on the producing card.
@@ -266,13 +266,13 @@ Interactions: hover a card for a tooltip, **click a card to expand it in place**
 with task detail (description, status, owner, phase, duration, artifact, inputs,
 dependencies, output files, validation commands, errors), click it again, the
 board, or press Escape to collapse it. Drag to pan, scroll to zoom (text stays
-crisp up to 2× — the dashboard bakes text at 2× resolution). Events stream over
+crisp up to 2× - the dashboard bakes text at 2× resolution). Events stream over
 Server-Sent Events; a snapshot is replayed on every
 (re)connect, and the engine persists a task's `running` status so the In
 Progress column reflects in-flight work even on a mid-run refresh.
 
 To **attach to an already-running (or detached) engine run**, use the `viz`
-subcommand from any terminal — it tails the audit log and serves the same
+subcommand from any terminal - it tails the audit log and serves the same
 dashboard:
 
 ```
@@ -331,13 +331,13 @@ sets the default, and `forge-launcher engine-run` (or the legacy
 
 1. Look up the owning agent by name (unmatched tasks are **skipped**, not failed).
 2. Project input artifacts into a compact context block (see *Artifact pattern* below).
-3. Mark the task `running`, then invoke the harness — retrying up to `--max-retries` on failure.
+3. Mark the task `running`, then invoke the harness - retrying up to `--max-retries` on failure.
 4. On success, record the task `complete` (and synthesize a work artifact if `produces` is declared).
 5. Save `WORKFLOW-STATE.json` and sync `PROGRESS.md` after every task.
 
 Tasks within a phase run sequentially (MVP); a failed task blocks downstream tasks in that phase, and the run stops with `status: "failed"`. A **skipped** task is treated as done for dependency purposes, so it never blocks the next phase.
 
-> **Owner assignment.** `forge-execution-adapter compile` guarantees every task has an owner: if no agent confidently matches a task, it falls back to an `*orchestrator`-named agent (else the first agent) and records a warning. Unassigned tasks are therefore rare and only arise from a hand-edited manifest — in which case the engine skips them safely rather than deadlocking.
+> **Owner assignment.** `forge-execution-adapter compile` guarantees every task has an owner: if no agent confidently matches a task, it falls back to an `*orchestrator`-named agent (else the first agent) and records a warning. Unassigned tasks are therefore rare and only arise from a hand-edited manifest - in which case the engine skips them safely rather than deadlocking.
 
 ---
 
@@ -369,9 +369,9 @@ every task, so artifacts are written on every successful run by default:
 }
 ```
 
-- **`inputs`** — artifact types loaded and projected into this task's context.
+- **`inputs`** - artifact types loaded and projected into this task's context.
   The compiler wires each task to the previous task's `produces`.
-- **`produces`** — artifact type recorded for this task. If the agent does not
+- **`produces`** - artifact type recorded for this task. If the agent does not
   write one explicitly, the engine synthesizes a minimal one from its output.
 
 Artifacts live under `docs/artifacts/<type>/<id>.json` (dots in the type become
@@ -391,7 +391,7 @@ hand-edit the manifest to use semantic types (`solution.architecture`,
   a paused run.
 - **`stop`** does the same as `pause` and additionally sends `SIGTERM` to the
   engine PID recorded in `docs/engine.pid` (the engine writes its own PID at
-  startup), so a live detached run stops even mid-task — still after the current
+  startup), so a live detached run stops even mid-task - still after the current
   task completes. Ctrl+C / SIGTERM on the engine process triggers the same
   graceful stop via an in-process flag.
 
@@ -421,7 +421,7 @@ To start fresh (e.g. after recompiling the manifest), delete `docs/WORKFLOW-STAT
 | `OPENAI_MODEL` | `gpt-4o` | Default model (overridden by agent `model:` frontmatter) |
 | `STUB_FAIL_TASK_IDS` | *(empty)* | Comma-separated task IDs to fail synthetically |
 | `STUB_DELAY_MS` | `0` | Simulated latency per task for the stub adapter |
-| `FLOWFORGE_KERNEL_BIN` / `FLOWFORGE_WORKFORCE_PATH` / `FLOWFORGE_WORKFLOW_ID` / `FLOWFORGE_KERNEL_MOCK` / `FLOWFORGE_KERNEL_EXTRA_FLAGS` / `FLOWFORGE_KERNEL_COMMAND_ARGS_JSON` / `FLOWFORGE_VALIDATE_WORKFORCE` | — | FlowForge kernel hand-off |
+| `FLOWFORGE_KERNEL_BIN` / `FLOWFORGE_WORKFORCE_PATH` / `FLOWFORGE_WORKFLOW_ID` / `FLOWFORGE_KERNEL_MOCK` / `FLOWFORGE_KERNEL_EXTRA_FLAGS` / `FLOWFORGE_KERNEL_COMMAND_ARGS_JSON` / `FLOWFORGE_VALIDATE_WORKFORCE` | - | FlowForge kernel hand-off |
 
 ---
 
@@ -431,9 +431,9 @@ To start fresh (e.g. after recompiling the manifest), delete `docs/WORKFLOW-STAT
 |---|---|---|
 | `Execution manifest not found` | Compile it first: `npm run forge-execution-adapter -- compile` |
 | Task failed after N attempts | Inspect `docs/EXECUTION-AUDIT.jsonl` / the task's `errorMessage`, fix the cause, then `replay <task-id>` |
-| Task failed: `timed out after <N>ms` | The task exceeded its timeout. Either split it into smaller tasks (recompile with fine granularity — the default) or raise the budget with `--task-timeout-ms` / a per-task `timeoutMs` |
+| Task failed: `timed out after <N>ms` | The task exceeded its timeout. Either split it into smaller tasks (recompile with fine granularity - the default) or raise the budget with `--task-timeout-ms` / a per-task `timeoutMs` |
 | No artifact files written | Recompile the manifest (the compiler auto-declares `produces`); hand-written manifests must declare `produces` |
-| Run seems hung | It isn't — watch the heartbeat lines; lower `--heartbeat-ms` for more frequent updates |
+| Run seems hung | It isn't - watch the heartbeat lines; lower `--heartbeat-ms` for more frequent updates |
 | `OpenCode must be in $PATH` | Set `OPENCODE_BIN` to the binary path |
 
 ---

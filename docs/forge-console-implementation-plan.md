@@ -1,6 +1,6 @@
-# Forge Console — Implementation Plan
+# Forge Console - Implementation Plan
 
-**Status:** Approved — implementing
+**Status:** Approved - implementing
 **Branch:** `feat/forge-console-web-ui`
 **Relates to:** [forge-console-desktop-frontend-plan.md](research/forge-console-desktop-frontend-plan.md) (research), ADR-034 (to be written)
 
@@ -35,22 +35,22 @@ ESM, no bundler). The board stays staged JS for now.
 ## Tasks
 
 ### 1. Board embed refactor (templates)
-- [x] `templates/skills/forge-workflow-engine/scripts/viz/dashboard/app.js` — wrap `main()` in `window.ForgeBoard = { init(hostEl) }`; legacy `index.html` calls it unchanged.
+- [x] `templates/skills/forge-workflow-engine/scripts/viz/dashboard/app.js` - wrap `main()` in `window.ForgeBoard = { init(hostEl) }`; legacy `index.html` calls it unchanged.
 - [x] Add "Open Forge Console" link to legacy board HUD.
 
 ### 2. Console server (launcher package)
-- [x] `scripts/forge-launcher/scripts/console/paths.ts` — registry at `~/.myforge/projects.json` (honor `FORGE_HOME`/`XDG_CONFIG_HOME`).
-- [x] `scripts/forge-launcher/scripts/console/server.ts` — `node:http`, `127.0.0.1`, mutable `RepoContext`, registry, SSE, control spawning (injectable spawner).
-- [x] `scripts/forge-launcher/scripts/console/server.test.ts` — endpoints, SSE, pause/stop, replay, path-traversal, registry.
+- [x] `scripts/forge-launcher/scripts/console/paths.ts` - registry at `~/.myforge/projects.json` (honor `FORGE_HOME`/`XDG_CONFIG_HOME`).
+- [x] `scripts/forge-launcher/scripts/console/server.ts` - `node:http`, `127.0.0.1`, mutable `RepoContext`, registry, SSE, control spawning (injectable spawner).
+- [x] `scripts/forge-launcher/scripts/console/server.test.ts` - endpoints, SSE, pause/stop, replay, path-traversal, registry.
 - [x] Static serving: console client dir + staged board assets (`/board/*`).
 
 ### 3. Server API
 - [x] `GET /api/projects` · `POST /api/projects/select|add|create`
 - [x] `GET /api/summary|tasks|audit|logs?lines=|artifacts|artifacts/:id|artifact/content?path=|docs|docs/content?path=|team|team/content?path=|actions`
 - [x] `GET /api/manifest|state` (no `/api/layout`; board fallback renders)
-- [x] `GET /api/events` — SSE: snapshot + audit + log + done
-- [x] `POST /api/control` — run|resume|pause|stop|replay
-- [x] `POST /api/open` — open whitelisted file externally
+- [x] `GET /api/events` - SSE: snapshot + audit + log + done
+- [x] `POST /api/control` - run|resume|pause|stop|replay
+- [x] `POST /api/open` - open whitelisted file externally
 
 ### 4. Console client (TypeScript)
 - [x] `tsconfig.client.json` (esnext/DOM; `.js` specifiers; outDir `resources/console/client`)
@@ -62,9 +62,9 @@ ESM, no bundler). The board stays staged JS for now.
 ### 5. CLI + build wiring (launcher package)
 - [x] `scripts/console` subcommand in `scripts/cli.ts` + `launcher.ts` (`--repo`, `--port`, `--no-open`)
 - [x] Record projects in registry from `createRepo`/`bootstrap`
-- [x] `scripts/engine-run.ts` — tee output to `docs/engine-run.log`
-- [x] `scripts/stage-resources.mjs` — stage board assets
-- [x] `package.json` — `build` + `typecheck` (both tsconfigs)
+- [x] `scripts/engine-run.ts` - tee output to `docs/engine-run.log`
+- [x] `scripts/stage-resources.mjs` - stage board assets
+- [x] `package.json` - `build` + `typecheck` (both tsconfigs)
 
 ### 6. Security
 - [x] Loopback-only bind
@@ -74,7 +74,7 @@ ESM, no bundler). The board stays staged JS for now.
 ### 7. Docs & changelog
 - [x] `docs/adr/034-forge-console-web-ui.md`
 - [x] `docs/forge-launcher.md` + `docs/workflow-engine.md`
-- [x] `docs/research/forge-console-desktop-frontend-plan.md` — mark Phases 1–3 done
+- [x] `docs/research/forge-console-desktop-frontend-plan.md` - mark Phases 1–3 done
 - [x] `docs/updates.md` v3.31 + README `**Latest:**` bump
 
 ### 8. Verify

@@ -43,11 +43,11 @@ export function closeHelp(): void {
 function helpBody(): HTMLElement {
   return el("div", { className: "help-body" }, [
     helpSection("What is this?", [
-      "Forge Console is a local web UI that fronts forge-launcher and the workflow engine. It lets you create a project, draft its PRD and agent team, run the build, and monitor/control it — all from your browser, without remembering terminal commands. It is served on 127.0.0.1 and reads the same files the terminal tools write.",
+      "Forge Console is a local web UI that fronts forge-launcher and the workflow engine. It lets you create a project, draft its PRD and agent team, run the build, and monitor/control it - all from your browser, without remembering terminal commands. It is served on 127.0.0.1 and reads the same files the terminal tools write.",
     ]),
     helpSection("The pipeline", [
       "Projects flow through four stages: Idea → PRD → Agent team → Build.",
-      "The Continue button on the Overview page advances one stage at a time, running the same steps the terminal launcher runs — so you can review each result (for example the drafted PRD in Plan & Team) and come back later to continue. Nothing runs until you click it.",
+      "The Continue button on the Overview page advances one stage at a time, running the same steps the terminal launcher runs - so you can review each result (for example the drafted PRD in Plan & Team) and come back later to continue. Nothing runs until you click it.",
       dl([
         ["Idea", "your project description in docs/IDEA.md."],
         ["PRD", "a reviewed requirements document (docs/PRD.md, or product-vision + features)."],
@@ -67,7 +67,7 @@ function helpBody(): HTMLElement {
       ["Projects", "switch to a different project or add a folder."],
     ])]),
     helpSection("Key terms", [dl([
-      ["PRD", "Product Requirements Document — the review gate before building."],
+      ["PRD", "Product Requirements Document - the review gate before building."],
       ["Product vision / feature", "a decomposed PRD's split form (overview + per-feature docs)."],
       ["Agent", "a specialist persona that does a job (e.g. qa-engineer)."],
       ["Skill", "a reusable instruction set an agent follows."],

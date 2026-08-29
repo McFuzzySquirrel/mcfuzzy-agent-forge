@@ -7,13 +7,13 @@
 
 ## Context
 
-ADR-014 (`forge-workflow-engine`) and ADR-016 (`forge-workforce-compiler`) give us DAG-driven execution, but the engine drains its ready-task frontier **sequentially**. Every loop iteration, `nextReadyTasks` computes the full set of tasks whose phase-level and task-level dependencies are satisfied — i.e. all tasks that *could* run concurrently — and then executes them one at a time in a `for…of await` loop.
+ADR-014 (`forge-workflow-engine`) and ADR-016 (`forge-workforce-compiler`) give us DAG-driven execution, but the engine drains its ready-task frontier **sequentially**. Every loop iteration, `nextReadyTasks` computes the full set of tasks whose phase-level and task-level dependencies are satisfied - i.e. all tasks that *could* run concurrently - and then executes them one at a time in a `for…of await` loop.
 
-This is a documented, conscious MVP tradeoff (see `workflow-engine-deep-dive.md`, "Why sequential in the MVP?"). The concern was that parallel dispatch requires each harness backend to guarantee isolation between concurrent invocations — something that cannot be assumed of every backend. However, the serialization has a real cost: on multi-agent builds, wall-clock time scales with the *sum* of task durations rather than the *critical path*.
+This is a documented, conscious MVP tradeoff (see `workflow-engine-deep-dive.md`, "Why sequential in the MVP?"). The concern was that parallel dispatch requires each harness backend to guarantee isolation between concurrent invocations - something that cannot be assumed of every backend. However, the serialization has a real cost: on multi-agent builds, wall-clock time scales with the *sum* of task durations rather than the *critical path*.
 
 Two facts make parallel dispatch viable now:
 
-1. **The DAG already encodes safety.** A task is only ready when every dependency is `complete`/`skipped`, so concurrently-ready tasks by definition operate on disjoint work. The dependency graph — not execution order — is the correctness mechanism.
+1. **The DAG already encodes safety.** A task is only ready when every dependency is `complete`/`skipped`, so concurrently-ready tasks by definition operate on disjoint work. The dependency graph - not execution order - is the correctness mechanism.
 2. **The harness adapters are already async.** `openai` uses `fetch`; `opencode`/`copilot` use `runCommand` (async `spawn`). Only `flowforge-kernel` still uses `execFileSync`, which blocks the event loop.
 
 ---
@@ -29,7 +29,7 @@ The sequential drain loop in `runEngine` is replaced with a **wave** loop:
 1. Compute `ready = nextReadyTasks(manifest, state)` (unchanged, already in manifest order).
 2. Emit phase bookkeeping (`phase.started`, `currentPhase`) for each newly-entered phase, in manifest order.
 3. Run all ready tasks through a bounded worker pool (`mapLimit`) with at most `maxConcurrency` tasks in flight.
-4. Merge each task's terminal transition back into the authoritative state in **manifest order** (deterministic — independent of completion order).
+4. Merge each task's terminal transition back into the authoritative state in **manifest order** (deterministic - independent of completion order).
 5. `saveState` + `syncProgressMd` once per wave.
 
 Concurrency `1` degrades to the previous sequential behavior exactly. Dependencies are re-checked at the top of every wave, so newly-unblocked tasks are picked up on the next wave.
@@ -52,7 +52,7 @@ All current adapters opt in after Phase 2 of this work:
 | `copilot` | async `spawn` | `supportsConcurrency = true` |
 | `flowforge-kernel` | `execFileSync` (blocks event loop) | converted to async `runCommand`; `supportsConcurrency = true` |
 
-For repo-editing harnesses (`opencode`, `copilot`, `flowforge-kernel`), concurrency safety of *file* changes is delegated to the manifest dependency graph — the same mechanism that already prevents conflicting edits in sequential mode.
+For repo-editing harnesses (`opencode`, `copilot`, `flowforge-kernel`), concurrency safety of *file* changes is delegated to the manifest dependency graph - the same mechanism that already prevents conflicting edits in sequential mode.
 
 ### 4. Harness isolation: `flowforge-kernel` de-synchronizes
 
@@ -90,7 +90,7 @@ Failure handling uses **drain** semantics: in-flight tasks in the current wave r
 
 ### Negative
 
-- Parallel repo-editing harnesses can race if a manifest author declares insufficient dependencies. The mitigation is unchanged from sequential mode (the DAG, plus the same-owner guard), but the blast radius of a missing dependency is now a lost edit rather than a serialized-but-wrong edit. Cross-owner tasks on shared paths (one task scaffolding a directory while another builds inside it) are still the operator's responsibility — a future file-overlap gate would close that.
+- Parallel repo-editing harnesses can race if a manifest author declares insufficient dependencies. The mitigation is unchanged from sequential mode (the DAG, plus the same-owner guard), but the blast radius of a missing dependency is now a lost edit rather than a serialized-but-wrong edit. Cross-owner tasks on shared paths (one task scaffolding a directory while another builds inside it) are still the operator's responsibility - a future file-overlap gate would close that.
 - The on-disk `WORKFLOW-STATE.json` no longer reflects a task's `running` status *during* a wave (it is persisted at wave boundaries). A process kill mid-wave re-runs the wave's tasks on resume, which is safe but not free.
 - "Current phase" is informational when multiple phases are in flight; `phase.started` events are emitted for each phase that enters a wave, but there is no single linear "current task" notion during a parallel wave.
 

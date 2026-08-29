@@ -17,14 +17,14 @@ stalled API call could hang a run indefinitely.
 Compounding this, task granularity is decided entirely by the execution plan:
 `forge-execution-adapter`'s compiler emitted **one task per top-level PRD
 bullet**, regardless of how much work the bullet described. A single large
-bullet became a single long, opaque task — the worst case for both failure
+bullet became a single long, opaque task - the worst case for both failure
 (one task can exceed the timeout) and observability (progress only advances at
 big, coarse milestones).
 
 Two decisions fall out of this:
 
 1. **Make tasks finer-grained** so each task is small, visible, and unlikely to
-   exhaust a per-task timeout — controlled at the execution-plan (compiler)
+   exhaust a per-task timeout - controlled at the execution-plan (compiler)
    level where tasks are derived.
 2. **Make the per-task timeout configurable** so an operator can raise the
    budget for heavy tasks instead of being pinned to a constant baked into an
@@ -43,7 +43,7 @@ In `fine` mode the compiler:
 
 - **Expands sub-bullets**: an indented sub-bullet under a bullet becomes its own
   task. The parent bullet acts as a *container* (not an executable task) and its
-  text — with the leading task-id label stripped, so task IDs stay unambiguous —
+  text - with the leading task-id label stripped, so task IDs stay unambiguous -
   is prefixed to each child task as context.
 - **Splits oversized bullets**: a bullet that is multi-sentence / roughly
   >160 chars is split at sentence/segment boundaries (`. ` + capital, `; `,
@@ -103,7 +103,7 @@ indentation) becomes one task in source order, with no splitting.
 - Heuristic splitting can mis-segment an unusual bullet; the compile-time
   warnings (and the `coarse` escape hatch) mitigate this.
 - Finer tasks mean more harness invocations per build, so per-task overhead
-  (process spawn, prompt round-trip) is multiplied — acceptable for the
+  (process spawn, prompt round-trip) is multiplied - acceptable for the
   visibility and reliability gains, and partially offset by parallel dispatch
   (ADR-021).
 

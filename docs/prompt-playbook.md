@@ -52,7 +52,7 @@ If you want to go from a one-liner idea to a **reviewed, confirmed PRD** without
 @workspace /forge-auto-build-prd I want to build [describe your idea in one sentence].
 ```
 
-`forge-build-prd` presents its PRD review checklist before the document is saved. Reply `revise: <notes>` to iterate on the PRD, or approve to finish. Once `docs/PRD.md` exists (plus `docs/product-vision.md` + `docs/features/*.md` when decomposed), generate the team and build — `forge-launcher resume` from the terminal, or in the harness `/forge-build-agent-team` then `@project-orchestrator` / `@workflow-orchestrator`.
+`forge-build-prd` presents its PRD review checklist before the document is saved. Reply `revise: <notes>` to iterate on the PRD, or approve to finish. Once `docs/PRD.md` exists (plus `docs/product-vision.md` + `docs/features/*.md` when decomposed), generate the team and build - `forge-launcher resume` from the terminal, or in the harness `/forge-build-agent-team` then `@project-orchestrator` / `@workflow-orchestrator`.
 
 If you prefer to drive the PRD yourself, use `forge-build-prd` directly (Step 2 below).
 
@@ -60,7 +60,7 @@ If you prefer to drive the PRD yourself, use `forge-build-prd` directly (Step 2 
 
 ## Full Auto Build - Terminal Fast-Path (Requires an Existing PRD)
 
-`forge-auto-build` is the **terminal/headless execution fast-path**: it takes an existing, reviewed PRD and runs the entire build pipeline with no manual hand-offs. It does **not** generate a PRD - that is a deliberate, separate stage. It is driven by `forge-launcher` (`--headless`, or the auto-draft flow) rather than invoked as an in-harness slash command — inside a chat harness use `@project-orchestrator` (interactive) or `@workflow-orchestrator` (autonomous) instead.
+`forge-auto-build` is the **terminal/headless execution fast-path**: it takes an existing, reviewed PRD and runs the entire build pipeline with no manual hand-offs. It does **not** generate a PRD - that is a deliberate, separate stage. It is driven by `forge-launcher` (`--headless`, or the auto-draft flow) rather than invoked as an in-harness slash command - inside a chat harness use `@project-orchestrator` (interactive) or `@workflow-orchestrator` (autonomous) instead.
 
 `forge-build-agent-team` → *(optional)* `forge-assign-models` → `forge-orchestrate-build` **(all phases, with validation + commit after each phase)**
 
@@ -82,7 +82,7 @@ opencode run --auto "/forge-auto-build Use docs/PRD.md as the project PRD. GO"
 
 > **Using the workflow engine:** at the pre-flight gate, type `GO --workflow-engine` to execute Stage 3 through `forge-workflow-engine` instead of the prompt-driven `forge-orchestrate-build`. That path installs the execution packages, compiles `docs/EXECUTION-MANIFEST.json`, and runs the engine (default harness: OpenCode).
 
-> **Resuming after interruption:** If the run is interrupted, re-invoke the same flow — `forge-launcher resume` picks up at the current stage, or re-run `forge-auto-build` headless in the same repo (it reads `docs/PROGRESS.md` / `docs/WORKFLOW-STATE.json` and resumes from the last completed task).
+> **Resuming after interruption:** If the run is interrupted, re-invoke the same flow - `forge-launcher resume` picks up at the current stage, or re-run `forge-auto-build` headless in the same repo (it reads `docs/PROGRESS.md` / `docs/WORKFLOW-STATE.json` and resumes from the last completed task).
 
 ---
 

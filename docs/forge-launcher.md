@@ -84,7 +84,7 @@ cd scripts/forge-launcher && npm unlink    # drops the `npm link` symlink
 
 **Update check.** On startup, `forge-launcher` checks the npm registry (honoring
 your configured registry, e.g. a local Verdaccio) once a day and prints a notice
-when a newer version is available — prereleases check the `beta` tag, releases
+when a newer version is available - prereleases check the `beta` tag, releases
 check `latest`. Disable it with `--no-update-check` or
 `FORGE_SKIP_UPDATE_CHECK=1` (also skipped in CI).
 
@@ -230,7 +230,7 @@ links to `docs/IDEA.md`, `docs/PRD.md`, the agent/skills dirs, and
 - Idea, no PRD → auto-draft the PRD headlessly, or open the harness to draft it manually.
 - PRD, no team → auto-draft the agent team headlessly, or open the harness for `forge-build-agent-team`.
 - Team, no manifest → start the engine (`engine-run`), print the command, or open the harness for the orchestrator.
-- Manifest + engine state → report the run status (running / paused / complete / failed, task counts, failed tasks, blockers) and offer to **resume the engine run**, tail the logs, or open the harness CLI. A `running` run warns against starting a second one and offers **"Stop the engine after the current task"** (writes `docs/engine-control.json` and SIGTERMs the PID in `docs/engine.pid` — the engine finishes the in-flight task, saves state as `paused`, and exits; resume with `engine-run`). A `complete` run points you at monitoring rather than resuming.
+- Manifest + engine state → report the run status (running / paused / complete / failed, task counts, failed tasks, blockers) and offer to **resume the engine run**, tail the logs, or open the harness CLI. A `running` run warns against starting a second one and offers **"Stop the engine after the current task"** (writes `docs/engine-control.json` and SIGTERMs the PID in `docs/engine.pid` - the engine finishes the in-flight task, saves state as `paused`, and exits; resume with `engine-run`). A `complete` run points you at monitoring rather than resuming.
 
 The same "where am I / what's next" checks make the launcher's queued in-harness
 command **conditional**: when a team already exists it queues
@@ -259,8 +259,8 @@ Full reference (views, the Continue pipeline, the project registry, the
 
 ### Stop here and resume later
 
-After each launcher checkpoint — idea captured, PRD added/drafted, team
-generated, execution plan drafted, build configured — the interactive flow asks
+After each launcher checkpoint - idea captured, PRD added/drafted, team
+generated, execution plan drafted, build configured - the interactive flow asks
 **"Stop here and resume later?"** and, when you say yes, prints the resume
 command and stops at the "where to pick up" summary:
 
@@ -281,7 +281,7 @@ produce the **execution plan** in `docs/PROGRESS.md`:
 - The monolithic or feature-based 5a prompt is selected from the repo layout
   (`docs/PRD.md` vs. `docs/product-vision.md` + `docs/features/`).
 - The plan is committed (`docs: add execution plan`) and the launcher stops for
-  review — a "Stop here and resume later?" checkpoint — before offering the
+  review - a "Stop here and resume later?" checkpoint - before offering the
   engine build.
 - If the headless run fails or writes no plan document, the launcher prints the
   manual `@project-orchestrator` command (and offers to open the harness CLI)
@@ -313,21 +313,21 @@ default assumption) and still keep human review between stages:
     - launch the CLI for a manual build.
 
 Choosing *run now* or *print the command* opens the **engine configuration**
-step — a set of defaults you can press Enter through:
+step - a set of defaults you can press Enter through:
 
-- **Per-task harness** — `opencode` (default), `copilot`, `openai`, `stub`
+- **Per-task harness** - `opencode` (default), `copilot`, `openai`, `stub`
   (offline testing), or `flowforge-kernel`.
-- **Task granularity** — `fine` (default: sub-bullets + oversized-bullet
+- **Task granularity** - `fine` (default: sub-bullets + oversized-bullet
   splits) or `coarse` (one task per PRD bullet). Choosing a granularity
   recompiles `docs/EXECUTION-MANIFEST.json` at that granularity.
-- **Max agents to run in parallel** — `1` (sequential, default) or higher for
+- **Max agents to run in parallel** - `1` (sequential, default) or higher for
   bounded waves (harness-gated via `supportsConcurrency`, see
   [ADR-021](adr/021-parallel-task-dispatch.md)).
-- **Per-task timeout (ms)** — default `600000`.
-- **Max retries per task** — default `2`.
-- **Live Forge Board dashboard** — launch the visualization during the run
+- **Per-task timeout (ms)** - default `600000`.
+- **Max retries per task** - default `2`.
+- **Live Forge Board dashboard** - launch the visualization during the run
   (default on). A port prompt follows (blank = `4299`). The dashboard starts
-  when the engine starts — after the manifest is prepared — and its URL is
+  when the engine starts - after the manifest is prepared - and its URL is
   printed in `docs/engine-run.log`.
 
 Esc/Ctrl+C keeps the current defaults. The configured values are written into
@@ -579,7 +579,7 @@ Select [1-3] [2]: 2
 ```
 
 Choosing **1) Run the workflow-engine build now (detached)** starts the engine in the
-background and skips the rest of the interactive launch prompt — the build is
+background and skips the rest of the interactive launch prompt - the build is
 already running, so the launcher no longer offers to open a CLI or re-run
 `forge-auto-build`:
 
@@ -638,7 +638,7 @@ whether the agent team exists**:
 `/forge-orchestrate-build` (project-orchestrator) drives the interactive build
 with per-phase approval. `/forge-auto-build` is the **terminal/headless
 fast-path**: it requires the PRD to already exist, generates the agent team,
-optionally assigns models, then executes the build — type `GO` at its
+optionally assigns models, then executes the build - type `GO` at its
 pre-flight gate, or `GO --workflow-engine` to run the build through the
 workflow engine instead of the prompt-driven orchestrator. On the engine path
 the engine starts detached (`docs/engine-run.log`), `forge-auto-build` polls
@@ -767,7 +767,7 @@ Pass this file to `forge-auto-build-prd` by referencing it in the chat:
 @workspace /forge-auto-build-prd Use docs/IDEA.md as the project idea
 ```
 
-`forge-auto-build-prd` builds a reviewed PRD from the idea (with automatic decomposition when it qualifies) and stops there. Once `docs/PRD.md` exists, generate the team and build — from the terminal, re-enter at the right stage:
+`forge-auto-build-prd` builds a reviewed PRD from the idea (with automatic decomposition when it qualifies) and stops there. Once `docs/PRD.md` exists, generate the team and build - from the terminal, re-enter at the right stage:
 
 ```
 forge-launcher resume [--repo <path>]     # picks up at the team/build stage
@@ -782,7 +782,7 @@ or autonomously:
 @workspace @workflow-orchestrator Run the workflow           # autonomous
 ```
 
-`forge-auto-build` remains available as the **terminal/headless fast-path** —
+`forge-auto-build` remains available as the **terminal/headless fast-path** -
 the launcher's `--headless` / auto-draft drives it via `opencode run --auto`
 (queued as `/forge-auto-build Use docs/PRD.md as the project PRD. GO
 [--workflow-engine]`). It requires a PRD representation to exist and never
@@ -794,7 +794,7 @@ generates one.
 
 ### "bootstrap.sh not found or not executable"
 
-The launcher no longer shells out to a `bootstrap.sh` — bootstrap logic is
+The launcher no longer shells out to a `bootstrap.sh` - bootstrap logic is
 bundled in the package (`forge-launcher bootstrap`), so this error should not
 occur. If you are running the package from a source checkout, make sure the
 package dependencies are installed first (`npm install` in
@@ -840,5 +840,5 @@ See [ADR-010: Forge Launcher](adr/010-forge-launcher.md) for the original
 rationale (now **superseded** for the implementation layer by
 [ADR-023](adr/023-forge-launcher-npm-package.md): the launcher is a Node npm
 package with a clack TUI rather than dual shell scripts). The flow-level
-decisions still stand — harness selection is step 2, `IDEA.md` is the hand-off
+decisions still stand - harness selection is step 2, `IDEA.md` is the hand-off
 artifact, and bootstrap is delegated rather than reimplemented.

@@ -1,6 +1,6 @@
 # Forge Console
 
-> A local web UI that fronts `forge-launcher` (authoring) and `forge-launcher engine-run` → `workflow-engine` (build). Create a project, draft the PRD and agent team, run the build, and monitor/control it — all from your browser.
+> A local web UI that fronts `forge-launcher` (authoring) and `forge-launcher engine-run` → `workflow-engine` (build). Create a project, draft the PRD and agent team, run the build, and monitor/control it - all from your browser.
 
 > **Screenshots:** see the [Visual Tour](forge-console-screenshots.md) for a walkthrough of every view.
 
@@ -13,7 +13,7 @@ The Forge Console is a self-contained, loopback-only web app served by
 terminal tools already write (`docs/WORKFLOW-STATE.json`, `EXECUTION-AUDIT.jsonl`,
 `engine-run.log`, `engine-control.json`, `engine.pid`, `docs/artifacts/`, …) and
 a thin supervisor over the launcher and engine processes. It does not reimplement
-authoring or execution — the terminal commands remain first-class and produce
+authoring or execution - the terminal commands remain first-class and produce
 identical results.
 
 It is TypeScript, compiled with `tsc` (no framework or bundler), and embeds the
@@ -33,7 +33,7 @@ From there:
 
 1. **Create a project** (New Project wizard) or **open an existing one**.
 2. On the **Overview**, click **Continue** to advance the pipeline one stage at a
-   time — draft the PRD, generate the agent team, then start the build.
+   time - draft the PRD, generate the agent team, then start the build.
 3. Watch it live on the **Board** / **Tasks** / **Logs** views, and use
    **Pause / Stop / Resume / Replay** to control a running build.
 
@@ -53,7 +53,7 @@ forge-launcher console [--repo <path>] [--port <n>] [--no-open]
 
 Run it from anywhere (`npx forge-launcher@beta console …` before the npm package
 is published). It requires Node 18+ and, for authoring steps, the harness CLI the
-project was created with (`opencode` or `copilot`) — see
+project was created with (`opencode` or `copilot`) - see
 [Prerequisites](forge-launcher.md#prerequisites).
 
 ---
@@ -64,11 +64,11 @@ Projects you create or open are remembered in a registry at
 `~/.myforge/projects.json` (honors `FORGE_HOME`, then `XDG_CONFIG_HOME`). The
 **Home** view lists recent projects (most-recent-first) and offers two actions:
 
-- **Create a new project** — the New Project wizard collects a name, harness,
+- **Create a new project** - the New Project wizard collects a name, harness,
   visibility, parent directory, and idea, then spawns
   `forge-launcher --non-interactive` in the background (optionally
   auto-drafting the PRD).
-- **Open an existing project** — a dropdown of your projects plus an
+- **Open an existing project** - a dropdown of your projects plus an
   "Add folder" input for a forge repo you have on disk but haven't opened yet.
 
 The **Projects** tab has the same dropdown + add-folder flow.
@@ -91,7 +91,7 @@ so you can review each result and come back later:
 Each step runs detached in the background (output is appended to
 `docs/engine-run.log`, visible in the **Logs** view); the Overview polls until
 the stage advances and updates the button label. Nothing runs until you click it,
-and the generated PRD/team are **view-only** in the console — review them in
+and the generated PRD/team are **view-only** in the console - review them in
 **Plan & Team** and edit them in your editor.
 
 The terminal counterparts are the new `draft-prd` / `draft-team` subcommands:
@@ -112,7 +112,7 @@ from the project's harness (`github` → copilot, otherwise opencode).
 |---|---|
 | **Home** | create a new project or open an existing one (landing). |
 | **Overview** | run status, progress + counts, blockers, the pipeline **Continue** button, and run controls. |
-| **Board** | the PixiJS Forge Board — a live kanban (To Do · In Progress · Done · Failed). |
+| **Board** | the PixiJS Forge Board - a live kanban (To Do · In Progress · Done · Failed). |
 | **Tasks** | every task in a filterable/sortable table with a detail drawer. |
 | **Logs** | `docs/engine-run.log` tail + the audit event stream (live via SSE). |
 | **Plan & Team** | the project documents (IDEA, PRD, vision, features, progress, model plan) + agents and skills, in collapsible sections. |
@@ -141,7 +141,7 @@ does:
 
 ## Security
 
-- The server binds to **`127.0.0.1` only** (loopback) — it is never exposed to
+- The server binds to **`127.0.0.1` only** (loopback) - it is never exposed to
   the network.
 - All `POST` endpoints require an **`X-Forge-Token`** header holding a
   per-server random token embedded in the served page, so cross-origin web pages

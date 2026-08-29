@@ -10,18 +10,18 @@
 
 The project has grown beyond its original identity. The brand "McFuzzy Agent
 Forge" was coined early and appears throughout the README, documentation, agent
-templates, and skill templates. The working name has settled on **MyForge** —
+templates, and skill templates. The working name has settled on **MyForge** -
 shorter and no longer tied to the author's handle. A rename was requested.
 
 Two technical naming surfaces already exist and are intentionally **not**
 branding:
 
-1. **`forge-*` technical identifiers** — package/CLI/skill names
+1. **`forge-*` technical identifiers** - package/CLI/skill names
    (`forge-launcher`, `forge-workflow-engine`, `forge-execution-adapter`,
    `forge-workforce-compiler`), `FORGE_*` environment variables, and skill
    directory names. These are wired into the launcher's skill dispatch, docs'
    example commands, and user environments.
-2. **FlowForge** — the packaged kernel artifact produced by
+2. **FlowForge** - the packaged kernel artifact produced by
    `forge-workforce-compiler`. It is a distinct sub-brand with its own
    constant names (`flowforge`/`FlowForge`/`FLOWFORGE`) across the compiler and
    kernel adapter.
@@ -32,7 +32,7 @@ branding:
   "agent forge", and "agent-forge" to **MyForge** (kebab/package-ID contexts use
   `myforge`).
 - **Do not rename** the `forge-*` technical identifiers, `FORGE_*` env vars, or
-  skill directory/agent names — they remain shorter and are heavily referenced.
+  skill directory/agent names - they remain shorter and are heavily referenced.
 - **Do not rename** the FlowForge kernel sub-brand.
 - The workforce compiler's default package ID root changes from
   `dev.agent-forge.*` to `dev.myforge.*` so newly compiled workforce packages
@@ -63,10 +63,10 @@ Negative:
 
 Trade-offs considered:
 
-- **Rename everything, including `forge-*` names** — rejected: broad churn
+- **Rename everything, including `forge-*` names** - rejected: broad churn
   across packages, CLIs, env vars, skill dispatch, and tests for no functional
   gain, plus a breaking change for existing users.
-- **Keep FlowForge** — accepted as a deliberate decision; it identifies the
+- **Keep FlowForge** - accepted as a deliberate decision; it identifies the
   packaged kernel artifact, not the toolchain brand.
 
 ## References

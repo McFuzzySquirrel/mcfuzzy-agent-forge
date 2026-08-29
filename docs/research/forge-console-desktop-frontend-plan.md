@@ -1,7 +1,7 @@
 # Feature Plan: Forge Console (Desktop/Web Front End for Launcher + Workflow Engine)
 
 **Date:** 2026-08-29  
-**Status:** Approved — Phases 1–3 shipped (`forge-launcher console` web UI); Phase 4 (desktop packaging) deferred (see [forge-console-implementation-plan.md](../forge-console-implementation-plan.md))
+**Status:** Approved - Phases 1–3 shipped (`forge-launcher console` web UI); Phase 4 (desktop packaging) deferred (see [forge-console-implementation-plan.md](../forge-console-implementation-plan.md))
 
 ---
 
@@ -35,7 +35,7 @@ This means the hardest foundation work is already done.
 
 ## Options Considered
 
-### Option A — Desktop app first (Electron/Tauri)
+### Option A - Desktop app first (Electron/Tauri)
 
 Pros:
 - Native app UX and packaging
@@ -46,7 +46,7 @@ Cons:
 - Adds release and runtime surface area before feature fit is proven
 - Duplicates UI/backend concerns already partially solved by current viz stack
 
-### Option B — Expand existing web dashboard into a full local console (**Recommended**)
+### Option B - Expand existing web dashboard into a full local console (**Recommended**)
 
 Pros:
 - Reuses existing viz server, SSE model, state files, and launcher workflows
@@ -57,7 +57,7 @@ Pros:
 Cons:
 - Still browser-based (not a packaged desktop app at first)
 
-### Option C — IDE extension first
+### Option C - IDE extension first
 
 Pros:
 - Good for developers already in an IDE
@@ -70,13 +70,13 @@ Cons:
 
 ## Recommended Direction
 
-Adopt **Option B** first: evolve the existing workflow-engine dashboard into a broader **Forge Console** web UI. **This shipped** as the self-contained `forge-launcher console` subcommand — a tsc-compiled TypeScript client (not a React app) served on loopback — and a desktop wrapper remains an open follow-up only after usage validates demand.
+Adopt **Option B** first: evolve the existing workflow-engine dashboard into a broader **Forge Console** web UI. **This shipped** as the self-contained `forge-launcher console` subcommand - a tsc-compiled TypeScript client (not a React app) served on loopback - and a desktop wrapper remains an open follow-up only after usage validates demand.
 
 ---
 
 ## Viable Phased Plan
 
-### Phase 1 — Forge Console MVP (Web, local-first) — **implemented**
+### Phase 1 - Forge Console MVP (Web, local-first) - **implemented**
 
 - Keep current board view as the primary visual layer
 - Add task table/filtering (status, phase, owner, retries, failures)
@@ -84,19 +84,19 @@ Adopt **Option B** first: evolve the existing workflow-engine dashboard into a b
 - Add task detail drilldown (outputs, errors, artifact metadata, validation outcomes)
 - Add run summary header (run id, status, elapsed, counts, blockers)
 
-### Phase 2 — Operator controls in the console — **implemented**
+### Phase 2 - Operator controls in the console - **implemented**
 
 - Expose pause/stop/replay actions through safe local endpoints or command bridging
 - Surface resume/run guidance from launcher and current engine config
 - Improve detached-run attach UX from `forge-launcher resume`/`engine-run`
 
-### Phase 3 — Artifact and history views — **implemented**
+### Phase 3 - Artifact and history views - **implemented**
 
 - Add artifact browser (by type/task/producer)
 - Add event timeline and failure-focused diagnostics
 - Add quick navigation between task, artifact, and log context
 
-### Phase 4 — Optional desktop packaging (still open / deferred)
+### Phase 4 - Optional desktop packaging (still open / deferred)
 
 - Wrap the local console in Electron or Tauri
 - Keep the web console as canonical UI/backend contract
@@ -104,7 +104,7 @@ Adopt **Option B** first: evolve the existing workflow-engine dashboard into a b
 
 > Phase 4 remains **open/deferred**: the web console shipped first (Phases 1–3)
 > as `forge-launcher console`; desktop packaging waits on proven adoption and
-> requirements. Note the Forge Board was **not** converted to TypeScript yet — it
+> requirements. Note the Forge Board was **not** converted to TypeScript yet - it
 > is still embedded as the vendored PixiJS artifact via iframe.
 
 ---

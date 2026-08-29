@@ -1,4 +1,4 @@
-# How the `forge-workforce-compiler` Works — A Deep-Dive Learning Guide
+# How the `forge-workforce-compiler` Works - A Deep-Dive Learning Guide
 
 ## What we're exploring
 

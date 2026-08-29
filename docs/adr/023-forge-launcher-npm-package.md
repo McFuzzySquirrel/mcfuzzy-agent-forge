@@ -14,7 +14,7 @@ decision that the launcher introduce **no new runtime dependencies** so it
 "works anywhere the bootstrap scripts already work". A "Tier 2" interactive
 frontend was deferred.
 
-Since then the CLI surface has grown to **six** dual-implemented scripts —
+Since then the CLI surface has grown to **six** dual-implemented scripts -
 `forge-launcher`, `bootstrap`, and `forge-engine-run`, each as a `.sh` and a
 `.ps1` (~1100, ~190, and ~140 lines respectively). Every feature added since
 ADR-010 (auto-draft stages, headless terminal mode, detached engine decision,
@@ -72,7 +72,7 @@ following release.
   versioned releases, no requirement to have the forge repository checked out.
 - **Better interactive UX with less code.** A full clack TUI (`select`,
   `confirm`, `text`, `multiline`, autocomplete `path`, spinners) replaces the
-  bash readline / PSReadLine hacks — the "Tier 2" frontend ADR-010 deferred is
+  bash readline / PSReadLine hacks - the "Tier 2" frontend ADR-010 deferred is
   delivered in the same runtime, at the cost of a single small dependency.
 - **One test suite.** `node --test` across the package replaces the bespoke
   bash test harness and the (never written) PowerShell equivalent.

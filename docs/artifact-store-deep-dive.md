@@ -1,4 +1,4 @@
-# Artifact Store Deep-Dive — MyForge
+# Artifact Store Deep-Dive - MyForge
 
 ## What this document covers
 
@@ -8,9 +8,9 @@ This guide explains the **Task → Agent → Artifact → Task** pattern that is
 
 ## The Problem: Context Bloat Between Agents
 
-When a multi-agent workflow passes the entire conversation — or the full `WORKFLOW-STATE.json` — from one agent to the next, every agent pays a context-window tax for work it wasn't involved in. This wastes tokens, slows small local models, and produces less focused outputs.
+When a multi-agent workflow passes the entire conversation - or the full `WORKFLOW-STATE.json` - from one agent to the next, every agent pays a context-window tax for work it wasn't involved in. This wastes tokens, slows small local models, and produces less focused outputs.
 
-The research behind this feature found that the optimisation is not *sequential execution itself* — it is **how small and deterministic the hand-off between agents is**. Token savings come from making the boundary between agents as narrow as possible.
+The research behind this feature found that the optimisation is not *sequential execution itself* - it is **how small and deterministic the hand-off between agents is**. Token savings come from making the boundary between agents as narrow as possible.
 
 ---
 
@@ -32,7 +32,7 @@ Artifact created
 ...
 ```
 
-The **artifact** is the token firewall. The next agent does not need to know how the previous agent arrived at its conclusion — only *what* it concluded.
+The **artifact** is the token firewall. The next agent does not need to know how the previous agent arrived at its conclusion - only *what* it concluded.
 
 ---
 
@@ -83,7 +83,7 @@ Every artifact is a JSON file stored in `docs/artifacts/<subdir>/<id>.json`.
 
 ### Key design choices
 
-**`summary` is the primary field.** Most downstream agents receive only `summary` and `confidence` — not `payload`. The payload is retrieved only when a task explicitly lists its fields in the manifest.
+**`summary` is the primary field.** Most downstream agents receive only `summary` and `confidence` - not `payload`. The payload is retrieved only when a task explicitly lists its fields in the manifest.
 
 **`inputs` traces the knowledge graph.** Every artifact records which other artifact IDs it was built from. This allows the audit log to reconstruct the complete knowledge-flow chain:
 
@@ -159,10 +159,10 @@ Add `inputs` and `produces` fields to tasks in `docs/EXECUTION-MANIFEST.json`:
 }
 ```
 
-- **`inputs`** — list of artifact *types* (not IDs) the engine loads before running this task. The engine resolves the most recently completed artifact of each listed type.
-- **`produces`** — the artifact *type* this task must create. If the agent does not produce one explicitly, the engine auto-synthesises a minimal `work` artifact from the task's output files and stdout excerpt.
+- **`inputs`** - list of artifact *types* (not IDs) the engine loads before running this task. The engine resolves the most recently completed artifact of each listed type.
+- **`produces`** - the artifact *type* this task must create. If the agent does not produce one explicitly, the engine auto-synthesises a minimal `work` artifact from the task's output files and stdout excerpt.
 
-Tasks without `inputs` or `produces` behave exactly as before — the artifact layer is strictly additive.
+Tasks without `inputs` or `produces` behave exactly as before - the artifact layer is strictly additive.
 
 ---
 
@@ -312,7 +312,7 @@ ArtifactStore
   └── BlobArtifactStore   ← add for distributed/cloud builds
 ```
 
-The SQLite store would index `artifact_id`, `type`, `task_id`, `status`, `created_at`, and `file_path` — without duplicating the payload. The orchestrator queries the index and loads only the relevant file.
+The SQLite store would index `artifact_id`, `type`, `task_id`, `status`, `created_at`, and `file_path` - without duplicating the payload. The orchestrator queries the index and loads only the relevant file.
 
 ### Later: context-aware retrieval
 
@@ -336,7 +336,7 @@ The projection system already supports this via the `fields` parameter: only fie
 |---|---|
 | `forge-execution-adapter/scripts/types.ts` | `ManifestTask` gains `inputs?: string[]` and `produces?: string`; new `Artifact`, `ArtifactCategory`, and `ArtifactProjection` types added |
 | `forge-workflow-engine/scripts/types.ts` | `TaskRecord` gains `artifactId?` and `inputArtifactIds?`; `AuditEvent.action` union extended with `artifact.created` and `context.projected`; `EngineOptions` gains `artifactsPath` |
-| `forge-workflow-engine/scripts/artifacts.ts` | New file — `ArtifactStore` class with `write`, `read`, `readByType`, `readByTask`, `project`, `renderProjection`, `synthesise` |
+| `forge-workflow-engine/scripts/artifacts.ts` | New file - `ArtifactStore` class with `write`, `read`, `readByType`, `readByTask`, `project`, `renderProjection`, `synthesise` |
 | `forge-workflow-engine/scripts/engine.ts` | `executeTask` now resolves input artifacts, builds projection, prepends context block to harness call, synthesises output artifact, emits new audit events |
 | `forge-workflow-engine/scripts/state.ts` | `markTaskComplete` accepts optional `artifactId` and `inputArtifactIds` parameters |
 | `forge-workflow-engine/scripts/harness/*.ts` | All harness `invoke` signatures accept optional `contextBlock?: string` parameter |
@@ -417,7 +417,7 @@ docs/artifacts/
 {"action":"context.projected","taskId":"3.1","sourceTokenEstimate":12800,"projectedTokenEstimate":720,"reductionPercent":94.4}
 ```
 
-The review agent at task 3.1 receives four projected summaries totalling ~720 tokens instead of ~12 800 tokens of raw artifact data — a 94% reduction before the task's own description is even added.
+The review agent at task 3.1 receives four projected summaries totalling ~720 tokens instead of ~12 800 tokens of raw artifact data - a 94% reduction before the task's own description is even added.
 
 ---
 
@@ -427,6 +427,6 @@ The artifact pattern is the answer to this question from the research:
 
 > *The optimisation isn't "use sequential agents." It's: make every agent consume the minimum artifact projection necessary to perform its task.*
 
-The implementation in MyForge is intentionally minimal: a file-based store, a projection function, a rendered markdown block, and two new audit event types. Everything else — the harness adapters, the state machine, the audit log — continues to work as before. The pattern is additive, not a rewrite.
+The implementation in MyForge is intentionally minimal: a file-based store, a projection function, a rendered markdown block, and two new audit event types. Everything else - the harness adapters, the state machine, the audit log - continues to work as before. The pattern is additive, not a rewrite.
 
 The `reductionPercent` field in `context.projected` audit events turns the hypothesis into a measurable claim. Track it across builds to understand the real-world impact on token efficiency and model quality for your specific workflows.
