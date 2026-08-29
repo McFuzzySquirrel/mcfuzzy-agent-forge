@@ -4,6 +4,22 @@ Detailed release and change notes for McFuzzy Agent Forge.
 
 ---
 
+## August 2026 - v3.29
+
+### Research/docs: Forge Console feature plan
+
+- Added `docs/research/forge-console-desktop-frontend-plan.md`, a proposed plan
+  for introducing a desktop/web front end for `forge-launcher` and
+  `forge-workflow-engine`.
+- The plan compares desktop-first vs. web-first approaches and recommends
+  evolving the existing local Forge Board dashboard into a broader **Forge
+  Console** first, then evaluating desktop packaging later.
+- The phased roadmap covers MVP observability (status/tasks/logs/output), run
+  controls (pause/stop/replay), artifact/history views, and optional desktop
+  wrapping after adoption is validated.
+
+---
+
 ## August 2026 - v3.28
 
 ### Workflow engine: same-owner task serialization under parallelism
