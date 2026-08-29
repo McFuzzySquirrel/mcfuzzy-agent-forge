@@ -412,6 +412,7 @@ Yes. The orchestrator/engine writes `docs/PROGRESS.md` after each phase; both bu
 
 - [Prompt Playbook](docs/prompt-playbook.md) - full copy-paste prompt sequence
 - [Forge Launcher](docs/forge-launcher.md) - launcher reference and non-interactive mode
+- [Forge Console](docs/forge-console.md) - the local web UI (`forge-launcher console`)
 - [Workflow Engine](docs/workflow-engine.md) - autonomous execution reference (run, resume, replay, harnesses)
 - [Testing Guide](docs/testing-guide.md) - manual verification of every path (skill creation, dark orchestration, launcher E2E, OpenAI, FlowForge kernel, artifacts)
 - [Updates](docs/updates.md) - release notes and change history

@@ -240,53 +240,22 @@ runs keep using `/forge-auto-build` as the terminal fast-path.
 
 ### Forge Console (local web UI)
 
-The **Forge Console** is a self-contained web UI that puts authoring and build in
-front of a single browser app. Start it anywhere (then pick a project) or point
-it straight at a repo:
+The **Forge Console** is a self-contained, loopback-only web UI that fronts the
+launcher and the workflow engine from one browser app:
 
 ```bash
 forge-launcher console [--repo <path>] [--port <n>] [--no-open]
 ```
 
-| Flag | Purpose |
-|------|---------|
-| `--repo <path>` | Start on a specific project instead of the project picker |
-| `--port <n>` | Port to serve on (default `4300`, next free port if busy) |
-| `--no-open` | Do not auto-open the browser (the URL is still printed) |
+From it you can pick or create a project, advance the pipeline one stage at a
+time (draft the PRD → generate the agent team → start the build), and
+monitor/control a run (board, tasks, logs, artifacts, timeline; pause/stop/
+resume/replay). It is a projection over the same `docs/*` files the terminal
+tools write, so the CLI paths stay first-class and interchangeable.
 
-The server binds to `127.0.0.1` and opens your browser to a **project picker**
-landing page. From one app you can:
-
-- **Pick or add a project** — choose from the project registry (see below) or
-  add an existing repo.
-- **Create a new project** — a New Project wizard that spawns
-  `forge-launcher --non-interactive` with `FORGE_REPO_NAME` / `_PARENT_DIR` /
-  `_DESCRIPTION` / `_VISIBILITY` / `_HARNESS_CHOICE` / `_IDEA` (plus optional
-  `FORGE_AUTO_DRAFT=1`).
-- **Resume a setup** — draft the PRD (`forge-launcher --draft`), generate the
-  team (headless `forge-build-agent-team`), or start the build.
-- **Start / resume a build** — `forge-launcher engine-run --harness <h> --yes`,
-  detached, with output logged to `docs/engine-run.log`.
-- **Monitor and control a run** — the **Overview** (run header, progress, counts,
-  blockers), the **Board** (the existing PixiJS Forge Board embedded full-screen
-  at `/board`), **Tasks** (filterable/sortable table + detail), **Logs**
-  (`docs/engine-run.log` tail + audit stream), **Documents** (read-only
-  IDEA/PRD/vision/features/progress/model-plan + agent team, "open externally"),
-  **Artifacts** (browse by type/task + preview), and **Timeline** (audit events,
-  failure-highlighted). Control a run with **Pause / Stop** (writes
-  `docs/engine-control.json` + SIGTERM `docs/engine.pid`), **Replay** a failed
-  task (`workflow-engine replay <task>`), and **Run / Resume**.
-
-The **project registry** lives at `~/.myforge/projects.json` (honoring
-`FORGE_HOME` / `XDG_CONFIG_HOME`) and remembers the projects you've opened.
-
-Security: the console serves loopback-only, and state-changing endpoints require
-an `X-Forge-Token` header (a per-server random token embedded in the served HTML)
-to block cross-origin drive-by requests. The existing CLI paths (`forge-launcher`,
-`engine-run`, `workflow-engine --viz`) are unchanged and still first-class.
-
-Quick start: run `forge-launcher console`, open a browser, pick or create a
-project, and click **Run**.
+Full reference (views, the Continue pipeline, the project registry, the
+`draft-prd`/`draft-team` headless subcommands, and security):
+**[docs/forge-console.md](forge-console.md)**.
 
 ### Stop here and resume later
 

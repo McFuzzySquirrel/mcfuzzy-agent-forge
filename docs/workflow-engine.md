@@ -64,7 +64,7 @@ This installs the adapter and engine dependencies, compiles the manifest if miss
 > **Prefer a browser?** Run monitoring and control from the **Forge Console**
 > (`forge-launcher console`) — a local web UI that reads the same `docs/*`
 > artifacts and embeds the Forge Board. See
-> [docs/forge-launcher.md](forge-launcher.md#forge-console-local-web-ui).
+> [docs/forge-console.md](forge-console.md).
 
 ### Via `forge-auto-build` (terminal/headless fast-path)
 
