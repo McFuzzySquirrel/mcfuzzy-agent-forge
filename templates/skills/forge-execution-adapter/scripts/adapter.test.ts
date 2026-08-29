@@ -123,6 +123,27 @@ test("compileExecutionManifest falls back to first agent when no owner matches",
   assert.match(manifest.warnings.join("\n"), /defaulting to 'api-engineer'/);
 });
 
+test("compileExecutionManifest does not treat framework names like ASP.NET as expected outputs", () => {
+  const root = createFixture();
+  writeFileSync(join(root, "docs", "PRD.md"), `# PRD
+
+## Phase 1: Foundation
+- Task 1.1: Build ASP.NET Core minimal API with SQLite (WAL mode) schema for conversations, messages, deliveries, artifacts, participants
+- Task 1.2: Implement durable inbox/outbox against src/HumanGateway.Core
+`, "utf8");
+
+  const repo = discoverForgeRepo(root);
+  const manifest = compileExecutionManifest(repo);
+
+  const task1 = manifest.phases[0]?.tasks[0];
+  assert.ok(task1);
+  assert.deepEqual(task1.expectedOutputs, [], "ASP.NET must not be extracted as an expected output");
+
+  const task2 = manifest.phases[0]?.tasks[1];
+  assert.ok(task2);
+  assert.ok(task2.expectedOutputs.includes("src/HumanGateway.Core"), "real paths still extracted");
+});
+
 test("compileExecutionManifest prefers an orchestrator fallback owner", () => {
   const root = createFixture();
   writeFileSync(join(root, ".agents", "agents", "workflow-orchestrator.md"), `---

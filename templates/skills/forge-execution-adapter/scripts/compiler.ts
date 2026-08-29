@@ -119,12 +119,22 @@ function extractCommands(markdown: string): string[] {
   return [...commands];
 }
 
+/**
+ * Known framework/runtime names that look like file paths but are not (e.g.
+ * "ASP.NET", ".NET"). Without this, a PRD bullet like "Build ASP.NET Core …"
+ * would extract "ASP.NET" as an expected output file that can never exist, so
+ * the output-verification gate fails the task on every attempt.
+ */
+const NON_PATH_DOTTED_TOKENS = new Set(["asp.net", ".net", "dotnet", "nuget"]);
+
 function extractPaths(text: string): string[] {
   const seen = new Set<string>();
   const push = (value: string) => {
     if (value.includes(" ")) return;
-    if (!/[./]/.test(value) && !/\.[A-Za-z0-9_-]+$/.test(value)) return;
-    seen.add(value.replace(/^`|`$/g, ""));
+    const token = value.replace(/^`|`$/g, "");
+    if (NON_PATH_DOTTED_TOKENS.has(token.toLowerCase())) return;
+    if (!/[./]/.test(token) && !/\.[A-Za-z0-9_-]+$/.test(token)) return;
+    seen.add(token);
   };
 
   for (const match of text.matchAll(/`([^`]+\.[A-Za-z0-9_-]+)`/g)) push(match[1]!);
