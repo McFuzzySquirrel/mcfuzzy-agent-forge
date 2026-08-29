@@ -171,6 +171,36 @@ forge-launcher console --repo my-app   # opens a specific project directly
 
 ---
 
+## Screenshots
+
+The **Forge Console** (`forge-launcher console`) in action — full walkthrough in
+[forge-console-screenshots.md](docs/forge-console-screenshots.md):
+
+<table>
+  <tr>
+    <td align="center"><a href="docs/images/forge-console/01-home.png"><img src="docs/images/forge-console/thumb/01-home.png" alt="Home" width="280"></a><br><sub>Home</sub></td>
+    <td align="center"><a href="docs/images/forge-console/02-overview.png"><img src="docs/images/forge-console/thumb/02-overview.png" alt="Overview" width="280"></a><br><sub>Overview</sub></td>
+    <td align="center"><a href="docs/images/forge-console/03-board.png"><img src="docs/images/forge-console/thumb/03-board.png" alt="Board" width="280"></a><br><sub>Board</sub></td>
+  </tr>
+  <tr>
+    <td align="center"><a href="docs/images/forge-console/04-tasks.png"><img src="docs/images/forge-console/thumb/04-tasks.png" alt="Tasks" width="280"></a><br><sub>Tasks</sub></td>
+    <td align="center"><a href="docs/images/forge-console/06-logs.png"><img src="docs/images/forge-console/thumb/06-logs.png" alt="Logs" width="280"></a><br><sub>Logs</sub></td>
+    <td align="center"><a href="docs/images/forge-console/09-plan-team-doc.png"><img src="docs/images/forge-console/thumb/09-plan-team-doc.png" alt="Plan & Team" width="280"></a><br><sub>Plan &amp; Team</sub></td>
+  </tr>
+  <tr>
+    <td align="center"><a href="docs/images/forge-console/10-artifacts.png"><img src="docs/images/forge-console/thumb/10-artifacts.png" alt="Artifacts" width="280"></a><br><sub>Artifacts</sub></td>
+    <td align="center"><a href="docs/images/forge-console/12-timeline.png"><img src="docs/images/forge-console/thumb/12-timeline.png" alt="Timeline" width="280"></a><br><sub>Timeline</sub></td>
+    <td align="center"><a href="docs/images/forge-console/13-new-project.png"><img src="docs/images/forge-console/thumb/13-new-project.png" alt="New project" width="280"></a><br><sub>New project</sub></td>
+  </tr>
+  <tr>
+    <td align="center"><a href="docs/images/forge-console/14-help.png"><img src="docs/images/forge-console/thumb/14-help.png" alt="Help" width="280"></a><br><sub>Help</sub></td>
+    <td></td>
+    <td></td>
+  </tr>
+</table>
+
+---
+
 ## How It Works
 
 ```
