@@ -1,7 +1,7 @@
 # Feature Plan: Forge Console (Desktop/Web Front End for Launcher + Workflow Engine)
 
 **Date:** 2026-08-29  
-**Status:** Proposed
+**Status:** Approved — Phases 1–3 shipped (`forge-launcher console` web UI); Phase 4 (desktop packaging) deferred (see [forge-console-implementation-plan.md](../forge-console-implementation-plan.md))
 
 ---
 
@@ -70,13 +70,13 @@ Cons:
 
 ## Recommended Direction
 
-Adopt **Option B** first: evolve the existing workflow-engine dashboard into a broader **Forge Console** web UI, then evaluate a desktop wrapper only after usage validates demand.
+Adopt **Option B** first: evolve the existing workflow-engine dashboard into a broader **Forge Console** web UI. **This shipped** as the self-contained `forge-launcher console` subcommand — a tsc-compiled TypeScript client (not a React app) served on loopback — and a desktop wrapper remains an open follow-up only after usage validates demand.
 
 ---
 
 ## Viable Phased Plan
 
-### Phase 1 — Forge Console MVP (Web, local-first)
+### Phase 1 — Forge Console MVP (Web, local-first) — **implemented**
 
 - Keep current board view as the primary visual layer
 - Add task table/filtering (status, phase, owner, retries, failures)
@@ -84,23 +84,28 @@ Adopt **Option B** first: evolve the existing workflow-engine dashboard into a b
 - Add task detail drilldown (outputs, errors, artifact metadata, validation outcomes)
 - Add run summary header (run id, status, elapsed, counts, blockers)
 
-### Phase 2 — Operator controls in the console
+### Phase 2 — Operator controls in the console — **implemented**
 
 - Expose pause/stop/replay actions through safe local endpoints or command bridging
 - Surface resume/run guidance from launcher and current engine config
 - Improve detached-run attach UX from `forge-launcher resume`/`engine-run`
 
-### Phase 3 — Artifact and history views
+### Phase 3 — Artifact and history views — **implemented**
 
 - Add artifact browser (by type/task/producer)
 - Add event timeline and failure-focused diagnostics
 - Add quick navigation between task, artifact, and log context
 
-### Phase 4 — Optional desktop packaging (only if justified)
+### Phase 4 — Optional desktop packaging (still open / deferred)
 
 - Wrap the local console in Electron or Tauri
 - Keep the web console as canonical UI/backend contract
 - Ensure packaging does not couple into engine execution semantics
+
+> Phase 4 remains **open/deferred**: the web console shipped first (Phases 1–3)
+> as `forge-launcher console`; desktop packaging waits on proven adoption and
+> requirements. Note the Forge Board was **not** converted to TypeScript yet — it
+> is still embedded as the vendored PixiJS artifact via iframe.
 
 ---
 
@@ -124,4 +129,4 @@ Adopt **Option B** first: evolve the existing workflow-engine dashboard into a b
 
 ## Decision Summary
 
-Build a **Forge Console web front end first** by extending the current viz infrastructure. Defer desktop packaging until the web console proves adoption and requirements.
+Build a **Forge Console web front end first** by extending the current viz infrastructure. **Shipped** as a self-contained `forge-launcher console` subcommand with a tsc-compiled TypeScript client (not a React app) served on loopback. Desktop packaging (Phase 4) is deferred until the web console proves adoption and requirements.

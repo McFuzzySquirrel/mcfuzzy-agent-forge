@@ -6,3 +6,4 @@ docs/engine-run.log
 scripts/forge-launcher/*.tgz
 scripts/forge-launcher/resources/templates/
 scripts/forge-launcher/resources/prompt-playbook.md
+scripts/forge-launcher/resources/console/

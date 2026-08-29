@@ -1,6 +1,6 @@
 {
   "name": "forge-launcher",
-  "version": "1.0.0-beta.2",
+  "version": "1.0.0-beta.3",
   "type": "module",
   "description": "One command from zero to auto-build: creates a repo, bootstraps MyForge, captures your idea, and launches the full pipeline. Cross-platform replacement for the forge-launcher/bootstrap/forge-engine-run shell scripts.",
   "bin": {
@@ -11,9 +11,9 @@
     "resources"
   ],
   "scripts": {
-    "build": "tsc",
+    "build": "tsc && tsc -p tsconfig.client.json && node scripts/copy-client-assets.mjs",
     "test": "node --import tsx --test scripts/*.test.ts",
-    "typecheck": "tsc --noEmit",
+    "typecheck": "tsc --noEmit && tsc -p tsconfig.client.json --noEmit",
     "prepack": "npm run build && node scripts/stage-resources.mjs"
   },
   "engines": {

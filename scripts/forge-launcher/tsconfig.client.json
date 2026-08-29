@@ -1,0 +1,18 @@
+{
+  "compilerOptions": {
+    "target": "ES2022",
+    "module": "ESNext",
+    "moduleResolution": "bundler",
+    "lib": ["ES2022", "DOM", "DOM.Iterable"],
+    "strict": true,
+    "skipLibCheck": true,
+    "forceConsistentCasingInFileNames": true,
+    "isolatedModules": true,
+    "noEmit": false,
+    "rootDir": "scripts/console/dashboard",
+    "outDir": "resources/console/client",
+    "declaration": false,
+    "sourceMap": false
+  },
+  "include": ["scripts/console/dashboard/**/*.ts"]
+}

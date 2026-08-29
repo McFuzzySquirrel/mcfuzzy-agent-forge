@@ -1,0 +1,140 @@
+import fs from "node:fs";
+import os from "node:os";
+import path from "node:path";
+
+// ─── Project registry ─────────────────────────────────────────────────────────
+//
+// The console remembers projects the user has created or opened so its landing
+// page can offer a picker. Location honours FORGE_HOME first, then XDG_CONFIG_HOME,
+// then ~/.myforge.
+
+export interface RegistryProject {
+  path: string;
+  name: string;
+  harness?: string;
+  createdAt?: string;
+  lastOpenedAt?: string;
+}
+
+function registryDir(): string {
+  if (process.env.FORGE_HOME) return process.env.FORGE_HOME;
+  const xdg = process.env.XDG_CONFIG_HOME;
+  if (xdg) return path.join(xdg, "myforge");
+  return path.join(os.homedir(), ".myforge");
+}
+
+export function registryPath(): string {
+  return path.join(registryDir(), "projects.json");
+}
+
+export function loadRegistry(): RegistryProject[] {
+  const file = registryPath();
+  if (!fs.existsSync(file)) return [];
+  try {
+    const parsed = JSON.parse(fs.readFileSync(file, "utf8"));
+    if (!Array.isArray(parsed)) return [];
+    return parsed.filter((p): p is RegistryProject => Boolean(p && typeof p.path === "string"));
+  } catch {
+    return [];
+  }
+}
+
+export function saveRegistry(projects: RegistryProject[]): void {
+  const file = registryPath();
+  fs.mkdirSync(path.dirname(file), { recursive: true });
+  fs.writeFileSync(file, `${JSON.stringify(projects, null, 2)}\n`, "utf8");
+}
+
+export function upsertProject(entry: Partial<RegistryProject> & { path: string }): RegistryProject[] {
+  const projects = loadRegistry();
+  const existing = projects.find((p) => p.path === entry.path);
+  const now = new Date().toISOString();
+  if (existing) {
+    existing.name = entry.name ?? existing.name;
+    existing.harness = entry.harness ?? existing.harness;
+    existing.lastOpenedAt = now;
+  } else {
+    projects.push({
+      path: entry.path,
+      name: entry.name ?? path.basename(entry.path),
+      harness: entry.harness,
+      createdAt: entry.createdAt ?? now,
+      lastOpenedAt: now,
+    });
+  }
+  saveRegistry(projects);
+  return projects;
+}
+
+export function touchProject(repoPath: string): void {
+  upsertProject({ path: repoPath });
+}
+
+// ─── Repo file paths ──────────────────────────────────────────────────────────
+//
+// The console reads the same docs/* artifacts the engine and launcher write.
+
+export interface RepoPaths {
+  repoRoot: string;
+  manifestPath: string;
+  statePath: string;
+  auditPath: string;
+  progressPath: string;
+  controlPath: string;
+  pidPath: string;
+  logPath: string;
+  artifactsDir: string;
+  engineConfigPath: string;
+  ideaPath: string;
+  prdPath: string;
+  visionPath: string;
+  featuresDir: string;
+  modelPlanPath: string;
+}
+
+export function repoPaths(repoRoot: string): RepoPaths {
+  const docs = path.join(repoRoot, "docs");
+  return {
+    repoRoot,
+    manifestPath: path.join(docs, "EXECUTION-MANIFEST.json"),
+    statePath: path.join(docs, "WORKFLOW-STATE.json"),
+    auditPath: path.join(docs, "EXECUTION-AUDIT.jsonl"),
+    progressPath: path.join(docs, "PROGRESS.md"),
+    controlPath: path.join(docs, "engine-control.json"),
+    pidPath: path.join(docs, "engine.pid"),
+    logPath: path.join(docs, "engine-run.log"),
+    artifactsDir: path.join(docs, "artifacts"),
+    engineConfigPath: path.join(docs, "engine-config.json"),
+    ideaPath: path.join(docs, "IDEA.md"),
+    prdPath: path.join(docs, "PRD.md"),
+    visionPath: path.join(docs, "product-vision.md"),
+    featuresDir: path.join(docs, "features"),
+    modelPlanPath: path.join(docs, "MODEL-PLAN.md"),
+  };
+}
+
+const HARNESS_ROOTS = [".agents", ".opencode", ".claude", ".github"] as const;
+
+export type HarnessRoot = (typeof HARNESS_ROOTS)[number];
+
+/** Detects the harness root used by a forge repo (first match wins). */
+export function detectHarnessRoot(repoRoot: string): HarnessRoot | null {
+  for (const root of HARNESS_ROOTS) {
+    if (fs.existsSync(path.join(repoRoot, root))) return root;
+  }
+  return null;
+}
+
+/** Locates the bootstrapped forge-workflow-engine skill dir (any harness root). */
+export function findEngineDir(repoRoot: string): string | null {
+  for (const root of HARNESS_ROOTS) {
+    const candidate = path.join(repoRoot, root, "skills", "forge-workflow-engine");
+    if (fs.existsSync(candidate)) return candidate;
+  }
+  return null;
+}
+
+/** True when the directory looks like a forge repo (git repo with docs/). */
+export function looksLikeForgeRepo(dir: string): boolean {
+  return fs.existsSync(path.join(dir, ".git")) && fs.existsSync(path.join(dir, "docs"));
+}

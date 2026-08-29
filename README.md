@@ -9,7 +9,7 @@
 
 **MyForge** turns your requirements into a team of specialist agents that plan, implement, and validate a project. The PRD is the quality gate: you deliberately review it, then the pipeline generates the team and drives the build - either interactively or fully autonomously ("dark orchestration").
 
-**Latest: v3.30** - rebranded from **McFuzzy Agent Forge** to **MyForge** across the README, docs, and templates; technical `forge-*` names and the FlowForge kernel are unchanged, and the workforce compiler's default package ID root is now `dev.myforge.*` (see [docs/updates.md](docs/updates.md)). (v3.29: added a proposed **Forge Console** feature plan in `docs/research/forge-console-desktop-frontend-plan.md` to introduce a desktop/web UX for engine and launcher observability and controls, recommending a web-first expansion of the existing Forge Board before optional desktop packaging. v3.28: the workflow engine now **serializes same-owner tasks** under parallelism (with `--concurrency > 1`, at most one task per agent runs per wave), and the execution-adapter compiler no longer mistakes framework names like **ASP.NET** for expected output files (which was failing tasks at the output gate on every retry). v3.27: the engine can be **stopped gracefully** — `workflow-engine stop`/`pause` or `forge-launcher engine-run --stop/--pause` write `docs/engine-control.json` and SIGTERM the PID in `docs/engine.pid`, so a detached run finishes the current task, saves state as `paused`, and resumes with `run`. v3.26: adaptive keep-alive default + execution-budget hints. v3.25: launcher adds "stop here and resume later" checkpoints and a post-team plan & validate step. v3.24: the Copilot harness selects forge agents natively via `/agent <name>`. v3.23: the workflow engine's **output verification gate** stops hollow "complete" runs. v3.22: `forge-launcher` is the single terminal entry point with `resume`.)
+**Latest: v3.31** - new **Forge Console** (`forge-launcher console`): a self-contained local web UI that fronts `forge-launcher` (authoring) and `forge-launcher engine-run` (build) from one browser app — project picker, new-project wizard, run views (overview/board/tasks/logs/documents/artifacts/timeline), and run controls (pause/stop/replay/run/resume) — served loopback-only behind an `X-Forge-Token` CSRF guard, with a project registry at `~/.myforge/projects.json` (see [docs/updates.md](docs/updates.md)). (v3.30: rebranded from **McFuzzy Agent Forge** to **MyForge**; technical `forge-*` names and the FlowForge kernel are unchanged. v3.29: added a proposed **Forge Console** feature plan in `docs/research/forge-console-desktop-frontend-plan.md` to introduce a desktop/web UX for engine and launcher observability and controls, recommending a web-first expansion of the existing Forge Board before optional desktop packaging. v3.28: the workflow engine now **serializes same-owner tasks** under parallelism (with `--concurrency > 1`, at most one task per agent runs per wave), and the execution-adapter compiler no longer mistakes framework names like **ASP.NET** for expected output files (which was failing tasks at the output gate on every retry). v3.27: the engine can be **stopped gracefully** — `workflow-engine stop`/`pause` or `forge-launcher engine-run --stop/--pause` write `docs/engine-control.json` and SIGTERM the PID in `docs/engine.pid`, so a detached run finishes the current task, saves state as `paused`, and resumes with `run`. v3.26: adaptive keep-alive default + execution-budget hints. v3.25: launcher adds "stop here and resume later" checkpoints and a post-team plan & validate step. v3.24: the Copilot harness selects forge agents natively via `/agent <name>`. v3.23: the workflow engine's **output verification gate** stops hollow "complete" runs. v3.22: `forge-launcher` is the single terminal entry point with `resume`.)
 
 ---
 
@@ -19,7 +19,7 @@ One command, zero to running - no PRD needed. The launcher creates your repo, bo
 
 ```bash
 # Anywhere (npm package - requires Node.js 18+):
-npx forge-launcher@beta          # v1.0.0-beta.2 pre-release (once published)
+npx forge-launcher@beta          # v1.0.0-beta.3 pre-release (once published)
 
 # Or from a clone (legacy shell wrappers, no install):
 git clone https://github.com/McFuzzySquirrel/mcfuzzy-agent-forge.git
@@ -27,7 +27,7 @@ cd mcfuzzy-agent-forge
 ./scripts/forge-launcher.sh          # PowerShell: .\scripts\forge-launcher.ps1
 ```
 
-The npm package is currently a **pre-release** (`1.0.0-beta.2`). Until it is
+The npm package is currently a **pre-release** (`1.0.0-beta.3`). Until it is
 published, install the packed tarball locally (below).
 
 Answer the prompts, then open the repo in your agent harness and run the queued command it prints. Full reference: [docs/forge-launcher.md](docs/forge-launcher.md).
@@ -43,10 +43,10 @@ it locally from your clone:
 # 1. Install build deps + build the package (compiles dist/ + stages templates)
 cd scripts/forge-launcher
 npm install
-npm pack                                   # → forge-launcher-1.0.0-beta.2.tgz
+npm pack                                   # → forge-launcher-1.0.0-beta.3.tgz
 
 # 2. Install the tarball exactly like a published package (global `forge-launcher`)
-npm install -g ./forge-launcher-1.0.0-beta.2.tgz
+npm install -g ./forge-launcher-1.0.0-beta.3.tgz
 ```
 
 > **Stale install?** After `git pull`, always re-run `npm install` before
@@ -90,10 +90,10 @@ prefix and run from a fresh directory:
 ```bash
 # 1. Build the package (compiles dist/ + stages templates as resources)
 cd scripts/forge-launcher
-npm pack                                   # → forge-launcher-1.0.0-beta.2.tgz
+npm pack                                   # → forge-launcher-1.0.0-beta.3.tgz
 
 # 2. Install it like `npm install -g forge-launcher@beta` would (isolated prefix)
-npm install -g --prefix /tmp/forge-user/install ./forge-launcher-1.0.0-beta.2.tgz
+npm install -g --prefix /tmp/forge-user/install ./forge-launcher-1.0.0-beta.3.tgz
 
 # 3. Be the new user: run the TUI in a fresh, unrelated workspace
 mkdir -p /tmp/forge-user/workspace
@@ -139,6 +139,20 @@ build**.
 | Draft the PRD + team for you, keeping review boundaries | `forge-launcher --draft` |
 | No chat session at all — full terminal/headless pipeline | `forge-launcher --headless` |
 | Pick up where you left off (reviews take a while) | `forge-launcher resume` |
+| A browser UI for authoring, build monitoring, and run controls | `forge-launcher console` |
+
+### Forge Console (web UI)
+
+Prefer a browser over the terminal? **`forge-launcher console`** opens a local
+web UI (`http://127.0.0.1:4300`) that wraps everything above in one place —
+create a project or pick an existing one, then **draft the PRD**, **generate the
+agent team**, **start/stop the build**, and monitor it live (board, tasks, logs,
+artifacts, docs) — all point-and-click:
+
+```bash
+forge-launcher console                 # opens the project picker
+forge-launcher console --repo my-app   # opens a specific project directly
+```
 
 **Deliberate, manual steps** — the building blocks `forge-launcher` automates:
 
@@ -194,13 +208,13 @@ Two principles govern the pipeline: **automate mechanical gates** (like decompos
 npx forge-launcher@beta        # npm package (requires Node.js 18+)
 ```
 
-The npm package is a **pre-release** (`1.0.0-beta.2`). Until it's published,
+The npm package is a **pre-release** (`1.0.0-beta.3`). Until it's published,
 install the packed tarball from a clone:
 
 ```bash
 git clone https://github.com/McFuzzySquirrel/mcfuzzy-agent-forge.git
 cd mcfuzzy-agent-forge/scripts/forge-launcher
-npm install && npm pack && npm install -g ./forge-launcher-1.0.0-beta.2.tgz
+npm install && npm pack && npm install -g ./forge-launcher-1.0.0-beta.3.tgz
 forge-launcher                 # the global command now works from anywhere
 ```
 
@@ -288,7 +302,7 @@ Dark orchestration means one pre-run gate, then unattended dispatch - no approva
 
 **Cut per-task startup overhead.** Every `opencode run` task normally cold-starts its own project instance (config, AGENTS.md, skills, and every MCP server) - on multi-task runs that adds up. Pass `--keep-alive` to boot one headless `opencode serve` for the run and attach every task to it (`--keep-alive-port <n>` pins the port); each task still gets a fresh, isolated session. If you already keep an `opencode serve` running, point tasks at it with `--attach <url>` (or the `FORGE_ENGINE_ATTACH` / `FORGE_ENGINE_ATTACH_URL` env vars) and skip the lifecycle management.
 
-**Watch the build live (The Forge Board).** Add `--viz` to a run (or `forge-launcher engine-run --viz`) and a PixiJS dashboard opens in your browser at `http://127.0.0.1:4299`: the build renders as a **kanban board** - one band per phase stacked top-to-bottom, with tasks as **name-tag cards** flowing left-to-right through **To Do · In Progress · Done · Failed**. Each card carries a procedurally-drawn **agent face** (tinted per agent, reacting to status), the agent's name, and the task title; dependency and artifact edges connect the cards and brighten on hover, and artifact hand-offs animate as dots. Hover a card for a tooltip, click it for task detail (outputs, artifact, errors), drag to pan, scroll to zoom. The board auto-sizes its bands so cards never overlap. To watch a **detached** run instead, run `npm run workflow-engine -- viz --repo <repo-dir>` from any terminal - it tails the audit log and serves the same dashboard. Pass `--no-open` to skip auto-opening the browser.
+**Watch the build live (The Forge Board).** Add `--viz` to a run (or `forge-launcher engine-run --viz`) and a PixiJS dashboard opens in your browser at `http://127.0.0.1:4299`: the build renders as a **kanban board** - one band per phase stacked top-to-bottom, with tasks as **name-tag cards** flowing left-to-right through **To Do · In Progress · Done · Failed**. Each card carries a procedurally-drawn **agent face** (tinted per agent, reacting to status), the agent's name, and the task title; dependency and artifact edges connect the cards and brighten on hover, and artifact hand-offs animate as dots. Hover a card for a tooltip, click it for task detail (outputs, artifact, errors), drag to pan, scroll to zoom. The board auto-sizes its bands so cards never overlap. To watch a **detached** run instead, run `npm run workflow-engine -- viz --repo <repo-dir>` from any terminal - it tails the audit log and serves the same dashboard. Pass `--no-open` to skip auto-opening the browser. **`forge-launcher console`** wraps the board plus tasks, logs, documents, artifacts, and run controls in a single local web UI.
 
 ### Path D - Fully terminal-driven (no chat session)
 

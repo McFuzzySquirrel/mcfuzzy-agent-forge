@@ -4,6 +4,56 @@ Detailed release and change notes for MyForge.
 
 ---
 
+## August 2026 - v3.31
+
+### Forge Console: a local web UI over the launcher and workflow engine
+
+- **`forge-launcher console`** opens a self-contained web UI that fronts both
+  `forge-launcher` (authoring) and `forge-launcher engine-run` →
+  `workflow-engine` (build) from one browser app. It is TypeScript compiled with
+  `tsc`, served on `127.0.0.1` (default port `4300`, next free port if busy).
+- **Project picker** landing page lists your projects and lets you add an
+  existing repo.
+- **New Project wizard** creates a repo by spawning
+  `forge-launcher --non-interactive` with `FORGE_REPO_NAME` / `_PARENT_DIR` /
+  `_DESCRIPTION` / `_VISIBILITY` / `_HARNESS_CHOICE` / `_IDEA` (plus optional
+  `FORGE_AUTO_DRAFT=1`).
+- **Resume a setup** — draft the PRD (`forge-launcher --draft`), generate the
+  team (headless `forge-build-agent-team`), or start the build.
+- **Start / resume a build** — `forge-launcher engine-run --harness <h> --yes`,
+  detached, logged to `docs/engine-run.log`.
+- **Views** — Overview (run header, progress, counts, blockers), **Board** (the
+  existing PixiJS Forge Board embedded full-screen at `/board`), Tasks
+  (filterable/sortable table + detail), Logs (`engine-run.log` tail + audit
+  stream), Documents (read-only IDEA/PRD/vision/features/progress/model-plan +
+  agent team, "open externally"), Artifacts (browse by type/task + preview), and
+  Timeline (audit events, failure-highlighted).
+- **Run controls** — Pause / Stop (write `docs/engine-control.json` + SIGTERM
+  `docs/engine.pid`), Replay a failed task (`workflow-engine replay <task>`), and
+  Run / Resume.
+
+### Project registry
+
+- Projects are remembered in a registry at `~/.myforge/projects.json` (honoring
+  `FORGE_HOME` / `XDG_CONFIG_HOME`).
+
+### TypeScript client + loopback security
+
+- The console client is plain TypeScript compiled with `tsc` (no bundler),
+  served loopback-only, and state-changing POST endpoints require an
+  `X-Forge-Token` header (a per-server random token embedded in the served HTML)
+  to block cross-origin drive-by requests; file reads are path-traversal
+  guarded.
+
+### `forge-launcher engine-run` tees engine output to a log
+
+- `forge-launcher engine-run` tees engine output to `docs/engine-run.log`, so a
+  detached run is tail-able from the terminal and the console alike.
+
+- See [ADR-034](adr/034-forge-console-web-ui.md).
+
+---
+
 ## August 2026 - v3.30
 
 ### Branding: "Agent Forge" is now "MyForge"

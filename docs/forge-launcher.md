@@ -43,7 +43,7 @@
 
 ### npm package (recommended, cross-platform)
 
-> The npm package is a **pre-release** (`forge-launcher@beta`, v1.0.0-beta.2).
+> The npm package is a **pre-release** (`forge-launcher@beta`, v1.0.0-beta.3).
 > Until it is published, install it locally from the clone (see the README
 > "Try the npm launcher locally" section) or use the legacy wrappers below.
 
@@ -55,6 +55,7 @@ npx forge-launcher@beta engine-run [--repo <path>] [--harness <h>] [--concurrenc
                               [--keep-alive [--keep-alive-port <n>]] [--no-keep-alive] [--attach <url>]
                               [--allow-noop] [--run-validation]
 npx forge-launcher@beta resume [--repo <path>] [--non-interactive] [--dry-run]
+npx forge-launcher@beta console [--repo <path>] [--port <n>] [--no-open]
 ```
 
 When installed globally (`npm install -g forge-launcher@beta`), drop the `npx`.
@@ -67,8 +68,8 @@ development:
 ```bash
 cd scripts/forge-launcher
 npm install                               # build deps
-npm pack                                  # build + stage templates → forge-launcher-1.0.0-beta.2.tgz
-npm install -g ./forge-launcher-1.0.0-beta.2.tgz   # global `forge-launcher`
+npm pack                                  # build + stage templates → forge-launcher-1.0.0-beta.3.tgz
+npm install -g ./forge-launcher-1.0.0-beta.3.tgz   # global `forge-launcher`
 
 # dev alternative (once dist/ is built): global symlink
 npm run build && npm link
@@ -236,6 +237,56 @@ command **conditional**: when a team already exists it queues
 `/forge-orchestrate-build` (project-orchestrator); when no team exists yet it
 keeps queueing `/forge-auto-build` (which generates the team in-chat). Headless
 runs keep using `/forge-auto-build` as the terminal fast-path.
+
+### Forge Console (local web UI)
+
+The **Forge Console** is a self-contained web UI that puts authoring and build in
+front of a single browser app. Start it anywhere (then pick a project) or point
+it straight at a repo:
+
+```bash
+forge-launcher console [--repo <path>] [--port <n>] [--no-open]
+```
+
+| Flag | Purpose |
+|------|---------|
+| `--repo <path>` | Start on a specific project instead of the project picker |
+| `--port <n>` | Port to serve on (default `4300`, next free port if busy) |
+| `--no-open` | Do not auto-open the browser (the URL is still printed) |
+
+The server binds to `127.0.0.1` and opens your browser to a **project picker**
+landing page. From one app you can:
+
+- **Pick or add a project** — choose from the project registry (see below) or
+  add an existing repo.
+- **Create a new project** — a New Project wizard that spawns
+  `forge-launcher --non-interactive` with `FORGE_REPO_NAME` / `_PARENT_DIR` /
+  `_DESCRIPTION` / `_VISIBILITY` / `_HARNESS_CHOICE` / `_IDEA` (plus optional
+  `FORGE_AUTO_DRAFT=1`).
+- **Resume a setup** — draft the PRD (`forge-launcher --draft`), generate the
+  team (headless `forge-build-agent-team`), or start the build.
+- **Start / resume a build** — `forge-launcher engine-run --harness <h> --yes`,
+  detached, with output logged to `docs/engine-run.log`.
+- **Monitor and control a run** — the **Overview** (run header, progress, counts,
+  blockers), the **Board** (the existing PixiJS Forge Board embedded full-screen
+  at `/board`), **Tasks** (filterable/sortable table + detail), **Logs**
+  (`docs/engine-run.log` tail + audit stream), **Documents** (read-only
+  IDEA/PRD/vision/features/progress/model-plan + agent team, "open externally"),
+  **Artifacts** (browse by type/task + preview), and **Timeline** (audit events,
+  failure-highlighted). Control a run with **Pause / Stop** (writes
+  `docs/engine-control.json` + SIGTERM `docs/engine.pid`), **Replay** a failed
+  task (`workflow-engine replay <task>`), and **Run / Resume**.
+
+The **project registry** lives at `~/.myforge/projects.json` (honoring
+`FORGE_HOME` / `XDG_CONFIG_HOME`) and remembers the projects you've opened.
+
+Security: the console serves loopback-only, and state-changing endpoints require
+an `X-Forge-Token` header (a per-server random token embedded in the served HTML)
+to block cross-origin drive-by requests. The existing CLI paths (`forge-launcher`,
+`engine-run`, `workflow-engine --viz`) are unchanged and still first-class.
+
+Quick start: run `forge-launcher console`, open a browser, pick or create a
+project, and click **Run**.
 
 ### Stop here and resume later
 

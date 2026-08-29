@@ -173,6 +173,36 @@ export function runLogged(
   });
 }
 
+/** Runs a command, streaming output to the terminal AND appending to a log file. */
+export function runTee(
+  cmd: string,
+  args: string[],
+  opts: { cwd?: string; logFile?: string; env?: NodeJS.ProcessEnv } = {},
+): Promise<{ code: number }> {
+  return new Promise((resolve, reject) => {
+    const child = spawn(cmd, args, {
+      cwd: opts.cwd,
+      env: { ...process.env, ...opts.env },
+      stdio: ["inherit", "pipe", "pipe"],
+    });
+    let stream: fs.WriteStream | undefined;
+    if (opts.logFile) {
+      fs.mkdirSync(path.dirname(opts.logFile), { recursive: true });
+      stream = fs.createWriteStream(opts.logFile, { flags: "a" });
+    }
+    child.stdout?.on("data", (d: Buffer) => { process.stdout.write(d); stream?.write(d); });
+    child.stderr?.on("data", (d: Buffer) => { process.stderr.write(d); stream?.write(d); });
+    child.on("error", (err) => {
+      stream?.end();
+      reject(describeSpawnError(cmd, err));
+    });
+    child.on("close", (code) => {
+      stream?.end();
+      resolve({ code: code ?? 0 });
+    });
+  });
+}
+
 /** Prints the last N lines of a log file to help diagnose a failed step. */
 export function printLogTail(logFile: string, n = 12): void {
   let text: string;

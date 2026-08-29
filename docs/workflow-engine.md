@@ -61,6 +61,11 @@ forge-launcher engine-run --repo <repo-dir> --harness opencode --yes
 
 This installs the adapter and engine dependencies, compiles the manifest if missing, then runs the engine in the foreground. Add `--dry-run` to print the command sequence without executing it.
 
+> **Prefer a browser?** Run monitoring and control from the **Forge Console**
+> (`forge-launcher console`) — a local web UI that reads the same `docs/*`
+> artifacts and embeds the Forge Board. See
+> [docs/forge-launcher.md](forge-launcher.md#forge-console-local-web-ui).
+
 ### Via `forge-auto-build` (terminal/headless fast-path)
 
 At `forge-auto-build`'s pre-flight gate, type `GO --workflow-engine`. The team is generated, the manifest is compiled, and the engine starts **detached** (log: `docs/engine-run.log`) while `forge-auto-build` polls `docs/WORKFLOW-STATE.json` to completion. To pick up a run later from any terminal, use `forge-launcher resume` or `forge-launcher engine-run`.
