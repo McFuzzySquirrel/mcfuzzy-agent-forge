@@ -1,8 +1,8 @@
-# How the `forge-workflow-engine` Works — A Deep-Dive Learning Guide
+# How the `forge-workflow-engine` Works - A Deep-Dive Learning Guide
 
 ## What we're exploring
 
-Agent Forge lets you describe a software project as a Product Requirements Document (PRD), decompose it into agents and tasks, and then build it. The *workflow engine* is the piece that takes over once all the planning is done and actually **runs** the build — autonomously, without a human prompting each step. This guide walks through exactly how it does that.
+MyForge lets you describe a software project as a Product Requirements Document (PRD), decompose it into agents and tasks, and then build it. The *workflow engine* is the piece that takes over once all the planning is done and actually **runs** the build - autonomously, without a human prompting each step. This guide walks through exactly how it does that.
 
 ---
 
@@ -12,29 +12,29 @@ The engine is organised into three cleanly separated layers:
 
 ```
 ┌──────────────────────────────────────────────────────────┐
-│  Layer 3 — DAG Engine  (scripts/engine.ts)               │
+│  Layer 3 - DAG Engine  (scripts/engine.ts)               │
 │   • Reads the manifest                                   │
 │   • Decides what to run next (dependency ordering)       │
 │   • Drives the main while-loop                           │
 ├──────────────────────────────────────────────────────────┤
-│  Layer 2 — Harness Adapters  (scripts/harness/*.ts)      │
+│  Layer 2 - Harness Adapters  (scripts/harness/*.ts)      │
 │   • Translates "invoke this task" into a real call       │
 │   • opencode CLI | copilot CLI | OpenAI API | Stub (dry) │
 ├──────────────────────────────────────────────────────────┤
-│  Layer 1 — State Manager  (scripts/state.ts)             │
+│  Layer 1 - State Manager  (scripts/state.ts)             │
 │   • Reads/writes docs/WORKFLOW-STATE.json                │
 │   • Syncs docs/PROGRESS.md (human-readable view)         │
 │   • Appends docs/EXECUTION-AUDIT.jsonl                   │
 └──────────────────────────────────────────────────────────┘
 ```
 
-Each layer has a single job. The DAG engine never touches the filesystem directly — it calls state functions. The harness adapters never mutate state — they return a `TaskResult`. This is a classic *separation of concerns* pattern and it's worth internalising because it's what makes the system replaceable and testable.
+Each layer has a single job. The DAG engine never touches the filesystem directly - it calls state functions. The harness adapters never mutate state - they return a `TaskResult`. This is a classic *separation of concerns* pattern and it's worth internalising because it's what makes the system replaceable and testable.
 
 ---
 
 ## Where It Starts: The Execution Manifest
 
-Before the engine can run, `forge-execution-adapter` compiles a file called `docs/EXECUTION-MANIFEST.json`. Think of this as the **build contract**: every phase, every task, every owning agent, every expected output file, and every validation command — structured as machine-readable JSON.
+Before the engine can run, `forge-execution-adapter` compiles a file called `docs/EXECUTION-MANIFEST.json`. Think of this as the **build contract**: every phase, every task, every owning agent, every expected output file, and every validation command - structured as machine-readable JSON.
 
 ```
 EXECUTION-MANIFEST.json (produced by forge-execution-adapter)
@@ -48,9 +48,9 @@ EXECUTION-MANIFEST.json (produced by forge-execution-adapter)
 │  ]
 ```
 
-Key insight: **the engine never re-reads the PRD**. It only ever looks at the compiled manifest. This is a deliberate firewall — if the PRD changes mid-run, you must re-compile and start a fresh run. This prevents partial builds from running against a stale plan.
+Key insight: **the engine never re-reads the PRD**. It only ever looks at the compiled manifest. This is a deliberate firewall - if the PRD changes mid-run, you must re-compile and start a fresh run. This prevents partial builds from running against a stale plan.
 
-Task decomposition is decided at compile time by `forge-execution-adapter`. With the default **fine** granularity, an indented sub-bullet becomes its own task and an oversized bullet is split at sentence boundaries — so the manifest carries many small, chained tasks rather than a few big ones. This is what makes per-task progress visible in `PROGRESS.md`/`WORKFLOW-STATE.json` and keeps individual harness calls short. Recompile with `--granularity coarse` for the legacy one-bullet-per-task behavior (see ADR-022).
+Task decomposition is decided at compile time by `forge-execution-adapter`. With the default **fine** granularity, an indented sub-bullet becomes its own task and an oversized bullet is split at sentence boundaries - so the manifest carries many small, chained tasks rather than a few big ones. This is what makes per-task progress visible in `PROGRESS.md`/`WORKFLOW-STATE.json` and keeps individual harness calls short. Recompile with `--granularity coarse` for the legacy one-bullet-per-task behavior (see ADR-022).
 
 ---
 
@@ -71,7 +71,7 @@ let state = loadState(opts.statePath)
 3. Creates a `TaskRecord` entry for each, all set to `status: "pending"`.
 4. Writes this to `docs/WORKFLOW-STATE.json`.
 
-Now the engine has a live snapshot of the entire planned build. Every subsequent decision is made by reading that snapshot — not by re-parsing the manifest each time.
+Now the engine has a live snapshot of the entire planned build. Every subsequent decision is made by reading that snapshot - not by re-parsing the manifest each time.
 
 ---
 
@@ -124,7 +124,7 @@ Two levels of dependency checking happen here:
 
 This is a simplified but correct DAG walk. Because tasks always move from `pending → running → complete/failed/skipped` and never backwards (except on explicit `replay`), `nextReadyTasks` can be called repeatedly as the loop iterates and will always produce the correct frontier.
 
-> **Why sequential in the MVP?** The ready list could theoretically contain multiple tasks that could run in parallel. The engine runs them one at a time for now. True parallelism would require each harness backend to guarantee isolation between concurrent invocations — something that can't be assumed of all backends (e.g. a CLI tool writing to shared files). It's a conscious tradeoff: correctness over speed.
+> **Why sequential in the MVP?** The ready list could theoretically contain multiple tasks that could run in parallel. The engine runs them one at a time for now. True parallelism would require each harness backend to guarantee isolation between concurrent invocations - something that can't be assumed of all backends (e.g. a CLI tool writing to shared files). It's a conscious tradeoff: correctness over speed.
 >
 > **As of ADR-021 this is no longer strictly sequential.** The engine now drains the ready frontier in bounded *waves* (`--concurrency <n>`, default `1`). Harness adapters declare a `supportsConcurrency` capability; only opt-in adapters are parallelized, and repo-editing harnesses still rely on the dependency graph for file isolation.
 
@@ -155,7 +155,7 @@ Once a task is ready, `executeTask` takes over:
            write audit event: task.retrying
 ```
 
-The retry loop is the engine's resilience mechanism. If a model call fails transiently — network timeout, rate limit, model error — the task is retried up to `--max-retries` times (default: 2) with a configurable delay (default 5 seconds). Only if all attempts fail does the task enter the `failed` state, which halts the phase.
+The retry loop is the engine's resilience mechanism. If a model call fails transiently - network timeout, rate limit, model error - the task is retried up to `--max-retries` times (default: 2) with a configurable delay (default 5 seconds). Only if all attempts fail does the task enter the `failed` state, which halts the phase.
 
 ### Heartbeat
 
@@ -165,7 +165,7 @@ A long harness call (e.g. a multi-minute `opencode run` or `copilot -p`) is sile
 [engine] …still working on task 1.1 (@project-architect, 45s elapsed)
 ```
 
-The interval defaults to 15 seconds and is controlled with `--heartbeat-ms <ms>` (or `FORGE_ENGINE_HEARTBEAT_MS`); `0` disables it. This only works because the CLI adapters (`opencode`, `copilot`) spawn their child process **asynchronously** (`spawn`, not the blocking `spawnSync`) — the event loop stays free for the heartbeat timer to fire. The OpenAI adapter is already async, so it benefits automatically.
+The interval defaults to 15 seconds and is controlled with `--heartbeat-ms <ms>` (or `FORGE_ENGINE_HEARTBEAT_MS`); `0` disables it. This only works because the CLI adapters (`opencode`, `copilot`) spawn their child process **asynchronously** (`spawn`, not the blocking `spawnSync`) - the event loop stays free for the heartbeat timer to fire. The OpenAI adapter is already async, so it benefits automatically.
 
 ### Per-task timeout
 
@@ -203,8 +203,8 @@ opencode run --model <agent.model> [--agent <name>] "<task title + description>"
 
 When the owning agent's file lives under the project's `.opencode/agents/`
 directory, the adapter passes `--agent <name>` so opencode loads the persona
-itself — the session runs under the forge agent rather than the default build
-agent — and the persona is not inlined. `opencode run` has no `--system-prompt`
+itself - the session runs under the forge agent rather than the default build
+agent - and the persona is not inlined. `opencode run` has no `--system-prompt`
 flag, so for other harness roots (`.agents`, `.claude`, `.github`) it falls back
 to inlining the agent body into the prompt. The task's title and description
 complete the user prompt. Outputs are verified by checking whether the
@@ -233,7 +233,7 @@ This enables fully API-driven builds without any local tooling installed.
 
 ### `StubAdapter`
 
-Returns a synthetic success for every task without making any real call. The environment variable `STUB_FAIL_TASK_IDS` can be set to a comma-separated list of task IDs that should fail — useful for testing the retry and failure handling logic without a real backend.
+Returns a synthetic success for every task without making any real call. The environment variable `STUB_FAIL_TASK_IDS` can be set to a comma-separated list of task IDs that should fail - useful for testing the retry and failure handling logic without a real backend.
 
 ### `FlowForgeKernelAdapter`
 
@@ -247,17 +247,17 @@ The beauty of this pattern: **the engine code never changes when you swap backen
 
 The engine maintains three output files and keeps them in sync after every state mutation:
 
-### `docs/WORKFLOW-STATE.json` — the machine's source of truth
+### `docs/WORKFLOW-STATE.json` - the machine's source of truth
 
 Every task has a full record: status, attempt count, start/end timestamps, output files, agent output text, and error message. The engine reads this file to decide what to run next. It also carries the `runId` (a UUID) which ties together all audit events for a single run.
 
-### `docs/PROGRESS.md` — the human's source of truth
+### `docs/PROGRESS.md` - the human's source of truth
 
 Regenerated by `syncProgressMd` after every task. It mirrors what a human operator would want to see: what's done, what's running, what's remaining, any blockers. It also happens to be the same format used by `forge-orchestrate-build`, so both execution modes produce compatible progress files.
 
-### `docs/EXECUTION-AUDIT.jsonl` — the append-only record
+### `docs/EXECUTION-AUDIT.jsonl` - the append-only record
 
-Every state transition is appended as a newline-delimited JSON event. This file is never overwritten — only appended to. It's the full history: `run.started`, `phase.started`, `task.started`, `task.retrying`, `task.complete`, `task.failed`, `task.skipped`, `run.paused`, `run.complete`. You can replay the entire history of a build from this file.
+Every state transition is appended as a newline-delimited JSON event. This file is never overwritten - only appended to. It's the full history: `run.started`, `phase.started`, `task.started`, `task.retrying`, `task.complete`, `task.failed`, `task.skipped`, `run.paused`, `run.complete`. You can replay the entire history of a build from this file.
 
 The sync pattern is:
 
@@ -284,7 +284,7 @@ let state = loadState(opts.statePath)    // loads existing state
 
 `nextReadyTasks` will skip over tasks already marked `complete` or `skipped` because they don't have `status === "pending"`. The engine picks up exactly where it left off.
 
-If the status was `paused`, the engine sets it back to `running` and continues. If it was `failed`, the engine logs a warning and continues — re-attempting any tasks that are still `pending`.
+If the status was `paused`, the engine sets it back to `running` and continues. If it was `failed`, the engine logs a warning and continues - re-attempting any tasks that are still `pending`.
 
 ### `replay` for targeted recovery
 
@@ -306,7 +306,7 @@ When a task fails after exhausting retries:
 2. On the next loop iteration, `hasFailed(state)` returns `true`.
 3. The loop logs an error and breaks.
 4. The run status becomes `"failed"`.
-5. All downstream tasks remain `"pending"` — they are not explicitly failed, they are simply never reached.
+5. All downstream tasks remain `"pending"` - they are not explicitly failed, they are simply never reached.
 
 This means a `replay` after fixing the root cause will naturally resume by re-running the failed task and then continuing forward through its dependents.
 
@@ -370,11 +370,11 @@ Storing all run state in a JSON file on disk costs almost nothing but gives you 
 
 ### 3. Plugin adapters at the execution boundary
 
-The `HarnessAdapter` interface is placed at exactly the right point — the moment when "intent" becomes "action". Everything before that point (DAG resolution, state management, retry logic) is completely harness-agnostic. This is the [Ports and Adapters (Hexagonal Architecture)](https://en.wikipedia.org/wiki/Hexagonal_architecture_(software)) pattern applied to AI agent orchestration.
+The `HarnessAdapter` interface is placed at exactly the right point - the moment when "intent" becomes "action". Everything before that point (DAG resolution, state management, retry logic) is completely harness-agnostic. This is the [Ports and Adapters (Hexagonal Architecture)](https://en.wikipedia.org/wiki/Hexagonal_architecture_(software)) pattern applied to AI agent orchestration.
 
 ### 4. Idempotent operations
 
-`nextReadyTasks` is pure — given the same manifest and state, it always returns the same answer. `saveState` overwrites (not appends) so re-running it is safe. The audit log *does* append, but that's intentional — you want a full history, not deduplication.
+`nextReadyTasks` is pure - given the same manifest and state, it always returns the same answer. `saveState` overwrites (not appends) so re-running it is safe. The audit log *does* append, but that's intentional - you want a full history, not deduplication.
 
 ### 5. Immutable state objects
 
@@ -406,7 +406,7 @@ The engine is essentially a **file-backed, resumable task scheduler with pluggab
 
 - **Batch job management**: Any scenario where you have N units of work with dependencies, a fallible execution backend, and a need for crash recovery maps onto this architecture.
 
-- **AI agent chains (general)**: The pattern of *manifest → DAG engine → harness adapter → agent* is a reusable template for any multi-agent workflow. The key insight is that the "what to run" (DAG) and "how to run it" (adapter) are independently replaceable — so you can swap in a different model, a different runtime, or a different dependency structure without touching the others.
+- **AI agent chains (general)**: The pattern of *manifest → DAG engine → harness adapter → agent* is a reusable template for any multi-agent workflow. The key insight is that the "what to run" (DAG) and "how to run it" (adapter) are independently replaceable - so you can swap in a different model, a different runtime, or a different dependency structure without touching the others.
 
 ---
 
@@ -430,15 +430,15 @@ The engine is essentially a **file-backed, resumable task scheduler with pluggab
 
 ## A Mental Model to Remember
 
-> The workflow engine is a **state machine whose states live on disk**. It reads a contract (the manifest), builds a plan (the task graph), and drives each step through a swappable execution backend — persisting every transition so it can always be resumed, replayed, or audited.
+> The workflow engine is a **state machine whose states live on disk**. It reads a contract (the manifest), builds a plan (the task graph), and drives each step through a swappable execution backend - persisting every transition so it can always be resumed, replayed, or audited.
 
-The three layers — state, adapter, engine — map directly to three concerns that should always be separated in any similar system: *what happened*, *how to act*, and *what to do next*. Get those three things cleanly separated and the whole system becomes easy to reason about, test, and extend.
+The three layers - state, adapter, engine - map directly to three concerns that should always be separated in any similar system: *what happened*, *how to act*, and *what to do next*. Get those three things cleanly separated and the whole system becomes easy to reason about, test, and extend.
 
 ---
 
 ## Related Reading
 
-- [`templates/skills/forge-workflow-engine/SKILL.md`](../templates/skills/forge-workflow-engine/SKILL.md) — reference documentation and CLI usage
-- [`docs/adr/014-dynamic-workflow-orchestration.md`](adr/014-dynamic-workflow-orchestration.md) — the architectural decision that introduced this system
-- [`docs/adr/011-forge-execution-adapter.md`](adr/011-forge-execution-adapter.md) — the upstream adapter that produces the manifest
-- [`docs/prompt-playbook.md`](prompt-playbook.md) — how to choose between prompt-driven and engine-driven execution modes
+- [`templates/skills/forge-workflow-engine/SKILL.md`](../templates/skills/forge-workflow-engine/SKILL.md) - reference documentation and CLI usage
+- [`docs/adr/014-dynamic-workflow-orchestration.md`](adr/014-dynamic-workflow-orchestration.md) - the architectural decision that introduced this system
+- [`docs/adr/011-forge-execution-adapter.md`](adr/011-forge-execution-adapter.md) - the upstream adapter that produces the manifest
+- [`docs/prompt-playbook.md`](prompt-playbook.md) - how to choose between prompt-driven and engine-driven execution modes

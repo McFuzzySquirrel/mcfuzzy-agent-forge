@@ -1,4 +1,4 @@
-# ADR-025: The Squirrel Forge — a Live Workflow-Engine Visualization
+# ADR-025: The Squirrel Forge - a Live Workflow-Engine Visualization
 
 **Date:** 2026-08-27
 **Status:** Accepted
@@ -17,15 +17,15 @@ terminal. There is no live, at-a-glance view of the build.
 
 The engine already produces everything a live view needs:
 
-- `docs/EXECUTION-MANIFEST.json` — the task DAG (phases → tasks, dependency
+- `docs/EXECUTION-MANIFEST.json` - the task DAG (phases → tasks, dependency
   edges, owner agents, `produces`/`inputs` artifact contracts, feature tags).
-- `docs/WORKFLOW-STATE.json` — current per-task status
+- `docs/WORKFLOW-STATE.json` - current per-task status
   (`pending`/`running`/`complete`/`failed`/`skipped`), attempts, timestamps,
   artifact IDs, output files.
-- `docs/EXECUTION-AUDIT.jsonl` — an append-only event stream
+- `docs/EXECUTION-AUDIT.jsonl` - an append-only event stream
   (`run.started`, `phase.started`, `task.started`, `context.projected`,
   `artifact.created`, `task.complete`, `run.complete`, …).
-- `docs/artifacts/<type>/<id>.json` — typed artifacts with category
+- `docs/artifacts/<type>/<id>.json` - typed artifacts with category
   (decision/work/evidence), confidence, producer, and consumed inputs.
 
 The engine package is deliberately dependency-free (`node:http`, `tsx`). Any
@@ -33,19 +33,19 @@ visualization should preserve that.
 
 ## Decision
 
-Add a **live, localhost visualization** to the workflow engine — *The Squirrel
-Forge* — that renders the build DAG as a single oak tree that grows over the
+Add a **live, localhost visualization** to the workflow engine - *The Squirrel
+Forge* - that renders the build DAG as a single oak tree that grows over the
 course of the run, where each agent is a named squirrel performing its tasks.
 Implement it with **PixiJS (v8) vendored into the dashboard** so the engine
 keeps a zero-runtime-dependency footprint, stream events over **Server-Sent
 Events (SSE) over `node:http`** (no WebSocket dependency), and offer it through
 **two launch modes**:
 
-1. **Embedded (`run --viz [port]`)** — the engine starts a localhost server
+1. **Embedded (`run --viz [port]`)** - the engine starts a localhost server
    before the main loop, broadcasts every audit event in-process, auto-opens
    the dashboard in the default browser, and shuts the server down shortly
    after the run ends so the finale can render.
-2. **Attach (`viz` subcommand / `forge-launcher engine-run --viz`)** — a
+2. **Attach (`viz` subcommand / `forge-launcher engine-run --viz`)** - a
    standalone mode that tails `docs/EXECUTION-AUDIT.jsonl` and serves the same
    dashboard, letting a user attach to an already-running or detached engine
    run (e.g. the `forge-auto-build` detached path).
@@ -64,7 +64,7 @@ Events (SSE) over `node:http`** (no WebSocket dependency), and offer it through
   from a horizontal branch line, and dependency/artifact edges become acorn
   trails. Keeping it pure makes it unit-testable and keeps rendering out of the
   engine.
-- **Theme.** Tasks are performed by **named squirrels** — one per agent, name
+- **Theme.** Tasks are performed by **named squirrels** - one per agent, name
   derived deterministically from the agent name (`api-engineer` → "Tailor",
   `qa-engineer` → "Nutsy", seeded hash fallback for arbitrary agents).
   Statuses are poses: pending = dozing; running = frantic scurry with a
@@ -75,7 +75,7 @@ Events (SSE) over `node:http`** (no WebSocket dependency), and offer it through
   filling with leaves as tasks complete, browning on failure, blooming on
   completion, when all squirrels gather and hoist a golden acorn.
 - **Frontend.** A single-page dashboard (`viz/dashboard/`) with a procedurally
-  drawn PixiJS scene — firefly `ParticleContainer`, falling leaves, parallax
+  drawn PixiJS scene - firefly `ParticleContainer`, falling leaves, parallax
   moon, procedural squirrels/acorns (no image assets), DOM HUD (acorn counter,
   run ID, harness, elapsed clock, agent legend), hover tooltips, click detail
   panel, pan/zoom. Connects via `EventSource("/api/events")` with a snapshot
@@ -116,7 +116,7 @@ Environment variables: `FORGE_ENGINE_VIZ=1`, `FORGE_ENGINE_VIZ_PORT`.
   runs; the `viz` attach mode covers the detached/`forge-auto-build` path and
   can monitor a run started earlier.
 - **A single integration point.** Broadcasting inside `writeAuditEvent` means
-  every event already written to the audit file is automatically live — no
+  every event already written to the audit file is automatically live - no
   engine rework per event type, and replay/pause flows are covered for free.
 - **Fun > utilitarian.** The squirrel theme makes long engine runs enjoyable
   to watch, which increases the chance people actually use the dashboard.

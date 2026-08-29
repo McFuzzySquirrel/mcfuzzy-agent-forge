@@ -17,5 +17,5 @@
     "sourceMap": false
   },
   "include": ["scripts/**/*.ts"],
-  "exclude": ["node_modules", "dist", "scripts/**/*.test.ts"]
+  "exclude": ["node_modules", "dist", "scripts/**/*.test.ts", "scripts/console/dashboard"]
 }

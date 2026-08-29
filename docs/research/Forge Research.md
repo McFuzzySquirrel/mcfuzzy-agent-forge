@@ -1,6 +1,6 @@
 # Forge Research  
   
-Yes — **but not simply because they are sequential**. The token savings come from **how much context each agent receives and what work each agent repeats**.  
+Yes - **but not simply because they are sequential**. The token savings come from **how much context each agent receives and what work each agent repeats**.  
 Think of it like this:  
 **Parallel agents**  
 Suppose you have 3 agents:  
@@ -40,9 +40,9 @@ Review only what it needs
 This **can be considerably cheaper**, because each agent has a deliberately scoped context.  
 But there’s an important catch:  
 **Sequential execution doesn’t inherently use fewer tokens. Context design does.**  
-   
+  
 ⸻  
-   
+  
 ## A useful way to think about your agent workforce idea  
 Given the work you’ve been doing around agent skills, workflows and agent identities, I’d actually model agents around **task boundaries**, rather than simply having a bunch of autonomous agents.  
 For example:  
@@ -79,9 +79,9 @@ Each agent gets:
 * access to tools appropriate to that task  
 * a small, structured output contract  
 That is much more token-efficient than giving every agent the entire conversation.  
-   
+  
 ⸻  
-   
+  
 **There’s another interesting effect**  
 Imagine:  
 **Parallel**  
@@ -104,9 +104,9 @@ Total ≈ 18k tokens
 
 ```
 The pipeline isn’t cheaper because it is sequential. It’s cheaper because **the information boundary between agents is smaller**.  
-   
+  
 ⸻  
-   
+  
 ## And there’s a really powerful pattern here  
 You don’t necessarily want:  
 **Agent → Agent → Agent**  
@@ -136,9 +136,9 @@ DecisionArtifact
 The artifact might be JSON, a short markdown document, database record, etc.  
 That gives you a **token firewall** between agents.  
 The next agent doesn’t need to know *how* the previous agent arrived at its conclusion. It only needs the relevant artifact.  
-   
+  
 ⸻  
-   
+  
 **Where parallel actually wins**  
 Parallel is still better when tasks are genuinely independent:  
 ```
@@ -172,7 +172,7 @@ And this fits *very nicely* with the agent-workforce / Durable Workflow / skills
   
 So what would be the most efficient way to create and then consume the artifact - a small db locally, or jsonl or does it not matter?  
   
-Yes — and I’d actually separate **the artifact format** from **the storage mechanism**.  
+Yes - and I’d actually separate **the artifact format** from **the storage mechanism**.  
 For the agent-workforce pattern you’re exploring, I wouldn’t use a database by default. I’d start with **small, structured JSON artifacts**, stored as files, and only introduce a DB when you need querying, concurrency, history, or scale.  
 **My preferred architecture**  
 ```
@@ -232,9 +232,9 @@ next_action
 
 ```
 That’s where your token savings come from.  
-   
+  
 ⸻  
-   
+  
 ## JSON vs JSONL vs SQLite  
 I’d think about it like this:  
 
@@ -263,9 +263,9 @@ For example:
 
 ```
 Very easy to inspect, replay, version and debug.  
-   
+  
 ⸻  
-   
+  
 **JSONL gets interesting for your agent-session work**  
 Given your previous **EJS / SAURON-style agent observability** ideas, JSONL could be particularly useful.  
 You could have:  
@@ -284,9 +284,9 @@ with:
 ```
 That’s effectively an **append-only event log**.  
 Very cheap and extremely useful for replay/debugging.  
-   
+  
 ⸻  
-   
+  
 ## Then SQLite becomes your index  
 This is where I’d probably take your architecture eventually:  
 ```
@@ -325,9 +325,9 @@ That gives you something quite powerful:
 **The workflow engine can ask SQLite:**  
 “Give me the latest successful research artifact for task X.”  
 Then load only that artifact.  
-   
+  
 ⸻  
-   
+  
 # But there’s an even bigger optimisation  
 I’d make the artifact have **two layers**:  
 ```
@@ -360,9 +360,9 @@ recommendation
 ```
 and retrieve the detailed payload **only if it needs it**.  
 That’s effectively **context-aware retrieval between agents**.  
-   
+  
 ⸻  
-   
+  
 ## This could become a really nice pattern for your Agent Workforce  
 I’d call the concept something like:  
 **Task → Artifact → Context Projection**  
@@ -431,9 +431,9 @@ I’d structure it more like:
 
 ```
 The important thing is that **each stage creates an artifact that becomes the contract for the next stage.**  
-   
+  
 ⸻  
-   
+  
 ## 1. Requirement artifact  
 The first agent turns the vague request:  
 “I need a service that sends customers notifications.”  
@@ -463,9 +463,9 @@ into something structured:
 ```
 The architect doesn’t need the original conversation anymore.  
 It needs **this artifact**.  
-   
+  
 ⸻  
-   
+  
 ## 2. Solution architecture artifact  
 Architect agent consumes the requirement artifact.  
 It produces:  
@@ -501,9 +501,9 @@ It produces:
 
 ```
 Now **three agents can work in parallel**.  
-   
+  
 ⸻  
-   
+  
 ## 3. Split into implementation tasks  
 A workflow agent could transform that architecture into:  
 ```
@@ -541,9 +541,9 @@ Each task has a tiny context:
 
 ```
 The coding agent doesn’t need the entire architecture document.  
-   
+  
 ⸻  
-   
+  
 ## 4. The coding agent produces an implementation artifact  
 This is where it gets particularly interesting.  
 Instead of the agent simply saying:  
@@ -572,9 +572,9 @@ It produces:
 ```
 That’s a **very powerful boundary**.  
 The next agent doesn’t need to inspect everything the coding agent thought about.  
-   
+  
 ⸻  
-   
+  
 ## 5. Now bring in the reviewer  
 Reviewer gets:  
 ```
@@ -613,9 +613,9 @@ It can produce:
 
 ```
 That becomes the **next task**.  
-   
+  
 ⸻  
-   
+  
 ## 6. The workflow loops  
 Now you have something really interesting:  
 ```
@@ -640,9 +640,9 @@ Now you have something really interesting:
 
 ```
 And **the artifact is what carries state through the loop**.  
-   
+  
 ⸻  
-   
+  
 ## The really important distinction  
 I’d actually have **three different kinds of artifacts**.  
 **1. Decision artifacts**  
@@ -689,9 +689,9 @@ That gives you:
         DECISION
 
 ```
-   
+  
 ⸻  
-   
+  
 ## And this is where your “skills” idea fits beautifully  
 Each agent could have a skill like:  
 ```
@@ -738,15 +738,15 @@ That last bit is particularly interesting for the kind of **FlowForge / agent wo
   
 So like what I have been doing here: [https://github.com/McFuzzySquirrel/test-mcfuzzy-agent-forge-orchestration/tree/main/docs](https://github.com/McFuzzySquirrel/test-mcfuzzy-agent-forge-orchestration/tree/main/docs)  
   
-Yes — **very much like what you’ve already built there.** I looked at the docs directory in your repo, and you already have several of the pieces of the artifact-based approach we were describing.   
+Yes - **very much like what you’ve already built there.** I looked at the docs directory in your repo, and you already have several of the pieces of the artifact-based approach we were describing.   
 Your current structure includes:  
-* PRD.md — the **problem/requirements artifact**  
-* IDEA.md — the **initial intent/context**  
-* WORKFLOW-STATE.json — the **current workflow state**  
-* EXECUTION-MANIFEST.json — the **execution plan/contract**  
-* EXECUTION-AUDIT.jsonl — the **event/evidence trail**  
-* PROGRESS.md — the **human-readable projection of state**  
-* prompt-playbook.md — the **agent/task instructions**  
+* PRD.md - the **problem/requirements artifact**  
+* IDEA.md - the **initial intent/context**  
+* WORKFLOW-STATE.json - the **current workflow state**  
+* EXECUTION-MANIFEST.json - the **execution plan/contract**  
+* EXECUTION-AUDIT.jsonl - the **event/evidence trail**  
+* PROGRESS.md - the **human-readable projection of state**  
+* prompt-playbook.md - the **agent/task instructions**  
 That’s actually quite close to the architecture I was describing.  
 **The interesting bit**  
 I would now think about your repo like this:  
@@ -788,9 +788,9 @@ It’s the **machine-readable current truth**.
 EXECUTION-AUDIT.jsonl isn’t merely logging.  
 It’s your **event stream / evidence trail**.  
 And PROGRESS.md is essentially a **human-readable projection** of that machine state.  
-   
+  
 ⸻  
-   
+  
 # And I think you’re onto something particularly interesting  
 Your EXECUTION-MANIFEST.json + WORKFLOW-STATE.json + EXECUTION-AUDIT.jsonl combination is arguably more useful than putting everything into a database initially.  
 You could evolve it toward:  
@@ -916,9 +916,9 @@ docs/
 ```
 But don’t make the agent responsible for deciding where things go.  
 **The workflow defines the artifact contract.**  
-   
+  
 ⸻  
-   
+  
 **2. Add an artifact definition to each task**  
 Your existing execution manifest could evolve from something like:  
 ```
@@ -950,9 +950,9 @@ to:
 That produces field is the important addition.  
 It tells the orchestrator:  
 **When this task completes, there must be an artifact of this type.**  
-   
+  
 ⸻  
-   
+  
 **3. Make the artifact itself small**  
 For example:  
 ```
@@ -989,9 +989,9 @@ Notice what **isn’t** here:
 * previous context  
 Those remain in the repo/logs if needed.  
 The artifact is the **compact hand-off**.  
-   
+  
 ⸻  
-   
+  
 ## 4. Then change   
 ```
 WORKFLOW-STATE.json
@@ -1036,9 +1036,9 @@ Create artifact
 Update state
 
 ```
-   
+  
 ⸻  
-   
+  
 ## 5. This is where your token optimisation happens  
 Suppose your reviewer needs:  
 ```
@@ -1084,9 +1084,9 @@ All logs
 
 ```
 That’s your **context projection**.  
-   
+  
 ⸻  
-   
+  
 ## 6. I’d add one more thing to your audit log  
 You already have EXECUTION-AUDIT.jsonl.  
 I’d make artifact creation an explicit event:  
@@ -1124,9 +1124,9 @@ release-001
 
 ```
 That’s much more interesting than simply having an agent execution log.  
-   
+  
 ⸻  
-   
+  
 ## And I wouldn’t introduce SQLite yet  
 For **your current experiment**, I’d deliberately keep it filesystem-based:  
 ```
@@ -1146,9 +1146,9 @@ ArtifactStore
 
 ```
 So your orchestrator doesn’t care where the artifact lives.  
-   
+  
 ⸻  
-   
+  
 ## The one change I’d make first  
 Don’t refactor the whole Forge.  
 Take **one existing workflow** in your repo and introduce:  
@@ -1187,11 +1187,11 @@ And record that in your audit:
 
 ```
 That would turn your experiment from **“I think artifact-based orchestration is more efficient”** into something you can actually demonstrate.  
-And I think that’s a *very* worthwhile next experiment for Agent Forge.  
+And I think that’s a *very* worthwhile next experiment for MyForge.  
   
 Would this be good for small local agents?  
   
-Yes — **arguably even more useful for small local agents**.  
+Yes - **arguably even more useful for small local agents**.  
 The constraint with a small local model isn’t just inference speed. It’s that you have a much smaller **context window, reasoning capacity, and available compute** than with a large cloud model.  
 The artifact approach lets you compensate by making the workflow do more of the organisational work.  
 **Think of it like this**  
@@ -1225,13 +1225,13 @@ Instead:
 
 ```
 The workflow becomes the **memory and coordination layer**, while the small model becomes the **specialist worker**.  
-   
+  
 ⸻  
-   
+  
 ## This opens up a really interesting architecture for your Pi/local AI work  
 Imagine a Raspberry Pi running several small models:  
 ```
-                    Agent Forge
+                    MyForge
                         │
                  Artifact Store
                         │
@@ -1248,9 +1248,9 @@ Each model could be relatively small because it **doesn’t need to be generally
 It only needs to be good at:  
 “Given this artifact, perform this task.”  
 That’s a much easier problem.  
-   
+  
 ⸻  
-   
+  
 **And you can make the artifacts extremely compact**  
 For example, instead of giving a coding agent a 20-page architecture document:  
 ```
@@ -1273,9 +1273,9 @@ For example, instead of giving a coding agent a 20-page architecture document:
 ```
 That’s an **excellent small-model prompt**.  
 The model doesn’t need to understand the whole system.  
-   
+  
 ⸻  
-   
+  
 ## There’s another benefit: specialization  
 You could actually choose models based on the artifact/task.  
 For example:  
@@ -1296,14 +1296,14 @@ So instead of:
 you get:  
 **“I need a collection of inexpensive specialists coordinated by a deterministic workflow.”**  
 That is a much more interesting architecture.  
-   
+  
 ⸻  
-   
+  
 ## And it fits your local-first idea extremely well  
 Your local setup could eventually look like:  
 ```
                  ┌────────────────────┐
-                 │    Agent Forge      │
+                 │    MyForge      │
                  │    Orchestrator     │
                  └─────────┬──────────┘
                            │
@@ -1324,9 +1324,9 @@ Your local setup could eventually look like:
 ```
 And because the artifacts are files, **the whole thing can work offline**.  
 That’s one reason I wouldn’t rush to a database.  
-   
+  
 ⸻  
-   
+  
 **One caveat**  
 Don’t over-fragment the work.  
 There’s a sweet spot.  
@@ -1338,11 +1338,11 @@ I’d aim for:
 For small models, I’d particularly favour:  
 **deterministic workflow + tiny context + specialised task + structured artifact**  
 rather than trying to make the small model itself act like a sophisticated autonomous agent.  
-And honestly, **this may be one of the strongest arguments for your Agent Forge experiment**: you’re effectively moving intelligence *out of the context window and into the workflow*.  
+And honestly, **this may be one of the strongest arguments for your MyForge experiment**: you’re effectively moving intelligence *out of the context window and into the workflow*.  
   
 About the work I am already doing:  
   
-Yes — **this changes my recommendation quite a bit**, because you’re already further along than I realised.  
+Yes - **this changes my recommendation quite a bit**, because you’re already further along than I realised.  
 I read ADR-016. What you’ve built there is not just an execution workflow; you’ve already introduced a **compiler/kernel boundary**. The Forge produces a .workforce package, validates it, maps Forge task IDs to workflow node IDs, and then optionally hands execution to a kernel while preserving state/audit correlation.   
 So I would **not add the artifact concept as another major layer**. I’d make it a first-class part of the compiler/workforce contract.  
 **Your architecture is becoming this**  
@@ -1378,9 +1378,9 @@ So I would **not add the artifact concept as another major layer**. I’d make i
 
 ```
 And **that last bit is what I think you’re missing today**.  
-   
+  
 ⸻  
-   
+  
 ## Where I’d put the artifact  
 Not primarily in the compiler.  
 I’d put it in the **workforce execution contract**.  
@@ -1404,9 +1404,9 @@ Before I execute this node, I need to provide the agent with an appropriate proj
 And after execution:  
 I expect an implementation.result artifact.  
 That’s a **much stronger contract** than simply saying “run agent X.”  
-   
+  
 ⸻  
-   
+  
 ## This also fits your compiler idea beautifully  
 The compiler can transform:  
 ```
@@ -1446,9 +1446,9 @@ becomes:
 ```
 That means the **compiler can enforce the information boundaries**.  
 And that’s important for your small local agents.  
-   
+  
 ⸻  
-   
+  
 ## Here’s the really interesting part  
 Your existing KERNEL-BRIDGE.json already records things like:  
 * workflow state path  
@@ -1481,9 +1481,9 @@ Something like:
 Now you have:  
 **Forge task → Workforce node → Agent → Artifact**  
 That is a very clean chain.  
-   
+  
 ⸻  
-   
+  
 ## And this actually solves the local-agent problem  
 Your local agent doesn’t need to know:  
 “What happened during the entire workflow?”  
@@ -1507,9 +1507,9 @@ implementation.result
 That’s it.  
 A relatively small model can handle that.  
 The **kernel/workflow is doing the orchestration intelligence**, while the local model does the domain work.  
-   
+  
 ⸻  
-   
+  
 ## I would therefore change one thing in your existing design  
 You currently have a strong distinction between:  
 **Forge generation**  
@@ -1546,9 +1546,9 @@ I’d introduce a third concept:
 ```
 The artifact isn’t another persistence system.  
 It’s a **contract between nodes**.  
-   
+  
 ⸻  
-   
+  
 ## And I’d hold off on SQLite  
 Given what you’ve already built, I’d actually make the first implementation:  
 ```
@@ -1586,12 +1586,12 @@ That gives you something I think is **more valuable than simply reducing token u
 And that fits *extremely* naturally with the Forge compiler/kernel work you’re already doing.  
 In fact, I’d say **ADR-016 is probably the right place to introduce this concept**, rather than creating an entirely separate ADR, because artifact contracts are directly related to what the compiler emits and what the kernel consumes. You could potentially make it **ADR-017: Workforce Artifact Contracts and Context Projection**.  
   
-So, this artifact change would apply to the orchestration engine rather that the flow-forge as the agent forge exports this to a .workforce as an option right?   
+So, this artifact change would apply to the orchestration engine rather that the flow-forge as the MyForge exports this to a .workforce as an option right?   
   
-Exactly. **I would put the artifact mechanism primarily in the orchestration/runtime layer, not in Agent Forge itself.**  
+Exactly. **I would put the artifact mechanism primarily in the orchestration/runtime layer, not in MyForge itself.**  
 Your existing separation actually makes this quite clean.  
 ```
-                    AGENT FORGE
+                    MYFORGE
                          │
                   Design / Compile
                          │
@@ -1620,7 +1620,7 @@ Your existing separation actually makes this quite clean.
 
 ```
 **The important distinction**  
-**Agent Forge says:**  
+**MyForge says:**  
 “Here is the workforce and how its tasks are related.”  
 The .workforce package can therefore *declare* artifact contracts:  
 ```
@@ -1634,12 +1634,12 @@ The .workforce package can therefore *declare* artifact contracts:
 But **FlowForge/the orchestration kernel says:**  
 “Given those contracts, here’s how I actually store, retrieve, project, validate and pass those artifacts between executions.”  
 That keeps the responsibilities clean.  
-   
+  
 ⸻  
-   
+  
 ## So I’d split the responsibilities like this  
 
-| Concern                         | Agent Forge | FlowForge / Orchestrator |
+| Concern                         | MyForge | FlowForge / Orchestrator |
 | ------------------------------- | ----------- | ------------------------ |
 | Define agents                   | ✅           |                          |
 | Define skills                   | ✅           |                          |
@@ -1656,9 +1656,9 @@ That keeps the responsibilities clean.
 | Audit consumption/creation      |             | ✅                        |
   
 So **Forge defines the contract; the orchestration engine implements the contract.**  
-   
+  
 ⸻  
-   
+  
 **And there’s a really nice consequence**  
 Artifact support becomes **optional** from Forge’s perspective.  
 A simple workforce could still be:  
@@ -1681,9 +1681,9 @@ Task C
 ```
 The same .workforce format supports both.  
 And FlowForge can decide how sophisticated the execution strategy needs to be.  
-   
+  
 ⸻  
-   
+  
 # I would actually make the   
 ```
 .workforce
@@ -1729,13 +1729,13 @@ Postgres
 
 ```
 The workforce doesn’t care.  
-   
+  
 ⸻  
-   
+  
 ## And this fits your Forge → Kernel handoff really well  
 You essentially end up with:  
 ```
-              McFuzzy Agent Forge
+              MyForge
                        │
                        │ compile
                        ▼
@@ -1763,20 +1763,20 @@ You essentially end up with:
 ```
 That makes **FlowForge more than an agent runner**.  
 It becomes the **execution and information-flow runtime for a compiled workforce**.  
-And I think that’s actually a stronger architectural story than putting all of this inside Agent Forge.  
+And I think that’s actually a stronger architectural story than putting all of this inside MyForge.  
 **Forge = compiler / workforce authoring**  
 ****.workforce = portable execution package****  
 **FlowForge = runtime/kernel**  
 **Artifacts = the information contracts flowing through the runtime**  
-That separation also means you could eventually have *another* orchestration engine consume the .workforce package without needing to adopt your artifact storage implementation — which is exactly the kind of clean boundary you want from the compiler/kernel approach.  
+That separation also means you could eventually have *another* orchestration engine consume the .workforce package without needing to adopt your artifact storage implementation - which is exactly the kind of clean boundary you want from the compiler/kernel approach.  
   
 But what if the user wants to use a different harness, would it then not make more sense to have it in the orchestration engine?  
   
-Yes — **that’s the stronger architecture**.  
-If Agent Forge can export a .workforce that can be consumed by **different harnesses/runtimes**, then the artifact concept should be part of the **workforce/orchestration contract**, while the *implementation* of artifact storage/context projection belongs to whichever orchestration engine is executing it.  
+Yes - **that’s the stronger architecture**.  
+If MyForge can export a .workforce that can be consumed by **different harnesses/runtimes**, then the artifact concept should be part of the **workforce/orchestration contract**, while the *implementation* of artifact storage/context projection belongs to whichever orchestration engine is executing it.  
 The key is separating **contract from implementation**.  
 ```
-                    Agent Forge
+                    MyForge
                         │
                         │ compile
                         ▼
@@ -1794,7 +1794,7 @@ The key is separating **contract from implementation**.
 
 ```
 **So I would actually make three layers**  
-**1. Agent Forge — authoring/compiler**  
+**1. MyForge - authoring/compiler**  
 Defines:  
 * agents  
 * skills  
@@ -1805,7 +1805,7 @@ Defines:
 * schemas  
 * expected inputs/outputs  
 It exports these into .workforce.  
-**2. .workforce — portable contract**  
+**2. .workforce - portable contract**  
 Contains something like:  
 ```
 {
@@ -1831,7 +1831,7 @@ or:
 Use FlowForge’s artifact service.  
 It simply says:  
 This task consumes this artifact and produces that artifact.  
-**3. Harness/orchestration engine — execution**  
+**3. Harness/orchestration engine - execution**  
 This is where the actual machinery lives:  
 ```
 ArtifactStore
@@ -1857,9 +1857,9 @@ Azure BlobArtifactStore
 
 ```
 But they all satisfy the same conceptual contract.  
-   
+  
 ⸻  
-   
+  
 ## And there’s an important distinction between “artifact” and “context”  
 I think this is where your design could become really elegant.  
 The **artifact is durable workflow state**.  
@@ -1898,9 +1898,9 @@ Architecture + relevant repository files
 ```
 **Same artifact. Different projection.**  
 That’s a really important portability property.  
-   
+  
 ⸻  
-   
+  
 # This also changes how I’d think about your   
 ```
 .workforce
@@ -1920,7 +1920,7 @@ Different runtimes
 ```
 Your model becomes:  
 ```
-Agent Forge
+MyForge
     ↓
 Workforce Compiler
     ↓
@@ -1932,9 +1932,9 @@ Workforce Compiler
 
 ```
 And the artifact contract travels **with the workforce**.  
-   
+  
 ⸻  
-   
+  
 ## Which means I would   
 ## not  
 ## call this “FlowForge artifacts”  
@@ -1944,14 +1944,14 @@ or perhaps:
 **Execution Artifacts**  
 Then FlowForge has an implementation of the artifact runtime.  
 That prevents your .workforce format from becoming accidentally coupled to your own kernel.  
-   
+  
 ⸻  
-   
+  
 **And this gives you a really strong division:**  
 **Forge defines what information must flow between tasks.**  
 **The harness determines how that information flows at runtime.**  
 That’s exactly what you want if someone says:  
-“I like Agent Forge, but I want to execute my workforce using LangGraph / Microsoft Agent Framework / Dapr / my own runtime.”  
+“I like MyForge, but I want to execute my workforce using LangGraph / Microsoft Agent Framework / Dapr / my own runtime.”  
 They shouldn’t have to adopt FlowForge’s storage or context-management architecture.  
 They consume the .workforce, implement the required runtime interfaces, and they’re good to go.  
 And **that makes the compiler/kernel handoff in ADR-016 even more important**, rather than less. The kernel is an *optional execution target*, while the .workforce is the portable representation of the workforce and its contracts.  

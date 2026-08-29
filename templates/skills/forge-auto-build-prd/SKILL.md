@@ -5,7 +5,7 @@ description: "Meta-skill that takes a project idea and produces a reviewed, conf
 
 # Skill: Build a PRD from an Idea (Meta-Skill)
 
-You are running the **PRD-creation stage** of the Agent Forge pipeline on behalf
+You are running the **PRD-creation stage** of the MyForge pipeline on behalf
 of the user. Your job is to take a project idea and produce a confirmed,
 reviewed PRD in `docs/PRD.md` - automatically decomposing it into a Product
 Vision + Feature documents when the objective criteria are met - and then stop.

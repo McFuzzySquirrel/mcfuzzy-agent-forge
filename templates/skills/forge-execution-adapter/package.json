@@ -2,7 +2,7 @@
   "name": "forge-execution-adapter",
   "version": "1.0.0",
   "type": "module",
-  "description": "Portable execution adapter tooling for Agent Forge repositories",
+  "description": "Portable execution adapter tooling for MyForge repositories",
   "scripts": {
     "forge-execution-adapter": "tsx scripts/adapter.ts",
     "test": "node --import tsx --test scripts/*.test.ts",

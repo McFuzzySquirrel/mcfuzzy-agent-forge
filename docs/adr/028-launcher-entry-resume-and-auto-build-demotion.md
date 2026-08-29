@@ -1,4 +1,4 @@
-# ADR-028: Launcher as the Single Entry Point — `resume`, Review Links, and `forge-auto-build` Demotion
+# ADR-028: Launcher as the Single Entry Point - `resume`, Review Links, and `forge-auto-build` Demotion
 
 **Date:** 2026-08-27
 **Status:** Accepted
@@ -8,7 +8,7 @@
 
 ## Context
 
-Agent Forge grew multiple overlapping entry points: `forge-launcher`,
+MyForge grew multiple overlapping entry points: `forge-launcher`,
 `forge-auto-build`, `forge-auto-build-prd`, `@project-orchestrator`, and
 `@workflow-orchestrator` were all presented as peer ways to start a build. A user
 "just thinking about when to use what" hit three concrete problems:
@@ -17,10 +17,10 @@ Agent Forge grew multiple overlapping entry points: `forge-launcher`,
    from the PRD at runtime, while the workflow engine consumed the deterministically
    compiled `docs/EXECUTION-MANIFEST.json`. Discussed (and deliberately *not* merged)
    separately: making the orchestrator follow the manifest. This ADR does **not**
-   change that — the orchestrator keeps building its own plan.
+   change that - the orchestrator keeps building its own plan.
 2. **No resume.** `forge-launcher` was a linear 9-step run. Walking away at a
    review boundary (drafted PRD, generated team, paused engine run) left no way to
-   re-enter — "it may take some time for the users to review and make changes."
+   re-enter - "it may take some time for the users to review and make changes."
 3. **In-harness overlap.** `forge-auto-build` was queued by the launcher as the
    in-harness command (`/forge-auto-build … GO`), so users *inside a chat harness*
    ran a chaining meta-skill, even though the two real in-harness execution modes
@@ -70,33 +70,33 @@ removing it.
 
 Positive:
 
-- One on-ramp, two execution modes, one resume path — the "when to use what"
+- One on-ramp, two execution modes, one resume path - the "when to use what"
   question collapses to a single decision (interactive vs. autonomous).
 - Reviewing takes time again: `resume` makes every stage a safe stopping point.
 - Review links make the review boundaries immediately openable from the terminal.
 - No breaking change to `forge-auto-build`'s mechanics (its headless/terminal
   path is unchanged); existing bootstrapped repos keep a working copy.
 - The interactive launcher flow is lighter: it only changes what gets queued when
-  a team already exists — no forced auto-draft on users who prefer in-chat review.
+  a team already exists - no forced auto-draft on users who prefer in-chat review.
 
 Negative:
 
 - `forge-auto-build` remains in the tree, so a determined user could still invoke
   it in a harness; the demotion is enforced by docs/recommendations, not code.
 - `resume`'s state detection is heuristic (presence of files), so a partially
-  cleaned repo could be mischaracterized — the wizard always prints the raw
+  cleaned repo could be mischaracterized - the wizard always prints the raw
   "where you are" summary before acting.
 - The conditional queue adds a branch to the launcher's command selection
   (team-exists vs. not), increasing test surface.
 
 Trade-offs considered:
 
-- **Retire `forge-auto-build` outright** (ADR-009 superseded) — cleanest mental
+- **Retire `forge-auto-build` outright** (ADR-009 superseded) - cleanest mental
   model, but loses a genuinely useful terminal/CI chaining tool; the user chose
   to keep it "in case it's useful later".
-- **Make `project-orchestrator` follow `docs/EXECUTION-MANIFEST.json`** — decided
+- **Make `project-orchestrator` follow `docs/EXECUTION-MANIFEST.json`** - decided
   against separately (see Context); the orchestrator keeps building its own plan.
-- **Force team auto-draft by default in the interactive launcher** — rejected:
+- **Force team auto-draft by default in the interactive launcher** - rejected:
   it would run a headless skill per launch and move the team-review gate out of
   the chat; the conditional queue keeps the current behavior when no team exists.
 

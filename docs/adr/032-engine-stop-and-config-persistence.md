@@ -37,7 +37,7 @@ in per-process memory seeded from env).
   in-process `stopRequested` flag wired to `SIGINT`/`SIGTERM` handlers). When a
   request is present, the run breaks **after the current task wave**, saves
   state as `paused`, clears the control file, and exits. `run` resumes from the
-  last completed task — identical semantics to the pre-existing
+  last completed task - identical semantics to the pre-existing
   `opts.pauseRequested` exit path.
 - `pause` writes the control file (in addition to flipping the state status, so
   it is honored even when no engine is running). `stop` writes the control file
@@ -53,8 +53,8 @@ in per-process memory seeded from env).
   after `configureEngineOptions` and seeds `resume` from it (explicit env vars
   still take precedence).
 - `resume`, monitor, and "where to pick up" commands now print
-  `npx forge-launcher engine-run …` built from `engineRunArgs()` — carrying
-  concurrency / keep-alive / retries / viz — instead of the minimal
+  `npx forge-launcher engine-run …` built from `engineRunArgs()` - carrying
+  concurrency / keep-alive / retries / viz - instead of the minimal
   `--harness`-only command.
 - `resume` offers **"Stop the engine after the current task"** when it detects a
   live (`running`) run, invoking the engine's `stop` command in the repo.
@@ -84,9 +84,9 @@ Negative:
 
 Trade-offs considered:
 
-- **pidfile-free control file only** — works for the next `run`, but cannot stop
+- **pidfile-free control file only** - works for the next `run`, but cannot stop
   a live detached process; the PID + SIGTERM nudge closes that gap.
-- **Immediate SIGKILL of in-flight tasks** — rejected: risks a half-written task
+- **Immediate SIGKILL of in-flight tasks** - rejected: risks a half-written task
   and orphaned subprocesses; graceful-after-current-task matches the documented
   pause semantics.
 

@@ -1,6 +1,6 @@
 # AGENTS.md
 
-Guidance for AI coding agents working in this repository (McFuzzy Agent Forge).
+Guidance for AI coding agents working in this repository (MyForge).
 
 ## Repository layout
 

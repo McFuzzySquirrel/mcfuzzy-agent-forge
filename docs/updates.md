@@ -1,6 +1,89 @@
 # Updates
 
-Detailed release and change notes for McFuzzy Agent Forge.
+Detailed release and change notes for MyForge.
+
+---
+
+## August 2026 - v3.31
+
+### Forge Console: a local web UI over the launcher and workflow engine
+
+- **`forge-launcher console`** opens a self-contained web UI that fronts both
+  `forge-launcher` (authoring) and `forge-launcher engine-run` →
+  `workflow-engine` (build) from one browser app. It is TypeScript compiled with
+  `tsc`, served on `127.0.0.1` (default port `4300`, next free port if busy).
+- **Project picker** landing page lists your projects and lets you add an
+  existing repo.
+- **New Project wizard** creates a repo by spawning
+  `forge-launcher --non-interactive` with `FORGE_REPO_NAME` / `_PARENT_DIR` /
+  `_DESCRIPTION` / `_VISIBILITY` / `_HARNESS_CHOICE` / `_IDEA` (plus optional
+  `FORGE_AUTO_DRAFT=1`).
+- **Resume a setup** - draft the PRD (`forge-launcher --draft`), generate the
+  team (headless `forge-build-agent-team`), or start the build.
+- **Start / resume a build** - `forge-launcher engine-run --harness <h> --yes`,
+  detached, logged to `docs/engine-run.log`.
+- **Views** - Overview (run header, progress, counts, blockers), **Board** (the
+  existing PixiJS Forge Board embedded full-screen at `/board`), Tasks
+  (filterable/sortable table + detail), Logs (`engine-run.log` tail + audit
+  stream), Documents (read-only IDEA/PRD/vision/features/progress/model-plan +
+  agent team, "open externally"), Artifacts (browse by type/task + preview), and
+  Timeline (audit events, failure-highlighted).
+- **Run controls** - Pause / Stop (write `docs/engine-control.json` + SIGTERM
+  `docs/engine.pid`), Replay a failed task (`workflow-engine replay <task>`), and
+  Run / Resume.
+
+### Project registry
+
+- Projects are remembered in a registry at `~/.myforge/projects.json` (honoring
+  `FORGE_HOME` / `XDG_CONFIG_HOME`).
+
+### TypeScript client + loopback security
+
+- The console client is plain TypeScript compiled with `tsc` (no bundler),
+  served loopback-only, and state-changing POST endpoints require an
+  `X-Forge-Token` header (a per-server random token embedded in the served HTML)
+  to block cross-origin drive-by requests; file reads are path-traversal
+  guarded.
+
+### `forge-launcher engine-run` tees engine output to a log
+
+- `forge-launcher engine-run` tees engine output to `docs/engine-run.log`, so a
+  detached run is tail-able from the terminal and the console alike.
+
+- See [ADR-034](adr/034-forge-console-web-ui.md).
+
+---
+
+## August 2026 - v3.30
+
+### Branding: "Agent Forge" is now "MyForge"
+
+- Rebranded the project from **McFuzzy Agent Forge** to **MyForge** across the
+  README, `docs/`, `plan.md`, `AGENTS.md`, agent templates, and skill templates.
+- Technical identifiers are unchanged: the `forge-*` package/CLI/skill names
+  (`forge-launcher`, `forge-workflow-engine`, `forge-execution-adapter`,
+  `forge-workforce-compiler`), `FORGE_*` environment variables, and the
+  **FlowForge** kernel name all keep their existing names.
+- The workforce compiler's default package ID root changed from
+  `dev.agent-forge.*` to `dev.myforge.*` (for example
+  `dev.myforge.my-project`), so freshly compiled workforce packages use the new
+  branding. See `docs/adr/033-brand-rename-to-myforge.md`.
+
+---
+
+## August 2026 - v3.29
+
+### Research/docs: Forge Console feature plan
+
+- Added `docs/research/forge-console-desktop-frontend-plan.md`, a proposed plan
+  for introducing a desktop/web front end for `forge-launcher` and
+  `forge-workflow-engine`.
+- The plan compares desktop-first vs. web-first approaches and recommends
+  evolving the existing local Forge Board dashboard into a broader **Forge
+  Console** first, then evaluating desktop packaging later.
+- The phased roadmap covers MVP observability (status/tasks/logs/output), run
+  controls (pause/stop/replay), artifact/history views, and optional desktop
+  wrapping after adoption is validated.
 
 ---
 
@@ -9,7 +92,7 @@ Detailed release and change notes for McFuzzy Agent Forge.
 ### Workflow engine: same-owner task serialization under parallelism
 
 - **Same-owner tasks never run concurrently.** With `--concurrency > 1`, the
-  engine previously dispatched the whole ready frontier in parallel — including
+  engine previously dispatched the whole ready frontier in parallel - including
   tasks owned by the same agent, which share a subsystem (project dir, build
   outputs, ports) and can collide even when the dependency graph sees them as
   independent (e.g. a port-`Address already in use` clash between an Edge
@@ -21,7 +104,7 @@ Detailed release and change notes for McFuzzy Agent Forge.
 - This is a dispatch-layer guard; the manifest dependency graph and the
   responsibility matrix are untouched. Cross-owner tasks on shared paths (one
   task scaffolding a directory while another builds inside it) remain the
-  operator's responsibility — a future file-overlap gate would close that.
+  operator's responsibility - a future file-overlap gate would close that.
 - New tests: `ownerUniqueReady` (per-owner first-wins, unassigned bucketing,
   empty), same-owner serialization under concurrency 2, and different-owner
   concurrency under concurrency 2. See ADR-021 (amended).
@@ -30,7 +113,7 @@ Detailed release and change notes for McFuzzy Agent Forge.
 
 - **`extractPaths` no longer treats framework/runtime names as file paths.**
   A PRD bullet like "Build **ASP.NET** Core minimal API …" previously declared
-  `ASP.NET` as an expected output file, which can never exist on disk — so the
+  `ASP.NET` as an expected output file, which can never exist on disk - so the
   engine's output-verification gate failed the task on **every** attempt (and
   each retry spawned a fresh identically-titled opencode session, looking like a
   collision). A `NON_PATH_DOTTED_TOKENS` blocklist (`asp.net`, `.net`, `dotnet`,
@@ -55,7 +138,7 @@ Detailed release and change notes for McFuzzy Agent Forge.
   last completed task. Previously `pause` only flipped the state file and the
   loop never re-read it, so a live run could not be stopped.
 - **`forge-launcher engine-run --stop` / `--pause`** request the same graceful
-  stop/pause from the launcher (no manifest or recompile needed) — the terminal
+  stop/pause from the launcher (no manifest or recompile needed) - the terminal
   counterpart to `workflow-engine stop`.
 - **`forge-launcher resume`** offers **"Stop the engine after the current task"**
   when it detects a live run, and its resume/monitor commands now reuse the last
@@ -101,8 +184,8 @@ Detailed release and change notes for McFuzzy Agent Forge.
 
 ### Launcher: "stop and resume later" checkpoints + post-team execution plan
 
-- **Stop here and resume later.** After each launcher checkpoint — idea captured,
-  PRD added/drafted, team generated, execution plan drafted, build configured —
+- **Stop here and resume later.** After each launcher checkpoint - idea captured,
+  PRD added/drafted, team generated, execution plan drafted, build configured -
   the interactive flow asks "Stop here and resume later?" and, when you say yes,
   prints `forge-launcher resume --repo "<path>"` and stops at the "where to pick
   up" summary. Pick the run back up any time with `forge-launcher resume`.
@@ -128,7 +211,7 @@ Detailed release and change notes for McFuzzy Agent Forge.
 
 The copilot adapter previously inlined every agent file into the `copilot -p`
 prompt. The Copilot CLI supports an inline `/agent <name>` directive that loads
-a repo agent natively — the same idea as opencode's `--agent <name>` (v3.21).
+a repo agent natively - the same idea as opencode's `--agent <name>` (v3.21).
 
 - **Native selection.** When the owning agent's file lives under the project's
   `.github/agents/` directory, the adapter now prepends `/agent <name>` to the
@@ -190,7 +273,7 @@ to a single mental model: **`forge-launcher` starts you, then you either drive
 the build interactively in the harness (`@project-orchestrator`) or hand it to
 the autonomous engine (`@workflow-orchestrator` / `forge-launcher engine-run`).**
 
-- **`forge-launcher resume [--repo]`** — re-enters an existing project at its
+- **`forge-launcher resume [--repo]`** - re-enters an existing project at its
   current stage (idea → PRD → team → build) as a full interactive wizard. It
   detects what's already drafted, prints where you are with clickable review
   links, and offers the right next action: capture an idea, auto-draft the PRD /
@@ -198,17 +281,17 @@ the autonomous engine (`@workflow-orchestrator` / `forge-launcher engine-run`).*
   harness CLI. `--non-interactive` prints the state plus the exact next commands
   to run. This covers the "walk away to review and make changes, come back
   later" gap in the previous linear 9-step flow.
-- **Review links** — the review boundaries (drafted PRD, generated team) and the
+- **Review links** - the review boundaries (drafted PRD, generated team) and the
   engine summary now emit OSC 8 terminal hyperlinks (Ctrl/Cmd+click to open the
   file), falling back to plain paths on non-TTY output.
-- **Conditional in-harness command** — when the launcher opens the CLI (or prints
+- **Conditional in-harness command** - when the launcher opens the CLI (or prints
   next steps) and the agent team already exists, it now queues
   `/forge-orchestrate-build` (project-orchestrator) instead of
   `/forge-auto-build`, honouring "in the harness = project-orchestrator". When
   no team exists yet it keeps queueing `/forge-auto-build` (which generates the
   team in-chat); headless runs keep using `/forge-auto-build` as the terminal
   fast-path.
-- **`forge-auto-build` demoted, not removed** — it stays installed but is
+- **`forge-auto-build` demoted, not removed** - it stays installed but is
   repositioned as the **terminal/headless fast-path** (launcher-driven,
   `opencode run --auto`), explicitly *not* the in-harness entry point. The
   `project-orchestrator` and `workflow-orchestrator` agents now document their
@@ -235,7 +318,7 @@ the autonomous engine (`@workflow-orchestrator` / `forge-launcher engine-run`).*
 ### OpenCode harness selects the forge agent natively
 
 `opencode run` supports an `--agent <name>` flag, but the workflow engine's
-opencode adapter never passed it — every task ran under opencode's **default
+opencode adapter never passed it - every task ran under opencode's **default
 agent**, with the forge persona inlined into the prompt. Session lists in
 opencode showed default "build" sessions instead of the forge agents
 (`discovery-engineer`, `qa-engineer`, …).
@@ -259,8 +342,8 @@ opencode showed default "build" sessions instead of the forge agents
 
 Auto-drafted teams could break the build: `forge-build-agent-team` generated
 `description:` frontmatter without quotes, and LLM prose routinely contains
-`: ` (colon-space), which YAML treats as a nested mapping. `gray-matter` — used
-by `forge-execution-adapter compile` to parse every agent/skill file — then
+`: ` (colon-space), which YAML treats as a nested mapping. `gray-matter` - used
+by `forge-execution-adapter compile` to parse every agent/skill file - then
 threw, the manifest was never written, and the engine failed with a confusing
 "EXECUTION-MANIFEST.json not found".
 
@@ -274,13 +357,13 @@ threw, the manifest was never written, and the engine failed with a confusing
   `description`, or unterminated frontmatter. Step 7 of the skill now requires
   it to pass instead of relying on self-report.
 - **Clear compile errors.** `forge-execution-adapter` discovery wraps frontmatter
-  parsing and rethrows `Invalid YAML frontmatter in <path>: <message> — hint:
+  parsing and rethrows `Invalid YAML frontmatter in <path>: <message> - hint:
   wrap description values in double quotes`, naming the offending file instead
   of a bare js-yaml error.
 - **Launcher fail-fast.** `forge-launcher engine-run` aborts immediately when the
   manifest compile exits non-zero (surfacing the compile output) instead of
   continuing to a misleading "manifest not found".
-- **Tests.** Adapter suite 17, launcher suite 40, engine suite 25 — all green;
+- **Tests.** Adapter suite 17, launcher suite 40, engine suite 25 - all green;
   the validator was exercised against a clean team and a deliberately broken
   fixture.
 
@@ -350,7 +433,7 @@ rival the actual model work. The engine now attaches tasks to a single warm
   non-opencode harnesses.
 - **Tasks stay isolated.** Each `opencode run --attach` invocation creates a
   fresh session (no `--continue`/`--session`/`--fork`), so one task's context
-  never leaks into the next — the server only keeps the shared project instance
+  never leaks into the next - the server only keeps the shared project instance
   warm.
 - **Server hygiene.** The engine-spawned server is loopback-only and strips any
   ambient `OPENCODE_SERVER_*` auth so the engine's own health probe and attach
@@ -377,7 +460,7 @@ rival the actual model work. The engine now attaches tasks to a single warm
 Related architecture decision:
 
 - [ADR-027](adr/027-workflow-engine-keep-alive-attach.md): keep-alive attach
-  mode — server lifecycle, session isolation, and auth/health-probe handling.
+  mode - server lifecycle, session isolation, and auth/health-probe handling.
 
 ---
 
@@ -400,18 +483,18 @@ where the interactive TUI and CLI spawning previously misbehaved:
   (opencode, copilot, claude) are `.cmd` shims on Windows, which plain
   `child_process.spawn` cannot launch. Spawning now goes through `cross-spawn`,
   which resolves shims with correct argument quoting. A failed spawn reports
-  `Failed to run '<cmd>': … — is it installed and on PATH?` instead of a cryptic
+  `Failed to run '<cmd>': … - is it installed and on PATH?` instead of a cryptic
   ENOENT. The terminal auto-launch code also gets correct PATH detection
   (`;`-delimited, `.exe`/`.cmd`/`.bat`) and Windows Terminal detection via
   `WT_SESSION`.
 - **Friendlier pre-publish install guidance.** The README and
   `docs/forge-launcher.md` document a simple local install
   (`npm install` → `npm pack` → `npm install -g <tarball>`), a dev symlink
-  (`npm link`), and the matching uninstall/unlink cleanup — no temp-workspace
+  (`npm link`), and the matching uninstall/unlink cleanup - no temp-workspace
   ceremony for day-to-day testing.
 - **Update check.** On startup, `forge-launcher` checks the npm registry once a
   day (honoring the configured registry, so a local Verdaccio works) and prints
-  a notice when a newer version exists — prereleases check the `beta` tag,
+  a notice when a newer version exists - prereleases check the `beta` tag,
   releases check `latest`. The result is cached in a user-level file, the
   fetch is timeout-bounded and fails silently offline, and it can be disabled
   with `--no-update-check` or `FORGE_SKIP_UPDATE_CHECK=1` (also skipped in CI).
@@ -423,7 +506,7 @@ the same Windows blind spot as the launcher:
 
 - **Engine tasks spawn correctly on Windows.** The engine's per-task harness
   (`opencode`, `copilot`, and flowforge-kernel adapters) now spawns through
-  `cross-spawn`, resolving npm-installed `.cmd`/`.bat` shims — so `opencode run`
+  `cross-spawn`, resolving npm-installed `.cmd`/`.bat` shims - so `opencode run`
   tasks no longer fail with `spawn opencode ENOENT` during an engine run.
 - **The Forge Board dashboard renders and connects.** The vendored PixiJS v8
   build exposes the `PIXI` global, but `app.js` referenced `Pixi`, so the
@@ -432,7 +515,7 @@ the same Windows blind spot as the launcher:
   (`window.Pixi = window.PIXI || window.Pixi`), so the board renders and the
   dashboard connects.
 - **Kanban dashboard theme.** The oak-tree-and-squirrel metaphor is gone. The
-  build now renders as a **kanban board** — renamed **The Forge Board** — one
+  build now renders as a **kanban board** - renamed **The Forge Board** - one
   band per phase stacked top-to-bottom (bands **auto-size** so stacked cards
   never overlap the next band), with tasks as cards flowing left-to-right
   through **To Do · In Progress · Done · Failed**. Cards are colored by their
@@ -447,7 +530,7 @@ the same Windows blind spot as the launcher:
 - **Cards are name tags with agent faces.** Each task renders as a **name tag**
   badge: a status-colored header ribbon, an avatar circle holding a
   procedurally-drawn **agent face** (deterministic skin/hair tinted per agent,
-  with a mouth that reacts — neutral, working, smiling on complete, frowning on
+  with a mouth that reacts - neutral, working, smiling on complete, frowning on
   failure), the agent's readable name, the task title, and the task id. Agent
   identity is the ring/border color, so the legend and the cards agree at a
   glance.
@@ -463,7 +546,7 @@ the same Windows blind spot as the launcher:
 
 Related architecture decisions:
 
-- [ADR-026](adr/026-forge-board-kanban-dashboard.md): the Forge Board — kanban
+- [ADR-026](adr/026-forge-board-kanban-dashboard.md): the Forge Board - kanban
   redesign, name-tag cards with agent faces, and the running-status
   persistence/crash-recovery behavior.
 - [ADR-025](adr/025-squirrel-forge-live-workflow-viz.md): the original Squirrel
@@ -565,8 +648,8 @@ performs. It now matches the original flow:
   Requirements bullets (warned). Monolithic repos compile exactly as before.
 - **Team-validation gate (always at compile).** Every `compile` checks for
   unassigned tasks, output files owned by more than one agent, and orphan
-  agents (generated agents that own no task) — mirroring
-  `forge-build-agent-team` Step 7 — surfacing any findings as manifest warnings.
+  agents (generated agents that own no task) - mirroring
+  `forge-build-agent-team` Step 7 - surfacing any findings as manifest warnings.
 - **Responsibility matrix restored.** `compile` writes
   `docs/agent-responsibility-matrix.md` (validation results + an
   agent × phase × task × outputs table + phase execution order) and records its
@@ -608,11 +691,11 @@ removed).
 - **One codebase, three subcommands.** `forge-launcher` (9-step onboarding),
   `forge-launcher bootstrap`, and `forge-launcher engine-run` mirror the legacy
   entry points with an unchanged flags/env-var contract. Run it from anywhere
-  with `npx forge-launcher` — no forge clone needed (templates are bundled as
+  with `npx forge-launcher` - no forge clone needed (templates are bundled as
   resources).
-- **Interactive TUI.** All prompts use `@clack/prompts` — `select` menus
+- **Interactive TUI.** All prompts use `@clack/prompts` - `select` menus
   (harness, PRD, engine decision), `confirm`, `text`, `multiline` (Enter-twice
-  submits), and an autocomplete path picker — with a readline fallback for
+  submits), and an autocomplete path picker - with a readline fallback for
   piped/CI input and a clean Ctrl+C exit (code 130).
 - **Spinners instead of heartbeats.** Long-running steps (repo create,
   bootstrap, push, headless skill runs) show a clack spinner with their output
@@ -624,7 +707,7 @@ removed).
 - **Auto-draft reliability.** Headless skill runs now set `FORGE_HEADLESS=1`
   for the spawned harness CLI so the forge skills' headless gate fires
   deterministically, and pass `--dir "<repo>"` to `opencode run` so the skill
-  runs in the **target repository** — `opencode run` resolves its project
+  runs in the **target repository** - `opencode run` resolves its project
   directory from its parent process, not the child's spawn `cwd`, so without
   `--dir` the skill ran in the launcher's own directory and reported its input
   (`docs/IDEA.md`) as missing. The workflow-engine `opencode` adapter passes the
@@ -636,7 +719,7 @@ removed).
   offline against canned artifacts for testing.
 - **Detached engine start fixed.** Choosing "Run the workflow-engine build now
   (detached)" re-invoked the CLI via `new URL("./cli.ts")`, which resolves to
-  `dist/cli.ts` — a file that does not exist when running the compiled package —
+  `dist/cli.ts` - a file that does not exist when running the compiled package -
   so the detached child failed to start with ENOENT and no manifest or
   `docs/engine-run.log` ever appeared. The entry now resolves to `dist/cli.js`
   when compiled (and preloads the tsx loader when running from source), and
@@ -876,7 +959,7 @@ Related architecture decision:
 
 - Added a file-based **artifact store** (`templates/skills/forge-workflow-engine/scripts/artifacts.ts`) that persists every meaningful agent output as a compact, typed JSON artifact under `docs/artifacts/<type-prefix>/<artifact-id>.json`.
 - Artifacts are organised into three categories: **decision** (what we are building and why), **work** (what has been done), and **evidence** (how we know it is correct).
-- Added **context projection**: before each task is dispatched, the engine resolves the task's declared `inputs`, fetches the relevant artifacts from the store, and builds a minimal markdown `contextBlock` that replaces the full workflow state in the agent prompt — dramatically reducing per-task token consumption.
+- Added **context projection**: before each task is dispatched, the engine resolves the task's declared `inputs`, fetches the relevant artifacts from the store, and builds a minimal markdown `contextBlock` that replaces the full workflow state in the agent prompt - dramatically reducing per-task token consumption.
 - Extended `ManifestTask` with two optional fields (`inputs` and `produces`) so workflows can declare the artifact hand-off contract directly in `EXECUTION-MANIFEST.json`.
 - Extended the `HarnessAdapter` interface with an optional `contextBlock` parameter; `OpenCodeAdapter` and `OpenAIAdapter` both prepend it when present. Existing adapters that ignore it remain unchanged.
 - Added two new audit event actions: `artifact.created` and `context.projected` (with `sourceTokenEstimate`, `projectedTokenEstimate`, and `reductionPercent` fields).
@@ -950,7 +1033,7 @@ Related architecture decision:
 
 Related architecture decision:
 
-- [ADR-011](adr/011-forge-execution-adapter.md): Adapter architecture, MVP scope, and rationale for keeping the bridge separate from Agent Forge authoring.
+- [ADR-011](adr/011-forge-execution-adapter.md): Adapter architecture, MVP scope, and rationale for keeping the bridge separate from MyForge authoring.
 
 ---
 
@@ -958,7 +1041,7 @@ Related architecture decision:
 
 ### Forge Launcher - interactive CLI for the full lifecycle
 
-- `forge-launcher` (`scripts/forge-launcher.sh` and `scripts/forge-launcher.ps1`): one terminal command guides users from zero to auto-build by creating a repo, selecting a harness, bootstrapping Agent Forge, capturing project idea context, committing, and optionally spawning the harness CLI.
+- `forge-launcher` (`scripts/forge-launcher.sh` and `scripts/forge-launcher.ps1`): one terminal command guides users from zero to auto-build by creating a repo, selecting a harness, bootstrapping MyForge, capturing project idea context, committing, and optionally spawning the harness CLI.
 - Terminal launch hardening and fallback guidance for CLI harnesses.
 - PRD-first guidance and seed-document recommendations added to launcher flow docs.
 

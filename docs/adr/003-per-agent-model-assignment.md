@@ -7,7 +7,7 @@
 
 ## Context
 
-The McFuzzy Agent Forge framework generates agent teams where every agent defaults to
+The MyForge framework generates agent teams where every agent defaults to
 whatever model the user has set globally (the VS Code model picker selection or the
 `COPILOT_MODEL` environment variable for Copilot CLI BYOK). This is convenient but
 suboptimal:
@@ -105,7 +105,7 @@ The skill enforces two hard gates before emitting a model recommendation:
 ### 5. Optional Frontmatter Fields
 
 The `model:` and `modelFallback:` keys written by Apply mode are **optional** in the
-agent frontmatter schema. Agent files that lack them continue to work exactly as before —
+agent frontmatter schema. Agent files that lack them continue to work exactly as before -
 Copilot uses the user's current default model. This preserves full backward compatibility.
 
 ### 6. Honest Enforcement Boundary

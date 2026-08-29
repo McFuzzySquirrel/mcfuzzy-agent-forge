@@ -1,6 +1,6 @@
 ---
 name: forge-workforce-compiler
-description: Compile Agent Forge execution artifacts into a FlowForge-compatible .workforce package, validate package shape against FlowForge-style schema constraints, and emit a kernel bridge file for workflow-engine handoff.
+description: Compile MyForge execution artifacts into a FlowForge-compatible .workforce package, validate package shape against FlowForge-style schema constraints, and emit a kernel bridge file for workflow-engine handoff.
 ---
 
 # Skill: Forge Workforce Compiler
@@ -34,13 +34,13 @@ npm run forge-workforce-compiler -- inspect
 
 ```bash
 npm run forge-workforce-compiler -- compile
-npm run forge-workforce-compiler -- compile --package-id dev.agent-forge.my-product --name "My Product Workforce"
+npm run forge-workforce-compiler -- compile --package-id dev.myforge.my-product --name "My Product Workforce"
 ```
 
 ### Validate an emitted package
 
 ```bash
-npm run forge-workforce-compiler -- validate --package dist/dev-agent-forge-my-product.workforce
+npm run forge-workforce-compiler -- validate --package dist/dev-myforge-my-product.workforce
 ```
 
 ---

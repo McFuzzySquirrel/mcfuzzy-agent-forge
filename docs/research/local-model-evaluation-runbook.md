@@ -7,7 +7,7 @@
 
 ## Goal
 
-Validate which local Ollama model is most reliable for Agent Forge skill execution on your hardware.
+Validate which local Ollama model is most reliable for MyForge skill execution on your hardware.
 
 Priority order used in this runbook:
 

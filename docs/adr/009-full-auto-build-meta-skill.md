@@ -7,7 +7,7 @@
 
 ## Context
 
-Agent Forge's pipeline is a fixed sequence of well-defined stages:
+MyForge's pipeline is a fixed sequence of well-defined stages:
 
 1. `forge-build-prd` -produce `docs/PRD.md`
 2. `forge-build-agent-team` -generate the specialist agent team

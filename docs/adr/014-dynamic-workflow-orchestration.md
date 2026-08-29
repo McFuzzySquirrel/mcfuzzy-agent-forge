@@ -7,7 +7,7 @@
 
 ## Context
 
-Agent Forge already provides a complete authoring pipeline and two modes of prompt-driven orchestration:
+MyForge already provides a complete authoring pipeline and two modes of prompt-driven orchestration:
 
 - `forge-auto-build` chains PRD generation, team building, and build execution in a single meta-skill with one pre-flight gate.
 - `project-orchestrator` + `forge-orchestrate-build` coordinate agents conversationally, phase by phase.
@@ -27,7 +27,7 @@ Every execution path in the current system terminates at a prompt instruction ("
 
 ### Gap 3: No harness abstraction
 
-Each prompt-driven flow assumes a specific execution context (the active chat harness). Teams that want to execute Agent Forge builds in CI/CD pipelines, scheduled jobs, or alternative CLI tools (OpenCode, direct API calls) have no supported integration path. ADR-011 introduces the concept of an "external runner" but does not provide a harness abstraction layer.
+Each prompt-driven flow assumes a specific execution context (the active chat harness). Teams that want to execute MyForge builds in CI/CD pipelines, scheduled jobs, or alternative CLI tools (OpenCode, direct API calls) have no supported integration path. ADR-011 introduces the concept of an "external runner" but does not provide a harness abstraction layer.
 
 ---
 
@@ -163,7 +163,7 @@ Similarly, `templates/agents/workflow-orchestrator.md` is in `templates/agents/`
 
 ### Positive
 
-- **Dark orchestration is now possible.** Teams can execute a full Agent Forge build without a human in the loop after the pre-run gate, including in CI/CD pipelines and scheduled jobs.
+- **Dark orchestration is now possible.** Teams can execute a full MyForge build without a human in the loop after the pre-run gate, including in CI/CD pipelines and scheduled jobs.
 - **Harness-agnostic.** The adapter interface means any execution backend (OpenCode, direct API, future runners) can be used without changing the engine.
 - **Machine-readable run state.** `docs/WORKFLOW-STATE.json` gives external tooling a stable contract for querying task status, outputs, and retry history.
 - **Resume across machines.** Because all state is in files, a paused or interrupted run can be resumed from any machine that has the repository.

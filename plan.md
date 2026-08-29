@@ -17,7 +17,7 @@ point:
 
 Every feature since ADR-010 (auto-draft, headless, engine decision, parallel
 dispatch, task timeouts) must be written twice in two languages. The two
-implementations have already drifted on behavior — e.g. the "Launch GitHub
+implementations have already drifted on behavior - e.g. the "Launch GitHub
 Copilot CLI / claude / opencode now?" prompts default to **no** in
 `forge-launcher.sh` (`prompt_yn`, default `n`) but **yes** in
 `forge-launcher.ps1` (`Read-YesNo ... "y"`). The interactive UX (Tab-complete
@@ -33,14 +33,14 @@ the only part that isn't.
 1. A single **`forge-launcher` npm package** (Node/TypeScript) that replaces
    all six shell scripts.
 2. Cross-platform in one codebase; Windows users stop needing PowerShell 5.1+.
-3. Installable/runnable anywhere: `npx forge-launcher`, versioned releases —
+3. Installable/runnable anywhere: `npx forge-launcher`, versioned releases -
    no need to clone the forge repo first.
 4. Bundle `templates/` + `docs/prompt-playbook.md` as package resources so the
    package bootstraps standalone.
 5. Keep `scripts/*.sh|.ps1` as legacy wrappers that delegate to the Node
    package until parity is proven, then remove them.
-6. **Interactive TUI** (full) built on `@clack/prompts` — the only runtime
-   dependency — replacing the hand-rolled bash/PSReadLine UX with clack
+6. **Interactive TUI** (full) built on `@clack/prompts` - the only runtime
+   dependency - replacing the hand-rolled bash/PSReadLine UX with clack
    `select`/`confirm`/`text`/`multiline`/`path` prompts and clack spinners for
    long-running steps (output tee'd to a per-run log).
 
@@ -90,7 +90,7 @@ ships `resources/` only.
 
 ## Phases
 
-### Phase 1 — Decision
+### Phase 1 - Decision
 
 - Write **ADR-023** superseding ADR-010's "zero new dependencies / Tier 1"
   clause. Justification: Node is already the forge runtime (engine skills), the
@@ -98,7 +98,7 @@ ships `resources/` only.
   language + test suite beats two. Document the trade-offs (Node becomes a
   prerequisite; interactive terminal still required for Tier-1 UX).
 
-### Phase 2 — Scaffold the package
+### Phase 2 - Scaffold the package
 
 - `scripts/forge-launcher/` with `package.json` (bin `forge-launcher`),
   `tsconfig.json` (mirror the engine package: ES2022, strict, tsx), and empty
@@ -106,7 +106,7 @@ ships `resources/` only.
 - `resources/` staging script or `files` field wiring to bundle
   `templates/` + `docs/prompt-playbook.md` for the published package.
 
-### Phase 3 — Port `bootstrap`
+### Phase 3 - Port `bootstrap`
 
 - `bootstrap.ts`: harness→root mapping (agents→`.agents`, github→`.github`,
   claude→`.claude`, opencode→`.opencode`), copy agents + skills +
@@ -117,7 +117,7 @@ ships `resources/` only.
 - Legacy `scripts/bootstrap.sh|.ps1` become thin wrappers that exec
   `forge-launcher bootstrap`.
 
-### Phase 4 — Port `forge-launcher` (9-step flow)
+### Phase 4 - Port `forge-launcher` (9-step flow)
 
 Faithful port of `forge-launcher.sh`:
 1. Pre-flight (git/gh/copilot/opencode/claude; exit if git missing).
@@ -127,7 +127,7 @@ Faithful port of `forge-launcher.sh`:
 4. Bootstrap delegation → `bootstrap.ts`.
 5. Idea capture (multi-line; `FORGE_IDEA`; `docs/IDEA.md` + `IDEA.md`).
 6. PRD + research/seed docs (`FORGE_PRD_FILE`, `FORGE_RESEARCH_FILES`, paste).
-7. Commit + push (`chore: bootstrap agent forge`).
+7. Commit + push (`chore: bootstrap MyForge`).
 8. Auto-build launch: auto-draft menu (`--draft` / `FORGE_AUTO_DRAFT=1`),
    headless mode (`--headless` / `FORGE_RUN_WITH` / `FORGE_WORKFLOW_ENGINE`),
    engine decision (detached run / print command / skip), CLI spawn
@@ -145,7 +145,7 @@ Faithful port of `forge-launcher.sh`:
   tail printed on failure. When stdout is not a TTY (CI/piped) the step runs
   directly with no spinner, keeping output clean.
 
-### Phase 5 — Port `forge-engine-run`
+### Phase 5 - Port `forge-engine-run`
 
 - `engine-run.ts`: repo detection (walk up for `.git`), locate bootstrapped
   `forge-workflow-engine` / `forge-execution-adapter` under the harness dirs,
@@ -155,13 +155,13 @@ Faithful port of `forge-launcher.sh`:
 - Detached engine start (used by launcher Step 8 choice 1) uses
   `child_process.spawn(..., { detached: true, stdio: [log] })`.
 
-### Phase 6 — Interactive TUI (full)
+### Phase 6 - Interactive TUI (full)
 
 - Add `@clack/prompts` as the package's **single runtime dependency**.
 - `prompts.ts`: clack `select` (harness, PRD menu, engine decision), `confirm`
   (all yes/no), `text` (repo name/description/visibility), `multiline` (idea /
   PRD paste, Enter-twice submits), and `path` (autocomplete file/dir picker
-  replacing hand-rolled Tab completion) — each with a readline fallback for
+  replacing hand-rolled Tab completion) - each with a readline fallback for
   piped/non-TTY stdin and `isCancel` → clean exit (code 130).
 - `format.ts`: `runWithHeartbeat` becomes a clack **spinner** (message updates
   honour `FORGE_HEARTBEAT_INTERVAL`); new `runLogged` tees child output to a
@@ -171,7 +171,7 @@ Faithful port of `forge-launcher.sh`:
 - Verified end-to-end under a pty (pexpect): full interactive run completes
   with idea captured, templates bootstrapped, and the bootstrap commit created.
 
-### Phase 7 — Tests
+### Phase 7 - Tests
 
 - Port the `test-forge-launcher.sh` acceptance surface to `node --test`
   (consistent with the engine packages): static content checks move to
@@ -184,14 +184,14 @@ Faithful port of `forge-launcher.sh`:
 - Interactive TUI is covered by the non-interactive suite (clack is bypassed
   when stdin/stdout are not TTY) plus the pexpect-driven pty smoke run.
 
-### Phase 8 — Docs
+### Phase 8 - Docs
 
 - Rewrite `docs/forge-launcher.md` usage to `npx forge-launcher …`;
   document subcommands, flags, and env vars (unchanged contract).
 - Update `docs/testing-guide.md` commands and `README.md` quick-start.
 - Mark `scripts/*.sh|.ps1` as legacy delegating wrappers.
 
-### Phase 9 — Deprecate / remove shell scripts
+### Phase 9 - Deprecate / remove shell scripts
 
 - Convert `scripts/forge-launcher.sh|.ps1`, `bootstrap.sh|.ps1`,
   `forge-engine-run.sh|.ps1` into thin wrappers delegating to the package
@@ -199,7 +199,7 @@ Faithful port of `forge-launcher.sh`:
   longer reference them. Decision: **keep as delegating wrappers** for one
   release, delete in the following release.
 
-### Phase 10 — Verify
+### Phase 10 - Verify
 
 - `npm test` (all packages) and `npm run typecheck` in the new package.
 - Run the launcher `--non-interactive --dry-run` and a full non-interactive
@@ -210,13 +210,13 @@ Faithful port of `forge-launcher.sh`:
 
 ## Out of scope
 
-- Bundling `bootstrap`/`forge-engine-run` from target repos — the launcher only
+- Bundling `bootstrap`/`forge-engine-run` from target repos - the launcher only
   bootstraps *from* the package; target repos keep their skill packages.
 - Publishing to npmjs.org in this plan (local `npm pack` + `npx` smoke only).
 
 ## Future work
 
-Open items deliberately not done in this plan — candidates for a follow-up.
+Open items deliberately not done in this plan - candidates for a follow-up.
 
 ### Publish the package
 

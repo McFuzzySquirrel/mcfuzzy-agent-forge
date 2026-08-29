@@ -1,6 +1,6 @@
 import fs from "node:fs";
 import path from "node:path";
-import { out, info } from "./format.ts";
+import { out, info, runTee } from "./format.ts";
 import { runCommand } from "./format.ts";
 import { detectRepoRoot } from "./paths.ts";
 
@@ -175,7 +175,10 @@ export async function engineRun(opts: EngineRunOptions = {}): Promise<number> {
     out(`  [dry-run] (cd '${engineDir}' && npm run workflow-engine -- run ${engineFlags.join(" ")})`);
     return 0;
   }
-  return run("npm", ["run", "workflow-engine", "--", "run", ...engineFlags], dryRun, engineDir);
+  return runTee("npm", ["run", "workflow-engine", "--", "run", ...engineFlags], {
+    cwd: engineDir,
+    logFile: path.join(repo, "docs", "engine-run.log"),
+  }).then((r) => r.code);
 }
 
 export function engineRunCli(args: string[]): Promise<number> {

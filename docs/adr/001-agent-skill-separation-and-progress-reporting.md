@@ -7,7 +7,7 @@
 
 ## Context
 
-The McFuzzy Agent Forge framework uses two complementary constructs - **agents** and **skills** - to provide GitHub Copilot with structured capabilities. The forge-team-builder agent and the forge-build-agent-team skill had significant content overlap: the agent's Process section (steps 1–6) repeated much of the skill's detailed step-by-step procedures (steps 1–8). This duplication made maintenance harder and risked the two drifting out of sync.
+The MyForge framework uses two complementary constructs - **agents** and **skills** - to provide GitHub Copilot with structured capabilities. The forge-team-builder agent and the forge-build-agent-team skill had significant content overlap: the agent's Process section (steps 1–6) repeated much of the skill's detailed step-by-step procedures (steps 1–8). This duplication made maintenance harder and risked the two drifting out of sync.
 
 Separately, the project-orchestrator was recently enhanced with progress tracking capabilities (incremental commits, `docs/PROGRESS.md` maintenance, resume-from-checkpoint support), but the agent template used by forge-build-agent-team to generate specialist agents had not been updated to match. Generated specialist agents had no guidance on:
 - When and how to commit work

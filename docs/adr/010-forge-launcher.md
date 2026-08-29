@@ -1,10 +1,10 @@
-# ADR-010: Forge Launcher -Interactive CLI for the Full Agent Forge Lifecycle
+# ADR-010: Forge Launcher -Interactive CLI for the Full MyForge Lifecycle
 
 **Date:** 2026-08-05
 **Status:** Superseded (implementation layer) by [ADR-023](023-forge-launcher-npm-package.md)
 
-> **Update (2026-08-26):** The implementation decision in §1 — a pair of pure
-> shell scripts with zero new dependencies — is superseded. The launcher is now
+> **Update (2026-08-26):** The implementation decision in §1 - a pair of pure
+> shell scripts with zero new dependencies - is superseded. The launcher is now
 > a Node npm package (`forge-launcher`) with a `@clack/prompts` TUI, replacing
 > the `.sh` / `.ps1` pair (which remain as delegating wrappers during the
 > transition). The flow decisions in this ADR (harness selection order,
@@ -15,10 +15,10 @@
 
 ## Context
 
-Agent Forge provides a powerful pipeline (forge-auto-build, forge-bootstrap-project, bootstrap scripts) but every step today assumes the user already has:
+MyForge provides a powerful pipeline (forge-auto-build, forge-bootstrap-project, bootstrap scripts) but every step today assumes the user already has:
 
 1. An existing repository with a configured Git remote.
-2. Agent Forge templates already bootstrapped into that repository.
+2. MyForge templates already bootstrapped into that repository.
 3. Knowledge of which harness to use and how to invoke the skills.
 
 This activation cost is acceptable for experienced users, but it is a barrier for anyone coming to the forge for the first time, or for teams that want to provide a "one command" experience to colleagues who are unfamiliar with the internals.
@@ -41,7 +41,7 @@ After `bootstrap.sh` completes, the user must open their agent harness, navigate
 
 ## Decision
 
-We introduce `forge-launcher`, a pair of interactive scripts (`scripts/forge-launcher.sh` and `scripts/forge-launcher.ps1`) that walk the user through the full Agent Forge lifecycle in a single terminal session.
+We introduce `forge-launcher`, a pair of interactive scripts (`scripts/forge-launcher.sh` and `scripts/forge-launcher.ps1`) that walk the user through the full MyForge lifecycle in a single terminal session.
 
 ### 1. Script-first, zero new dependencies (Tier 1)
 
@@ -60,7 +60,7 @@ The launcher orchestrates exactly the same operations a user would perform manua
 | 3 | Repo creation -`gh repo create --clone` (GitHub) or `git init` + optional remote |
 | 4 | Bootstrap -delegates to the existing `bootstrap.sh` / `bootstrap.ps1` |
 | 5 | Idea capture -multi-line prompt, saved to `IDEA.md` |
-| 6 | Commit + push -`git add . && git commit -m "chore: bootstrap agent forge"` |
+| 6 | Commit + push -`git add . && git commit -m "chore: bootstrap MyForge"` |
 | 7 | Auto-build launch -harness-specific instructions or optional CLI spawn |
 | 8 | Completion summary -repo path, harness, next steps |
 
@@ -96,7 +96,7 @@ Both scripts accept a `--non-interactive` / `-NonInteractive` flag. In this mode
 
 ### Positive
 
-- **One command from zero to auto-build.** A user who has never used Agent Forge can run `./scripts/forge-launcher.sh`, answer a handful of prompts, and arrive at a bootstrapped repository with `forge-auto-build` queued to run -without reading any documentation first.
+- **One command from zero to auto-build.** A user who has never used MyForge can run `./scripts/forge-launcher.sh`, answer a handful of prompts, and arrive at a bootstrapped repository with `forge-auto-build` queued to run -without reading any documentation first.
 - **Harness choice is surfaced and explained.** The numbered menu and the directory hint next to each option eliminate the most common onboarding mistake (bootstrapping into the wrong harness directory).
 - **No regression for existing users.** The bootstrap scripts, forge skills, and agent templates are unchanged. Power users who prefer the manual flow are unaffected.
 - **No new runtime dependencies.** The scripts run anywhere Bash 4+ or PowerShell 5.1+ is available, which is already the existing prerequisite for the bootstrap scripts.

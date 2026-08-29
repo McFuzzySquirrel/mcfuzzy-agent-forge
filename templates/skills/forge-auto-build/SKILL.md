@@ -79,7 +79,7 @@ When the user invokes this skill, perform the following before touching any file
      - Default: `forge-orchestrate-build` - execute all phases continuously, committing after each phase
      - With `--workflow-engine`: compile `docs/EXECUTION-MANIFEST.json` and execute the build through `forge-workflow-engine`
 6. **State the commit strategy** explicitly:
-   - After Stage 1: `chore: bootstrap Agent Forge agent and skill templates`
+   - After Stage 1: `chore: bootstrap MyForge agent and skill templates`
    - After each build phase N: `feat: complete Phase N -<phase name>`
    - After all phases: `chore: auto-build complete -all phases delivered`
 7. **Present the pre-flight checklist** (see below).
@@ -113,7 +113,7 @@ Input
       (docs/PRD.md, or docs/product-vision.md + docs/features/)
 - [ ] The PRD has been reviewed and you are ready to build from it
 - [ ] The target project directory is open and git-initialised
-- [ ] Agent Forge templates are bootstrapped (`HARNESS_AGENTS_DIR` and `HARNESS_SKILLS_DIR` exist)
+- [ ] MyForge templates are bootstrapped (`HARNESS_AGENTS_DIR` and `HARNESS_SKILLS_DIR` exist)
 
 Scope
 - [ ] You understand that this skill will run autonomously until all phases are complete
@@ -138,7 +138,7 @@ When it finishes:
 - Commit the generated files:
   ```
   git add {HARNESS_AGENTS_DIR}/ {HARNESS_SKILLS_DIR}/ docs/
-  git commit -m "chore: bootstrap Agent Forge agent and skill templates"
+  git commit -m "chore: bootstrap MyForge agent and skill templates"
   ```
 - Report: "Stage 1 complete -agent team committed. Moving to Stage 2."
 

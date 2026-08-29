@@ -7,7 +7,7 @@
 
 ## Context
 
-The McFuzzy Agent Forge framework produces a single monolithic Product Requirements Document (PRD) that contains all user stories, functional requirements, non-functional requirements, and implementation phases in one document. While this works well for small-to-medium projects, it has limitations:
+The MyForge framework produces a single monolithic Product Requirements Document (PRD) that contains all user stories, functional requirements, non-functional requirements, and implementation phases in one document. While this works well for small-to-medium projects, it has limitations:
 
 1. **No formal traceability** - User stories (Section 4.2) and functional requirements (Section 8) sit in separate tables with no formal link. There's no chain from "this user story drives these requirements which live in this feature which maps to this phase."
 

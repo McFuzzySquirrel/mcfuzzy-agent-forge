@@ -16,8 +16,8 @@ load the persona itself.
 
 Testing revealed the Copilot CLI supports the same idea inline: a prompt such as
 `copilot -p "/agent agent-name and the rest of the message"` loads the named
-agent natively. Since Agent Forge bootstraps GitHub Copilot harness agents into
-`.github/agents/*.md` — the directory GitHub Copilot auto-detects (ADR-006) —
+agent natively. Since MyForge bootstraps GitHub Copilot harness agents into
+`.github/agents/*.md` - the directory GitHub Copilot auto-detects (ADR-006) -
 `/agent <name>` resolves the forge-generated agents without any configuration.
 
 ## Decision
@@ -58,10 +58,10 @@ Negative:
 
 Trade-offs considered:
 
-- **Opt-in flag** (default to inline until proven): rejected — the opencode
+- **Opt-in flag** (default to inline until proven): rejected - the opencode
   precedent is default-on with an escape hatch, and the output gate makes the
   change safe.
-- **Inline the persona *and* pass `/agent`** (belt-and-suspenders): rejected —
+- **Inline the persona *and* pass `/agent`** (belt-and-suspenders): rejected -
   duplicates the persona and defeats the native-selection purpose.
 
 ## References

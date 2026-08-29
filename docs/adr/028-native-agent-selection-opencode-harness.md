@@ -17,7 +17,7 @@ user prompt, because `opencode run` has no `--system-prompt` flag.
 That works functionally, but the **session attribution is wrong**. `opencode run`
 supports a `--agent <name>` flag that selects a project or global agent for the
 session. Because the adapter never passed it, every task ran under opencode's
-**default agent** — inspecting opencode's session list showed a wall of default
+**default agent** - inspecting opencode's session list showed a wall of default
 "build" sessions instead of the forge agents (`discovery-engineer`, `qa-engineer`,
 …). The persona was present only as prompt text, so the session metadata never
 reflected which forge agent executed the task.
@@ -25,8 +25,8 @@ reflected which forge agent executed the task.
 ## Decision
 
 When the task's owning agent file lives under the project's
-`.opencode/agents/` directory — the harness root opencode natively scans for
-agent definitions — the adapter:
+`.opencode/agents/` directory - the harness root opencode natively scans for
+agent definitions - the adapter:
 
 - passes `--agent <name>` (using the agent's frontmatter `name`, which matches
   the file name opencode expects), and
@@ -49,7 +49,7 @@ Positive:
   attribution, and per-agent review match the manifest's ownership.
 - Persona duplication is removed for `.opencode`-rooted repos: opencode supplies
   the system prompt, and the user prompt is just the task + context + validation
-  hints — fewer tokens per task.
+  hints - fewer tokens per task.
 - Applies in all engine modes (`--attach`, `--keep-alive`, cold start) because
   it is purely an argv change on `opencode run`.
 - Default behavior is unchanged for non-`.opencode` harness roots.
@@ -66,10 +66,10 @@ Negative:
 
 Trade-offs considered:
 
-- **Always pass `--agent` + keep the inline persona** — simplest change, works
+- **Always pass `--agent` + keep the inline persona** - simplest change, works
   even when opencode cannot find the agent, but doubles the persona in context
   and still runs under the default agent for non-`.opencode` roots.
-- **Synthesize opencode agent files for all harness roots** — full attribution
+- **Synthesize opencode agent files for all harness roots** - full attribution
   everywhere, but requires a sync step that mirrors `.agents/`/`.claude/` into
   `.opencode/agents/`; rejected as heavier than the guard for the current
   `.opencode`-centric usage.

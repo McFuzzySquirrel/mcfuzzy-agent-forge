@@ -7,7 +7,7 @@
 
 ## Question
 
-Now that we have the agent-forge working, how do we tackle new feature requests once the initial PRD has been completed? We need a way to create a "feature PRD" that takes into account what was done and completed according to the original PRD, so that the agent team builder can either reuse existing agents or add new ones depending on what the feature requires. How do we implement this without breaking the current working solution?
+Now that we have MyForge working, how do we tackle new feature requests once the initial PRD has been completed? We need a way to create a "feature PRD" that takes into account what was done and completed according to the original PRD, so that the agent team builder can either reuse existing agents or add new ones depending on what the feature requires. How do we implement this without breaking the current working solution?
 
 ---
 

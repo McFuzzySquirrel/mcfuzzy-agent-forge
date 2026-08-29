@@ -4,6 +4,7 @@ import os from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { bootstrap } from "./bootstrap.ts";
+import { upsertProject } from "./console/paths.ts";
 import { command, fail, header, info, link, ok, out, printLogTail, runCommand, runLogged, runWithHeartbeat, spawnDetached, step, warn } from "./format.ts";
 import { detectRepoRoot, expandPath, resolveInputFile } from "./paths.ts";
 import { prompt, promptMultiline, promptPath, promptPathLoop, promptSelect, promptYesNo, prompts } from "./prompts.ts";
@@ -963,15 +964,17 @@ async function createRepo(opts: LauncherOptions): Promise<void> {
       }
     }
   }
+
+  upsertProject({ path: state.repoDir, name: repoName, harness: state.harness });
 }
 
 // --- Step 4: Bootstrap -----------------------------------------------------
 
 async function bootstrapForge(opts: LauncherOptions): Promise<void> {
-  step("Step 4 of 9: Bootstrap Agent Forge");
+  step("Step 4 of 9: Bootstrap MyForge");
   info(`Running bootstrap → ${state.repoDir} (--harness ${state.harness}) …`);
   await runWithHeartbeat(
-    "Bootstrapping Agent Forge (copying templates)…",
+    "Bootstrapping MyForge (copying templates)…",
     () =>
       bootstrap({
         targetDir: state.repoDir,
@@ -985,7 +988,7 @@ async function bootstrapForge(opts: LauncherOptions): Promise<void> {
       }),
     { dryRun: opts.dryRun },
   );
-  ok("Agent Forge templates bootstrapped.");
+  ok("MyForge templates bootstrapped.");
 }
 
 // --- Step 5: Capture idea --------------------------------------------------
@@ -1159,8 +1162,8 @@ async function commitBootstrap(): Promise<void> {
   step("Step 7 of 9: Commit bootstrapped forge and idea");
 
   await runCommand("git", ["-C", state.repoDir, "add", "."]);
-  await runCommand("git", ["-C", state.repoDir, "commit", "-m", "chore: bootstrap agent forge"]);
-  ok("Committed: 'chore: bootstrap agent forge'");
+  await runCommand("git", ["-C", state.repoDir, "commit", "-m", "chore: bootstrap MyForge"]);
+  ok("Committed: 'chore: bootstrap MyForge'");
 
   if (state.remoteCreated) {
     info("Pushing to remote …");
@@ -1512,6 +1515,65 @@ async function resumeTeamStep(opts: ResumeOptions): Promise<boolean> {
     return false;
   }
   return true;
+}
+
+/**
+ * Headless pipeline advancement for the Forge Console: draft the PRD from
+ * docs/IDEA.md (when absent). Non-interactive by design — the console triggers
+ * it, the user reviews the result (and comes back) in the UI.
+ */
+export async function runDraftPrd(repoDir: string): Promise<number> {
+  setupStateForRepo(repoDir);
+  if (hasPrd()) {
+    out("PRD already exists.");
+    return 0;
+  }
+  if (!fs.existsSync(path.join(repoDir, "docs", "IDEA.md"))) {
+    fail("No docs/IDEA.md found; add a project idea first.");
+    return 1;
+  }
+  out("Auto-drafting the PRD from docs/IDEA.md (headless) …");
+  const ran = await runSkillHeadless(`/forge-auto-build-prd ${PRD_HEADLESS_MSG}`, { nonInteractive: true });
+  if (!ran) return 1;
+  await draftCommit("docs: add auto-drafted PRD");
+  if (hasPrd()) {
+    ok("PRD generated.");
+    out(`    - ${link(path.join(repoDir, "docs", "PRD.md"))}`);
+    return 0;
+  }
+  await diagnoseAutoDraftFail("forge-auto-build-prd");
+  return 1;
+}
+
+/**
+ * Headless pipeline advancement for the Forge Console: generate the agent team
+ * from the PRD (when absent).
+ */
+export async function runDraftTeam(repoDir: string): Promise<number> {
+  setupStateForRepo(repoDir);
+  if (hasGeneratedTeam()) {
+    out("Agent team already exists.");
+    return 0;
+  }
+  if (!hasPrd()) {
+    fail("No PRD yet; draft the PRD first.");
+    return 1;
+  }
+  out("Generating the agent team from the PRD (headless) …");
+  const prdSource = prdSourceForTeam();
+  const ran = await runSkillHeadless(
+    `/forge-build-agent-team Use ${prdSource} to build the agent team. Auto-proceed with default assumptions and no questions.`,
+    { nonInteractive: true },
+  );
+  if (!ran) return 1;
+  await draftCommit("feat: generate auto-drafted agent team");
+  if (hasGeneratedTeam()) {
+    ok("Agent team generated.");
+    out(`    - Agents : ${link(harnessAgentsDir() + "/")}`);
+    return 0;
+  }
+  await diagnoseAutoDraftFail("forge-build-agent-team");
+  return 1;
 }
 
 function printEngineStatus(engine: ResumeEngineState): void {

@@ -23,7 +23,7 @@ export function detectRepoRoot(start = process.cwd()): string {
     current = parent;
   }
 
-  throw new Error(`Could not detect an Agent Forge repository root from ${start}`);
+  throw new Error(`Could not detect an MyForge repository root from ${start}`);
 }
 
 function detectHarnessRoot(repoRoot: string): { root: HarnessRoot; warnings: string[] } {

@@ -2,7 +2,7 @@
  * Artifact store for the forge-workflow-engine.
  *
  * Implements the Task → Agent → Artifact → Task pattern described in the
- * Agent Forge research document.  Every meaningful agent step produces a
+ * MyForge research document.  Every meaningful agent step produces a
  * compact, typed JSON artifact that becomes the sole hand-off to the next
  * agent — rather than passing the full conversation or full workflow state.
  *

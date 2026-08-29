@@ -1,13 +1,13 @@
 ---
 name: forge-execution-adapter
-description: "Discover an Agent Forge repository, compile its PRD and generated agents into a structured execution manifest, and keep runtime checkpoints synchronized with docs/PROGRESS.md for external runners such as FlowForge-style engines."
+description: "Discover an MyForge repository, compile its PRD and generated agents into a structured execution manifest, and keep runtime checkpoints synchronized with docs/PROGRESS.md for external runners such as FlowForge-style engines."
 ---
 
 # Skill: Build a Forge Execution Adapter
 
-You are bridging an **Agent Forge-authored repository** to an **execution backend**. Your job is to discover the repo's generated artifacts, compile them into a structured execution contract, and keep that contract synchronized with runtime progress so an external runner can execute the build reliably.
+You are bridging an **MyForge-authored repository** to an **execution backend**. Your job is to discover the repo's generated artifacts, compile them into a structured execution contract, and keep that contract synchronized with runtime progress so an external runner can execute the build reliably.
 
-This skill does **not** replace Agent Forge. It starts **after** the forge has already produced:
+This skill does **not** replace MyForge. It starts **after** the forge has already produced:
 
 - `docs/PRD.md`
 - `docs/PROGRESS.md` (optional on first run)

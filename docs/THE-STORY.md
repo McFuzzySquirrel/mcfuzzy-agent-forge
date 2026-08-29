@@ -1,11 +1,11 @@
 ---
 layout: post
-title:  "The Story of Agent Forge: Building an AI Development Team from Scratch"
+title:  "The Story of MyForge: Building an AI Development Team from Scratch"
 date:   2026-03-20 21:45:00 +0200
 categories: personal update
 ---
 
-# The Story of (McFuzzy) Agent Forge: Building an AI Development Team from Scratch
+# The Story of MyForge: Building an AI Development Team from Scratch
 
 > *How a simple question: "What if AI could work like a real team?", became a framework that turns ideas into coordinated agent teams.*
 
@@ -216,7 +216,7 @@ The most important design decision was using **prefixed IDs** everywhere: `FT-US
 
 ## Chapter 7: The Research-Driven Approach
 
-If there's one pattern that defined the entire development of Agent Forge, it's this: **research before implementation**.
+If there's one pattern that defined the entire development of MyForge, it's this: **research before implementation**.
 
 Every significant capability was preceded by a research document that followed the same structure:
 
@@ -244,7 +244,7 @@ It served three practical purposes:
 
 ## Chapter 8: The Meta-Lesson - Building Tools That Build Tools
 
-Here's the most interesting thing about Agent Forge: **it's a framework that uses AI to create AI teams that build software**. That recursion isn't accidental, it's the whole point.
+Here's the most interesting thing about MyForge: **it's a framework that uses AI to create AI teams that build software**. That recursion isn't accidental, it's the whole point.
 
 - The PRD Builder skill doesn't fill in a template. It conducts an intelligent interview, challenges assumptions, and researches technology currency. 
 - The Team Builder doesn't just slot agents into predefined roles. It analyzes the specific requirements, identifies the right specialization boundaries, and validates coverage. 
@@ -254,7 +254,7 @@ At every layer, the principle is the same: **give the AI enough structure to be 
 
 This balance: structure versus freedom, is the hardest thing to get right. Too much structure and your framework only works for one type of project. Too little and agents go off in unpredictable directions.
 
-The sweet spot, as discovered through building Agent Forge, is:
+The sweet spot, as discovered through building MyForge, is:
 - **Structure the *process*, not the *output*.** Tell agents *how* to think about a problem (analyze requirements -> identify roles -> validate coverage), not *what* to produce (always create exactly 6 agents with these exact names).
 - **Make the PRD the single source of truth.** Everything else is derived from it. If agents disagree, the PRD wins.
 - **Use validation as a safety net.** The team builder validates that every requirement has an owner. The orchestrator validates that deliverables exist before moving forward. These checks catch the cases where freedom leads to gaps.
@@ -263,15 +263,15 @@ The sweet spot, as discovered through building Agent Forge, is:
 
 ## Chapter 9: Your Turn - A Framework for Building Frameworks
 
-This story isn't just about Agent Forge. It's about a *process* for building any framework that coordinates AI agents, or, really, any complex system where multiple components need to work together.
+This story isn't just about MyForge. It's about a *process* for building any framework that coordinates AI agents, or, really, any complex system where multiple components need to work together.
 
 Here's the process, distilled:
 
 ### Step 1: Identify the Real Problem
-Don't start with the technology. Start with the frustration. What are you actually trying to make better? For Agent Forge, it was: "One AI can't be an expert in everything simultaneously." Your problem will be different, but the approach is the same: name the pain clearly.
+Don't start with the technology. Start with the frustration. What are you actually trying to make better? For MyForge, it was: "One AI can't be an expert in everything simultaneously." Your problem will be different, but the approach is the same: name the pain clearly.
 
 ### Step 2: Study How Humans Solve It
-Before you design an AI system, understand the human system it mirrors. Agent Forge works because real development teams work: specialists with clear roles, coordinated by a project manager, working from shared requirements. Whatever your domain, there's a human process that already works. Find it. Understand it. Translate it.
+Before you design an AI system, understand the human system it mirrors. MyForge works because real development teams work: specialists with clear roles, coordinated by a project manager, working from shared requirements. Whatever your domain, there's a human process that already works. Find it. Understand it. Translate it.
 
 ### Step 3: Build the Foundation First (PRD-Equivalent)
 Every multi-agent system needs a single source of truth. For software, that's a PRD. For a content pipeline, it might be an editorial brief. For a data processing system, it might be a data specification. Whatever your domain, build the "single source of truth creation" tool first. Everything else depends on it.
@@ -391,7 +391,7 @@ Decomposed:   Idea → PRD → Decompose → Product Vision + Feature Docs
 
 ## Chapter 13: The Methodology - Making the Implicit Explicit
 
-Somewhere along the way, a pattern had been repeating without being named. Every significant change to Agent Forge followed the same three-phase rhythm:
+Somewhere along the way, a pattern had been repeating without being named. Every significant change to MyForge followed the same three-phase rhythm:
 
 **Phase 1: Research with AI assistance.** Frame the question clearly. Explore the landscape of approaches, trade-offs, and risks. Challenge assumptions. Let the AI surface considerations you hadn't thought of. Output: a research document.
 
@@ -403,7 +403,7 @@ This wasn't invented all at once. It *emerged* from doing the work. The freshnes
 
 The realization that this methodology was itself worth documenting led to the AI Research Workflow document, a guide not to the framework, but to the *process of evolving* the framework.
 
-There's a recursive beauty here that's worth noting. Agent Forge uses AI to build teams of AI agents. The methodology uses AI to research how to improve Agent Forge, which makes the AI agents it produces better at their work. The tools improve the tools. The process improves the process. And at every layer, the forcing function is the same: **write it down**. Research documents force clarity before complexity. ADRs force rationale alongside decisions. The act of writing is the act of thinking.
+There's a recursive beauty here that's worth noting. MyForge uses AI to build teams of AI agents. The methodology uses AI to research how to improve MyForge, which makes the AI agents it produces better at their work. The tools improve the tools. The process improves the process. And at every layer, the forcing function is the same: **write it down**. Research documents force clarity before complexity. ADRs force rationale alongside decisions. The act of writing is the act of thinking.
 
 ### The Takeaway for Builders
 
@@ -415,7 +415,7 @@ There's a recursive beauty here that's worth noting. Agent Forge uses AI to buil
 
 Let's zoom out and see the whole picture.
 
-**McFuzzy Agent Forge** is a template repository that takes an idea and turns it into a coordinated team of AI specialists. Two paths, one framework:
+**MyForge** is a template repository that takes an idea and turns it into a coordinated team of AI specialists. Two paths, one framework:
 
 **Path A - Monolithic (best for small-to-medium projects):**
 
@@ -506,7 +506,7 @@ And thats the story, **and here is the repo**: https://github.com/McFuzzySquirre
 
 ---
 
-*This is the story of how my Agent Forge came to be. But more importantly, it's a playbook. Take it. Adapt it. Build your own version. The patterns work whether you're building AI agent teams, data pipelines, content systems, or anything else where multiple specialized components need to work together toward a shared goal.*
+*This is the story of how my MyForge came to be. But more importantly, it's a playbook. Take it. Adapt it. Build your own version. The patterns work whether you're building AI agent teams, data pipelines, content systems, or anything else where multiple specialized components need to work together toward a shared goal.*
 
 *The tools will change. The process won't.*
 

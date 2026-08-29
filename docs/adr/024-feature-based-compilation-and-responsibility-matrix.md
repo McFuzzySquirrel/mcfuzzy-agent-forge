@@ -15,7 +15,7 @@ forge-execution-adapter compile → docs/EXECUTION-MANIFEST.json → forge-workf
 ```
 
 When the engine path was introduced it compiled the manifest **only** from the
-monolithic `docs/PRD.md` — `forge-execution-adapter` read a single `prdPath`,
+monolithic `docs/PRD.md` - `forge-execution-adapter` read a single `prdPath`,
 parsed `## Phase N` headings, and assigned owners by token overlap. Repos that
 had been decomposed into `docs/product-vision.md` + `docs/features/*.md` (the
 recommended flow since CR-001 / ADR-018) therefore lost their features: the
@@ -51,14 +51,14 @@ checked it, with the autonomous path being the weaker one.
 2. **Phase ids are feature-tagged** (e.g. `BUDGETS-2`). Task labels in feature
    docs repeat across features ("Task 1.1"), so a label is only honored when it
    belongs to the phase (monolithic behavior unchanged); feature-mode tasks are
-   auto-numbered under the feature-tagged phase id — keeping task ids globally
+   auto-numbered under the feature-tagged phase id - keeping task ids globally
    unique for the engine's `state.tasks` map.
 3. **A deterministic team-validation gate always runs at `compile`.**
    Unassigned tasks, output files owned by more than one agent, and orphan
    agents (generated agents owning no task) are detected and surfaced as
    manifest warnings. This mirrors the *guarantees* of `forge-build-agent-team`
    Step 7 without requiring an LLM call.
-4. **`docs/agent-responsibility-matrix.md` is always generated at `compile`** —
+4. **`docs/agent-responsibility-matrix.md` is always generated at `compile`** -
    validation results, an agent × phase × task × outputs ownership table, and
    the phase execution order. Its path is recorded on the manifest
    (`responsibilityMatrixPath`) and printed in the engine's pre-run summary.

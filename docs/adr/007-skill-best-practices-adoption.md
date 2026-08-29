@@ -9,7 +9,7 @@
 
 The [agentskills.io best practices guide](https://agentskills.io/skill-creation/best-practices) defines a set of patterns for creating effective, well-calibrated skills. These patterns include: starting from real expertise, spending context wisely, progressive disclosure, gotchas sections, calibration of control, validation loops, plan-validate-execute, and bundling reusable scripts.
 
-The McFuzzy Agent Forge both (a) contains its own skills (`forge-build-prd`, `forge-decompose-prd`, etc.) that users invoke directly, and (b) generates skills for user projects via `forge-build-agent-team`. Neither the forge's own skills nor the generation engine consistently followed these best practices:
+The MyForge both (a) contains its own skills (`forge-build-prd`, `forge-decompose-prd`, etc.) that users invoke directly, and (b) generates skills for user projects via `forge-build-agent-team`. Neither the forge's own skills nor the generation engine consistently followed these best practices:
 
 - **Forge skills** were verbose, with large template blocks inline in `SKILL.md` (e.g., the 220-line PRD output format template in `forge-build-prd`). No skills had `## Gotchas` sections. No skills used progressive disclosure (`references/` directories).
 - **Generated skills** from `forge-build-agent-team` used a template that lacked gotchas, validation loops, and progressive disclosure patterns. Agent templates included generic "Process and Workflow" steps identical across every agent - wasting context tokens on instructions the agent already knows.

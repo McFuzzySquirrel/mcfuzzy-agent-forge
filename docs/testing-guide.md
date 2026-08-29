@@ -1,4 +1,4 @@
-# McFuzzy Agent Forge – Manual Testing Guide
+# MyForge – Manual Testing Guide
 
 This guide walks you through a concrete end-to-end scenario you can run by hand to verify that the forge pipeline works as expected.  It covers ten capabilities in sequence:
 
@@ -17,7 +17,7 @@ This guide walks you through a concrete end-to-end scenario you can run by hand 
 
 ## Choosing a Build Path
 
-Agent Forge has several deliberately different paths. Which one you exercise in a test depends on what you want to verify. The table below maps each situation to the path that serves it, what it produces, and which part of this guide covers it.
+MyForge has several deliberately different paths. Which one you exercise in a test depends on what you want to verify. The table below maps each situation to the path that serves it, what it produces, and which part of this guide covers it.
 
 | Situation | Path | What it produces | Verified in |
 |---|---|---|---|
@@ -25,13 +25,13 @@ Agent Forge has several deliberately different paths. Which one you exercise in 
 | Idea → PRD → team, auto-drafted (review boundaries) | launcher `--draft` / `FORGE_AUTO_DRAFT=1` | PRD (+ decomposed layout) then agent team, committed per stage | Part 8 |
 | Manual PRD authoring | `forge-build-prd` | `docs/PRD.md` | Parts 1, 2 |
 | Automatic decomposition of a qualifying PRD | `forge-build-prd` Step 5 (auto-invokes `forge-decompose-prd`) | `docs/product-vision.md` + `docs/features/*.md` | see note in Part 1 |
-| Manual decomposition of any PRD | `forge-decompose-prd` | decomposed layout | — |
+| Manual decomposition of any PRD | `forge-decompose-prd` | decomposed layout | - |
 | PRD → team → build, hands-free | `forge-auto-build` (terminal/headless fast-path) | agent files, skills, built project | Parts 2, 3 |
 | Same, but harness-driven (dark orchestration) | `forge-launcher engine-run` / `workflow-orchestrator` | compiled manifest + engine-driven build | Parts 2, 3, 4, 6 |
 | Same, but with parallel dispatch | engine `--concurrency <n>` / `FORGE_ENGINE_CONCURRENCY` (harness-gated) | ready tasks run in bounded waves; wall-clock = critical path | Part 9 |
 | Interactive build in the harness | `project-orchestrator` (`/forge-orchestrate-build`) | incremental phases reviewed one at a time | Part 1 |
-| Add a feature to a finished project | `forge-build-feature-prd` → `forge-build-agent-team` (Feature Increment) | feature PRD + targeted team update | — |
-| Per-agent model selection | `forge-assign-models` | `docs/MODEL-PLAN.md`, `model:`/`modelFallback:` frontmatter | — |
+| Add a feature to a finished project | `forge-build-feature-prd` → `forge-build-agent-team` (Feature Increment) | feature PRD + targeted team update | - |
+| Per-agent model selection | `forge-assign-models` | `docs/MODEL-PLAN.md`, `model:`/`modelFallback:` frontmatter | - |
 | Pick up where you left off | `forge-launcher resume` | re-enters at idea/PRD/team/build stage | Part 8 |
 
 ### Prompt-driven vs. dark orchestration (the execution fork)
@@ -52,7 +52,7 @@ Both write `docs/PROGRESS.md` in the same format, so you can switch between them
 
 ## A note on "dark orchestration"
 
-The term **dark orchestration** is used throughout Agent Forge documentation and is not a security concern or anything harmful. It simply means **background execution with no human in the loop**: once the pre-run gate is accepted, the workflow engine dispatches agent invocations, waits for results, retries failures, and advances the task graph on its own - you do not need to approve each step. Think of it the same way you would a CI/CD pipeline: it runs "in the dark" (unattended) until it finishes or hits a blocker that needs human input.
+The term **dark orchestration** is used throughout MyForge documentation and is not a security concern or anything harmful. It simply means **background execution with no human in the loop**: once the pre-run gate is accepted, the workflow engine dispatches agent invocations, waits for results, retries failures, and advances the task graph on its own - you do not need to approve each step. Think of it the same way you would a CI/CD pipeline: it runs "in the dark" (unattended) until it finishes or hits a blocker that needs human input.
 
 This is the explicit opposite of the interactive `project-orchestrator` flow, where a human confirms each phase before the next one starts.
 
@@ -75,7 +75,7 @@ This is the explicit opposite of the interactive `project-orchestrator` flow, wh
 ```bash
 mkdir ~/forge-test && cd ~/forge-test
 git init
-# Run the bootstrap (from a forge-launcher install or your Agent Forge clone)
+# Run the bootstrap (from a forge-launcher install or your MyForge clone)
 forge-launcher bootstrap .
 git add -A && git commit -m "bootstrap"
 ```
@@ -225,7 +225,7 @@ This part verifies the autonomous execution layer. Recall: **dark orchestration 
 **Step 1 – Prepare a workflow-engine-ready project**
 
 Either:
-- run `forge-launcher engine-run` from an existing PRD — it installs the adapter, compiles `docs/EXECUTION-MANIFEST.json`, and starts the engine, or
+- run `forge-launcher engine-run` from an existing PRD - it installs the adapter, compiles `docs/EXECUTION-MANIFEST.json`, and starts the engine, or
 - use the team you generated in Part 1 and compile a manifest manually.
 
 The manifest must exist at `docs/EXECUTION-MANIFEST.json` before the engine can start.
@@ -500,7 +500,7 @@ npm test --prefix scripts/forge-launcher
 
 ## Part 4 – Dark Orchestration with the OpenAI Harness
 
-This part verifies that the workflow engine can execute a compiled manifest by calling the OpenAI API directly. **No `opencode`, `claude`, or other CLI harness is required** — only an API key and Node.js. Use this path when you want to run dark orchestration on any machine that already has internet access and an OpenAI (or compatible) API key.
+This part verifies that the workflow engine can execute a compiled manifest by calling the OpenAI API directly. **No `opencode`, `claude`, or other CLI harness is required** - only an API key and Node.js. Use this path when you want to run dark orchestration on any machine that already has internet access and an OpenAI (or compatible) API key.
 
 ### Prerequisites for Part 4
 
@@ -805,7 +805,7 @@ This part verifies the v3.7 artifact store and context projection path: the engi
 - `docs/EXECUTION-MANIFEST.json` exists (compiled by the execution adapter)
 - The manifest must have at least one task that declares `produces` and at least one task that declares `inputs`. See the sample below if you need to add these fields.
 
-**Minimal manifest extension example** — edit `docs/EXECUTION-MANIFEST.json` and add `inputs`/`produces` to two tasks:
+**Minimal manifest extension example** - edit `docs/EXECUTION-MANIFEST.json` and add `inputs`/`produces` to two tasks:
 
 ```json
 {
@@ -831,7 +831,7 @@ This part verifies the v3.7 artifact store and context projection path: the engi
 }
 ```
 
-Tasks that declare neither `inputs` nor `produces` continue to work unchanged — the artifact layer is additive.
+Tasks that declare neither `inputs` nor `produces` continue to work unchanged - the artifact layer is additive.
 
 ---
 
@@ -888,7 +888,7 @@ cat docs/WORKFLOW-STATE.json | python3 -m json.tool | grep -A4 "artifactId"
 grep "context.projected" docs/EXECUTION-AUDIT.jsonl
 ```
 
-**Check ✓** At least one line contains `"event":"context.projected"` with `sourceTokenEstimate`, `projectedTokenEstimate`, and `reductionPercent` fields — confirming the projection layer fired before the consuming task.
+**Check ✓** At least one line contains `"event":"context.projected"` with `sourceTokenEstimate`, `projectedTokenEstimate`, and `reductionPercent` fields - confirming the projection layer fired before the consuming task.
 
 Example expected output:
 
@@ -1281,7 +1281,7 @@ FORGE_ENGINE_CONCURRENCY=3 npm run workflow-engine -- run --harness stub --yes
 **Check ✓** `FORGE_ENGINE_CONCURRENCY=3` behaves like `--concurrency 3`, and
 `forge-engine-run.sh --dry-run` prints a command containing
 `--concurrency 3`. With a non-concurrent harness (none today), parallelism would
-be forced off — the engine always falls back to `1` when
+be forced off - the engine always falls back to `1` when
 `supportsConcurrency` is false.
 
 ### Part 9 Pass/Fail Summary
@@ -1339,7 +1339,7 @@ Your `OPENAI_API_KEY` is missing, expired, or incorrect. Re-export the correct k
 Compile first (`npm run forge-workforce-compiler -- compile`) so `docs/KERNEL-BRIDGE.json` includes `workforcePath`, or set `FLOWFORGE_WORKFORCE_PATH` explicitly.
 
 **`docs/artifacts/` is empty after a run**
-Only tasks that declare a `produces` field write artifacts. If no tasks in your manifest have `produces`, no artifact files are created — this is expected. Add the field to any task you want to participate in the artifact pattern.
+Only tasks that declare a `produces` field write artifacts. If no tasks in your manifest have `produces`, no artifact files are created - this is expected. Add the field to any task you want to participate in the artifact pattern.
 
 **`context.projected` events missing from audit log**
 Context projection only fires for tasks that declare at least one entry in `inputs`. Confirm the consuming task has `"inputs": ["<artifact-type>"]` in `docs/EXECUTION-MANIFEST.json` and that a prior task already created an artifact of that type.
@@ -1449,5 +1449,5 @@ Recompiling at a different granularity produces a new task set. Delete
 
 **A task fails with `timed out after <N>ms`**
 The harness call exceeded the effective timeout. Either split the task into
-smaller ones (recompile with fine granularity — the default) or raise the budget
+smaller ones (recompile with fine granularity - the default) or raise the budget
 with `--task-timeout-ms` / a per-task `timeoutMs`.

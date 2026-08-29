@@ -25,14 +25,14 @@ Compounding factors:
 
 - `expectedOutputs` are regex-extracted file paths (`extractPaths`). Meta and
   delegation tasks ("DELEGATED-AGENT-CONTROL-2.1") name no file paths, so they
-  compile with `expectedOutputs: []` — the empty-output case is common.
+  compile with `expectedOutputs: []` - the empty-output case is common.
 - `buildPrompt` produced a thin prompt (`Task: <title>` + optional description)
   for such tasks, which invites an acknowledgment-only reply.
 - Manifest `validationCommands` were only *shown* in the prompt, never executed.
 
 A comparison against `~/Projects/repo-garden` (a project built successfully by
 the engine with real code) confirmed the engine core, the Copilot adapter, and
-the compiler are byte-identical to the current templates — repo-garden's tasks
+the compiler are byte-identical to the current templates - repo-garden's tasks
 were substantive (rich descriptions + file paths), so its agents did real work.
 The defect is the engine's missing output verification, not a specific harness.
 
@@ -43,7 +43,7 @@ harness call and before the task is marked complete:
 
 1. **Expected-output gate.** If a task declares `expectedOutputs`, every one must
    exist (relative to the repo root) after the call. Missing outputs are treated
-   as a failed attempt — retried up to `--max-retries`, then the task is marked
+   as a failed attempt - retried up to `--max-retries`, then the task is marked
    `failed` with the missing list as the error.
 2. **No-op detection.** Tasks that declare no `expectedOutputs` must show
    evidence of work: file changes in the git working tree (a
@@ -60,8 +60,8 @@ harness call and before the task is marked complete:
    no-op heuristic. Opt-in because some commands are phase-level build/lint/test
    and may be slow or not per-task safe.
 5. **Prompt hardening (mitigation).** Both the opencode and copilot `buildPrompt`
-   append an explicit execution directive ("Perform the task now — do not merely
-   acknowledge it — create or modify the required files, then list what you
+   append an explicit execution directive ("Perform the task now - do not merely
+   acknowledge it - create or modify the required files, then list what you
    changed"). The opencode adapter also honors `FORGE_ENGINE_NATIVE_AGENT=0` to
    force the pre-v3.21 inline-persona prompt instead of `--agent <name>`.
 6. **Hollow-run visibility.** The final run summary and `workflow-engine status`
@@ -97,10 +97,10 @@ Negative:
 Trade-offs considered:
 
 - **Require the harness adapters to gate** (each adapter checks its own outputs):
-  rejected — policy should be centralized, and the engine owns retries/failure.
-- **Always run `validationCommands`** instead of opt-in: rejected — some manifest
+  rejected - policy should be centralized, and the engine owns retries/failure.
+- **Always run `validationCommands`** instead of opt-in: rejected - some manifest
   commands are phase-level build/test and would slow or wrongly fail single tasks.
-- **Revert the opencode `--agent` change (v3.21)** entirely: rejected — it is not
+- **Revert the opencode `--agent` change (v3.21)** entirely: rejected - it is not
   the root cause (Copilot reproduces without it); the env fallback covers the
   opencode-specific prompt-delivery difference.
 

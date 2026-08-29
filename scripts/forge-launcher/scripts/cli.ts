@@ -1,8 +1,11 @@
 #!/usr/bin/env node
+import path from "node:path";
 import { bootstrapCli } from "./bootstrap.ts";
+import { consoleCli } from "./console/cli.ts";
 import { engineRunCli } from "./engine-run.ts";
 import { fail } from "./format.ts";
-import { runLauncher, runResume } from "./launcher.ts";
+import { runDraftPrd, runDraftTeam, runLauncher, runResume } from "./launcher.ts";
+import { detectRepoRoot } from "./paths.ts";
 import { PromptCancelled, prompts } from "./prompts.ts";
 import { checkForUpdate, printUpdateNotice } from "./update-check.ts";
 
@@ -18,6 +21,8 @@ Usage:
                             [--keep-alive [--keep-alive-port <n>]] [--no-keep-alive] [--attach <url>]
                             [--stop] [--pause]
   forge-launcher resume [--repo <path>] [--non-interactive] [--dry-run]
+  forge-launcher draft-prd [--repo <path>]      # headless: idea → PRD (Forge Console pipeline)
+  forge-launcher draft-team [--repo <path>]     # headless: PRD → agent team
 
 Launcher options:
   --non-interactive   Skip all interactive prompts (requires env vars; see docs/forge-launcher.md).
@@ -49,7 +54,24 @@ async function main(): Promise<number> {
 
   // Subcommands
   if (args[0] === "bootstrap") return bootstrapCli(args.slice(1));
+  if (args[0] === "console") return consoleCli(args.slice(1));
   if (args[0] === "engine-run") return engineRunCli(args.slice(1));
+  if (args[0] === "draft-prd" || args[0] === "draft-team") {
+    let repo: string | undefined;
+    const rest = args.slice(1);
+    for (let i = 0; i < rest.length; i++) {
+      const a = rest[i];
+      if (a === "--repo") repo = rest[++i];
+      else if (a === "-h" || a === "--help") { process.stdout.write(USAGE); return 0; }
+      else {
+        fail(`Unknown option: ${a}`);
+        process.stdout.write("\n" + USAGE);
+        return 1;
+      }
+    }
+    const repoDir = repo ? path.resolve(repo) : detectRepoRoot();
+    return args[0] === "draft-prd" ? runDraftPrd(repoDir) : runDraftTeam(repoDir);
+  }
   if (args[0] === "resume") {
     const opts = { repo: undefined as string | undefined, nonInteractive: false, dryRun: false };
     const rest = args.slice(1);

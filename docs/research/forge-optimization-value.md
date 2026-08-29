@@ -7,7 +7,7 @@
 
 ## Question
 
-What concrete efficiencies does the Agent Forge gain from migrating to `.agents/` and adopting the [agentskills.io best practices](https://agentskills.io/skill-creation/best-practices)?
+What concrete efficiencies does the MyForge gain from migrating to `.agents/` and adopting the [agentskills.io best practices](https://agentskills.io/skill-creation/best-practices)?
 
 ---
 
