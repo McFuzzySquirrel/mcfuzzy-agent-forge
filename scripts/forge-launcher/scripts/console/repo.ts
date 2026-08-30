@@ -23,7 +23,7 @@ import type {
   WorkflowState,
 } from "./types.ts";
 import { loadEngineConfig, saveEngineConfig } from "../engine-config.ts";
-import { detectHarnessRoot, findAdapterDir, looksLikeForgeRepo, type RepoPaths, repoPaths } from "./paths.ts";
+import { detectHarnessRoot, findAdapterDir, inferEngineHarness, looksLikeForgeRepo, type RepoPaths, repoPaths } from "./paths.ts";
 
 // ─── Low-level reads (tolerant of missing files) ─────────────────────────────
 
@@ -97,7 +97,7 @@ export function setAllTaskTimeouts(p: RepoPaths, timeoutMs: number): TimeoutUpda
 export function setDefaultTimeout(p: RepoPaths, timeoutMs: number): TimeoutUpdateResult {
   const existing = loadEngineConfig(p.repoRoot);
   const cfg = {
-    harness: existing?.harness ?? "opencode",
+    harness: existing?.harness ?? inferEngineHarness(p.repoRoot),
     granularity: existing?.granularity ?? "",
     concurrency: existing?.concurrency ?? "",
     taskTimeoutMs: String(timeoutMs),

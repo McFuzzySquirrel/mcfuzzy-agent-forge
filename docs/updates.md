@@ -4,6 +4,25 @@ Detailed release and change notes for MyForge.
 
 ---
 
+## August 2026 - v3.33
+
+### Forge Console: restore Copilot harness for pre-existing GitHub repos
+
+- The console **Run** action now infers the engine harness from the repo's
+  harness root when `docs/engine-config.json` is absent, so projects bootstrapped
+  before engine-config persistence existed run with `copilot` again instead of
+  silently defaulting to `opencode`. New projects (bootstrapped via the launcher
+  or console) are unaffected: their harness is already persisted during
+  bootstrap.
+- Setting the engine-wide default timeout (`set all` / Controls) on a repo
+  without a config now writes the inferred harness too, instead of pinning
+  `opencode`.
+- The engine execution harness for Claude and generic `.agents` repos remains
+  `opencode` — the workflow engine currently ships opencode, Copilot, OpenAI,
+  stub, and FlowForge kernel adapters only.
+
+---
+
 ## August 2026 - v3.32
 
 ### Forge Console: edit task timeouts
