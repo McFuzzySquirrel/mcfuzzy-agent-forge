@@ -134,6 +134,15 @@ export function findEngineDir(repoRoot: string): string | null {
   return null;
 }
 
+/** Locates the bootstrapped forge-execution-adapter skill dir (any harness root). */
+export function findAdapterDir(repoRoot: string): string | null {
+  for (const root of HARNESS_ROOTS) {
+    const candidate = path.join(repoRoot, root, "skills", "forge-execution-adapter");
+    if (fs.existsSync(candidate)) return candidate;
+  }
+  return null;
+}
+
 /** True when the directory looks like a forge repo (git repo with docs/). */
 export function looksLikeForgeRepo(dir: string): boolean {
   return fs.existsSync(path.join(dir, ".git")) && fs.existsSync(path.join(dir, "docs"));
