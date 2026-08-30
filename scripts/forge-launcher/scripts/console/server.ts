@@ -354,6 +354,24 @@ export async function startConsoleServer(options: ConsoleServerOptions = {}): Pr
           if (!currentRepo) return sendJson(res, 400, { ok: false, message: "no repo selected" });
           return sendJson(res, 200, controller.dispatch(action, taskId));
         }
+        if (urlPath === "/api/tasks/timeout") {
+          const timeoutMs = Number(body.timeoutMs);
+          if (!Number.isInteger(timeoutMs) || timeoutMs <= 0) {
+            return sendJson(res, 400, { ok: false, message: "timeoutMs must be a positive integer (milliseconds)." });
+          }
+          if (!currentRepo) return sendJson(res, 400, { ok: false, message: "no repo selected" });
+          const p = currentPaths()!;
+          const taskId = typeof body.taskId === "string" && body.taskId.length > 0 ? body.taskId : undefined;
+          let result;
+          if (taskId) {
+            result = repo.setTaskTimeout(p, taskId, timeoutMs);
+          } else {
+            result = repo.setAllTaskTimeouts(p, timeoutMs);
+            if (result.ok) repo.setDefaultTimeout(p, timeoutMs);
+          }
+          if (result.ok) broadcast("snapshot", snapshotEvent());
+          return sendJson(res, result.ok ? 200 : 400, result);
+        }
         if (urlPath === "/api/projects/select") {
           const target = String(body.path ?? "");
           if (!target || !fs.existsSync(target) || !fs.existsSync(path.join(target, "docs"))) {

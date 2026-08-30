@@ -4,6 +4,44 @@ Detailed release and change notes for MyForge.
 
 ---
 
+## August 2026 - v3.32
+
+### Forge Console: edit task timeouts
+
+- **Per-task timeout editor.** Each task's detail drawer in the **Tasks** view
+  now lets you set that task's `timeoutMs` override (a number input + Apply),
+  and the Overview **Controls** panel has a matching task picker + Set control.
+  This is the "bump the timeout on a failed task, then Replay it" flow: builds
+  and tests that exceed the default can be given a larger budget and retried.
+- **Set every task's timeout at once.** The Tasks view header and the Overview
+  Controls panel both offer a "set all" control that writes `timeoutMs` to every
+  manifest task *and* updates the engine-wide default in
+  `docs/engine-config.json`, so the whole run gets a longer budget in one step.
+- **How it's stored.** Per-task values are written back to
+  `docs/EXECUTION-MANIFEST.json` (`ManifestTask.timeoutMs`); the "all tasks"
+  action also writes `taskTimeoutMs` into `docs/engine-config.json`. Edits are
+  preserved by `replay` and by `run`/`resume` unless a granularity is explicitly
+  set (which recompiles the manifest from the PRD, regenerating `timeoutMs`).
+- New token-gated `POST /api/tasks/timeout` endpoint (`{ taskId?, timeoutMs }`)
+  validates the value and broadcasts a snapshot refresh.
+- **Enter timeouts in minutes.** The timeout inputs (Tasks detail, "Set all",
+  and Overview Controls) accept minutes with decimals (`1.5` = 90s) and convert
+  to/from the millisecond values stored in the manifest and `engine-config.json`.
+- **Finished tasks are read-only.** Completed/skipped tasks show their timeout
+  as plain text instead of an editor — the task's own `timeoutMs`, or the
+  effective default (`default · 10 min`) when it never had an override. Failed,
+  pending, and running tasks stay editable so a failed task can be bumped and
+  replayed.
+
+### Forge Console: Manifest panel links to Plan & Team
+
+- The Overview **Manifest** panel now shows a single **Open Plan & Team** link
+  (replacing the IDEA/PRD-only links) — the Plan & Team view lists every
+  document (IDEA, PRD, vision, features, progress, model plan) plus the agent
+  team and skills.
+
+---
+
 ## August 2026 - v3.31
 
 ### Forge Console: a local web UI over the launcher and workflow engine

@@ -122,6 +122,7 @@ export interface Summary {
   live: boolean;
   control: string | null;
   logExists: boolean;
+  defaultTimeoutMs: number | null;
 }
 
 export interface TaskRow {
@@ -242,6 +243,13 @@ export interface ControlResult {
   ok: boolean;
   message: string;
   pid?: number;
+}
+
+export interface TimeoutUpdateResult {
+  ok: boolean;
+  message: string;
+  taskId?: string;
+  affected?: number;
 }
 
 export interface CreateProjectRequest {
