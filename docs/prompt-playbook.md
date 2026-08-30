@@ -20,6 +20,8 @@ git init
 
 ## Step 1 - Bootstrap MyForge into Your Project
 
+If you prefer a browser-based workflow for creating, opening, and monitoring projects after bootstrap, see the [Forge Console user guide](forge-console-user-guide.md).
+
 Copy the agent and skill templates into your project's harness directory with the launcher (Node, cross-platform):
 
 ```bash

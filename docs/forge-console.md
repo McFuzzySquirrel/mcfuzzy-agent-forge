@@ -3,6 +3,8 @@
 > A local web UI that fronts `forge-launcher` (authoring) and `forge-launcher engine-run` → `workflow-engine` (build). Create a project, draft the PRD and agent team, run the build, and monitor/control it - all from your browser.
 
 > **Screenshots:** see the [Visual Tour](forge-console-screenshots.md) for a walkthrough of every view.
+>
+> **Getting started:** follow the [Forge Console user guide](forge-console-user-guide.md) for a step-by-step walkthrough from startup to project switching and build monitoring.
 
 ---
 
