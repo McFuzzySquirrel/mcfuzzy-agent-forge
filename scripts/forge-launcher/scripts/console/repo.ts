@@ -27,6 +27,9 @@ import { detectHarnessRoot, looksLikeForgeRepo, type RepoPaths, repoPaths } from
 
 // ─── Low-level reads (tolerant of missing files) ─────────────────────────────
 
+/** Mirrors the workflow engine's DEFAULT_TASK_TIMEOUT_MS (and the launcher's interactive default). */
+const DEFAULT_TASK_TIMEOUT_MS = 600000;
+
 function readJson<T>(file: string): T | null {
   if (!fs.existsSync(file)) return null;
   try {
@@ -191,6 +194,11 @@ export function summary(p: RepoPaths): Summary {
     };
   }
 
+  const cfgTimeoutMs = Number(loadEngineConfig(p.repoRoot)?.taskTimeoutMs);
+  const defaultTimeoutMs = Number.isInteger(cfgTimeoutMs) && cfgTimeoutMs > 0
+    ? cfgTimeoutMs
+    : DEFAULT_TASK_TIMEOUT_MS;
+
   return {
     repoRoot: p.repoRoot,
     repoName: path.basename(p.repoRoot),
@@ -206,6 +214,7 @@ export function summary(p: RepoPaths): Summary {
     live: isPidAlive(readPid(p)),
     control: readControl(p),
     logExists: fs.existsSync(p.logPath),
+    defaultTimeoutMs,
   };
 }
 

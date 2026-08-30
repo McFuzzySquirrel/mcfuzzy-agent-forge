@@ -1,7 +1,8 @@
 // ─── Tasks: filterable/sortable table with expandable detail ────────────────
 
 import { api } from "../api.js";
-import { el, fmtDuration, fmtTime, statusBadge, toast } from "../render/dom.js";
+import { store } from "../state.js";
+import { el, fmtDuration, fmtTime, minutesToTimeoutMs, statusBadge, timeoutToMinutes, toast } from "../render/dom.js";
 import type { TaskRow } from "../types.js";
 
 type SortKey = "status" | "phase" | "owner" | "duration" | "attempt";
@@ -74,19 +75,19 @@ export async function renderTasks(container: HTMLElement): Promise<void> {
 
   const allTimeoutInput = el("input", {
     type: "number",
-    placeholder: "Timeout for all tasks (ms)",
+    placeholder: "Timeout for all tasks (min)",
     className: "search timeout-input",
   });
   const allTimeoutBtn = el("button", { className: "btn btn-sm" }, "Set all");
   allTimeoutBtn.addEventListener("click", () => {
-    const value = Number((allTimeoutInput as HTMLInputElement).value);
-    if (!Number.isInteger(value) || value <= 0) {
-      toast("Enter a positive timeout in milliseconds.");
+    const minutes = Number((allTimeoutInput as HTMLInputElement).value);
+    if (!Number.isFinite(minutes) || minutes <= 0) {
+      toast("Enter a positive timeout in minutes.");
       return;
     }
     void (async () => {
       try {
-        const res = await api.setAllTaskTimeouts(value);
+        const res = await api.setAllTaskTimeouts(minutesToTimeoutMs(minutes));
         toast(res.message || (res.ok ? "ok" : "failed"));
         await refresh();
       } catch (err) {
@@ -270,7 +271,7 @@ function detail(t: TaskRow): HTMLElement {
       ? el("div", null, [el("div", { className: "k" }, "Artifact"), el("span", { className: "mono" }, t.artifactId)])
       : null,
     el("div", { className: "stats" }, [
-      timeoutEditor(t),
+      isFinished(t) ? readOnlyTimeout(t) : timeoutEditor(t),
       el("div", { className: "stat" }, [el("div", { className: "k" }, "Started"), el("div", { className: "v" }, fmtTime(t.startedAt))]),
       el("div", { className: "stat" }, [el("div", { className: "k" }, "Completed"), el("div", { className: "v" }, fmtTime(t.completedAt))]),
       el("div", { className: "stat" }, [el("div", { className: "k" }, "Approval"), el("div", { className: "v" }, t.approvalRequired ? "yes" : "no")]),
@@ -280,23 +281,37 @@ function detail(t: TaskRow): HTMLElement {
   return el("div", { className: "detail" }, fields.filter(Boolean) as HTMLElement[]);
 }
 
+function isFinished(t: TaskRow): boolean {
+  return t.status === "complete" || t.status === "skipped";
+}
+
+function readOnlyTimeout(t: TaskRow): HTMLElement {
+  const own = t.timeoutMs != null ? `${timeoutToMinutes(t.timeoutMs)} min` : null;
+  const def = store.summary?.defaultTimeoutMs ?? null;
+  const text = own ?? (def != null ? `default · ${timeoutToMinutes(def)} min` : "default");
+  return el("div", { className: "stat" }, [
+    el("div", { className: "k" }, "Timeout"),
+    el("div", { className: "v" }, text),
+  ]);
+}
+
 function timeoutEditor(t: TaskRow): HTMLElement {
   const input = el("input", {
     type: "number",
-    placeholder: "ms",
+    placeholder: "min",
     className: "timeout-input",
-    value: t.timeoutMs != null ? String(t.timeoutMs) : "",
+    value: timeoutToMinutes(t.timeoutMs),
   });
   const apply = el("button", { className: "btn btn-sm" }, "Apply");
   apply.addEventListener("click", () => {
-    const value = Number((input as HTMLInputElement).value);
-    if (!Number.isInteger(value) || value <= 0) {
-      toast("Enter a positive timeout in milliseconds.");
+    const minutes = Number((input as HTMLInputElement).value);
+    if (!Number.isFinite(minutes) || minutes <= 0) {
+      toast("Enter a positive timeout in minutes.");
       return;
     }
     void (async () => {
       try {
-        const res = await api.setTaskTimeout(t.id, value);
+        const res = await api.setTaskTimeout(t.id, minutesToTimeoutMs(minutes));
         toast(res.message || (res.ok ? "ok" : "failed"));
         await refresh();
       } catch (err) {
@@ -306,7 +321,7 @@ function timeoutEditor(t: TaskRow): HTMLElement {
   });
 
   return el("div", { className: "stat" }, [
-    el("div", { className: "k" }, "Timeout (ms)"),
+    el("div", { className: "k" }, "Timeout (min)"),
     el("div", { className: "row gap" }, [input, apply]),
   ]);
 }

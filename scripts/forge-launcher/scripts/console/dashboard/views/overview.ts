@@ -2,7 +2,7 @@
 
 import { api } from "../api.js";
 import { store } from "../state.js";
-import { el, fmtDuration, fmtTime, statusBadge, toast } from "../render/dom.js";
+import { el, fmtDuration, fmtTime, minutesToTimeoutMs, statusBadge, toast } from "../render/dom.js";
 import type { Actions, ControlAction, RunSummary, Summary, TaskRow } from "../types.js";
 
 let gen = 0;
@@ -320,12 +320,12 @@ function renderTimeoutControls(container: HTMLElement, tasks: TaskRow[]): HTMLEl
     taskSelect.appendChild(el("option", { value: t.id }, `${t.id} — ${t.title}`));
   }
 
-  const taskInput = el("input", { type: "number", placeholder: "ms", className: "timeout-input" });
+  const taskInput = el("input", { type: "number", placeholder: "min", className: "timeout-input" });
   const setTask = el("button", { className: "btn btn-sm" }, "Set");
   setTask.addEventListener("click", () => {
-    const value = Number((taskInput as HTMLInputElement).value);
-    if (!Number.isInteger(value) || value <= 0) {
-      toast("Enter a positive timeout in milliseconds.");
+    const minutes = Number((taskInput as HTMLInputElement).value);
+    if (!Number.isFinite(minutes) || minutes <= 0) {
+      toast("Enter a positive timeout in minutes.");
       return;
     }
     const id = (taskSelect as HTMLSelectElement).value;
@@ -335,7 +335,7 @@ function renderTimeoutControls(container: HTMLElement, tasks: TaskRow[]): HTMLEl
     }
     void (async () => {
       try {
-        const res = await api.setTaskTimeout(id, value);
+        const res = await api.setTaskTimeout(id, minutesToTimeoutMs(minutes));
         toast(res.message || (res.ok ? "ok" : "failed"));
         reload();
       } catch (err) {
@@ -344,17 +344,17 @@ function renderTimeoutControls(container: HTMLElement, tasks: TaskRow[]): HTMLEl
     })();
   });
 
-  const allInput = el("input", { type: "number", placeholder: "ms", className: "timeout-input" });
+  const allInput = el("input", { type: "number", placeholder: "min", className: "timeout-input" });
   const setAll = el("button", { className: "btn btn-sm" }, "Set all");
   setAll.addEventListener("click", () => {
-    const value = Number((allInput as HTMLInputElement).value);
-    if (!Number.isInteger(value) || value <= 0) {
-      toast("Enter a positive timeout in milliseconds.");
+    const minutes = Number((allInput as HTMLInputElement).value);
+    if (!Number.isFinite(minutes) || minutes <= 0) {
+      toast("Enter a positive timeout in minutes.");
       return;
     }
     void (async () => {
       try {
-        const res = await api.setAllTaskTimeouts(value);
+        const res = await api.setAllTaskTimeouts(minutesToTimeoutMs(minutes));
         toast(res.message || (res.ok ? "ok" : "failed"));
         reload();
       } catch (err) {

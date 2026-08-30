@@ -129,6 +129,7 @@ export interface Summary {
   live: boolean;
   control: string | null;
   logExists: boolean;
+  defaultTimeoutMs: number | null;
 }
 
 export interface TaskRow {

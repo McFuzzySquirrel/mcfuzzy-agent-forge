@@ -200,13 +200,14 @@ async function withServer<T>(
 
 test("serves summary, tasks, docs, team, and actions", async () => {
   await withServer(async (server, repo) => {
-    const summary = await getJson(`${server.url}/api/summary`) as { repoName: string; hasPrd: boolean; hasTeam: boolean; run: { status: string; counts: { complete: number; running: number } } };
+    const summary = await getJson(`${server.url}/api/summary`) as { repoName: string; hasPrd: boolean; hasTeam: boolean; defaultTimeoutMs: number; run: { status: string; counts: { complete: number; running: number } } };
     assert.equal(summary.repoName, repo.split("/").pop());
     assert.equal(summary.hasPrd, true);
     assert.equal(summary.hasTeam, true);
     assert.equal(summary.run.status, "running");
     assert.equal(summary.run.counts.complete, 1);
     assert.equal(summary.run.counts.running, 1);
+    assert.equal(summary.defaultTimeoutMs, 600000);
 
     const tasks = await getJson(`${server.url}/api/tasks`) as Array<{ id: string; status: string; phaseTitle: string }>;
     assert.equal(tasks.length, 2);
@@ -322,6 +323,9 @@ test("set all task timeouts and update the engine default", async () => {
 
     const config = JSON.parse(readFileSync(join(repo, "docs", "engine-config.json"), "utf8")) as { taskTimeoutMs: string };
     assert.equal(config.taskTimeoutMs, "1200000");
+
+    const summary = await getJson(`${server.url}/api/summary`) as { defaultTimeoutMs: number };
+    assert.equal(summary.defaultTimeoutMs, 1200000);
   });
 });
 

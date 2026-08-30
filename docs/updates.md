@@ -24,6 +24,14 @@ Detailed release and change notes for MyForge.
   set (which recompiles the manifest from the PRD, regenerating `timeoutMs`).
 - New token-gated `POST /api/tasks/timeout` endpoint (`{ taskId?, timeoutMs }`)
   validates the value and broadcasts a snapshot refresh.
+- **Enter timeouts in minutes.** The timeout inputs (Tasks detail, "Set all",
+  and Overview Controls) accept minutes with decimals (`1.5` = 90s) and convert
+  to/from the millisecond values stored in the manifest and `engine-config.json`.
+- **Finished tasks are read-only.** Completed/skipped tasks show their timeout
+  as plain text instead of an editor — the task's own `timeoutMs`, or the
+  effective default (`default · 10 min`) when it never had an override. Failed,
+  pending, and running tasks stay editable so a failed task can be bumped and
+  replayed.
 
 ### Forge Console: Manifest panel links to Plan & Team
 

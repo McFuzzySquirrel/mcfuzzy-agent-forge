@@ -70,6 +70,18 @@ export function fmtTime(iso: string | null | undefined): string {
   return date.toLocaleString();
 }
 
+/** Formats a millisecond timeout as minutes ("600000" → "10", "90000" → "1.5"). */
+export function timeoutToMinutes(ms: number | null): string {
+  if (ms === null || !Number.isFinite(ms)) return "";
+  const minutes = ms / 60000;
+  return Number.isInteger(minutes) ? String(minutes) : String(Math.round(minutes * 100) / 100);
+}
+
+/** Converts a minutes value (decimals allowed) to a whole-millisecond timeout. */
+export function minutesToTimeoutMs(minutes: number): number {
+  return Math.round(minutes * 60000);
+}
+
 export function toast(message: string): void {
   const node = el("div", { className: "toast" }, message);
   document.body.appendChild(node);
