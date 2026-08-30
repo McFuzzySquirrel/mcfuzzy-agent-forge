@@ -25,6 +25,13 @@ Detailed release and change notes for MyForge.
 - New token-gated `POST /api/tasks/timeout` endpoint (`{ taskId?, timeoutMs }`)
   validates the value and broadcasts a snapshot refresh.
 
+### Forge Console: Manifest panel links to Plan & Team
+
+- The Overview **Manifest** panel now shows a single **Open Plan & Team** link
+  (replacing the IDEA/PRD-only links) — the Plan & Team view lists every
+  document (IDEA, PRD, vision, features, progress, model plan) plus the agent
+  team and skills.
+
 ---
 
 ## August 2026 - v3.31

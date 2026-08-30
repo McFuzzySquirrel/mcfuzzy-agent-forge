@@ -132,8 +132,7 @@ function renderRun(run: RunSummary | null): HTMLElement {
 function renderManifest(summary: Summary): HTMLElement {
   const m = summary.manifest;
   const links = el("div", { className: "row gap" }, [
-    ...(summary.hasIdea ? [el("a", { href: "#/documents", className: "btn btn-sm" }, "Open IDEA")] : []),
-    ...(summary.hasPrd ? [el("a", { href: "#/documents", className: "btn btn-sm" }, "Open PRD")] : []),
+    el("a", { href: "#/documents", className: "btn btn-sm" }, "Open Plan & Team"),
   ]);
 
   return el("div", { className: "panel" }, [
