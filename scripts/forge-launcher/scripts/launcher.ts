@@ -40,6 +40,10 @@ export interface LauncherOptions {
 
 type HarnessName = "github" | "opencode" | "claude" | "agents";
 
+export function defaultEngineHarness(harness: HarnessName): string {
+  return harness === "github" ? "copilot" : "opencode";
+}
+
 interface LauncherState {
   harness: HarnessName;
   harnessLabel: string;
@@ -886,6 +890,9 @@ async function selectHarness(opts: LauncherOptions): Promise<void> {
       warn(`Unrecognised choice '${choice}', defaulting to generic .agents`);
       state.harness = "agents"; state.harnessLabel = "Generic .agents";
   }
+  if (!process.env.FORGE_ENGINE_HARNESS) {
+    state.engineConfig.harness = defaultEngineHarness(state.harness);
+  }
   ok(`Harness: ${state.harnessLabel} (--harness ${state.harness})`);
 }
 
@@ -988,6 +995,7 @@ async function bootstrapForge(opts: LauncherOptions): Promise<void> {
       }),
     { dryRun: opts.dryRun },
   );
+  saveEngineConfig(state.repoDir, state.engineConfig);
   ok("MyForge templates bootstrapped.");
 }
 
