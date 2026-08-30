@@ -39,6 +39,9 @@ Detailed release and change notes for MyForge.
   (replacing the IDEA/PRD-only links) - the Plan & Team view lists every
   document (IDEA, PRD, vision, features, progress, model plan) plus the agent
   team and skills.
+- Added a practical [Forge Console user guide](forge-console-user-guide.md) for
+  launching the console, creating or opening projects, switching repos, and
+  monitoring runs from the browser.
 
 ---
 
