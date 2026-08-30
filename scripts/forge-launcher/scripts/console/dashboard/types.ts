@@ -197,6 +197,8 @@ export interface SkillInfo {
   description: string;
   path: string;
   relPath: string;
+  /** Whether the skill was bootstrapped from the forge templates ("forge") or generated for the project ("project"). */
+  category: "forge" | "project";
 }
 
 export interface TeamIndex {

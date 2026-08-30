@@ -107,6 +107,12 @@ function makeRepo(): string {
     "utf8",
   );
 
+  writeFileSync(
+    join(root, ".agents", "skills", "forge-workflow-engine", "SKILL.md"),
+    "---\nname: forge-workflow-engine\ndescription: >\n  Autonomous execution engine\n  for MyForge manifests.\n---\n\n# Skill: Workflow Engine\n",
+    "utf8",
+  );
+
   return root;
 }
 
@@ -225,14 +231,19 @@ test("serves summary, tasks, docs, team, and actions", async () => {
     assert.ok(docs.entries.some((e) => e.kind === "prd"));
     assert.ok(docs.entries.some((e) => e.kind === "idea"));
 
-    const team = await getJson(`${server.url}/api/team`) as { agents: Array<{ name: string; description: string; model: string }>; skills: Array<{ name: string; description: string }> };
+    const team = await getJson(`${server.url}/api/team`) as { agents: Array<{ name: string; description: string; model: string }>; skills: Array<{ name: string; description: string; category: string }> };
     assert.equal(team.agents.length, 1);
     assert.equal(team.agents[0]!.name, "qa-engineer");
     assert.equal(team.agents[0]!.description, "Owns test quality and keeps the build green.");
     assert.equal(team.agents[0]!.model, "gpt-4o");
-    assert.equal(team.skills.length, 1);
-    assert.equal(team.skills[0]!.name, "add-endpoint");
-    assert.equal(team.skills[0]!.description, "Adds a REST endpoint following project conventions.");
+    assert.equal(team.skills.length, 2);
+    const projectSkill = team.skills.find((s) => s.name === "add-endpoint");
+    assert.ok(projectSkill, "add-endpoint skill should be listed");
+    assert.equal(projectSkill!.description, "Adds a REST endpoint following project conventions.");
+    assert.equal(projectSkill!.category, "project");
+    const forgeSkill = team.skills.find((s) => s.name === "forge-workflow-engine");
+    assert.ok(forgeSkill, "forge-workflow-engine skill should be listed");
+    assert.equal(forgeSkill!.category, "forge");
 
     const actions = await getJson(`${server.url}/api/actions`) as { canRun: boolean; failedTasks: string[] };
     assert.equal(actions.canRun, false);
