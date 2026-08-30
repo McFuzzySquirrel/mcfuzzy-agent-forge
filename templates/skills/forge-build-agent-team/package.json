@@ -1,0 +1,10 @@
+{
+  "name": "forge-build-agent-team",
+  "version": "1.0.0",
+  "type": "module",
+  "description": "Generate a team of custom agents and reusable skills from requirements documents",
+  "scripts": {
+    "test": "node --test scripts/*.test.mjs",
+    "validate-frontmatter": "node scripts/validate-frontmatter.mjs"
+  }
+}

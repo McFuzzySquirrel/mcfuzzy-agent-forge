@@ -1,6 +1,6 @@
 ---
 name: forge-workforce-compiler
-description: Compile MyForge execution artifacts into a FlowForge-compatible .workforce package, validate package shape against FlowForge-style schema constraints, and emit a kernel bridge file for workflow-engine handoff.
+description: "Compile MyForge execution artifacts into a FlowForge-compatible .workforce package, validate package shape against FlowForge-style schema constraints, and emit a kernel bridge file for workflow-engine handoff."
 ---
 
 # Skill: Forge Workforce Compiler

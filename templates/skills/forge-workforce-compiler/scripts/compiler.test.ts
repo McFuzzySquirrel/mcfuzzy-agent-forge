@@ -58,3 +58,12 @@ test("compileWorkforcePackage emits valid workforce artifacts", () => {
   const bridge = JSON.parse(readFileSync(result.bridgePath, "utf8")) as { taskNodeMap: Array<{ taskId: string }> };
   assert.equal(bridge.taskNodeMap[0]?.taskId, "1.1");
 });
+
+test("discoverForgeRepo folds YAML block-scalar descriptions", () => {
+  const root = fixtureRoot();
+  writeFileSync(join(root, ".agents", "agents", "api-engineer.md"), `---\nname: api-engineer\ndescription: >\n  Builds REST APIs and\n  owns validation.\n---\n\n# API Engineer\n`, "utf8");
+
+  const repo = discoverForgeRepo(root);
+  const agent = repo.agents.find((a) => a.name === "api-engineer");
+  assert.equal(agent?.description, "Builds REST APIs and owns validation.");
+});

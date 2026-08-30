@@ -2,10 +2,15 @@
 // validate-frontmatter.mjs — mechanical gate for generated agent/skill
 // frontmatter.
 //
-// Catches the footgun that breaks forge-execution-adapter compile: an unquoted
-// `description:` value containing `: ` (colon-space), which YAML treats as a
-// nested mapping and gray-matter rejects. Also flags missing `name` /
-// `description`, and missing or unterminated frontmatter blocks.
+// Catches the footguns that break harness parsing and `forge-execution-adapter
+// compile`:
+//   - `description:` values must be single-line and double-quoted. Block
+//     scalars (`>`, `|` and their `-`/`+` variants) and any multi-line value
+//     are rejected — several harnesses' frontmatter readers cannot parse them.
+//   - An unquoted `description:` value containing `: ` (colon-space) is read as
+//     a nested mapping by YAML parsers and rejected by gray-matter.
+//   - Missing `name` / `description`, and missing or unterminated frontmatter
+//     blocks.
 //
 // Scans the same file set the execution adapter parses: every `.md` under
 // <harness>/agents/ (excluding SKILL.md) and every file named SKILL.md under
@@ -83,6 +88,10 @@ function problemsIn(file, text) {
   const seen = new Set();
   for (let i = 0; i < block.length; i += 1) {
     const line = block[i];
+    if (/^\s/.test(line)) {
+      probs.push(`line ${i + 2}: multi-line value not allowed — keep every value on a single line (block scalars and continuation lines break some harness parsers)`);
+      continue;
+    }
     const idx = line.indexOf(":");
     if (idx === -1) continue;
     const key = line.slice(0, idx).trim();
@@ -90,8 +99,16 @@ function problemsIn(file, text) {
     if (!key || !value) continue;
     seen.add(key);
     if (key === "name") continue; // names are slugs, safe
+    if (/^[>|](\s*[-+])?$/.test(value)) {
+      probs.push(`line ${i + 2}: '${key}' uses a YAML block scalar ('${value}') — not supported by all harness readers; write a single-line, double-quoted value (${key}: "...")`);
+      continue;
+    }
     const quoted = (value.startsWith('"') && value.endsWith('"') && value.length > 1)
       || (value.startsWith("'") && value.endsWith("'") && value.length > 1);
+    if (key === "description" && !quoted) {
+      probs.push(`line ${i + 2}: 'description' must be double-quoted — single line, no block scalars (description: "...")`);
+      continue;
+    }
     if (!quoted && /:\s/.test(value)) {
       probs.push(`line ${i + 2}: unquoted '${key}' contains ': ' — wrap it in double quotes (${key}: "...")`);
     }
@@ -125,7 +142,7 @@ for (const file of files) {
 
 if (problems > 0) {
   console.error(`\nvalidate-frontmatter: ${problems} file(s) with frontmatter problems.`);
-  console.error("Fix each (typically: double-quote the description value), then re-run.");
+  console.error("Fix each (typically: a single-line, double-quoted description), then re-run.");
   process.exit(1);
 }
 console.log(`validate-frontmatter: OK — ${files.length} agent/skill file(s) parsed cleanly (harness: ${harness})`);

@@ -4,6 +4,30 @@ Detailed release and change notes for MyForge.
 
 ---
 
+## August 2026 - v3.34
+
+### Agent/skill descriptions: single-line, double-quoted frontmatter
+
+- **No more block scalars.** Generated agents and skills sometimes used a YAML
+  folded/literal block scalar (`description: >` / `|`), which harnesses with
+  simple frontmatter readers render as just `>` — the agent/skill looked
+  undecorated (e.g. the Forge Console's Plan & Team view). Descriptions must
+  now be **single-line and double-quoted** (`description: "..."`).
+- **The `validate-frontmatter.mjs` gate now rejects them.** It flags block
+  scalars (`>`/`|` and their `-`/`+` variants), multi-line values, unquoted
+  descriptions, and the existing unquoted `: ` / `#` hazards — so
+  `forge-build-agent-team` fails the gate instead of shipping broken files.
+- **Templates and instructions updated.** `forge-build-agent-team` and
+  `skill-creator` callouts/checklists/templates now mandate the single-line
+  double-quoted form; the bootstrapped agent/skill template files were swept to
+  match, so fresh teams pass the gate cleanly.
+- **Parsers now tolerate block scalars anyway.** The Forge Console
+  (`forge-launcher`) and the workforce compiler read folded/literal
+  descriptions correctly, so pre-existing or third-party files written with
+  `>`/`|` still display properly.
+
+---
+
 ## August 2026 - v3.33
 
 ### Forge Console: restore Copilot harness for pre-existing GitHub repos
