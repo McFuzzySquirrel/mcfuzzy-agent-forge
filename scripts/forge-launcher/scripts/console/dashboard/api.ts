@@ -19,6 +19,7 @@ import type {
   Summary,
   TaskRow,
   TeamIndex,
+  TimeoutUpdateResult,
   WorkflowState,
 } from "./types.js";
 
@@ -94,6 +95,12 @@ export const api = {
   },
   control(action: ControlAction, taskId?: string): Promise<ControlResult> {
     return post<ControlResult>("/api/control", { action, taskId });
+  },
+  setTaskTimeout(taskId: string, timeoutMs: number): Promise<TimeoutUpdateResult> {
+    return post<TimeoutUpdateResult>("/api/tasks/timeout", { taskId, timeoutMs });
+  },
+  setAllTaskTimeouts(timeoutMs: number): Promise<TimeoutUpdateResult> {
+    return post<TimeoutUpdateResult>("/api/tasks/timeout", { timeoutMs });
   },
   openExternal(path: string): Promise<OpenResult> {
     return post<OpenResult>("/api/open", { path });

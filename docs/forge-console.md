@@ -113,7 +113,7 @@ from the project's harness (`github` → copilot, otherwise opencode).
 | **Home** | create a new project or open an existing one (landing). |
 | **Overview** | run status, progress + counts, blockers, the pipeline **Continue** button, and run controls. |
 | **Board** | the PixiJS Forge Board - a live kanban (To Do · In Progress · Done · Failed). |
-| **Tasks** | every task in a filterable/sortable table with a detail drawer. |
+| **Tasks** | every task in a filterable/sortable table with a detail drawer (including an editable per-task timeout). |
 | **Logs** | `docs/engine-run.log` tail + the audit event stream (live via SSE). |
 | **Plan & Team** | the project documents (IDEA, PRD, vision, features, progress, model plan) + agents and skills, in collapsible sections. |
 | **Artifacts** | the structured outputs tasks produced (`docs/artifacts/`), browsable by type/task with previews. |
@@ -136,6 +136,28 @@ does:
 | **Stop** | writes `request: stop` **and** SIGTERMs `docs/engine.pid`. |
 | **Resume** | `forge-launcher engine-run --repo <path> …` (resumes from `WORKFLOW-STATE.json`). |
 | **Replay** | `workflow-engine replay <task-id> --repo <path>` for a failed task. |
+
+### Task timeouts
+
+The Console can edit timeouts without leaving the browser, so a task that
+outruns its budget (a slow build or test) can be retried with a larger one:
+
+- **Per task** - open a task's detail drawer in **Tasks** (or use the task picker
+  in the Overview **Controls** panel) and set its timeout, then **Replay** it.
+- **All tasks** - the Tasks view header and the Overview Controls panel both have
+  a "set all" control that gives every task the same timeout.
+
+Storage and precedence (same as the CLI):
+
+- A per-task value is written as `timeoutMs` on that task in
+  `docs/EXECUTION-MANIFEST.json`, and overrides the engine default.
+- The "set all" action writes `timeoutMs` to every manifest task **and** updates
+  `taskTimeoutMs` in `docs/engine-config.json` (the engine-wide default).
+
+> **Note:** `replay` and `run`/`resume` preserve these edits, *except* that
+> `run`/`resume` recompiles the manifest from the PRD when a granularity is
+> explicitly set — which regenerates `timeoutMs`. The engine-config default is
+> always preserved.
 
 ---
 

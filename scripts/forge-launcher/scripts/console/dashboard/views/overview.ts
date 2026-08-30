@@ -3,7 +3,7 @@
 import { api } from "../api.js";
 import { store } from "../state.js";
 import { el, fmtDuration, fmtTime, statusBadge, toast } from "../render/dom.js";
-import type { Actions, ControlAction, RunSummary, Summary } from "../types.js";
+import type { Actions, ControlAction, RunSummary, Summary, TaskRow } from "../types.js";
 
 let gen = 0;
 let unsub: Array<() => void> = [];
@@ -37,8 +37,9 @@ export async function renderOverview(container: HTMLElement): Promise<void> {
   // and actions stay current during a live run.
   let summary: Summary | null;
   let actions: Actions;
+  let tasks: TaskRow[] = [];
   try {
-    [summary, actions] = await Promise.all([api.summary(), api.actions()]);
+    [summary, actions, tasks] = await Promise.all([api.summary(), api.actions(), api.tasks()]);
   } catch {
     summary = store.summary;
     actions = { canRun: false, canResume: false, canPause: false, canStop: false, failedTasks: [] };
@@ -62,7 +63,7 @@ export async function renderOverview(container: HTMLElement): Promise<void> {
   container.appendChild(renderRun(summary.run));
   container.appendChild(renderManifest(summary));
   container.appendChild(renderGuidance(container, summary, actions));
-  container.appendChild(renderActions(container, summary, actions));
+  container.appendChild(renderActions(container, summary, actions, tasks));
 }
 
 function renderHeader(summary: Summary): HTMLElement {
@@ -261,7 +262,7 @@ function renderGuidance(container: HTMLElement, summary: Summary, actions: Actio
   return el("div", { className: "panel hint" }, children);
 }
 
-function renderActions(container: HTMLElement, summary: Summary, actions: Actions): HTMLElement {
+function renderActions(container: HTMLElement, summary: Summary, actions: Actions, tasks: TaskRow[]): HTMLElement {
   const ctl = (action: ControlAction, taskId?: string): void => {
     void (async () => {
       try {
@@ -294,10 +295,88 @@ function renderActions(container: HTMLElement, summary: Summary, actions: Action
     replay = el("div", { className: "row gap" }, [select, replayBtn]);
   }
 
+  const timeouts = renderTimeoutControls(container, tasks);
+
   return el("div", { className: "panel" }, [
     el("h4", null, "Controls"),
     el("div", { className: "actions" }, buttons),
     replay,
+    timeouts,
+  ]);
+}
+
+function renderTimeoutControls(container: HTMLElement, tasks: TaskRow[]): HTMLElement {
+  const reload = (): void => {
+    void renderOverview(container);
+  };
+
+  const sorted = [...tasks].sort((a, b) => {
+    const af = a.status === "failed" ? 0 : 1;
+    const bf = b.status === "failed" ? 0 : 1;
+    return af - bf || a.id.localeCompare(b.id);
+  });
+
+  const taskSelect = el("select", { className: "replay-select" });
+  for (const t of sorted) {
+    taskSelect.appendChild(el("option", { value: t.id }, `${t.id} — ${t.title}`));
+  }
+
+  const taskInput = el("input", { type: "number", placeholder: "ms", className: "timeout-input" });
+  const setTask = el("button", { className: "btn btn-sm" }, "Set");
+  setTask.addEventListener("click", () => {
+    const value = Number((taskInput as HTMLInputElement).value);
+    if (!Number.isInteger(value) || value <= 0) {
+      toast("Enter a positive timeout in milliseconds.");
+      return;
+    }
+    const id = (taskSelect as HTMLSelectElement).value;
+    if (!id) {
+      toast("Select a task.");
+      return;
+    }
+    void (async () => {
+      try {
+        const res = await api.setTaskTimeout(id, value);
+        toast(res.message || (res.ok ? "ok" : "failed"));
+        reload();
+      } catch (err) {
+        toast(err instanceof Error ? err.message : "update failed");
+      }
+    })();
+  });
+
+  const allInput = el("input", { type: "number", placeholder: "ms", className: "timeout-input" });
+  const setAll = el("button", { className: "btn btn-sm" }, "Set all");
+  setAll.addEventListener("click", () => {
+    const value = Number((allInput as HTMLInputElement).value);
+    if (!Number.isInteger(value) || value <= 0) {
+      toast("Enter a positive timeout in milliseconds.");
+      return;
+    }
+    void (async () => {
+      try {
+        const res = await api.setAllTaskTimeouts(value);
+        toast(res.message || (res.ok ? "ok" : "failed"));
+        reload();
+      } catch (err) {
+        toast(err instanceof Error ? err.message : "update failed");
+      }
+    })();
+  });
+
+  return el("div", { className: "timeout-controls" }, [
+    el("h4", null, "Timeouts"),
+    el("div", { className: "row gap", style: "margin:6px 0" }, [
+      el("span", { className: "dim small" }, "Task"),
+      taskSelect,
+      taskInput,
+      setTask,
+    ]),
+    el("div", { className: "row gap" }, [
+      el("span", { className: "dim small" }, "All tasks"),
+      allInput,
+      setAll,
+    ]),
   ]);
 }
 

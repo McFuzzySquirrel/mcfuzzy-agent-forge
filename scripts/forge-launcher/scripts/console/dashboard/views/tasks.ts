@@ -1,7 +1,7 @@
 // ─── Tasks: filterable/sortable table with expandable detail ────────────────
 
 import { api } from "../api.js";
-import { el, fmtDuration, fmtTime, statusBadge } from "../render/dom.js";
+import { el, fmtDuration, fmtTime, statusBadge, toast } from "../render/dom.js";
 import type { TaskRow } from "../types.js";
 
 type SortKey = "status" | "phase" | "owner" | "duration" | "attempt";
@@ -72,6 +72,29 @@ export async function renderTasks(container: HTMLElement): Promise<void> {
     renderTable();
   });
 
+  const allTimeoutInput = el("input", {
+    type: "number",
+    placeholder: "Timeout for all tasks (ms)",
+    className: "search timeout-input",
+  });
+  const allTimeoutBtn = el("button", { className: "btn btn-sm" }, "Set all");
+  allTimeoutBtn.addEventListener("click", () => {
+    const value = Number((allTimeoutInput as HTMLInputElement).value);
+    if (!Number.isInteger(value) || value <= 0) {
+      toast("Enter a positive timeout in milliseconds.");
+      return;
+    }
+    void (async () => {
+      try {
+        const res = await api.setAllTaskTimeouts(value);
+        toast(res.message || (res.ok ? "ok" : "failed"));
+        await refresh();
+      } catch (err) {
+        toast(err instanceof Error ? err.message : "update failed");
+      }
+    })();
+  });
+
   countLine = el("div", { className: "dim small" });
   tableHost = el("div", null);
 
@@ -80,6 +103,11 @@ export async function renderTasks(container: HTMLElement): Promise<void> {
       el("div", { className: "row between wrap" }, [el("h3", null, "Tasks"), countLine]),
       statusChips,
       el("div", { className: "row gap", style: "margin:8px 0" }, [searchInput]),
+      el("div", { className: "row gap", style: "margin:0 0 8px" }, [
+        el("span", { className: "dim small" }, "Set every task's timeout:"),
+        allTimeoutInput,
+        allTimeoutBtn,
+      ]),
       tableHost,
     ]),
   );
@@ -97,6 +125,15 @@ function chip(label: string, active: boolean, onClick: () => void): HTMLElement 
   const node = el("span", { className: active ? "chip active" : "chip" }, label);
   node.addEventListener("click", onClick);
   return node;
+}
+
+async function refresh(): Promise<void> {
+  try {
+    allTasks = await api.tasks();
+  } catch {
+    // keep the existing rows on failure
+  }
+  renderTable();
 }
 
 function visibleTasks(): TaskRow[] {
@@ -233,7 +270,7 @@ function detail(t: TaskRow): HTMLElement {
       ? el("div", null, [el("div", { className: "k" }, "Artifact"), el("span", { className: "mono" }, t.artifactId)])
       : null,
     el("div", { className: "stats" }, [
-      el("div", { className: "stat" }, [el("div", { className: "k" }, "Timeout"), el("div", { className: "v" }, t.timeoutMs ? `${t.timeoutMs}ms` : "—")]),
+      timeoutEditor(t),
       el("div", { className: "stat" }, [el("div", { className: "k" }, "Started"), el("div", { className: "v" }, fmtTime(t.startedAt))]),
       el("div", { className: "stat" }, [el("div", { className: "k" }, "Completed"), el("div", { className: "v" }, fmtTime(t.completedAt))]),
       el("div", { className: "stat" }, [el("div", { className: "k" }, "Approval"), el("div", { className: "v" }, t.approvalRequired ? "yes" : "no")]),
@@ -241,4 +278,35 @@ function detail(t: TaskRow): HTMLElement {
   ];
 
   return el("div", { className: "detail" }, fields.filter(Boolean) as HTMLElement[]);
+}
+
+function timeoutEditor(t: TaskRow): HTMLElement {
+  const input = el("input", {
+    type: "number",
+    placeholder: "ms",
+    className: "timeout-input",
+    value: t.timeoutMs != null ? String(t.timeoutMs) : "",
+  });
+  const apply = el("button", { className: "btn btn-sm" }, "Apply");
+  apply.addEventListener("click", () => {
+    const value = Number((input as HTMLInputElement).value);
+    if (!Number.isInteger(value) || value <= 0) {
+      toast("Enter a positive timeout in milliseconds.");
+      return;
+    }
+    void (async () => {
+      try {
+        const res = await api.setTaskTimeout(t.id, value);
+        toast(res.message || (res.ok ? "ok" : "failed"));
+        await refresh();
+      } catch (err) {
+        toast(err instanceof Error ? err.message : "update failed");
+      }
+    })();
+  });
+
+  return el("div", { className: "stat" }, [
+    el("div", { className: "k" }, "Timeout (ms)"),
+    el("div", { className: "row gap" }, [input, apply]),
+  ]);
 }

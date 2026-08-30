@@ -293,6 +293,53 @@ test("run and replay spawn detached processes via the injected spawner", async (
   });
 });
 
+test("set a single task's timeout and persist it to the manifest", async () => {
+  await withServer(async (server, repo) => {
+    const token = server.token;
+    const res = await postJson(`${server.url}/api/tasks/timeout`, { taskId: "1.2", timeoutMs: 900000 }, { "X-Forge-Token": token });
+    assert.equal((res.body as { ok: boolean }).ok, true);
+
+    const manifest = JSON.parse(readFileSync(join(repo, "docs", "EXECUTION-MANIFEST.json"), "utf8")) as { phases: Array<{ tasks: Array<{ id: string; timeoutMs?: number }> }> };
+    const task = manifest.phases.flatMap((p) => p.tasks).find((t) => t.id === "1.2");
+    assert.equal(task!.timeoutMs, 900000);
+
+    const tasks = await getJson(`${server.url}/api/tasks`) as Array<{ id: string; timeoutMs: number | null }>;
+    assert.equal(tasks.find((t) => t.id === "1.2")!.timeoutMs, 900000);
+  });
+});
+
+test("set all task timeouts and update the engine default", async () => {
+  await withServer(async (server, repo) => {
+    const token = server.token;
+    const res = await postJson(`${server.url}/api/tasks/timeout`, { timeoutMs: 1200000 }, { "X-Forge-Token": token });
+    assert.equal((res.body as { ok: boolean }).ok, true);
+    assert.equal((res.body as { affected: number }).affected, 2);
+
+    const manifest = JSON.parse(readFileSync(join(repo, "docs", "EXECUTION-MANIFEST.json"), "utf8")) as { phases: Array<{ tasks: Array<{ timeoutMs?: number }> }> };
+    for (const task of manifest.phases.flatMap((p) => p.tasks)) {
+      assert.equal(task.timeoutMs, 1200000);
+    }
+
+    const config = JSON.parse(readFileSync(join(repo, "docs", "engine-config.json"), "utf8")) as { taskTimeoutMs: string };
+    assert.equal(config.taskTimeoutMs, "1200000");
+  });
+});
+
+test("timeout update rejects invalid values and missing token", async () => {
+  await withServer(async (server) => {
+    const token = server.token;
+
+    const zero = await postJson(`${server.url}/api/tasks/timeout`, { timeoutMs: 0 }, { "X-Forge-Token": token });
+    assert.equal(zero.status, 400);
+
+    const nan = await postJson(`${server.url}/api/tasks/timeout`, { timeoutMs: "lots" }, { "X-Forge-Token": token });
+    assert.equal(nan.status, 400);
+
+    const unauth = await postJson(`${server.url}/api/tasks/timeout`, { timeoutMs: 1000 });
+    assert.equal(unauth.status, 403);
+  });
+});
+
 test("draft-prd and draft-team actions dispatch and return ok", async () => {
   await withServer(async (server, repo) => {
     const token = server.token;

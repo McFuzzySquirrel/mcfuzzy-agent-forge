@@ -251,6 +251,13 @@ export interface ControlResult {
   pid?: number;
 }
 
+export interface TimeoutUpdateResult {
+  ok: boolean;
+  message: string;
+  taskId?: string;
+  affected?: number;
+}
+
 export interface CreateProjectRequest {
   name: string;
   description?: string;

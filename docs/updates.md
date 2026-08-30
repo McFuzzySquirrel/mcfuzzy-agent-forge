@@ -4,6 +4,29 @@ Detailed release and change notes for MyForge.
 
 ---
 
+## August 2026 - v3.32
+
+### Forge Console: edit task timeouts
+
+- **Per-task timeout editor.** Each task's detail drawer in the **Tasks** view
+  now lets you set that task's `timeoutMs` override (a number input + Apply),
+  and the Overview **Controls** panel has a matching task picker + Set control.
+  This is the "bump the timeout on a failed task, then Replay it" flow: builds
+  and tests that exceed the default can be given a larger budget and retried.
+- **Set every task's timeout at once.** The Tasks view header and the Overview
+  Controls panel both offer a "set all" control that writes `timeoutMs` to every
+  manifest task *and* updates the engine-wide default in
+  `docs/engine-config.json`, so the whole run gets a longer budget in one step.
+- **How it's stored.** Per-task values are written back to
+  `docs/EXECUTION-MANIFEST.json` (`ManifestTask.timeoutMs`); the "all tasks"
+  action also writes `taskTimeoutMs` into `docs/engine-config.json`. Edits are
+  preserved by `replay` and by `run`/`resume` unless a granularity is explicitly
+  set (which recompiles the manifest from the PRD, regenerating `timeoutMs`).
+- New token-gated `POST /api/tasks/timeout` endpoint (`{ taskId?, timeoutMs }`)
+  validates the value and broadcasts a snapshot refresh.
+
+---
+
 ## August 2026 - v3.31
 
 ### Forge Console: a local web UI over the launcher and workflow engine

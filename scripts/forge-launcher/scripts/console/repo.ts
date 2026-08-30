@@ -19,8 +19,10 @@ import type {
   Summary,
   TaskRow,
   TeamIndex,
+  TimeoutUpdateResult,
   WorkflowState,
 } from "./types.ts";
+import { loadEngineConfig, saveEngineConfig } from "../engine-config.ts";
 import { detectHarnessRoot, looksLikeForgeRepo, type RepoPaths, repoPaths } from "./paths.ts";
 
 // ─── Low-level reads (tolerant of missing files) ─────────────────────────────
@@ -49,6 +51,61 @@ export function loadState(p: RepoPaths): WorkflowState | null {
 
 export function loadManifest(p: RepoPaths): ExecutionManifest | null {
   return readJson<ExecutionManifest>(p.manifestPath);
+}
+
+function saveManifest(p: RepoPaths, manifest: ExecutionManifest): void {
+  fs.mkdirSync(path.dirname(p.manifestPath), { recursive: true });
+  fs.writeFileSync(p.manifestPath, `${JSON.stringify(manifest, null, 2)}\n`, "utf8");
+}
+
+/** Sets the per-task `timeoutMs` override on a single manifest task. */
+export function setTaskTimeout(p: RepoPaths, taskId: string, timeoutMs: number): TimeoutUpdateResult {
+  const manifest = loadManifest(p);
+  if (!manifest) return { ok: false, message: "No execution manifest found." };
+
+  for (const phase of manifest.phases) {
+    const task = phase.tasks.find((t) => t.id === taskId);
+    if (task) {
+      task.timeoutMs = timeoutMs;
+      saveManifest(p, manifest);
+      return { ok: true, message: `Timeout for ${taskId} set to ${timeoutMs}ms.`, taskId };
+    }
+  }
+  return { ok: false, message: `Task ${taskId} not found in the manifest.` };
+}
+
+/** Sets the per-task `timeoutMs` override on every manifest task. */
+export function setAllTaskTimeouts(p: RepoPaths, timeoutMs: number): TimeoutUpdateResult {
+  const manifest = loadManifest(p);
+  if (!manifest) return { ok: false, message: "No execution manifest found." };
+
+  let affected = 0;
+  for (const phase of manifest.phases) {
+    for (const task of phase.tasks) {
+      task.timeoutMs = timeoutMs;
+      affected += 1;
+    }
+  }
+  saveManifest(p, manifest);
+  return { ok: true, message: `Timeout set to ${timeoutMs}ms on ${affected} task(s).`, affected };
+}
+
+/** Persists the engine-wide default task timeout in docs/engine-config.json. */
+export function setDefaultTimeout(p: RepoPaths, timeoutMs: number): TimeoutUpdateResult {
+  const existing = loadEngineConfig(p.repoRoot);
+  const cfg = {
+    harness: existing?.harness ?? "opencode",
+    granularity: existing?.granularity ?? "",
+    concurrency: existing?.concurrency ?? "",
+    taskTimeoutMs: String(timeoutMs),
+    maxRetries: existing?.maxRetries ?? "",
+    viz: existing?.viz ?? false,
+    vizPort: existing?.vizPort ?? "",
+    keepAlive: existing?.keepAlive ?? false,
+    attach: existing?.attach ?? "",
+  };
+  saveEngineConfig(p.repoRoot, cfg);
+  return { ok: true, message: `Default timeout set to ${timeoutMs}ms.` };
 }
 
 export function loadAudit(p: RepoPaths): AuditEvent[] {
