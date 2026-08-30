@@ -28,7 +28,7 @@ Detailed release and change notes for MyForge.
   and Overview Controls) accept minutes with decimals (`1.5` = 90s) and convert
   to/from the millisecond values stored in the manifest and `engine-config.json`.
 - **Finished tasks are read-only.** Completed/skipped tasks show their timeout
-  as plain text instead of an editor — the task's own `timeoutMs`, or the
+  as plain text instead of an editor - the task's own `timeoutMs`, or the
   effective default (`default · 10 min`) when it never had an override. Failed,
   pending, and running tasks stay editable so a failed task can be bumped and
   replayed.
@@ -36,7 +36,7 @@ Detailed release and change notes for MyForge.
 ### Forge Console: Manifest panel links to Plan & Team
 
 - The Overview **Manifest** panel now shows a single **Open Plan & Team** link
-  (replacing the IDEA/PRD-only links) — the Plan & Team view lists every
+  (replacing the IDEA/PRD-only links) - the Plan & Team view lists every
   document (IDEA, PRD, vision, features, progress, model plan) plus the agent
   team and skills.
 

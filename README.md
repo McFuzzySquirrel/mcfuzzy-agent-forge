@@ -173,7 +173,7 @@ forge-launcher console --repo my-app   # opens a specific project directly
 
 ## Screenshots
 
-The **Forge Console** (`forge-launcher console`) in action — full walkthrough in
+The **Forge Console** (`forge-launcher console`) in action - full walkthrough in
 [forge-console-screenshots.md](docs/forge-console-screenshots.md):
 
 <table>

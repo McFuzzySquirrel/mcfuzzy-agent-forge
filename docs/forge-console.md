@@ -156,7 +156,7 @@ Storage and precedence (same as the CLI):
 
 > **Note:** `replay` and `run`/`resume` preserve these edits, *except* that
 > `run`/`resume` recompiles the manifest from the PRD when a granularity is
-> explicitly set — which regenerates `timeoutMs`. The engine-config default is
+> explicitly set - which regenerates `timeoutMs`. The engine-config default is
 > always preserved.
 
 ---
