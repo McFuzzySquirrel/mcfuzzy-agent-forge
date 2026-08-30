@@ -23,7 +23,7 @@ import type {
   WorkflowState,
 } from "./types.ts";
 import { loadEngineConfig, saveEngineConfig } from "../engine-config.ts";
-import { detectHarnessRoot, looksLikeForgeRepo, type RepoPaths, repoPaths } from "./paths.ts";
+import { detectHarnessRoot, findAdapterDir, looksLikeForgeRepo, type RepoPaths, repoPaths } from "./paths.ts";
 
 // ─── Low-level reads (tolerant of missing files) ─────────────────────────────
 
@@ -478,8 +478,12 @@ export function actions(p: RepoPaths): Actions {
 
   const hasIncomplete = state ? Object.values(state.tasks ?? {}).some((t) => !["complete", "skipped"].includes(t.status)) : false;
 
+  // The engine can compile a missing manifest itself when forge-execution-adapter
+  // is bootstrapped, so allow Run when the adapter is present even without a manifest.
+  const canCompile = manifest !== null || findAdapterDir(p.repoRoot) !== null;
+
   return {
-    canRun: manifest !== null && (state === null || state.status === "complete" || state.status === "failed"),
+    canRun: canCompile && (state === null || state.status === "complete" || state.status === "failed"),
     canResume: manifest !== null && state !== null && hasIncomplete && !live,
     canPause: live && state !== null && state.status === "running",
     canStop: live,
