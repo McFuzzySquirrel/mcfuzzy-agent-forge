@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { mkdtempSync, mkdirSync, writeFileSync, appendFileSync, readFileSync } from "node:fs";
+import { mkdtempSync, mkdirSync, writeFileSync, appendFileSync, readFileSync, renameSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { get as httpGet, request as httpRequest } from "node:http";
@@ -168,7 +168,7 @@ function collectSse(url: string) {
 }
 
 async function withServer<T>(
-  fn: (server: ConsoleServer, repo: string) => Promise<T>,
+  fn: (server: ConsoleServer, repo: string, spawned: FakeSpawn) => Promise<T>,
   opts: { repoRoot?: boolean } = { repoRoot: true },
 ): Promise<T> {
   const home = mkdtempSync(join(tmpdir(), "forge-home-"));
@@ -190,7 +190,7 @@ async function withServer<T>(
     },
   });
   try {
-    return await fn(server, repo);
+    return await fn(server, repo, spawn);
   } finally {
     await server.stop();
     if (prevHome === undefined) delete process.env.FORGE_HOME;
@@ -291,6 +291,20 @@ test("run and replay spawn detached processes via the injected spawner", async (
 
     const replay = await postJson(`${server.url}/api/control`, { action: "replay", taskId: "1.2" }, { "X-Forge-Token": token });
     assert.equal((replay.body as { ok: boolean }).ok, true);
+  });
+});
+
+test("run infers the copilot engine harness from a GitHub harness root", async () => {
+  await withServer(async (server, repo, spawned) => {
+    renameSync(join(repo, ".agents"), join(repo, ".github"));
+
+    const run = await postJson(`${server.url}/api/control`, { action: "run" }, { "X-Forge-Token": server.token });
+    assert.equal((run.body as { ok: boolean }).ok, true);
+
+    const runCall = spawned.calls.at(-1);
+    assert.ok(runCall);
+    const harnessIndex = runCall.args.indexOf("--harness");
+    assert.equal(runCall.args[harnessIndex + 1], "copilot");
   });
 });
 
