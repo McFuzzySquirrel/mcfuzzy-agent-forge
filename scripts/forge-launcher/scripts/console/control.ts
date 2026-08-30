@@ -4,7 +4,7 @@ import spawn from "cross-spawn";
 
 import { loadEngineConfig } from "../engine-config.ts";
 import { engineDetachedCommand } from "../launcher.ts";
-import { detectHarnessRoot, findEngineDir, repoPaths } from "./paths.ts";
+import { findEngineDir, repoPaths } from "./paths.ts";
 import type {
   ControlAction,
   ControlResult,
@@ -62,8 +62,7 @@ function defaultKill(pid: number, signal: NodeJS.Signals): void {
 /** Builds the engine-run invocation args (console is the live view, so no --viz). */
 function engineRunArgs(repoRoot: string): string[] {
   const cfg = loadEngineConfig(repoRoot);
-  const inferredHarness = detectHarnessRoot(repoRoot) === ".github" ? "copilot" : "opencode";
-  const args = ["engine-run", "--repo", repoRoot, "--harness", cfg?.harness ?? inferredHarness];
+  const args = ["engine-run", "--repo", repoRoot, "--harness", cfg?.harness ?? "opencode"];
   if (cfg?.granularity) args.push("--granularity", cfg.granularity);
   if (cfg?.concurrency) args.push("--concurrency", cfg.concurrency);
   if (cfg?.taskTimeoutMs) args.push("--task-timeout-ms", cfg.taskTimeoutMs);

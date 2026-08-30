@@ -5,7 +5,7 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import { engineDetachedCommand, headlessSkillMsg } from "./launcher.ts";
+import { defaultEngineHarness, engineDetachedCommand, headlessSkillMsg } from "./launcher.ts";
 import { spawnDetached } from "./format.ts";
 
 const CLI = fileURLToPath(new URL("./cli.ts", import.meta.url));
@@ -55,9 +55,20 @@ test("non-interactive run with no PRD bootstraps and queues forge-auto-build-prd
   assert.ok(fs.existsSync(path.join(repo, "docs", "IDEA.md")));
   assert.ok(fs.existsSync(path.join(repo, "IDEA.md")));
   assert.ok(!fs.existsSync(path.join(repo, "docs", "PRD.md")));
+  const config = JSON.parse(
+    fs.readFileSync(path.join(repo, "docs", "engine-config.json"), "utf8"),
+  ) as { harness: string };
+  assert.equal(config.harness, "opencode");
   // CR-001 lifecycle: no PRD -> queue forge-auto-build-prd
   assert.ok(out.includes("/forge-auto-build-prd Use docs/IDEA.md as the project idea"));
   assert.ok(!out.includes("/forge-auto-build Use docs/PRD.md as the project PRD"));
+});
+
+test("GitHub projects default to the copilot engine harness", () => {
+  assert.equal(defaultEngineHarness("github"), "copilot");
+  assert.equal(defaultEngineHarness("opencode"), "opencode");
+  assert.equal(defaultEngineHarness("claude"), "opencode");
+  assert.equal(defaultEngineHarness("agents"), "opencode");
 });
 
 test("headless PRD message includes the gap check the manual flow runs", () => {
