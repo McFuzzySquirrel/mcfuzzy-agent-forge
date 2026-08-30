@@ -3,7 +3,7 @@
 import { api } from "../api.js";
 import { el, toast } from "../render/dom.js";
 import { renderMarkdown } from "../render/md.js";
-import type { AgentInfo, DocEntry, DocsIndex, TeamIndex } from "../types.js";
+import type { AgentInfo, DocEntry, DocsIndex, SkillInfo, TeamIndex } from "../types.js";
 
 let unsub: Array<() => void> = [];
 let detailHost: HTMLElement | null = null;
@@ -126,13 +126,32 @@ function renderSkills(host: HTMLElement, team: TeamIndex): void {
     host.appendChild(el("div", { className: "dim" }, "No skills generated yet."));
     return;
   }
-  const list = el("ul", { className: "doc-list" });
-  for (const skill of team.skills) {
-    list.appendChild(
-      el("li", null, [el("strong", null, skill.name), el("span", { className: "dim" }, ` — ${skill.description}`)]),
-    );
-  }
-  host.appendChild(list);
+  const forge = team.skills.filter((s) => s.category === "forge");
+  const project = team.skills.filter((s) => s.category !== "forge");
+  if (project.length > 0) appendSkillGroup(host, "Project skills", project);
+  if (forge.length > 0) appendSkillGroup(host, "Forge skills", forge);
+}
+
+function appendSkillGroup(host: HTMLElement, title: string, skills: SkillInfo[]): void {
+  host.appendChild(el("h4", { className: "group-title" }, `${title} (${skills.length})`));
+  const grid = el("div", { className: "cards" });
+  for (const skill of skills) grid.appendChild(skillCard(skill));
+  host.appendChild(grid);
+}
+
+function skillCard(skill: SkillInfo): HTMLElement {
+  const card = el("div", { className: "card" }, [
+    el("div", { className: "card-title" }, [
+      el("strong", null, skill.name),
+      el("span", { className: `badge badge-${skill.category}` }, skill.category),
+      el("button", { className: "btn btn-sm" }, "Open"),
+    ]),
+    el("p", { className: "dim" }, skill.description),
+    el("p", { className: "small mono dim" }, skill.relPath),
+  ]);
+  const openBtn = card.querySelector<HTMLElement>(".card-title .btn");
+  if (openBtn) openBtn.addEventListener("click", () => void openExternal(skill.relPath));
+  return card;
 }
 
 function agentCard(agent: AgentInfo): HTMLElement {

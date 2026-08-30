@@ -23,6 +23,7 @@ import type {
   WorkflowState,
 } from "./types.ts";
 import { loadEngineConfig, saveEngineConfig } from "../engine-config.ts";
+import { resolveResources } from "../resources.ts";
 import { detectHarnessRoot, findAdapterDir, inferEngineHarness, looksLikeForgeRepo, type RepoPaths, repoPaths } from "./paths.ts";
 
 // ─── Low-level reads (tolerant of missing files) ─────────────────────────────
@@ -478,8 +479,23 @@ function listSkills(repoRoot: string, harnessRoot: string): SkillInfo[] {
       description: (fm.description ?? "").replace(/\s+/g, " ").trim(),
       path: file,
       relPath: path.relative(repoRoot, dir),
+      category: forgeSkillNames().has(path.basename(dir)) ? "forge" : "project",
     };
   });
+}
+
+let cachedForgeSkills: Set<string> | null = null;
+
+/** Directory names of the forge template skills (the set `bootstrap()` copies). */
+function forgeSkillNames(): Set<string> {
+  if (cachedForgeSkills !== null) return cachedForgeSkills;
+  const skillsDir = path.join(resolveResources().templatesDir, "skills");
+  cachedForgeSkills = new Set(
+    fs.existsSync(skillsDir)
+      ? fs.readdirSync(skillsDir).filter((name) => fs.statSync(path.join(skillsDir, name), { throwIfNoEntry: false })?.isDirectory())
+      : [],
+  );
+  return cachedForgeSkills;
 }
 
 export function team(p: RepoPaths): TeamIndex {

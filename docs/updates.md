@@ -4,6 +4,28 @@ Detailed release and change notes for MyForge.
 
 ---
 
+## August 2026 - v3.35
+
+### Forge Console: skills shown as cards, grouped Forge vs Project
+
+- **Skills render as cards in Plan & Team.** The Skills section of the console's
+  Plan & Team view previously listed skills as a plain bulleted list. They now
+  use the same card layout as the agent team, with the skill name, a category
+  badge, description, its location under the harness, and an **Open** button
+  (opens the skill directory in your file manager).
+- **Skills are grouped into Forge skills and Project skills.** Skills
+  bootstrapped from the forge templates (the `forge-*` skills plus
+  `skill-creator`/`skill-review`/`skill-review-updater`) are classified as
+  **Forge skills**; skills the generated team wrote for the project are grouped
+  under **Project skills**. Each group renders its own card grid with a count
+  in its heading, and empty groups are omitted.
+- **Classification is derived, not stored.** The console matches a skill's
+  directory against the forge template set it bootstraps from, so the grouping
+  stays in sync as forge skills are added or renamed, and no re-bootstrap of
+  existing projects is required.
+
+---
+
 ## August 2026 - v3.34
 
 ### Agent/skill descriptions: single-line, double-quoted frontmatter

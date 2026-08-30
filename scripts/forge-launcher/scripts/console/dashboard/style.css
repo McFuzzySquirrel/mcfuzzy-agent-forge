@@ -119,6 +119,8 @@ h4 { font-size: 12px; text-transform: uppercase; letter-spacing: 0.6px; color: v
 .badge-skipped { background: rgba(245, 197, 66, 0.16); color: var(--accent); }
 .badge-paused { background: rgba(245, 197, 66, 0.16); color: var(--accent); }
 .badge-no-run { background: rgba(139, 150, 184, 0.18); color: var(--text-dim); }
+.badge-forge { background: rgba(140, 170, 255, 0.14); color: var(--blue); }
+.badge-project { background: rgba(94, 211, 106, 0.14); color: var(--green); }
 
 .btn {
   display: inline-flex;
@@ -256,6 +258,8 @@ label { display: block; color: var(--text-dim); font-size: 12px; margin: 10px 0 
 .collapsible { margin-top: 8px; }
 .collapsible summary { cursor: pointer; color: var(--text-dim); font-size: 12px; }
 .collapsible ul { margin: 4px 0 0; padding-left: 18px; font-size: 12px; }
+.group-title { margin: 14px 0 8px; color: var(--text-dim); font-size: 12px; text-transform: uppercase; letter-spacing: 0.5px; }
+.group-title:first-child { margin-top: 0; }
 
 .timeline { position: relative; padding-left: 22px; }
 .timeline::before { content: ""; position: absolute; left: 5px; top: 4px; bottom: 4px; width: 2px; background: var(--panel-border); }
