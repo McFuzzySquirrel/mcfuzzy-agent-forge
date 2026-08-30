@@ -128,8 +128,8 @@ function renderSkills(host: HTMLElement, team: TeamIndex): void {
   }
   const forge = team.skills.filter((s) => s.category === "forge");
   const project = team.skills.filter((s) => s.category !== "forge");
-  if (forge.length > 0) appendSkillGroup(host, "Forge skills", forge);
   if (project.length > 0) appendSkillGroup(host, "Project skills", project);
+  if (forge.length > 0) appendSkillGroup(host, "Forge skills", forge);
 }
 
 function appendSkillGroup(host: HTMLElement, title: string, skills: SkillInfo[]): void {
