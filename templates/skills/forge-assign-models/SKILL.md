@@ -1,6 +1,6 @@
 ---
 name: forge-assign-models
-description: Discover which LLM models are available to the user (cloud subscription + local Ollama), classify each generated agent's workload, and recommend (and optionally apply) a per-agent model assignment so that lightweight agents do not default to the most expensive model. Use this skill after `forge-build-agent-team` has produced an agent team, or any time the team changes.
+description: "Discover which LLM models are available to the user (cloud subscription + local Ollama), classify each generated agent's workload, and recommend (and optionally apply) a per-agent model assignment so that lightweight agents do not default to the most expensive model. Use this skill after `forge-build-agent-team` has produced an agent team, or any time the team changes."
 ---
 
 # Skill: Assign Models to a Generated Agent Team

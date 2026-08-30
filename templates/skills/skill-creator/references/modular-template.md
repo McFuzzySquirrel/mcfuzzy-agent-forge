@@ -13,7 +13,7 @@ Replace every `{placeholder}` with content from the interview answers. Create th
 ```markdown
 ---
 name: {skill-name}
-description: {One-sentence description. Include trigger keywords. Be specific about what the skill does and when to use it.}
+description: "{One-sentence description. Include trigger keywords. Be specific about what the skill does and when to use it. Single line, double-quoted — never a YAML block scalar (>) or multi-line value.}"
 ---
 
 # Skill: {Title Case Name}

@@ -1,6 +1,6 @@
 ---
 name: forge-build-agent-team
-description: Analyze a Product Requirements Document (PRD), Product Vision with Feature documents, or Feature PRD and generate a complete team of custom agents and reusable skills tailored to the project. Use this skill when asked to create, scaffold, or design a development team from requirements documents.
+description: "Analyze a Product Requirements Document (PRD), Product Vision with Feature documents, or Feature PRD and generate a complete team of custom agents and reusable skills tailored to the project. Use this skill when asked to create, scaffold, or design a development team from requirements documents."
 ---
 
 # Skill: Build a Custom Agent Team from a PRD
@@ -79,7 +79,9 @@ Create each agent file at `HARNESS_AGENTS_DIR/{agent-name}.md`:
 > **Always double-quote `description:`.** The value is prose and routinely
 > contains `: ` (colon-space); unquoted, YAML treats that as a nested mapping
 > and `forge-execution-adapter compile` (gray-matter) fails the whole build.
-> Wrap every description in double quotes, never a bare scalar.
+> Wrap every description in double quotes, never a bare scalar. Keep it on a
+> **single line** — never a YAML block scalar (`>` / `|`) or multi-line value;
+> several harnesses' frontmatter readers cannot parse them.
 
 ````markdown
 ---
@@ -181,7 +183,8 @@ If `skill-creator` or `skill-review` is not available in the environment, stop a
 Only after explicit user approval to proceed without these dependencies, scaffold directly using this template:
 
 > **Always double-quote `description:`** for the same reason as agents: an
-> unquoted colon-space breaks YAML frontmatter parsing at compile time.
+> unquoted colon-space breaks YAML frontmatter parsing at compile time. Single
+> line only — never a YAML block scalar (`>` / `|`) or multi-line value.
 
 ````markdown
 ---
@@ -258,9 +261,9 @@ Before finalizing:
 - [ ] Every PRD functional requirement maps to exactly one agent
 - [ ] Every agent has `## Collaboration` listing agents it depends on
 - [ ] No two agents own the same file or responsibility
-- [ ] Agent files end with `.md`; `name:` matches the filename (without extension); every `description:` is double-quoted YAML
-- [ ] Skill directory names match the skill `name` field; every `description:` is double-quoted YAML
-- [ ] **Frontmatter gate passed:** run `node scripts/validate-frontmatter.mjs` (from this skill's directory) and it exits `0` — it flags unquoted `: ` values, missing `name`/`description`, and unterminated frontmatter across the harness agents and skills
+- [ ] Agent files end with `.md`; `name:` matches the filename (without extension); every `description:` is single-line, double-quoted YAML (never a block scalar)
+- [ ] Skill directory names match the skill `name` field; every `description:` is single-line, double-quoted YAML (never a block scalar)
+- [ ] **Frontmatter gate passed:** run `node scripts/validate-frontmatter.mjs` (from this skill's directory) and it exits `0` — it flags block scalars (`>`/`|`), multi-line values, unquoted `: ` values, missing `name`/`description`, and unterminated frontmatter across the harness agents and skills
 - [ ] All PRD section references are accurate
 - [ ] Agent names are lowercase-hyphenated
 - [ ] Team covers: foundation/scaffolding, core logic, testing, and all major feature areas
@@ -328,6 +331,7 @@ After Feature Increment Mode runs, suggest Re-tune mode for targeted refresh.
 
 - **Agent `name:` must match the filename (without extension).** `my-agent.md` → `name: my-agent`. A mismatch silently breaks agent detection.
 - **Unquoted `description:` with `: ` breaks the build.** `description: Owns the Discovery: recursive scanning…` fails YAML parsing in `forge-execution-adapter compile`, which aborts before the manifest is written. Always double-quote `description:` — every generated agent and skill — and run `scripts/validate-frontmatter.mjs` before finalizing (Step 7).
+- **Never write `description:` as a YAML block scalar.** `description: >` (folded) or `description: |` (literal) renders as just `>`/`|` in harnesses with simple frontmatter readers (agents/skills look undecorated), and the `validate-frontmatter.mjs` gate rejects them. Always a single-line, double-quoted value.
 - **Never generate agents for areas the PRD doesn't cover.** If in doubt, ask the user rather than speculating.
 - **Code block templates must escape nested fenced blocks.** If a generated skill's output template contains markdown code blocks, use ` ``` `` ` syntax or indent differently to avoid breaking the parent template.
 - **Feature Increment Mode must never regenerate untouched agents.** It's the most common source of regressions. Always diff before writing.

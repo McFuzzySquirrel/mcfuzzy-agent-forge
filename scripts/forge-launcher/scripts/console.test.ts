@@ -21,6 +21,7 @@ function makeRepo(): string {
   mkdirSync(docs, { recursive: true });
   mkdirSync(join(root, ".git"), { recursive: true });
   mkdirSync(join(root, ".agents", "skills", "forge-workflow-engine"), { recursive: true });
+  mkdirSync(join(root, ".agents", "skills", "add-endpoint"), { recursive: true });
   mkdirSync(join(root, ".agents", "agents"), { recursive: true });
 
   writeFileSync(join(docs, "IDEA.md"), "# Idea\n\nBuild a thing.\n", "utf8");
@@ -96,7 +97,13 @@ function makeRepo(): string {
 
   writeFileSync(
     join(root, ".agents", "agents", "qa-engineer.md"),
-    "---\nname: qa-engineer\ndescription: \"Owns test quality\"\nmodel: gpt-4o\n---\n\n## Expertise\n- Testing\n",
+    "---\nname: qa-engineer\ndescription: >\n  Owns test quality and\n  keeps the build green.\nmodel: gpt-4o\n---\n\n## Expertise\n- Testing\n",
+    "utf8",
+  );
+
+  writeFileSync(
+    join(root, ".agents", "skills", "add-endpoint", "SKILL.md"),
+    "---\nname: add-endpoint\ndescription: >\n  Adds a REST endpoint following\n  project conventions.\n---\n\n# Skill: Add Endpoint\n",
     "utf8",
   );
 
@@ -218,10 +225,14 @@ test("serves summary, tasks, docs, team, and actions", async () => {
     assert.ok(docs.entries.some((e) => e.kind === "prd"));
     assert.ok(docs.entries.some((e) => e.kind === "idea"));
 
-    const team = await getJson(`${server.url}/api/team`) as { agents: Array<{ name: string; model: string }> };
+    const team = await getJson(`${server.url}/api/team`) as { agents: Array<{ name: string; description: string; model: string }>; skills: Array<{ name: string; description: string }> };
     assert.equal(team.agents.length, 1);
     assert.equal(team.agents[0]!.name, "qa-engineer");
+    assert.equal(team.agents[0]!.description, "Owns test quality and keeps the build green.");
     assert.equal(team.agents[0]!.model, "gpt-4o");
+    assert.equal(team.skills.length, 1);
+    assert.equal(team.skills[0]!.name, "add-endpoint");
+    assert.equal(team.skills[0]!.description, "Adds a REST endpoint following project conventions.");
 
     const actions = await getJson(`${server.url}/api/actions`) as { canRun: boolean; failedTasks: string[] };
     assert.equal(actions.canRun, false);

@@ -13,15 +13,45 @@ function parseFrontmatter(markdown: string): Record<string, string> {
   const match = markdown.match(/^---\r?\n([\s\S]*?)\r?\n---/);
   if (!match) return {};
   const result: Record<string, string> = {};
-  for (const rawLine of match[1]!.split(/\r?\n/)) {
-    const line = rawLine.trim();
-    if (!line || line.startsWith("#")) continue;
-    const idx = line.indexOf(":");
+  const lines = match[1]!.split(/\r?\n/);
+  let currentKey: string | null = null;
+  let currentLines: string[] = [];
+  let blockMode: "fold" | "literal" | null = null;
+
+  const commit = () => {
+    if (currentKey === null) return;
+    const value = (blockMode === "literal" ? currentLines.join("\n") : currentLines.join(" "))
+      .replace(/\s+/g, " ")
+      .trim();
+    if (value) result[currentKey] = value;
+    currentKey = null;
+    currentLines = [];
+    blockMode = null;
+  };
+
+  for (const rawLine of lines) {
+    const trimmed = rawLine.trim();
+    if (currentKey !== null && /^[ \t]/.test(rawLine)) {
+      currentLines.push(trimmed);
+      continue;
+    }
+    commit();
+    if (!trimmed || trimmed.startsWith("#")) continue;
+    const idx = trimmed.indexOf(":");
     if (idx === -1) continue;
-    const key = line.slice(0, idx).trim();
-    const value = line.slice(idx + 1).trim().replace(/^"|"$/g, "");
-    if (key && value) result[key] = value;
+    const key = trimmed.slice(0, idx).trim();
+    const value = trimmed.slice(idx + 1).trim().replace(/^"|"$/g, "");
+    if (key && value) {
+      if (/^[>|](\s*[-+])?$/.test(value)) {
+        currentKey = key;
+        blockMode = value.startsWith("|") ? "literal" : "fold";
+        currentLines = [];
+      } else {
+        result[key] = value;
+      }
+    }
   }
+  commit();
   return result;
 }
 
