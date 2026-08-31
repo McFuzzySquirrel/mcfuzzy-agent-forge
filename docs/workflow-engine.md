@@ -413,6 +413,42 @@ hyphens, e.g. `work.1.1` → `docs/artifacts/work-1-1/work-1-1-001.json`). You c
 hand-edit the manifest to use semantic types (`solution.architecture`,
 `implementation.result`) or add cross-task `inputs` beyond the linear chain.
 
+### Context projection (how it works)
+
+Context projection is the engine's **token firewall**: a downstream task
+receives a short typed summary of the artifacts it consumes, never the full
+artifact payloads or previous conversations.
+
+When a task declares `inputs`, the engine (`ArtifactStore.project`) takes the
+latest **completed** artifact of each input type and keeps only a few fields:
+`artifactId`, `type`, `summary`, `confidence` (plus any task-requested
+`fields`). `renderProjection` turns that into a compact markdown block
+(`## Context from previous tasks`), and the harness adapter prepends only that
+block to the agent's prompt - the full `WorkflowState` and the artifact JSONs
+are never sent. That is where the tokens are saved: the agent receives a few
+lines of summary, not the previous agent's whole output.
+
+The `[engine] Context projected for <task>: ~N tokens (X% reduction from ~M)`
+log line is **telemetry, not a billing meter**. `estimateTokens` counts
+characters and divides by 4 (the "~4 chars per token" GPT-family rule of thumb)
+- see `artifacts.ts`. So "~130 tokens (49.6% reduction from ~258)" means the
+full source artifacts were ~258 estimated tokens and the projection is ~130: a
+~50% cut **of the artifact bytes**, not of the whole request (the persona file,
+task text, and budget hints are unchanged).
+
+What the percentage does *not* mean:
+
+- It is relative to the artifact payloads, not the entire prompt.
+- It is a character-count proxy, not the model's real tokenizer.
+- It only trims input tokens; output tokens are unaffected.
+- The default projection is deliberately tiny (`summary` + `confidence`), so
+  the larger the artifacts, the larger the real saving.
+
+Plainly: each task hands off a short typed summary of what it produced, not its
+full output; the engine estimates the reduction (~4 chars/token) from the full
+payloads to that summary. The mechanism genuinely shrinks what the next agent
+receives - the percentage is just an estimate.
+
 ---
 
 ## Resume, replay, pause & stop
