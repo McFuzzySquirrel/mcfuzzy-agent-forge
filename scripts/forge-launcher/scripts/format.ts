@@ -190,8 +190,14 @@ export function runTee(
       fs.mkdirSync(path.dirname(opts.logFile), { recursive: true });
       stream = fs.createWriteStream(opts.logFile, { flags: "a" });
     }
-    child.stdout?.on("data", (d: Buffer) => { process.stdout.write(d); stream?.write(d); });
-    child.stderr?.on("data", (d: Buffer) => { process.stderr.write(d); stream?.write(d); });
+    child.stdout?.on("data", (d: Buffer) => {
+      if (process.stdout.isTTY) process.stdout.write(d);
+      stream?.write(d);
+    });
+    child.stderr?.on("data", (d: Buffer) => {
+      if (process.stderr.isTTY) process.stderr.write(d);
+      stream?.write(d);
+    });
     child.on("error", (err) => {
       stream?.end();
       reject(describeSpawnError(cmd, err));

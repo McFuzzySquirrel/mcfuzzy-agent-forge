@@ -6,6 +6,18 @@ Detailed release and change notes for MyForge.
 
 ## September 2026 - v3.36
 
+### Engine log no longer duplicates every line on detached runs
+
+- **Fix.** When a run was started detached (from the Forge Console's Run/Resume,
+  or the interactive launcher's "run now detached"), the launcher's `runTee`
+  wrote the engine output to `docs/engine-run.log` **and** forwarded it to its
+  stdout — which the console/detached spawn had already redirected to that same
+  log file. Every engine line (phase, context projection, "starting task",
+  heartbeats, etc.) was therefore logged twice, sometimes merged mid-line.
+- **Now** `runTee` only echoes to stdout/stderr when they are attached to a
+  terminal, so a detached run writes each line exactly once. Terminal runs
+  (`forge-launcher engine-run` in a shell) still stream live output unchanged.
+
 ### Execution adapter: a skills-only harness root no longer shadows the real one
 
 - **Fix.** `discoverForgeRepo`'s harness-root detection matched any root with
