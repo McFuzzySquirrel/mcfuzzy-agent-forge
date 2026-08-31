@@ -6,6 +6,22 @@ Detailed release and change notes for MyForge.
 
 ## September 2026 - v3.36
 
+### Forge Board: clearer expanded cards and fixed avatar moods
+
+- **Expanded cards get wider.** Clicking a task card now widens it (+150px) in
+  addition to growing taller, so the expanded detail (full title, description,
+  status/owner/phase/timeout/inputs/outputs rows) has room to breathe; the
+  card floats over its right neighbor on an opaque backdrop.
+- **Detail rows no longer overlap.** The key/value rows previously drew the
+  label and value at the same spot, so "Status · complete" rendered on top of
+  itself. Labels now sit in their own column with the value indented beside
+  them, and row spacing was increased.
+- **Avatars smile when done.** The face's mouth had the smile/frown arcs
+  reversed, so completed cards looked cross and failed ones grinned. Completed
+  cards now smile, failed ones frown (running = dot, pending/skipped = neutral).
+- **Long task ids are trimmed** to fit the card instead of spilling over the
+  edge.
+
 ### Engine heartbeat default raised to 60s
 
 - The engine's per-task heartbeat line (`…still working on task <id> (@<agent>, Ns elapsed)`)
