@@ -165,7 +165,7 @@ A long harness call (e.g. a multi-minute `opencode run` or `copilot -p`) is sile
 [engine] …still working on task 1.1 (@project-architect, 45s elapsed)
 ```
 
-The interval defaults to 15 seconds and is controlled with `--heartbeat-ms <ms>` (or `FORGE_ENGINE_HEARTBEAT_MS`); `0` disables it. This only works because the CLI adapters (`opencode`, `copilot`) spawn their child process **asynchronously** (`spawn`, not the blocking `spawnSync`) - the event loop stays free for the heartbeat timer to fire. The OpenAI adapter is already async, so it benefits automatically.
+The interval defaults to 60 seconds and is controlled with `--heartbeat-ms <ms>` (or `FORGE_ENGINE_HEARTBEAT_MS`); `0` disables it. This only works because the CLI adapters (`opencode`, `copilot`) spawn their child process **asynchronously** (`spawn`, not the blocking `spawnSync`) - the event loop stays free for the heartbeat timer to fire. The OpenAI adapter is already async, so it benefits automatically.
 
 ### Per-task timeout
 
@@ -177,6 +177,21 @@ After every `executeTask` call, the engine calls both `saveState` and `syncProgr
 
 - If the process crashes mid-run (power failure, SIGKILL, etc.), the next `run` invocation picks up from exactly the last saved state.
 - `PROGRESS.md` is always current so a human checking in on the build gets an accurate picture.
+
+### Auto-commit after each task
+
+Immediately after `saveState` + `syncProgressMd`, the engine runs `git add -A`
+and commits the working tree **once per task that completed in that wave** (see
+ADR-035). Commits are sequenced after the wave merge — never inside
+`executeTask` — so concurrent tasks cannot race git. Each commit includes the
+task's work **and** the engine-owned files (`docs/WORKFLOW-STATE.json`,
+`docs/EXECUTION-AUDIT.jsonl`, `docs/PROGRESS.md`), and records a
+`task.committed` audit event with the SHA. Default message:
+`feat(forge-engine): complete task {taskId} - {taskTitle}`.
+
+Auto-commit is **on by default**; `--no-auto-commit` / `FORGE_ENGINE_AUTO_COMMIT=0`
+disables it. A missing `.git`, an empty diff, or a failed commit is skipped or
+logged — it never fails a task that already succeeded.
 
 ---
 

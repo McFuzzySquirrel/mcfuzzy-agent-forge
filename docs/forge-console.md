@@ -69,7 +69,9 @@ Projects you create or open are remembered in a registry at
 - **Create a new project** - the New Project wizard collects a name, harness,
   visibility, parent directory, and idea, then spawns
   `forge-launcher --non-interactive` in the background (optionally
-  auto-drafting the PRD).
+  auto-drafting the PRD). It also lets you **add an existing PRD and
+  research/seed documents** (see *Adding a PRD and research/seed documents*
+  below), mirroring the CLI's Step 6.
 - **Open an existing project** - a dropdown of your projects plus an
   "Add folder" input for a forge repo you have on disk but haven't opened yet.
 
@@ -108,14 +110,47 @@ from the project's harness (`github` → copilot, otherwise opencode).
 
 ---
 
+## Adding a PRD and research/seed documents
+
+The **New Project wizard** mirrors the CLI's Step 6 (`addPrdAndResearch`): after
+you enter the idea, a **Project documents** section lets you supply an existing
+PRD and research/seed documents (design specs, market research, technical
+notes). Both fields accept either a **file-picker browse** or a **typed absolute
+path** (comma-separated for multiple research docs):
+
+- **Existing PRD** → copied to `docs/PRD.md` and used as-is, instead of the
+  pipeline drafting one from the idea.
+- **Research / seed documents** → copied to `docs/research/`, where the later
+  PRD build (`forge-auto-build-prd`) reads them as extra context.
+
+Picked files are uploaded to the server (`POST /api/uploads`, staged under the
+OS temp dir) and the launcher is handed the paths via `FORGE_PRD_FILE` /
+`FORGE_RESEARCH_FILES` — exactly the same env vars the terminal CLI uses.
+After creation, research docs are listed in **Plan & Team** (kind `research`)
+alongside the other project documents.
+
+---
+
+## Launching the harness CLI
+
+A **Launch \<harness\> CLI** button on the **Tasks** view header and the
+**Overview** header opens the project's harness CLI in a new terminal window,
+working from the project folder — so you can watch the live run and take over
+at any point. The CLI is chosen from the repo's harness root (`github` →
+`copilot`, `claude` → `claude`, otherwise `opencode`). Backed by
+`POST /api/launch-cli`; when no desktop terminal emulator is available, the
+button shows the exact command to run manually.
+
+---
+
 ## Views
 
 | View | What it shows |
 |---|---|
 | **Home** | create a new project or open an existing one (landing). |
-| **Overview** | run status, progress + counts, blockers, the pipeline **Continue** button, and run controls. |
+| **Overview** | run status, progress + counts, blockers, the pipeline **Continue** button, run controls, an **auto-commit** toggle, and a **Launch \<harness\> CLI** button. |
 | **Board** | the PixiJS Forge Board - a live kanban (To Do · In Progress · Done · Failed). |
-| **Tasks** | every task in a filterable/sortable table with a detail drawer (including an editable per-task timeout). |
+| **Tasks** | every task in a filterable/sortable table with a detail drawer (including an editable per-task timeout) and a **Launch \<harness\> CLI** button. |
 | **Logs** | `docs/engine-run.log` tail + the audit event stream (live via SSE). |
 | **Plan & Team** | the project documents (IDEA, PRD, vision, features, progress, model plan) + agents and skills, in collapsible sections. |
 | **Artifacts** | the structured outputs tasks produced (`docs/artifacts/`), browsable by type/task with previews. |
@@ -138,6 +173,13 @@ does:
 | **Stop** | writes `request: stop` **and** SIGTERMs `docs/engine.pid`. |
 | **Resume** | `forge-launcher engine-run --repo <path> …` (resumes from `WORKFLOW-STATE.json`). |
 | **Replay** | `workflow-engine replay <task-id> --repo <path>` for a failed task. |
+
+The **Auto-commit after each task** checkbox (Controls panel) toggles
+`autoCommit` in `docs/engine-config.json`, which the console's run/resume
+command passes to the engine. It defaults to **on** (see
+[ADR-035](adr/035-auto-commit-after-task.md)); the engine commits one commit per
+completed task. Disable it if the working tree is dirty and you don't want agent
+output mixed with your uncommitted changes.
 
 ### Task timeouts
 

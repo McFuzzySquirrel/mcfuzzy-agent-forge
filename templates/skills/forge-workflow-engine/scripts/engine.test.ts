@@ -5,7 +5,7 @@ import { mkdtempSync, mkdirSync, writeFileSync, readFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
-import { allDepsComplete, isComplete, isTaskDone, mapLimit, nextReadyTasks, ownerUniqueReady, runEngine } from "./engine.ts";
+import { allDepsComplete, isComplete, isTaskDone, mapLimit, nextReadyTasks, ownerUniqueReady, replayTask, runEngine } from "./engine.ts";
 import { runCommand } from "./harness/run.ts";
 import { readControl, writeControl } from "./control.ts";
 import type { EngineOptions, ExecutionManifest, HarnessAdapter, ManifestTask, TaskResult, TaskStatus, WorkflowState } from "./types.ts";
@@ -606,6 +606,8 @@ class FileWritingHarness implements HarnessAdapter {
 
 function initGit(root: string): void {
   execFileSync("git", ["init", "-q"], { cwd: root });
+  execFileSync("git", ["config", "user.email", "forge-test@local"], { cwd: root });
+  execFileSync("git", ["config", "user.name", "Forge Test"], { cwd: root });
 }
 
 test("output gate: a task whose expectedOutputs are missing is marked failed, not complete", async () => {
@@ -659,6 +661,74 @@ test("output gate: a file change detected via git diff passes, even with trivial
 
   assert.equal(state.status, "complete");
   assert.equal(state.tasks["1.1"]?.status, "complete");
+});
+
+test("auto-commit (default on) commits one commit per completed task and records task.committed", async () => {
+  const fixture = makeEngineFixture();
+  initGit(fixture.root);
+  const manifestPath = fixture.manifestPath;
+  const manifest = JSON.parse(readFileSync(manifestPath, "utf8")) as ExecutionManifest;
+  manifest.phases[0]!.tasks.push({
+    id: "1.2",
+    title: "Build a second thing",
+    description: "Build another thing",
+    ownerAgent: "worker",
+    dependencies: ["1.1"],
+    expectedOutputs: [],
+    validationCommands: [],
+    approvalRequired: false,
+    sourceLines: ["- Task 1.2: Build a second thing"],
+  });
+  writeFileSync(manifestPath, JSON.stringify(manifest), "utf8");
+
+  const harness = new FileWritingHarness();
+  const state = await runEngine(engineOptionsFor(fixture, harness, 1_000));
+
+  assert.equal(state.status, "complete");
+  const log = execFileSync("git", ["log", "--oneline"], { cwd: fixture.root, encoding: "utf8" })
+    .trim()
+    .split("\n")
+    .filter(Boolean);
+  assert.equal(log.length, 2, "one commit per completed task");
+  assert.match(log[0]!, /complete task 1\.2/);
+  assert.match(log[1]!, /complete task 1\.1/);
+
+  const audit = readFileSync(join(fixture.root, "docs", "EXECUTION-AUDIT.jsonl"), "utf8");
+  assert.match(audit, /"action":"task\.committed"/);
+  assert.match(audit, /"commitSha":"[0-9a-f]{40}"/);
+});
+
+test("auto-commit disabled (autoCommit: false) leaves the working tree uncommitted", async () => {
+  const fixture = makeEngineFixture();
+  initGit(fixture.root);
+  const harness = new FileWritingHarness();
+  const state = await runEngine(engineOptionsFor(fixture, harness, 1_000, { autoCommit: false }));
+
+  assert.equal(state.status, "complete");
+  const status = execFileSync("git", ["status", "--porcelain", "--untracked-files=all"], { cwd: fixture.root, encoding: "utf8" });
+  assert.match(status, /src\/thing\.ts/, "task work should remain uncommitted");
+  const audit = readFileSync(join(fixture.root, "docs", "EXECUTION-AUDIT.jsonl"), "utf8");
+  assert.doesNotMatch(audit, /"action":"task\.committed"/);
+});
+
+test("replayTask auto-commits a replayed task's work by default", async () => {
+  const fixture = makeEngineFixture({ expectedOutputs: ["src/thing.ts"] });
+  initGit(fixture.root);
+  const hollow = new HollowHarness();
+  const failed = await runEngine(engineOptionsFor(fixture, hollow, 1_000, { allowNoop: false }));
+  assert.equal(failed.status, "failed");
+  assert.equal(failed.tasks["1.1"]?.status, "failed");
+
+  const writing = new FileWritingHarness();
+  const state = await replayTask("1.1", engineOptionsFor(fixture, writing, 1_000, { allowNoop: false }));
+
+  assert.equal(state.tasks["1.1"]?.status, "complete");
+  const log = execFileSync("git", ["log", "--oneline"], { cwd: fixture.root, encoding: "utf8" })
+    .trim()
+    .split("\n")
+    .filter(Boolean);
+  assert.equal(log.length, 1, "the replayed task should produce one commit");
+  assert.match(log[0]!, /complete task 1\.1/);
 });
 
 test("output gate: a failing manifest validation command marks the task failed", async () => {

@@ -99,9 +99,15 @@ export async function renderTasks(container: HTMLElement): Promise<void> {
   countLine = el("div", { className: "dim small" });
   tableHost = el("div", null);
 
+  const launch = el("button", { className: "btn btn-sm" }, `Launch ${store.summary?.harness ?? "harness"} CLI`);
+  launch.addEventListener("click", () => void launchCli());
+
   container.appendChild(
     el("div", { className: "panel" }, [
-      el("div", { className: "row between wrap" }, [el("h3", null, "Tasks"), countLine]),
+      el("div", { className: "row between wrap" }, [
+        el("h3", null, "Tasks"),
+        el("div", { className: "row gap" }, [launch, countLine]),
+      ]),
       statusChips,
       el("div", { className: "row gap", style: "margin:8px 0" }, [searchInput]),
       el("div", { className: "row gap", style: "margin:0 0 8px" }, [
@@ -126,6 +132,16 @@ function chip(label: string, active: boolean, onClick: () => void): HTMLElement 
   const node = el("span", { className: active ? "chip active" : "chip" }, label);
   node.addEventListener("click", onClick);
   return node;
+}
+
+/** Opens the project's harness CLI (opencode/copilot/claude) in a new terminal. */
+async function launchCli(): Promise<void> {
+  try {
+    const res = await api.launchCli();
+    toast(res.message ?? (res.ok ? "harness CLI launched." : "launch failed"));
+  } catch (err) {
+    toast(err instanceof Error ? err.message : "launch failed");
+  }
 }
 
 async function refresh(): Promise<void> {

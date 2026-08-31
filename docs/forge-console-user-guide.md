@@ -39,6 +39,9 @@ If you are creating a repo from the browser, the wizard collects:
 - the harness choice,
 - the parent directory,
 - the initial idea,
+- optionally an **existing PRD** and **research/seed documents** (browse a file
+  picker or type absolute paths) — these are copied to `docs/PRD.md` /
+  `docs/research/` and inform the PRD build,
 - and whether the PRD should be drafted automatically.
 
 Once it finishes, the console opens that project’s Overview view.
@@ -91,6 +94,8 @@ The Overview controls panel offers the same actions you would otherwise issue fr
 - **Stop**: terminate the running engine.
 - **Resume**: continue the run from the saved state.
 - **Replay**: retry a failed task.
+- **Auto-commit after each task**: toggles one-commit-per-task git history (on by default).
+- **Launch \<harness\> CLI**: opens the project's harness CLI (opencode/copilot/claude) in a new terminal from the project folder, so you can watch the live run and take over manually. Also available on the Tasks header.
 
 If a task times out or fails, open its detail drawer in the Tasks view and adjust the timeout before replaying it.
 

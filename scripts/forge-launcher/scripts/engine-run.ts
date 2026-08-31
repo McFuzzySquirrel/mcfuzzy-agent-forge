@@ -24,6 +24,9 @@ export interface EngineRunOptions {
   attach?: string;
   allowNoop?: boolean;
   runValidation?: boolean;
+  autoCommit?: boolean;
+  noAutoCommit?: boolean;
+  commitMessageTemplate?: string;
   stop?: boolean;
   pause?: boolean;
 }
@@ -57,6 +60,8 @@ export async function engineRun(opts: EngineRunOptions = {}): Promise<number> {
   const attach = opts.attach ?? process.env.FORGE_ENGINE_ATTACH_URL ?? "";
   const allowNoop = opts.allowNoop ?? process.env.FORGE_ENGINE_ALLOW_NOOP === "1";
   const runValidation = opts.runValidation ?? process.env.FORGE_ENGINE_RUN_VALIDATION === "1";
+  const autoCommit = opts.autoCommit ?? !(process.env.FORGE_ENGINE_AUTO_COMMIT === "0");
+  const commitMessageTemplate = opts.commitMessageTemplate ?? process.env.FORGE_ENGINE_COMMIT_MESSAGE_TEMPLATE ?? "";
   const stop = opts.stop ?? false;
   const pause = opts.pause ?? false;
 
@@ -112,7 +117,7 @@ export async function engineRun(opts: EngineRunOptions = {}): Promise<number> {
 
   const manifest = path.join(repo, "docs", "EXECUTION-MANIFEST.json");
 
-  out(`forge-engine-run: repo=${repo} harness=${harness}${granularity ? ` granularity=${granularity}` : ""}${concurrency ? ` concurrency=${concurrency}` : ""}${taskTimeoutMs ? ` task-timeout=${taskTimeoutMs}` : ""}${maxRetries ? ` max-retries=${maxRetries}` : ""}${viz ? ` viz=${vizPort || "default"}` : ""}${keepAlive ? ` keep-alive${keepAlivePort ? `=${keepAlivePort}` : ""}` : ""}${noKeepAlive ? ` no-keep-alive` : ""}${attach ? ` attach=${attach}` : ""}`);
+  out(`forge-engine-run: repo=${repo} harness=${harness}${granularity ? ` granularity=${granularity}` : ""}${concurrency ? ` concurrency=${concurrency}` : ""}${taskTimeoutMs ? ` task-timeout=${taskTimeoutMs}` : ""}${maxRetries ? ` max-retries=${maxRetries}` : ""}${viz ? ` viz=${vizPort || "default"}` : ""}${keepAlive ? ` keep-alive${keepAlivePort ? `=${keepAlivePort}` : ""}` : ""}${noKeepAlive ? ` no-keep-alive` : ""}${attach ? ` attach=${attach}` : ""}${autoCommit === false ? " no-auto-commit" : ""}${commitMessageTemplate ? " commit-message-template=<custom>" : ""}`);
   out(`  engine : ${engineDir}`);
   out(`  adapter: ${adapterDir || "<not bootstrapped; manifest must already exist>"}`);
 
@@ -170,6 +175,8 @@ export async function engineRun(opts: EngineRunOptions = {}): Promise<number> {
   if (attach) engineFlags.push("--attach", attach);
   if (allowNoop) engineFlags.push("--allow-noop");
   if (runValidation) engineFlags.push("--run-validation");
+  if (autoCommit === false) engineFlags.push("--no-auto-commit");
+  if (commitMessageTemplate) engineFlags.push("--commit-message-template", commitMessageTemplate);
 
   if (dryRun) {
     out(`  [dry-run] (cd '${engineDir}' && npm run workflow-engine -- run ${engineFlags.join(" ")})`);
@@ -206,6 +213,9 @@ export function engineRunCli(args: string[]): Promise<number> {
       case "--attach": opts.attach = args[++i]; break;
       case "--allow-noop": opts.allowNoop = true; break;
       case "--run-validation": opts.runValidation = true; break;
+      case "--auto-commit": opts.autoCommit = true; break;
+      case "--no-auto-commit": opts.noAutoCommit = true; opts.autoCommit = false; break;
+      case "--commit-message-template": opts.commitMessageTemplate = args[++i]; break;
       case "--stop": opts.stop = true; break;
       case "--pause": opts.pause = true; break;
       default: throw new Error(`Unknown option: ${a}`);

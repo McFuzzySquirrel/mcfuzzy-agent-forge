@@ -98,6 +98,33 @@ behavior) on either harness.
 
 ---
 
+## Auto-commit
+
+After each task completes, the engine commits the working tree — one commit per
+task, sequenced after the wave merge so it is safe at any `--concurrency`. This
+produces a git history aligned with the manifest's task decomposition: review,
+bisect, or roll back any single task's work.
+
+- **Default on.** The engine commits by default. Disable with
+  `--no-auto-commit` / `FORGE_ENGINE_AUTO_COMMIT=0` (e.g. when you are
+  mid-rebase, or the working tree already has changes you don't want mixed with
+  agent output).
+- **What is committed.** `git add -A` scoped to the repo root, so the task's
+  work and the engine-owned files (`docs/WORKFLOW-STATE.json`,
+  `docs/EXECUTION-AUDIT.jsonl`, `docs/PROGRESS.md`) land in the same commit.
+- **Commit message.** Default
+  `feat(forge-engine): complete task {taskId} - {taskTitle}`; override with
+  `--commit-message-template` / `FORGE_ENGINE_COMMIT_MESSAGE_TEMPLATE` using
+  `{taskId}` and `{taskTitle}` placeholders.
+- **Non-fatal.** No `.git`, an empty diff ("nothing to commit"), or a failed
+  commit (e.g. no git identity) is skipped/logged — it never fails the task or
+  the run. A `task.committed` audit event records the SHA of each successful
+  commit (visible in `docs/EXECUTION-AUDIT.jsonl` and the console Timeline).
+- **See also** [ADR-035](adr/035-auto-commit-after-task.md) for the design
+  rationale and the deviation from the research plan (default on).
+
+---
+
 ## Upgrading the engine in an existing project
 
 The gate (and this fix) lives entirely in the forge skill code - the PRD,
@@ -161,6 +188,8 @@ engine's heartbeat stays responsive.
 npm run workflow-engine -- run     [--repo <path>] [--harness <name>] [--max-retries <n>]
                                    [--retry-delay-ms <ms>] [--heartbeat-ms <ms>]
                                    [--concurrency <n>] [--task-timeout-ms <ms>] [--yes]
+                                   [--allow-noop] [--run-validation]
+                                   [--auto-commit|--no-auto-commit] [--commit-message-template <tmpl>]
                                    [--keep-alive] [--keep-alive-port <n>] [--no-keep-alive] [--attach <url>]
                                    [--viz [port]] [--no-open]
 npm run workflow-engine -- status  [--repo <path>]
@@ -176,7 +205,7 @@ npm run workflow-engine -- viz     [--repo <path>] [--port <n>] [--no-open]
 | `--harness <name>` | `opencode` | Backend: `opencode`, `copilot`, `openai`, `stub`, `flowforge-kernel` |
 | `--max-retries <n>` | `2` | Attempts per task before it is marked `failed` |
 | `--retry-delay-ms <ms>` | `5000` | Delay between retries |
-| `--heartbeat-ms <ms>` | `15000` | Heartbeat interval while a task runs; `0` disables |
+| `--heartbeat-ms <ms>` | `60000` | Heartbeat interval while a task runs; `0` disables |
 | `--concurrency <n>` | `1` | Max ready tasks to run in parallel (see *Parallel dispatch* below) |
 | `--task-timeout-ms <ms>` | `600000` (10 min) | Per-task timeout before the harness call is killed; a task's own `timeoutMs` in the manifest overrides this |
 | `--yes` | *(off)* | Skip the interactive pre-run gate |
@@ -186,6 +215,11 @@ npm run workflow-engine -- viz     [--repo <path>] [--port <n>] [--no-open]
 | `--attach <url>` | *(off)* | Attach tasks to an already-running `opencode serve` instance (e.g. `http://127.0.0.1:4096`) with no lifecycle management |
 | `--viz [port]` | *(off)* | Launch the live Forge Board dashboard (default port `4299`, next free port if busy) |
 | `--no-open` | *(off)* | Do not auto-open the browser (the URL is still printed) |
+| `--allow-noop` | *(off)* | Relax the output-verification no-op gate (missing/trivial output still fails) |
+| `--run-validation` | *(off)* | Execute each task's manifest `validationCommands` and require them to pass |
+| `--auto-commit` | **on** | Commit the working tree after each completed task (one commit per task; see *Auto-commit* below) |
+| `--no-auto-commit` | *(off)* | Disable per-task auto-commit (e.g. mid-rebase or with a dirty working tree) |
+| `--commit-message-template <tmpl>` | *(built-in)* | Commit message with `{taskId}` / `{taskTitle}` placeholders; default `feat(forge-engine): complete task {taskId} - {taskTitle}` |
 
 ### Pre-run gate
 
@@ -404,7 +438,7 @@ To start fresh (e.g. after recompiling the manifest), delete `docs/WORKFLOW-STAT
 | Variable | Default | Purpose |
 |---|---|---|
 | `FORGE_ENGINE_YES` | *(unset)* | `1` skips the pre-run gate (same as `--yes`) |
-| `FORGE_ENGINE_HEARTBEAT_MS` | `15000` | Heartbeat interval in ms |
+| `FORGE_ENGINE_HEARTBEAT_MS` | `60000` | Heartbeat interval in ms |
 | `FORGE_ENGINE_CONCURRENCY` | `1` | Max ready tasks to run in parallel (same as `--concurrency`; only for harnesses that declare `supportsConcurrency`) |
 | `FORGE_ENGINE_TASK_TIMEOUT_MS` | `600000` | Per-task timeout in ms (same as `--task-timeout-ms`; per-task manifest `timeoutMs` overrides) |
 | `FORGE_ENGINE_HARNESS` | `opencode` | Default harness for the standalone runner |
@@ -412,6 +446,10 @@ To start fresh (e.g. after recompiling the manifest), delete `docs/WORKFLOW-STAT
 | `FORGE_ENGINE_VIZ_PORT` | `4299` | Dashboard port when `--viz` is enabled |
 | `FORGE_ENGINE_ATTACH` | *(unset)* | `1` forces the `opencode serve` keep-alive (same as `--keep-alive`); `0` forces cold start per task (same as `--no-keep-alive`); unset = adaptive |
 | `FORGE_ENGINE_ATTACH_URL` | *(unset)* | Attach tasks to an existing `opencode serve` URL (same as `--attach`) |
+| `FORGE_ENGINE_ALLOW_NOOP` | *(unset)* | `1` relaxes the no-op output gate (same as `--allow-noop`) |
+| `FORGE_ENGINE_RUN_VALIDATION` | *(unset)* | `1` runs manifest `validationCommands` per task (same as `--run-validation`) |
+| `FORGE_ENGINE_AUTO_COMMIT` | `1` | `0` disables auto-commit after each completed task (same as `--no-auto-commit`); default on |
+| `FORGE_ENGINE_COMMIT_MESSAGE_TEMPLATE` | *(built-in)* | Commit message template with `{taskId}` / `{taskTitle}` placeholders |
 | `OPENCODE_BIN` | `opencode` | Path to the opencode binary |
 | `OPENCODE_EXTRA_FLAGS` | *(empty)* | Extra flags appended to every `opencode run` |
 | `COPILOT_BIN` | `copilot` | Path to the copilot binary |

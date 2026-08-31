@@ -4,6 +4,107 @@ Detailed release and change notes for MyForge.
 
 ---
 
+## September 2026 - v3.36
+
+### Engine log no longer duplicates every line on detached runs
+
+- **Fix.** When a run was started detached (from the Forge Console's Run/Resume,
+  or the interactive launcher's "run now detached"), the launcher's `runTee`
+  wrote the engine output to `docs/engine-run.log` **and** forwarded it to its
+  stdout — which the console/detached spawn had already redirected to that same
+  log file. Every engine line (phase, context projection, "starting task",
+  heartbeats, etc.) was therefore logged twice, sometimes merged mid-line.
+- **Now** `runTee` only echoes to stdout/stderr when they are attached to a
+  terminal, so a detached run writes each line exactly once. Terminal runs
+  (`forge-launcher engine-run` in a shell) still stream live output unchanged.
+
+### Execution adapter: a skills-only harness root no longer shadows the real one
+
+- **Fix.** `discoverForgeRepo`'s harness-root detection matched any root with
+  `agents/` **or** `skills/`. A stray skills-only root (e.g. a `.github/` that
+  has skills but no agents) could shadow the real harness root, so agent
+  discovery returned **zero agents** — the engine then *skipped* every task
+  ("No agent matched owner …"), and because skipped counts as done, a resume
+  could mark a whole run complete without executing anything.
+- **Now** a root that owns `agents/` wins; a skills-only root is only used when
+  no root has agents, and a warning records any ignored skills-only root. This
+  restores correct owner matching (and real execution) for runs with mixed
+  harness roots.
+
+### Forge Board: clearer expanded cards and fixed avatar moods
+
+- **Expanded cards get wider.** Clicking a task card now widens it (+150px) in
+  addition to growing taller, so the expanded detail (full title, description,
+  status/owner/phase/timeout/inputs/outputs rows) has room to breathe; the
+  card floats over its right neighbor on an opaque backdrop.
+- **Detail rows no longer overlap.** The key/value rows previously drew the
+  label and value at the same spot, so "Status · complete" rendered on top of
+  itself. Labels now sit in their own column with the value indented beside
+  them, and row spacing was increased.
+- **Avatars smile when done.** The face's mouth had the smile/frown arcs
+  reversed, so completed cards looked cross and failed ones grinned. Completed
+  cards now smile, failed ones frown (running = dot, pending/skipped = neutral).
+- **Long task ids are trimmed** to fit the card instead of spilling over the
+  edge.
+
+### Engine heartbeat default raised to 60s
+
+- The engine's per-task heartbeat line (`…still working on task <id> (@<agent>, Ns elapsed)`)
+  now prints every **60 seconds** by default instead of 15, so `docs/engine-run.log`
+  stays quieter during long tasks. Override with `--heartbeat-ms` /
+  `FORGE_ENGINE_HEARTBEAT_MS` (or `0` to disable).
+
+### Auto-commit after each completed task (default on)
+
+- **One commit per completed task.** The workflow engine now commits the
+  working tree after each task completes, sequenced after the wave merge so it
+  is safe at any concurrency level. The commit includes the task's work **and**
+  the engine-owned files (`docs/WORKFLOW-STATE.json`, `docs/EXECUTION-AUDIT.jsonl`,
+  `docs/PROGRESS.md`), producing a clear, attributable history aligned with the
+  manifest's task decomposition.
+- **Default on** (per product decision). Existing runs change behaviour by
+  default. Disable with `--no-auto-commit` (`FORGE_ENGINE_AUTO_COMMIT=0`) —
+  for example when mid-rebase or with pre-existing uncommitted changes you
+  don't want mixed with agent output.
+- **Custom message template.** `--commit-message-template "<tmpl>"` (or
+  `FORGE_ENGINE_COMMIT_MESSAGE_TEMPLATE`) with `{taskId}` / `{taskTitle}`
+  placeholders; default is `feat(forge-engine): complete task {taskId} - {taskTitle}`.
+- **Non-fatal failures.** A repo without `.git`, an empty diff, or a failed
+  commit (e.g. no git identity) is logged/skipped and never fails the task or
+  the run. A new `task.committed` audit event records the commit SHA.
+- **Wired through the CLI and console.** `forge-launcher engine-run` accepts
+  `--auto-commit|--no-auto-commit` and `--commit-message-template`; the setting
+  persists in `docs/engine-config.json` (new `autoCommit` field) and appears as
+  a checkbox on the console **Overview** (Controls panel). The interactive
+  launcher's engine configuration also asks about it (default yes).
+
+### Forge Console: add an existing PRD and research/seed documents in the New Project wizard
+
+- **Mirrors the CLI's Step 6.** The New Project wizard now has a **Project
+  documents** section (after the idea) where you can add an existing PRD and
+  research/seed documents (design specs, market research, technical notes) —
+  exactly like the terminal flow. Docs are copied to `docs/PRD.md` and
+  `docs/research/`, so the later PRD build (`forge-auto-build-prd`) reads the
+  research context and a supplied PRD is used as-is instead of being drafted.
+- **Browse by file picker or absolute path.** Both fields support a file-picker
+  browse (upload) **and** a typed absolute path (comma-separated for multiple
+  research docs). Picked files are staged server-side (`POST /api/uploads`) and
+  the launcher is handed the paths via `FORGE_PRD_FILE` / `FORGE_RESEARCH_FILES`.
+- **Research docs are visible afterwards.** The console's Plan & Team view now
+  lists `docs/research/*.md` entries (kind `research`), so the docs you added
+  are browsable in the browser.
+
+### Forge Console: launch the harness CLI from a task
+
+- **"Launch <harness> CLI"** button on the **Tasks** view header and the
+  **Overview** header opens the project's harness CLI (opencode / copilot /
+  claude, chosen from the repo's harness root) in a new terminal window in the
+  project folder — so you can watch the live run and take over at any point.
+  Backed by `POST /api/launch-cli` (injectable in tests); when no desktop
+  terminal emulator is found the UI shows the exact command to run manually.
+
+---
+
 ## August 2026 - v3.35
 
 ### Forge Console: skills shown as cards, grouped Forge vs Project

@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { mkdtempSync, mkdirSync, writeFileSync, appendFileSync, readFileSync, renameSync } from "node:fs";
+import { mkdtempSync, mkdirSync, writeFileSync, appendFileSync, readFileSync, renameSync, existsSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { get as httpGet, request as httpRequest } from "node:http";
@@ -429,4 +429,136 @@ test("artifact content path traversal is rejected", async () => {
     const res = await getJson(`${server.url}/api/artifact/content?path=..%2F..%2Fetc%2Fpasswd`);
     assert.equal(res, null);
   });
+});
+
+test("POST /api/uploads stages uploaded content to a temp file and returns its path", async () => {
+  await withServer(async (server) => {
+    const token = server.token;
+    const res = await postJson(`${server.url}/api/uploads`, { name: "market research.md", content: "# Research\n\nSeed doc.\n" }, { "X-Forge-Token": token });
+    const body = res.body as { ok: boolean; path?: string; name?: string };
+    assert.equal(body.ok, true);
+    assert.ok(body.path && existsSync(body.path), "staged file should exist");
+    assert.equal(readFileSync(body.path!, "utf8"), "# Research\n\nSeed doc.\n");
+    assert.equal(body.name, "market_research.md");
+  });
+});
+
+test("createProject passes FORGE_PRD_FILE and FORGE_RESEARCH_FILES to the launcher", async () => {
+  await withServer(async (server, repo, spawned) => {
+    const token = server.token;
+    const prd = join(repo, "PRD.md");
+    const research = join(repo, "research.md");
+    writeFileSync(prd, "# PRD\n", "utf8");
+    writeFileSync(research, "# Seed\n", "utf8");
+
+    const res = await postJson(`${server.url}/api/projects/create`, {
+      name: "my-app",
+      idea: "Build an app.",
+      parentDir: "/tmp",
+      prdPath: prd,
+      researchPaths: [research],
+    }, { "X-Forge-Token": token });
+    assert.equal((res.body as { ok: boolean }).ok, true);
+
+    const call = spawned.calls.at(-1);
+    assert.ok(call);
+    assert.equal(call.opts.env!.FORGE_PRD_FILE, prd);
+    assert.equal(call.opts.env!.FORGE_RESEARCH_FILES, research);
+  });
+});
+
+test("createProject rejects a missing PRD path", async () => {
+  await withServer(async (server) => {
+    const token = server.token;
+    const res = await postJson(`${server.url}/api/projects/create`, {
+      name: "my-app",
+      idea: "Build an app.",
+      prdPath: "/does/not/exist.md",
+    }, { "X-Forge-Token": token });
+    assert.equal(res.status, 400);
+    assert.match((res.body as { message: string }).message, /PRD file not found/);
+  });
+});
+
+test("engine-config toggles auto-commit and flows into engine-run args", async () => {
+  await withServer(async (server, repo, spawned) => {
+    const token = server.token;
+    assert.equal((await getJson(`${server.url}/api/summary`) as { autoCommit: boolean }).autoCommit, true);
+
+    const off = await postJson(`${server.url}/api/engine-config`, { autoCommit: false }, { "X-Forge-Token": token });
+    assert.equal((off.body as { ok: boolean }).ok, true);
+    assert.equal(JSON.parse(readFileSync(join(repo, "docs", "engine-config.json"), "utf8")).autoCommit, false);
+    assert.equal((await getJson(`${server.url}/api/summary`) as { autoCommit: boolean }).autoCommit, false);
+
+    const run = await postJson(`${server.url}/api/control`, { action: "run" }, { "X-Forge-Token": token });
+    assert.equal((run.body as { ok: boolean }).ok, true);
+    assert.ok(spawned.calls.at(-1)!.args.includes("--no-auto-commit"), "engine-run should pass --no-auto-commit");
+
+    const on = await postJson(`${server.url}/api/engine-config`, { autoCommit: true }, { "X-Forge-Token": token });
+    assert.equal((on.body as { ok: boolean }).ok, true);
+    const run2 = await postJson(`${server.url}/api/control`, { action: "run" }, { "X-Forge-Token": token });
+    assert.ok(!spawned.calls.at(-1)!.args.includes("--no-auto-commit"), "default on: no --no-auto-commit flag");
+  });
+});
+
+test("launch-cli opens the harness CLI in a terminal (opencode for .agents)", async () => {
+  const home = mkdtempSync(join(tmpdir(), "forge-home-"));
+  const prevHome = process.env.FORGE_HOME;
+  process.env.FORGE_HOME = home;
+  const repo = makeRepo();
+  const calls: Array<{ cli: string; dir: string; args: string[] }> = [];
+  const server = await startConsoleServer({
+    repoRoot: repo,
+    port: nextPort(),
+    open: false,
+    onLog: () => {},
+    allowExternalOpen: true,
+    launchCli: async (cli, dir, args) => { calls.push({ cli, dir, args }); return true; },
+  });
+  try {
+    const res = await postJson(`${server.url}/api/launch-cli`, {}, { "X-Forge-Token": server.token });
+    const body = res.body as { ok: boolean; launched?: boolean; cli?: string; command?: string };
+    assert.equal(body.ok, true);
+    assert.equal(body.launched, true);
+    assert.equal(body.cli, "opencode");
+    assert.deepEqual(calls, [{ cli: "opencode", dir: repo, args: ["."] }]);
+    assert.match(body.command ?? "", /opencode \.$/);
+  } finally {
+    await server.stop();
+    if (prevHome === undefined) delete process.env.FORGE_HOME;
+    else process.env.FORGE_HOME = prevHome;
+  }
+});
+
+test("launch-cli chooses copilot for a GitHub harness and reports the manual fallback", async () => {
+  const home = mkdtempSync(join(tmpdir(), "forge-home-"));
+  const prevHome = process.env.FORGE_HOME;
+  process.env.FORGE_HOME = home;
+  const repo = makeRepo();
+  renameSync(join(repo, ".agents"), join(repo, ".github"));
+  const calls: Array<{ cli: string; dir: string; args: string[] }> = [];
+  const server = await startConsoleServer({
+    repoRoot: repo,
+    port: nextPort(),
+    open: false,
+    onLog: () => {},
+    allowExternalOpen: true,
+    launchCli: async (cli, dir, args) => { calls.push({ cli, dir, args }); return false; },
+  });
+  try {
+    const res = await postJson(`${server.url}/api/launch-cli`, {}, { "X-Forge-Token": server.token });
+    const body = res.body as { ok: boolean; launched?: boolean; cli?: string; command?: string };
+    assert.equal(body.launched, false);
+    assert.equal(body.cli, "copilot");
+    assert.deepEqual(calls, [{ cli: "copilot", dir: repo, args: [] }]);
+    assert.match(body.message ?? "", /run it manually/);
+    assert.match(body.command ?? "", /copilot/);
+
+    const unauth = await postJson(`${server.url}/api/launch-cli`, {});
+    assert.equal(unauth.status, 403);
+  } finally {
+    await server.stop();
+    if (prevHome === undefined) delete process.env.FORGE_HOME;
+    else process.env.FORGE_HOME = prevHome;
+  }
 });

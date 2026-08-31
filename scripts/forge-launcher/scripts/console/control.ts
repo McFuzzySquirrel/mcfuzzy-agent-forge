@@ -69,6 +69,7 @@ function engineRunArgs(repoRoot: string): string[] {
   if (cfg?.maxRetries) args.push("--max-retries", cfg.maxRetries);
   if (cfg?.keepAlive) args.push("--keep-alive");
   if (cfg?.attach) args.push("--attach", cfg.attach);
+  if (cfg?.autoCommit === false) args.push("--no-auto-commit");
   args.push("--yes");
   return args;
 }
@@ -170,6 +171,13 @@ export class RunController {
       FORGE_IDEA: req.idea,
       FORGE_YN_DEFAULT: "n",
     };
+    // Existing PRD + research/seed docs: hand the non-interactive launcher the
+    // paths so its Step 6 (addPrdAndResearch) copies them into the new repo,
+    // mirroring the terminal flow exactly.
+    if (req.prdPath) env.FORGE_PRD_FILE = req.prdPath;
+    if (req.researchPaths && req.researchPaths.length > 0) {
+      env.FORGE_RESEARCH_FILES = req.researchPaths.join(",");
+    }
     if (req.autoDraft) env.FORGE_AUTO_DRAFT = "1";
 
     const logFile = path.join(parentDir, `${req.name}.forge-create.log`);

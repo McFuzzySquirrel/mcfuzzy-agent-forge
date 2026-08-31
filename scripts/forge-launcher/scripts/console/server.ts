@@ -2,13 +2,17 @@ import { randomBytes } from "node:crypto";
 import fs from "node:fs";
 import http from "node:http";
 import type { Server } from "node:http";
+import os from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { spawn } from "node:child_process";
 
 import { resolveResources } from "../resources.ts";
+import { resolveInputFile } from "../paths.ts";
+import { launchCliInTerminal } from "../terminal.ts";
 import { RunController, type ControlDeps } from "./control.ts";
 import {
+  detectHarnessRoot,
   loadRegistry,
   looksLikeForgeRepo,
   repoPaths,
@@ -34,6 +38,8 @@ export interface ConsoleServerOptions {
   boardDir?: string;
   deps?: ControlDeps;
   allowExternalOpen?: boolean;
+  /** Injectable "launch a harness CLI in a terminal" seam (defaults to launchCliInTerminal). */
+  launchCli?: (cli: string, dir: string, args: string[]) => Promise<boolean>;
 }
 
 export interface ConsoleServer {
@@ -107,6 +113,25 @@ function openPath(filePath: string): void {
   }
 }
 
+/** Chooses the harness CLI + launch args for a forge repo (github → copilot, claude → claude, else opencode). */
+function harnessCli(repoRoot: string): { cli: string; args: string[] } {
+  const root = detectHarnessRoot(repoRoot);
+  if (root === ".github") return { cli: "copilot", args: [] };
+  if (root === ".claude") return { cli: "claude", args: ["."] };
+  return { cli: "opencode", args: ["."] };
+}
+
+/** Staging dir for browser-uploaded PRD/research files (needed before the new repo exists). */
+function uploadStagingDir(): string {
+  return path.join(os.tmpdir(), "forge-console-uploads", randomBytes(6).toString("hex"));
+}
+
+function sanitizeFileName(name: string): string {
+  const base = path.basename(name.trim());
+  const cleaned = base.replace(/[^a-zA-Z0-9._-]/g, "_").replace(/^\.+/, "");
+  return cleaned || `upload-${randomBytes(4).toString("hex")}.txt`;
+}
+
 const MIME: Record<string, string> = {
   ".html": "text/html; charset=utf-8",
   ".css": "text/css; charset=utf-8",
@@ -167,6 +192,7 @@ export async function startConsoleServer(options: ConsoleServerOptions = {}): Pr
   const clientDir = options.clientDir ?? CLIENT_DIR;
   const boardAssets = options.boardDir ?? boardDir();
   const onLog = options.onLog ?? ((m: string) => console.log(m));
+  const launchCli = options.launchCli ?? launchCliInTerminal;
   const token = randomBytes(16).toString("hex");
 
   const controller = new RunController(options.repoRoot ?? "", options.deps);
@@ -392,10 +418,56 @@ export async function startConsoleServer(options: ConsoleServerOptions = {}): Pr
           upsertProject({ path: target });
           return sendJson(res, 200, { ok: true });
         }
+        if (urlPath === "/api/uploads") {
+          const name = String(body.name ?? "");
+          const content = String(body.content ?? "");
+          if (!name || typeof content !== "string" || content.length === 0) {
+            return sendJson(res, 400, { ok: false, message: "name and non-empty content are required." });
+          }
+          const staging = uploadStagingDir();
+          fs.mkdirSync(staging, { recursive: true });
+          const file = path.join(staging, sanitizeFileName(name));
+          fs.writeFileSync(file, content, "utf8");
+          return sendJson(res, 200, { ok: true, path: file, name: path.basename(file) });
+        }
+        if (urlPath === "/api/engine-config") {
+          if (!currentRepo) return sendJson(res, 400, { ok: false, message: "no repo selected" });
+          const autoCommit = body.autoCommit;
+          if (typeof autoCommit !== "boolean") {
+            return sendJson(res, 400, { ok: false, message: "autoCommit must be a boolean." });
+          }
+          const result = repo.setAutoCommit(currentPaths()!, autoCommit);
+          broadcast("snapshot", snapshotEvent());
+          return sendJson(res, result.ok ? 200 : 400, result);
+        }
+        if (urlPath === "/api/launch-cli") {
+          if (!options.allowExternalOpen) return sendJson(res, 200, { ok: false, message: "launch-cli not enabled" });
+          if (!currentRepo) return sendJson(res, 400, { ok: false, message: "no repo selected" });
+          const { cli, args } = harnessCli(currentRepo);
+          const launched = await launchCli(cli, currentRepo, args);
+          const command = `cd "${currentRepo}" && ${cli} ${args.join(" ")}`.trim();
+          return sendJson(res, 200, {
+            ok: true,
+            launched,
+            cli,
+            command,
+            message: launched
+              ? `${cli} launched in a new terminal (cwd: ${currentRepo}).`
+              : `No supported terminal emulator found - run it manually: ${command}`,
+          });
+        }
         if (urlPath === "/api/projects/create") {
           const req = body as unknown as CreateProjectRequest;
           if (!req.name || !req.idea) {
             return sendJson(res, 400, { ok: false, message: "name and idea are required" });
+          }
+          if (req.prdPath && !resolveInputFile(req.prdPath).ok) {
+            return sendJson(res, 400, { ok: false, message: `PRD file not found: ${req.prdPath}` });
+          }
+          for (const p of req.researchPaths ?? []) {
+            if (!resolveInputFile(p).ok) {
+              return sendJson(res, 400, { ok: false, message: `Research/seed file not found: ${p}` });
+            }
           }
           const result = controller.createProject(req);
           return sendJson(res, 200, result);

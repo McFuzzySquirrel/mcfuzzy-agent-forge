@@ -27,12 +27,22 @@ export function detectRepoRoot(start = process.cwd()): string {
 }
 
 function detectHarnessRoot(repoRoot: string): { root: HarnessRoot; warnings: string[] } {
-  const matches = HARNESS_ROOTS.filter((root) => isDir(join(repoRoot, root, "agents")) || isDir(join(repoRoot, root, "skills")));
+  const withAgents = HARNESS_ROOTS.filter((root) => isDir(join(repoRoot, root, "agents")));
+  const withSkills = HARNESS_ROOTS.filter((root) => isDir(join(repoRoot, root, "skills")));
+  // Prefer a root that owns agents: a skills-only root (e.g. a stray .github/
+  // that has skills but no agents) must not shadow the real harness root, or
+  // every task would fail owner matching. Only when no root has agents do we
+  // fall back to a skills-only root.
+  const matches = withAgents.length > 0 ? withAgents : withSkills;
   if (matches.length === 0) {
     throw new Error(`No supported harness root found under ${repoRoot}. Expected one of ${HARNESS_ROOTS.join(", ")}.`);
   }
 
   const warnings: string[] = [];
+  const ignoredSkillsOnly = withSkills.filter((root) => !withAgents.includes(root));
+  if (withAgents.length > 0 && ignoredSkillsOnly.length > 0) {
+    warnings.push(`Ignoring skills-only harness root(s) ${ignoredSkillsOnly.join(", ")} (no agents/); using ${matches[0]}.`);
+  }
   if (matches.length > 1) {
     warnings.push(`Multiple harness roots detected (${matches.join(", ")}); using ${matches[0]}.`);
   }
