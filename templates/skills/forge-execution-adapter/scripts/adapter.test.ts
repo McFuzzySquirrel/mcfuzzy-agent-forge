@@ -73,6 +73,25 @@ test("discoverForgeRepo supports non-default harness roots", () => {
   assert.equal(repo.harnessRoot, ".github");
 });
 
+test("discoverForgeRepo prefers an agents root over a skills-only root", () => {
+  const root = createFixture(".opencode");
+  // A skills-only root (e.g. a stray .github/) must not shadow the .opencode
+  // agents root, or every task would fail owner matching and get skipped.
+  mkdirSync(join(root, ".github", "skills", "create-readme"), { recursive: true });
+  writeFileSync(join(root, ".github", "skills", "create-readme", "SKILL.md"), `---
+name: create-readme
+description: Writes project READMEs.
+---
+
+# Skill
+`, "utf8");
+
+  const repo = discoverForgeRepo(root);
+  assert.equal(repo.harnessRoot, ".opencode");
+  assert.equal(repo.agents.length, 2);
+  assert.match(repo.warnings.join("\n"), /skills-only harness root.*\.github/);
+});
+
 test("compileExecutionManifest builds phases, tasks, and owners", () => {
   const root = createFixture();
   const repo = discoverForgeRepo(root);

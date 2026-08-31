@@ -6,6 +6,19 @@ Detailed release and change notes for MyForge.
 
 ## September 2026 - v3.36
 
+### Execution adapter: a skills-only harness root no longer shadows the real one
+
+- **Fix.** `discoverForgeRepo`'s harness-root detection matched any root with
+  `agents/` **or** `skills/`. A stray skills-only root (e.g. a `.github/` that
+  has skills but no agents) could shadow the real harness root, so agent
+  discovery returned **zero agents** — the engine then *skipped* every task
+  ("No agent matched owner …"), and because skipped counts as done, a resume
+  could mark a whole run complete without executing anything.
+- **Now** a root that owns `agents/` wins; a skills-only root is only used when
+  no root has agents, and a warning records any ignored skills-only root. This
+  restores correct owner matching (and real execution) for runs with mixed
+  harness roots.
+
 ### Forge Board: clearer expanded cards and fixed avatar moods
 
 - **Expanded cards get wider.** Clicking a task card now widens it (+150px) in
