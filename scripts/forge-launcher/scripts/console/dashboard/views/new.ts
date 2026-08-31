@@ -37,9 +37,9 @@ function buildForm(): HTMLElement {
   // an absolute-path input. Picked files are uploaded to the server; paths are
   // validated and copied. Either way the docs land in docs/PRD.md / docs/research/
   // and inform the later PRD build (forge-auto-build-prd reads docs/research/).
-  const prdFile = el("input", { type: "file", accept: ".md,.txt" });
+  const prdPicker = buildFilePicker(".md,.txt", false);
+  const researchPicker = buildFilePicker(".md,.txt,.pdf,.docx", true);
   const prdPath = el("input", { type: "text", placeholder: "…or an absolute path to a PRD file" });
-  const researchFiles = el("input", { type: "file", accept: ".md,.txt,.pdf,.docx", multiple: "true" });
   const researchPaths = el("input", { type: "text", placeholder: "…or comma-separated absolute paths" });
 
   const submit = el("button", { className: "btn btn-primary", type: "submit" }, "Create project");
@@ -52,9 +52,9 @@ function buildForm(): HTMLElement {
     field("Idea", idea),
     el("div", { className: "doc-section" }, [
       el("h4", null, "Project documents (optional, recommended)"),
-      field("Existing PRD", prdFile),
+      field("Existing PRD", prdPicker.root),
       field("", prdPath),
-      field("Research / seed documents", researchFiles),
+      field("Research / seed documents", researchPicker.root),
       field("", researchPaths),
       el("p", { className: "dim small" }, "Research and seed docs (design specs, market research, technical notes) are copied to docs/research/ and give the PRD build extra context. An existing PRD is used as-is instead of drafting from the idea."),
     ]),
@@ -72,14 +72,40 @@ function buildForm(): HTMLElement {
       parentDir: (parentDir as HTMLInputElement).value.trim() || undefined,
       idea: (idea as HTMLTextAreaElement).value,
       autoDraft: (autoDraft as HTMLInputElement).checked,
-      prdFile: (prdFile as HTMLInputElement).files,
+      prdFile: prdPicker.input.files,
       prdPath: (prdPath as HTMLInputElement).value.trim() || undefined,
-      researchFiles: (researchFiles as HTMLInputElement).files,
+      researchFiles: researchPicker.input.files,
       researchPaths: (researchPaths as HTMLInputElement).value.trim() || undefined,
     });
   });
 
   return el("div", { className: "panel" }, [form]);
+}
+
+interface FilePicker {
+  root: HTMLElement;
+  input: HTMLInputElement;
+}
+
+/** A styled "Browse…" button that opens a hidden native file picker. */
+function buildFilePicker(accept: string, multiple: boolean): FilePicker {
+  const input = el("input", { type: "file", accept, className: "file-input-hidden" }) as HTMLInputElement;
+  if (multiple) input.setAttribute("multiple", "true");
+  const status = el("span", { className: "file-name" }, "No file selected");
+  const browse = el("button", { className: "btn", type: "button" }, "Browse…");
+  browse.addEventListener("click", () => input.click());
+  input.addEventListener("change", () => {
+    const files = input.files;
+    if (!files || files.length === 0) {
+      status.textContent = "No file selected";
+    } else if (multiple) {
+      status.textContent = `${files.length} file${files.length === 1 ? "" : "s"} selected`;
+    } else {
+      status.textContent = files[0]!.name;
+    }
+  });
+  const root = el("div", { className: "file-pick" }, [browse, status]);
+  return { root, input };
 }
 
 function field(label: string, control: HTMLElement): HTMLElement {
