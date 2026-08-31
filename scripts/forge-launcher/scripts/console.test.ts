@@ -138,8 +138,17 @@ function getJson(url: string): Promise<unknown> {
   });
 }
 
-function postJson(url: string, body: unknown, headers: Record<string, string> = {}): Promise<{ status: number; body: unknown }> {
+function getText(url: string): Promise<{ status: number; body: string; type: string | null }> {
   return new Promise((resolve, reject) => {
+    httpGet(url, { agent: false }, (res) => {
+      let body = "";
+      res.on("data", (c) => { body += c; });
+      res.on("end", () => resolve({ status: res.statusCode ?? 0, body, type: res.headers["content-type"] ?? null }));
+    }).on("error", reject);
+  });
+}
+
+function postJson(url: string, body: unknown, headers: Record<string, string> = {}): Promise<{ status: number; body: unknown }> {  return new Promise((resolve, reject) => {
     const data = JSON.stringify(body);
     const req = httpRequest(url, { agent: false, method: "POST", headers: { "Content-Type": "application/json", "Content-Length": Buffer.byteLength(data), ...headers } }, (res) => {
       let text = "";
@@ -248,6 +257,17 @@ test("serves summary, tasks, docs, team, and actions", async () => {
     const actions = await getJson(`${server.url}/api/actions`) as { canRun: boolean; failedTasks: string[] };
     assert.equal(actions.canRun, false);
     assert.deepEqual(actions.failedTasks, []);
+  });
+});
+
+test("serves the user guide at /guide.md", async () => {
+  await withServer(async (server, repo) => {
+    writeFileSync(join(repo, "docs", "guide.md"), "# Forge Console user guide\n\nTest walkthrough.\n", "utf8");
+    const res = await getText(`${server.url}/guide.md`);
+    assert.equal(res.status, 200);
+    assert.match(res.type ?? "", /text\/markdown/);
+    assert.match(res.body, /Test walkthrough/);
+    assert.match(res.body, /^# Forge Console user guide/m);
   });
 });
 

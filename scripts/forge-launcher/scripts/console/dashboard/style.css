@@ -455,6 +455,10 @@ body[data-view="board"] #view { max-width: none; padding: 16px; }
   padding: 20px 24px;
   box-shadow: 0 20px 70px rgba(0, 0, 0, 0.6);
 }
+.help-dialog.guide-mode { max-width: 860px; }
+.help-dialog .tabs { margin-top: 14px; }
+.help-dialog .md h1 { font-size: 18px; }
+.help-dialog .md h2 { font-size: 16px; margin-top: 16px; }
 .help-close {
   background: none;
   border: 1px solid var(--panel-border);

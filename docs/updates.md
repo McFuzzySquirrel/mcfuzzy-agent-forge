@@ -4,6 +4,16 @@ Detailed release and change notes for MyForge.
 
 ---
 
+## October 2026 - v3.37
+
+### Forge Console: user guide refreshed and available in the Help modal
+
+- **The user guide is now in the console.** The Help dialog (top-right **Help** button) gains a **User guide** tab alongside the quick reference. It renders the walkthrough (`docs/forge-console-user-guide.md`, shipped with the package as `guide.md` and served at `/guide.md`), so the full walkthrough is one click away from any view instead of living only in the repo docs.
+- **Guide refreshed for v3.37.** Brought `forge-console-user-guide.md` up to date with the current UI: the `--port` flag, the New Project wizard's **Description** and **Visibility** fields, research/seed docs accepting `.md`/`.txt`/`.pdf`/`.docx` (multi-file via picker or comma-separated paths), the Overview **Manifest** panel and Live/Idle + harness header, and the Plan & Team **skills cards grouped into Forge vs Project skills**. Section titles were tightened into a parallel verb-first style and a pointer to the changelog was added.
+- **Relative doc links render as text** in the guide tab (they can't resolve inside the served page), while external and fragment links stay clickable.
+
+---
+
 ## September 2026 - v3.36
 
 ### Engine log no longer duplicates every line on detached runs
