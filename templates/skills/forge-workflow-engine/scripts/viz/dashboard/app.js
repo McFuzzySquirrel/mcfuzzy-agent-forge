@@ -467,7 +467,7 @@ function truncate(text, maxChars) {
       root, bg, ribbon, avatar, nameText, title, idText, dot, badgeLayer, detailLayer,
       task, status: "pending", artifactId: null, ctxPct: null,
       targetX: 0, targetY: 0,
-      expanded: false, detailH: 0, curH: 0, detailTexts: [],
+      expanded: false, detailH: 0, curH: 0, curW: 0, detailTexts: [],
     };
 
     root.on("pointertap", (e) => {
@@ -531,27 +531,34 @@ function truncate(text, maxChars) {
     entry.dot.position.set(cardW - 12, 12);
     entry.root.alpha = entry.status === "skipped" ? 0.55 : 1;
 
-    // Badges (context projection, artifact).
+    // Badges (context projection, artifact). Right-aligned on their own row
+    // below the id text, truncated so they never cover the name/title/id.
     entry.badgeLayer.removeChildren().forEach((c) => c.destroy());
-    let bx = cardW - 12;
-    if (entry.ctxPct !== null) {
-      const t = new P.Text({
-        text: `ctx −${entry.ctxPct}%`,
-        style: textStyle({ fontSize: 9, fill: 0xa9d1f7 }),
-      });
-      t.anchor.set(1, 0);
-      t.position.set(bx, 26);
-      entry.badgeLayer.addChild(t);
-      bx -= t.width + 6;
-    }
+    const badgeRowY = 47;
+    const badgeMaxW = cardW - 70; // keep clear of the avatar + text column (x < 58)
+    const makeBadge = (text, fill) => new P.Text({ text, style: textStyle({ fontSize: 9, fill }) });
+
+    let ctxBadge = null;
+    if (entry.ctxPct !== null) ctxBadge = makeBadge(`ctx −${entry.ctxPct}%`, 0xa9d1f7);
+
+    let artBadge = null;
     if (entry.artifactId) {
-      const t = new P.Text({
-        text: `⛁ ${entry.artifactId}`,
-        style: textStyle({ fontSize: 9, fill: 0xf5c542 }),
-      });
-      t.anchor.set(1, 0);
-      t.position.set(bx, 26);
-      entry.badgeLayer.addChild(t);
+      const budget = badgeMaxW - (ctxBadge ? ctxBadge.width + 6 : 0);
+      const maxChars = Math.max(6, Math.floor(budget / 5.2));
+      artBadge = makeBadge(truncate(`⛁ ${entry.artifactId}`, maxChars), 0xf5c542);
+    }
+
+    let bx = cardW - 12;
+    if (artBadge) {
+      artBadge.anchor.set(1, 0);
+      artBadge.position.set(bx, badgeRowY);
+      entry.badgeLayer.addChild(artBadge);
+      bx -= artBadge.width + 6;
+    }
+    if (ctxBadge) {
+      ctxBadge.anchor.set(1, 0);
+      ctxBadge.position.set(bx, badgeRowY);
+      entry.badgeLayer.addChild(ctxBadge);
     }
   }
 
@@ -564,9 +571,9 @@ function truncate(text, maxChars) {
   const DETAIL_ROW_H = 17; // fixed row step (measurement-safe, roomy)
   const EXPAND_W = 150; // extra width when a card is expanded (detail spills right)
 
-  /** Card width, wider while expanded so detail has room. */
+  /** Card width, animated between collapsed (cardW) and expanded (cardW + EXPAND_W). */
   function entryW(entry) {
-    return state.cardW + ((entry.expanded || entry.curH > 0.5) ? EXPAND_W : 0);
+    return state.cardW + entry.curW;
   }
 
   let expandedEntry = null;
@@ -662,6 +669,9 @@ function truncate(text, maxChars) {
     expandedEntry = entry;
     entry.expanded = true;
     entry.root.zIndex = 1;
+    // Snap the width to the expanded value immediately so detail lays out at the
+    // wide size; the ticker keeps it there (and animates it back down on close).
+    entry.curW = EXPAND_W;
     entry.detailH = buildDetail(entry);
     if (entry.curH === 0) entry.curH = 1;
     entry.root.hitArea = new P.Rectangle(0, 0, entryW(entry), GEOM.cardH + entry.detailH);
@@ -1068,24 +1078,26 @@ function truncate(text, maxChars) {
     // Cards glide to their column/stack position.
     let moving = false;
     for (const entry of state.ordered) {
-      // Expanded-card height animation (open/close) + detail fade.
-      const target = entry.expanded ? entry.detailH : 0;
+      // Expanded-card height + width animation (open/close) + detail fade.
+      const targetH = entry.expanded ? entry.detailH : 0;
+      const targetW = entry.expanded ? EXPAND_W : 0;
       const ek = 1 - Math.exp(-dt * 12);
-      entry.curH = lerp(entry.curH, target, ek);
-      if (Math.abs(entry.curH - target) < 0.5) entry.curH = target;
+      entry.curH = lerp(entry.curH, targetH, ek);
+      entry.curW = lerp(entry.curW, targetW, ek);
+      if (Math.abs(entry.curH - targetH) < 0.5) entry.curH = targetH;
+      if (Math.abs(entry.curW - targetW) < 0.5) entry.curW = targetW;
       if (!entry.expanded && entry.curH < 0.5) entry.detailH = 0;
-      if (entry.expanded || entry.curH > 0) {
-        // Grow the opaque backdrop with the animated height (paintCard only
-        // repaints on events, so animate the card bg here).
-        const hh = GEOM.cardH + entry.curH;
-        entry.bg.clear();
-        entry.bg.roundRect(0, 0, entryW(entry), hh, 8)
-          .fill({ color: 0x0c1224, alpha: 1 })
-          .stroke({ width: 1.5, color: agentColor(entry.task.ownerAgent), alpha: 1 });
+      if (entry.expanded || entry.curH > 0 || entry.curW > 0) {
+        // Repaint the card so the opaque backdrop and the name-tag (title fit,
+        // dot, badges) track the animating height and width, then fade the
+        // detail layer with the height.
+        const hMoving = Math.abs(entry.curH - targetH) > 0.5;
+        const wMoving = Math.abs(entry.curW - targetW) > 0.5;
+        if (hMoving || wMoving) paintCard(entry);
         if (entry.detailH > 0) {
           entry.detailLayer.alpha = clamp(entry.curH / entry.detailH, 0, 1);
-          if (Math.abs(entry.curH - target) > 0.5) {
-            entry.root.hitArea = new P.Rectangle(0, 0, entryW(entry), hh);
+          if (hMoving) {
+            entry.root.hitArea = new P.Rectangle(0, 0, entryW(entry), GEOM.cardH + entry.curH);
           }
         }
       }
