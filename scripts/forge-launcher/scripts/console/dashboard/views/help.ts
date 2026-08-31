@@ -1,9 +1,12 @@
-// ─── Help: modal overlay explaining the UI and pipeline terms ────────────────
+// ─── Help: modal overlay with a quick reference and the full user guide ──────
 
+import { api } from "../api.js";
 import { el } from "../render/dom.js";
+import { renderMarkdown } from "../render/md.js";
 
 let overlay: HTMLElement | null = null;
 let onKeydown: ((e: KeyboardEvent) => void) | null = null;
+let guideReady: Promise<string> | null = null;
 
 export function openHelp(): void {
   closeHelp();
@@ -16,7 +19,28 @@ export function openHelp(): void {
   dialog.appendChild(
     el("div", { className: "row between" }, [el("h2", { className: "no-margin" }, "Forge Console help"), closeBtn]),
   );
-  dialog.appendChild(helpBody());
+
+  const tabs = el("div", { className: "tabs" }, [
+    tabButton("Quick help"),
+    tabButton("User guide"),
+  ]);
+  const body = el("div", { className: "help-body" });
+  body.appendChild(quickHelp());
+
+  tabs.querySelector<HTMLElement>(".tab")?.classList.add("active");
+  tabs.querySelectorAll<HTMLElement>(".tab").forEach((tab, i) => {
+    tab.addEventListener("click", () => {
+      tabs.querySelectorAll<HTMLElement>(".tab").forEach((t) => t.classList.remove("active"));
+      tab.classList.add("active");
+      dialog.classList.toggle("guide-mode", i === 1);
+      body.textContent = "";
+      if (i === 0) body.appendChild(quickHelp());
+      else void renderGuide(body);
+    });
+  });
+
+  dialog.appendChild(tabs);
+  dialog.appendChild(body);
   overlay.appendChild(dialog);
 
   overlay.addEventListener("click", (e) => {
@@ -40,8 +64,12 @@ export function closeHelp(): void {
   }
 }
 
-function helpBody(): HTMLElement {
-  return el("div", { className: "help-body" }, [
+function tabButton(label: string): HTMLElement {
+  return el("button", { className: "tab", type: "button" }, label);
+}
+
+function quickHelp(): HTMLElement {
+  return el("div", null, [
     helpSection("What is this?", [
       "Forge Console is a local web UI that fronts forge-launcher and the workflow engine. It lets you create a project, draft its PRD and agent team, run the build, and monitor/control it - all from your browser, without remembering terminal commands. It is served on 127.0.0.1 and reads the same files the terminal tools write.",
     ]),
@@ -78,7 +106,48 @@ function helpBody(): HTMLElement {
       ["Audit", "the event log (task started/completed/failed, …)."],
       ["Pause / Stop / Resume / Replay", "graceful controls over a running build."],
     ])]),
+    helpSection("Full walkthrough", [
+      "For the step-by-step walkthrough (startup, creating/opening projects, monitoring and controlling builds), open the User guide tab.",
+    ]),
   ]);
+}
+
+/** Loads and renders the user guide, caching the rendered result. */
+function loadGuide(): Promise<string> {
+  if (!guideReady) {
+    guideReady = api
+      .guideMarkdown()
+      .then((md) => guideHtml(md))
+      .catch((err) => {
+        guideReady = null;
+        throw err;
+      });
+  }
+  return guideReady;
+}
+
+/**
+ * Renders the guide markdown, dropping links to local files (e.g. forge-console.md)
+ * that cannot resolve in the browser - they would open a 404 in a new tab.
+ * External (http/https) and fragment links are preserved.
+ */
+function guideHtml(md: string): string {
+  return renderMarkdown(md).replace(
+    /<a href="(?![a-z]+:|#)([^"]*)" target="_blank" rel="noopener">([^<]*)<\/a>/g,
+    (_m, _href: string, text: string) => text,
+  );
+}
+
+async function renderGuide(host: HTMLElement): Promise<void> {
+  host.appendChild(el("div", { className: "dim" }, "Loading…"));
+  try {
+    const html = await loadGuide();
+    host.textContent = "";
+    host.appendChild(el("div", { className: "md" }, [el("div", { html })]));
+  } catch {
+    host.textContent = "";
+    host.appendChild(el("div", { className: "dim" }, "Could not load the user guide."));
+  }
 }
 
 function helpSection(title: string, content: Array<HTMLElement | string>): HTMLElement {

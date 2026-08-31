@@ -80,6 +80,12 @@ export const api = {
   teamContent(relPath: string): Promise<FileContent> {
     return request<FileContent>(`/api/team/content?path=${encodeURIComponent(relPath)}`);
   },
+  guideMarkdown(): Promise<string> {
+    return fetch("/guide.md").then((res) => {
+      if (!res.ok) throw new Error(`request failed: ${res.status} ${res.statusText}`);
+      return res.text();
+    });
+  },
   actions(): Promise<Actions> {
     return request<Actions>("/api/actions");
   },

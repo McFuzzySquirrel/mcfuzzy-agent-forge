@@ -1,6 +1,6 @@
 # Forge Console user guide
 
-This walkthrough covers the everyday flow for opening the Forge Console, creating or switching projects, and monitoring a build without leaving the browser.
+This walkthrough covers the everyday flow for opening the Forge Console, creating or switching projects, and monitoring a build without leaving the browser. It is kept in step with the console UI — see [updates.md](updates.md) for what changed in each release.
 
 ---
 
@@ -14,17 +14,17 @@ forge-launcher console
 
 The server binds to `127.0.0.1` and prints a local URL such as `http://127.0.0.1:4300`. If the default port is busy, the next free port is used.
 
-If you want to open a specific repo immediately, use:
+Useful flags:
 
 ```bash
-forge-launcher console --repo /path/to/your/project
+forge-launcher console --repo /path/to/your/project   # open a specific repo immediately
+forge-launcher console --port 4400                    # prefer a specific port
+forge-launcher console --no-open                      # keep the browser handoff manual
 ```
-
-Use `--no-open` if you want to keep the browser handoff manual.
 
 ---
 
-## 2. Create a new project or open an existing one
+## 2. Create or open a project
 
 On the landing page you will see one of two choices:
 
@@ -35,26 +35,30 @@ The project picker remembers recent repos in your local Forge registry, so you c
 
 If you are creating a repo from the browser, the wizard collects:
 
-- the project name,
-- the harness choice,
-- the parent directory,
-- the initial idea,
-- optionally an **existing PRD** and **research/seed documents** (browse a file
-  picker or type absolute paths) — these are copied to `docs/PRD.md` /
+- the project **name**,
+- the **description** (optional),
+- the **harness** choice (opencode / github / claude / agents),
+- the **visibility** (private or public),
+- the **parent directory**,
+- the initial **idea**,
+- optionally an **existing PRD** and **research/seed documents** — browse a file
+  picker or type absolute paths (comma-separated for multiple). Picked files can
+  be `.md`, `.txt`, `.pdf`, or `.docx`; they are copied to `docs/PRD.md` /
   `docs/research/` and inform the PRD build,
-- and whether the PRD should be drafted automatically.
+- and whether the PRD should be **drafted automatically** after creation.
 
-Once it finishes, the console opens that project’s Overview view.
+Once it finishes, the console opens that project's Overview view.
 
 ---
 
-## 3. Use the Overview pipeline
+## 3. Drive the pipeline from Overview
 
 The Overview is the main control center for a project. It shows:
 
-- the current build state,
+- the run header (Live/Idle indicator, harness badge, and control state),
 - progress counters,
 - blockers or failures,
+- the **Manifest** panel (compiled phase/task counts),
 - the pipeline status,
 - and the run controls.
 
@@ -71,7 +75,7 @@ The console polls for state changes and updates the button label as each stage c
 
 ---
 
-## 4. Monitor the build in the main views
+## 4. Monitor a build in the main views
 
 Once the build starts, switch between the views to follow the work:
 
@@ -79,6 +83,8 @@ Once the build starts, switch between the views to follow the work:
 - **Tasks**: a sortable, filterable task table with a detail drawer for each task.
 - **Logs**: the engine log tail plus the live audit event stream.
 - **Plan & Team**: the project documents and the generated agent/skill files.
+  Documents open in a detail pane with an **Open externally** button; skills are
+  shown as cards grouped into **Forge skills** and **Project skills**.
 - **Artifacts**: structured outputs produced by the run, browsable by type and task.
 - **Timeline**: a chronological record of important events and failures.
 
@@ -101,25 +107,25 @@ If a task times out or fails, open its detail drawer in the Tasks view and adjus
 
 ---
 
-## 6. Adjust timeouts from the browser
+## 6. Tune task timeouts
 
 The console can edit task timeouts without leaving the UI:
 
 - open a task in the **Tasks** view,
-- change the timeout value,
+- change the timeout value (entered in minutes, decimals allowed),
 - and replay the task.
 
-You can also set the same timeout for every task at once from the Tasks header or the Overview Controls panel. These values are stored in the manifest and engine config files so the run can be retried with a larger budget.
+You can also set the same timeout for every task at once from the Tasks header or the Overview Controls panel. These values are stored in the manifest and engine config files so the run can be retried with a larger budget. Completed tasks show their timeout read-only; failed, pending, and running tasks stay editable.
 
 ---
 
-## 7. Switch projects quickly
+## 7. Switch between projects
 
 If you are working across several repos, use the **Projects** view or the project picker to switch contexts. This keeps the current workspace and run state separate while preserving your recent-project history.
 
 ---
 
-## 8. Common troubleshooting
+## 8. Troubleshoot common issues
 
 - If the page does not open, check the terminal output for the local URL and try opening it manually.
 - If a build does not advance, confirm the current stage in Overview and look for blockers in the Logs view.
