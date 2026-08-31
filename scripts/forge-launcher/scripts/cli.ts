@@ -19,6 +19,7 @@ Usage:
                             [--retry-delay-ms <ms>] [--heartbeat-ms <ms>] [--yes] [--dry-run]
                             [--viz [--viz-port <n>]] [--no-open]
                             [--keep-alive [--keep-alive-port <n>]] [--no-keep-alive] [--attach <url>]
+                            [--auto-commit|--no-auto-commit] [--commit-message-template <tmpl>]
                             [--stop] [--pause]
   forge-launcher resume [--repo <path>] [--non-interactive] [--dry-run]
   forge-launcher draft-prd [--repo <path>]      # headless: idea → PRD (Forge Console pipeline)
@@ -38,6 +39,11 @@ engine-run control:
   --stop              Stop a running detached engine after the current task
                       (writes docs/engine-control.json + SIGTERMs docs/engine.pid).
   --pause             Pause a running engine after the current task (same, no signal).
+
+engine-run auto-commit:
+  --auto-commit       Commit the working tree after each completed task (default: on).
+  --no-auto-commit    Disable per-task auto-commit.
+  --commit-message-template <tmpl>  Commit message with {taskId}/{taskTitle} placeholders.
 
 Resume options:
   --repo <path>       Repository to resume (default: current directory).

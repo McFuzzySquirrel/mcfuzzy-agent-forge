@@ -81,5 +81,11 @@ ESM, no bundler). The board stays staged JS for now.
 - [x] `npm run typecheck` (server + client) · `npm test` in `scripts/forge-launcher/`
 - [x] Manual smoke: `forge-launcher console` → New Project (stub) → board/tasks/logs → pause/stop/replay → Documents + Artifacts → resume
 
+### 9. v3.36 additions
+- [x] New Project wizard: add an existing PRD + research/seed documents via file-picker upload (`POST /api/uploads`) **and** absolute-path input; server passes `FORGE_PRD_FILE` / `FORGE_RESEARCH_FILES` to the launcher.
+- [x] Plan & Team lists `docs/research/*.md` (kind `research`).
+- [x] `POST /api/engine-config { autoCommit }` → `docs/engine-config.json`; auto-commit checkbox on Overview Controls (default on); `engineRunArgs` passes `--no-auto-commit` when off.
+- [x] `POST /api/launch-cli` → opens the harness CLI in a terminal (injectable in tests); **Launch \<harness\> CLI** buttons on Tasks header + Overview header.
+
 ## Out of scope
 Desktop packaging (Phase 4); in-browser editing of PRD/team; board → TS conversion; multi-repo simultaneous tabs.

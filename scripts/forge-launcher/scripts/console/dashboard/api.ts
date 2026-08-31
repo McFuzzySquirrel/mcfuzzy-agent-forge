@@ -12,6 +12,7 @@ import type {
   DocsIndex,
   ExecutionManifest,
   FileContent,
+  LaunchCliResult,
   LogsResponse,
   OpenResult,
   ProjectsIndex,
@@ -20,6 +21,7 @@ import type {
   TaskRow,
   TeamIndex,
   TimeoutUpdateResult,
+  UploadResult,
   WorkflowState,
 } from "./types.js";
 
@@ -92,6 +94,15 @@ export const api = {
   },
   createProject(req: CreateProjectRequest): Promise<CreateProjectResult> {
     return post<CreateProjectResult>("/api/projects/create", req);
+  },
+  upload(name: string, content: string): Promise<UploadResult> {
+    return post<UploadResult>("/api/uploads", { name, content });
+  },
+  setAutoCommit(enabled: boolean): Promise<{ ok: boolean; message: string }> {
+    return post<{ ok: boolean; message: string }>("/api/engine-config", { autoCommit: enabled });
+  },
+  launchCli(): Promise<LaunchCliResult> {
+    return post<LaunchCliResult>("/api/launch-cli", {});
   },
   control(action: ControlAction, taskId?: string): Promise<ControlResult> {
     return post<ControlResult>("/api/control", { action, taskId });

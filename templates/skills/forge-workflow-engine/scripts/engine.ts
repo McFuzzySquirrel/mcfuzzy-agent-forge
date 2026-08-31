@@ -30,6 +30,7 @@ import {
 } from "./state.ts";
 
 import { ArtifactStore } from "./artifacts.ts";
+import { commitTaskWork } from "./commit.ts";
 import { captureWorktree, runTaskValidation, verifyTaskResult } from "./verify.ts";
 import { clearControl, readControl } from "./control.ts";
 
@@ -517,6 +518,32 @@ export async function runEngine(opts: EngineOptions): Promise<WorkflowState> {
 
     saveState(opts.statePath, state);
     syncProgressMd(opts.progressPath, state, manifest);
+
+    // Auto-commit: one commit per task that completed in this wave, sequenced
+    // after the merge (safe with any concurrency). Runs after saveState +
+    // syncProgressMd so the engine-owned files (WORKFLOW-STATE, audit, PROGRESS)
+    // are included in the same commit as the task's work. Defaults to on.
+    if (opts.autoCommit !== false) {
+      for (const entry of ready) {
+        const record = state.tasks[entry.task.id];
+        if (record?.status !== "complete") continue;
+        const sha = await commitTaskWork(
+          entry.task.id,
+          entry.task.title,
+          opts.repoRoot,
+          opts.commitMessageTemplate,
+        );
+        if (!sha) continue;
+        writeAuditEvent(opts.auditPath, {
+          timestamp: new Date().toISOString(),
+          action: "task.committed",
+          runId: state.runId,
+          taskId: entry.task.id,
+          commitSha: sha,
+        });
+        console.log(`[engine] Task ${entry.task.id} committed (${sha.slice(0, 7)})`);
+      }
+    }
   }
 
   if (shouldStop() && !isComplete(manifest, state)) {
@@ -600,5 +627,26 @@ export async function replayTask(taskId: string, opts: EngineOptions): Promise<W
 
   saveState(opts.statePath, state);
   syncProgressMd(opts.progressPath, state, manifest);
+
+  // Auto-commit a replayed task's work too (default on), matching runEngine.
+  if (opts.autoCommit !== false && state.tasks[taskId]?.status === "complete") {
+    const sha = await commitTaskWork(
+      taskId,
+      task.title ?? taskId,
+      opts.repoRoot,
+      opts.commitMessageTemplate,
+    );
+    if (sha) {
+      writeAuditEvent(opts.auditPath, {
+        timestamp: new Date().toISOString(),
+        action: "task.committed",
+        runId: state.runId,
+        taskId,
+        commitSha: sha,
+      });
+      console.log(`[engine] Task ${taskId} committed (${sha.slice(0, 7)})`);
+    }
+  }
+
   return state;
 }

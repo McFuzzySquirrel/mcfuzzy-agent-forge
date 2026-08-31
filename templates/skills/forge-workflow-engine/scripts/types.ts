@@ -5,6 +5,9 @@ export type { AgentDescriptor, ExecutionManifest, ManifestTask };
 /** Default per-task timeout (10 minutes), matching the previous hardcoded value. */
 export const DEFAULT_TASK_TIMEOUT_MS = 10 * 60 * 1000;
 
+/** Default heartbeat interval (60s) while a task is executing; 0 disables. */
+export const DEFAULT_HEARTBEAT_MS = 60 * 1000;
+
 // ─── Task execution status ────────────────────────────────────────────────────
 
 export type TaskStatus = "pending" | "running" | "complete" | "failed" | "skipped";
@@ -134,6 +137,18 @@ export interface EngineOptions {
    * harness call and require them to pass before the task is marked complete.
    */
   runValidation: boolean;
+  /**
+   * Auto-commit the working tree after each task completes (one commit per task,
+   * sequenced after the wave merge so it is safe with concurrency). Defaults to
+   * `true`; set `false` (`--no-auto-commit` / `FORGE_ENGINE_AUTO_COMMIT=0`) to
+   * disable. Commit failures are logged and never fail the task or the run.
+   */
+  autoCommit?: boolean;
+  /**
+   * Commit message template with `{taskId}` / `{taskTitle}` placeholders.
+   * Default: `feat(forge-engine): complete task {taskId} - {taskTitle}`.
+   */
+  commitMessageTemplate?: string;
   pauseRequested: boolean;
   /**
    * In-process stop flag (e.g. set by SIGINT/SIGTERM handlers). The engine
@@ -159,6 +174,7 @@ export interface AuditEvent {
     | "task.failed"
     | "task.retrying"
     | "task.skipped"
+    | "task.committed"
     | "phase.started"
     | "phase.complete"
     | "state.saved"
@@ -175,6 +191,8 @@ export interface AuditEvent {
   artifactId?: string;
   artifactType?: string;
   inputArtifacts?: string[];
+  /** Populated for task.committed events */
+  commitSha?: string;
   /** Populated for context.projected events */
   sourceTokenEstimate?: number;
   projectedTokenEstimate?: number;

@@ -107,9 +107,29 @@ export function setDefaultTimeout(p: RepoPaths, timeoutMs: number): TimeoutUpdat
     vizPort: existing?.vizPort ?? "",
     keepAlive: existing?.keepAlive ?? false,
     attach: existing?.attach ?? "",
+    autoCommit: existing?.autoCommit,
   };
   saveEngineConfig(p.repoRoot, cfg);
   return { ok: true, message: `Default timeout set to ${timeoutMs}ms.` };
+}
+
+/** Persists the auto-commit-after-each-task toggle in docs/engine-config.json. */
+export function setAutoCommit(p: RepoPaths, enabled: boolean): { ok: boolean; message: string } {
+  const existing = loadEngineConfig(p.repoRoot);
+  const cfg = {
+    harness: existing?.harness ?? inferEngineHarness(p.repoRoot),
+    granularity: existing?.granularity ?? "",
+    concurrency: existing?.concurrency ?? "",
+    taskTimeoutMs: existing?.taskTimeoutMs ?? "",
+    maxRetries: existing?.maxRetries ?? "",
+    viz: existing?.viz ?? false,
+    vizPort: existing?.vizPort ?? "",
+    keepAlive: existing?.keepAlive ?? false,
+    attach: existing?.attach ?? "",
+    autoCommit: enabled,
+  };
+  saveEngineConfig(p.repoRoot, cfg);
+  return { ok: true, message: `Auto-commit ${enabled ? "enabled" : "disabled"}.` };
 }
 
 export function loadAudit(p: RepoPaths): AuditEvent[] {
@@ -216,6 +236,7 @@ export function summary(p: RepoPaths): Summary {
     control: readControl(p),
     logExists: fs.existsSync(p.logPath),
     defaultTimeoutMs,
+    autoCommit: loadEngineConfig(p.repoRoot)?.autoCommit !== false,
   };
 }
 
@@ -345,6 +366,15 @@ export function docsIndex(p: RepoPaths): DocsIndex {
   push("vision", "vision", "Product Vision", "docs/product-vision.md", p.visionPath);
   push("progress", "progress", "Progress", "docs/PROGRESS.md", p.progressPath);
   push("model-plan", "model-plan", "Model Plan", "docs/MODEL-PLAN.md", p.modelPlanPath);
+  for (const f of listMarkdown(path.join(p.repoRoot, "docs", "research"))) {
+    entries.push({
+      id: `research:${f}`,
+      kind: "research",
+      title: f.replace(/\.md$/, ""),
+      relPath: path.posix.join("docs", "research", f),
+      exists: true,
+    });
+  }
   for (const f of listMarkdown(p.featuresDir)) {
     entries.push({
       id: `feature:${f}`,

@@ -7,7 +7,7 @@ import { runEngine, replayTask } from "./engine.ts";
 import { loadState, statePath, auditPath } from "./state.ts";
 import { startVizServer, type VizServer } from "./viz/server.ts";
 import { controlPath, pidPath, readPid, removePid, writeControl, writePid } from "./control.ts";
-import { DEFAULT_TASK_TIMEOUT_MS, type ExecutionManifest, type HarnessAdapter, type EngineOptions } from "./types.ts";
+import { DEFAULT_TASK_TIMEOUT_MS, DEFAULT_HEARTBEAT_MS, type ExecutionManifest, type HarnessAdapter, type EngineOptions } from "./types.ts";
 import { OpenCodeAdapter } from "./harness/opencode-adapter.ts";
 import { CopilotAdapter } from "./harness/copilot-adapter.ts";
 import { OpenAIAdapter } from "./harness/openai-adapter.ts";
@@ -24,6 +24,7 @@ Usage:
   npm run workflow-engine -- run     [--repo <path>] [--harness opencode|copilot|openai|stub|flowforge-kernel]
                                      [--max-retries <n>] [--retry-delay-ms <ms>] [--heartbeat-ms <ms>] [--concurrency <n>] [--task-timeout-ms <ms>] [--yes]
                                      [--allow-noop] [--run-validation]
+                                     [--auto-commit|--no-auto-commit] [--commit-message-template <tmpl>]
                                      [--viz [port]] [--no-open]
                                      [--keep-alive] [--keep-alive-port <port>] [--attach <url>] [--no-keep-alive]
   npm run workflow-engine -- status  [--repo <path>]
@@ -34,13 +35,16 @@ Usage:
 
 Environment variables:
   FORGE_ENGINE_YES      Skip the pre-run confirmation gate (same as --yes)
-  FORGE_ENGINE_HEARTBEAT_MS  Heartbeat interval in ms while a task runs (default: 15000)
+  FORGE_ENGINE_HEARTBEAT_MS  Heartbeat interval in ms while a task runs (default: 60000)
   FORGE_ENGINE_CONCURRENCY   Max ready tasks to run in parallel (default: 1; ignored unless harness supports concurrency)
   FORGE_ENGINE_TASK_TIMEOUT_MS   Per-task timeout in ms (default: 600000 / 10 min; per-task manifest timeoutMs overrides)
   FORGE_ENGINE_ALLOW_NOOP        "1" to allow tasks that produce no expected outputs, no file changes, and only
                                  trivial agent output to count as complete (bypasses the no-op output gate)
   FORGE_ENGINE_RUN_VALIDATION    "1" to execute each task's manifest validationCommands and require them to pass
                                  before the task is marked complete
+  FORGE_ENGINE_AUTO_COMMIT        "0" to disable auto-commit after each completed task (default: 1)
+  FORGE_ENGINE_COMMIT_MESSAGE_TEMPLATE  Commit message template with {taskId}/{taskTitle} placeholders
+                                 (default: feat(forge-engine): complete task {taskId} - {taskTitle})
   FORGE_ENGINE_ATTACH   "1" to force the opencode keep-alive server for the run (same as --keep-alive);
                         "0" to force cold start per task (same as --no-keep-alive); unset = adaptive
                         (keep-alive when more than one task remains, cold start otherwise)
@@ -165,11 +169,13 @@ function buildOptions(
     harness: resolveHarness(harnessName ?? flag(args, "--harness"), attachUrl),
     maxRetries: Number(flag(args, "--max-retries") ?? "2"),
     retryDelayMs: Number(flag(args, "--retry-delay-ms") ?? "5000"),
-    heartbeatMs: Number(flag(args, "--heartbeat-ms") ?? process.env["FORGE_ENGINE_HEARTBEAT_MS"] ?? "15000"),
+    heartbeatMs: Number(flag(args, "--heartbeat-ms") ?? process.env["FORGE_ENGINE_HEARTBEAT_MS"] ?? String(DEFAULT_HEARTBEAT_MS)),
     maxConcurrency: Number(flag(args, "--concurrency") ?? process.env["FORGE_ENGINE_CONCURRENCY"] ?? "1"),
     taskTimeoutMs: Number(flag(args, "--task-timeout-ms") ?? process.env["FORGE_ENGINE_TASK_TIMEOUT_MS"] ?? String(DEFAULT_TASK_TIMEOUT_MS)),
     allowNoop: hasFlag(args, "--allow-noop") || process.env["FORGE_ENGINE_ALLOW_NOOP"] === "1",
     runValidation: hasFlag(args, "--run-validation") || process.env["FORGE_ENGINE_RUN_VALIDATION"] === "1",
+    autoCommit: !(hasFlag(args, "--no-auto-commit") || process.env["FORGE_ENGINE_AUTO_COMMIT"] === "0"),
+    commitMessageTemplate: flag(args, "--commit-message-template") ?? process.env["FORGE_ENGINE_COMMIT_MESSAGE_TEMPLATE"],
     pauseRequested: false,
   };
 }
@@ -206,6 +212,12 @@ async function confirmPreRun(opts: EngineOptions, args: string[], keepAlive?: Ke
   console.log(`  Keep-alive: ${keepAliveLabel}`);
   console.log(`  Output gate: ${opts.allowNoop ? "relaxed (--allow-noop: no-op tasks allowed)" : "strict (missing outputs / no-op tasks are retried then failed)"}`);
   if (opts.runValidation) console.log("  Validation: running manifest validationCommands per task (--run-validation)");
+  const autoCommitLabel = opts.autoCommit === false
+    ? "off (--no-auto-commit)"
+    : opts.commitMessageTemplate
+      ? "on (one commit per completed task, custom template)"
+      : "on (one commit per completed task)";
+  console.log(`  Auto-commit: ${autoCommitLabel}`);
   console.log(`  Manifest: ${opts.manifestPath}`);
   if (manifest.featureOrder) console.log(`  Features: ${manifest.featureOrder.join(" → ")}`);
   if (manifest.responsibilityMatrixPath) console.log(`  Matrix  : ${manifest.responsibilityMatrixPath}`);

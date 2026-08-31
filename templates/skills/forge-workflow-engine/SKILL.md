@@ -74,7 +74,7 @@ engine prints a `…still working on task <id> (@<agent>, Ns elapsed)` line at a
 fixed interval so a quiet terminal doesn't look hung:
 
 ```bash
-npm run workflow-engine -- run --heartbeat-ms 15000        # default: 15s
+npm run workflow-engine -- run --heartbeat-ms 60000        # default: 60s
 npm run workflow-engine -- run --heartbeat-ms 0            # disable
 ```
 

@@ -66,6 +66,7 @@ interface LauncherState {
     vizPort: string;
     keepAlive: boolean;
     attach: string;
+    autoCommit: boolean;
   };
 }
 
@@ -91,6 +92,7 @@ const state: LauncherState = {
     vizPort: process.env.FORGE_ENGINE_VIZ_PORT ?? "",
     keepAlive: envFlag("FORGE_ENGINE_ATTACH"),
     attach: process.env.FORGE_ENGINE_ATTACH_URL ?? "",
+    autoCommit: process.env.FORGE_ENGINE_AUTO_COMMIT !== "0",
   },
 };
 
@@ -584,6 +586,7 @@ function engineRunArgs(): string[] {
   }
   if (cfg.keepAlive) args.push("--keep-alive");
   if (cfg.attach) args.push("--attach", cfg.attach);
+  if (cfg.autoCommit === false) args.push("--no-auto-commit");
   args.push("--yes");
   return args;
 }
@@ -657,6 +660,12 @@ async function configureEngineOptions(opts: LauncherOptions): Promise<void> {
         cfg.vizPort || "",
       );
     }
+
+    const autoCommitAnswer = await promptYesNo(
+      "Auto-commit after each completed task?",
+      cfg.autoCommit ? "y" : "y",
+    );
+    cfg.autoCommit = autoCommitAnswer === "y";
   } catch {
     info("Engine options cancelled; using the current defaults.");
   }
@@ -1354,6 +1363,7 @@ function setupStateForRepo(repoDir: string): void {
   state.engineConfig.vizPort = process.env.FORGE_ENGINE_VIZ_PORT ?? persisted?.vizPort ?? "";
   state.engineConfig.keepAlive = envFlagOrUndefined("FORGE_ENGINE_ATTACH") ?? persisted?.keepAlive ?? false;
   state.engineConfig.attach = process.env.FORGE_ENGINE_ATTACH_URL ?? persisted?.attach ?? "";
+  state.engineConfig.autoCommit = envFlagOrUndefined("FORGE_ENGINE_AUTO_COMMIT") ?? persisted?.autoCommit ?? true;
 }
 
 function readEngineState(): ResumeEngineState | null {

@@ -123,6 +123,8 @@ export interface Summary {
   control: string | null;
   logExists: boolean;
   defaultTimeoutMs: number | null;
+  /** Auto-commit after each completed task (engine-config; default on). */
+  autoCommit: boolean;
 }
 
 export interface TaskRow {
@@ -262,6 +264,10 @@ export interface CreateProjectRequest {
   parentDir?: string;
   idea: string;
   autoDraft?: boolean;
+  /** Server-side path of an existing PRD file to copy into the new repo as docs/PRD.md. */
+  prdPath?: string;
+  /** Server-side paths of research/seed docs to copy into the new repo's docs/research/. */
+  researchPaths?: string[];
 }
 
 export interface CreateProjectResult {
@@ -270,6 +276,21 @@ export interface CreateProjectResult {
   repoDir?: string;
   logFile?: string;
   pid?: number;
+}
+
+export interface UploadResult {
+  ok: boolean;
+  path?: string;
+  name?: string;
+  message?: string;
+}
+
+export interface LaunchCliResult {
+  ok: boolean;
+  launched?: boolean;
+  cli?: string;
+  command?: string;
+  message?: string;
 }
 
 export interface SelectResult {

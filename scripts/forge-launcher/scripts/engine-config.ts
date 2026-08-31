@@ -19,6 +19,8 @@ export interface PersistedEngineConfig {
   vizPort: string;
   keepAlive: boolean;
   attach: string;
+  /** Auto-commit after each completed task; absent means the engine default (on). */
+  autoCommit?: boolean;
 }
 
 export function engineConfigPath(repoDir: string): string {

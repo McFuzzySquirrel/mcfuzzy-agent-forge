@@ -54,6 +54,7 @@ npx forge-launcher@beta engine-run [--repo <path>] [--harness <h>] [--concurrenc
                               [--task-timeout-ms <ms>] [--yes] [--dry-run]
                               [--keep-alive [--keep-alive-port <n>]] [--no-keep-alive] [--attach <url>]
                               [--allow-noop] [--run-validation]
+                              [--auto-commit|--no-auto-commit] [--commit-message-template <tmpl>]
 npx forge-launcher@beta resume [--repo <path>] [--non-interactive] [--dry-run]
 npx forge-launcher@beta console [--repo <path>] [--port <n>] [--no-open]
 ```
@@ -373,6 +374,15 @@ The engine run honours parallel dispatch too: set `FORGE_ENGINE_CONCURRENCY=<n>`
 (or pass `--concurrency <n>` to `forge-launcher engine-run`) to run ready tasks in
 bounded waves (harness-gated via `supportsConcurrency`, default `1` = sequential;
 see [ADR-021](adr/021-parallel-task-dispatch.md)).
+
+**Auto-commit is on by default.** Each completed task is committed to git (one
+commit per task, including the engine-owned `docs/*` files). Disable with
+`--no-auto-commit` / `FORGE_ENGINE_AUTO_COMMIT=0`, and customise the message
+with `--commit-message-template "<tmpl>"` (`{taskId}` / `{taskTitle}`
+placeholders). The same setting persists in `docs/engine-config.json`
+(`autoCommit`) — the interactive launcher asks about it, the console exposes it
+as a checkbox on the Overview, and `resume`/monitor commands honour it. See
+[ADR-035](adr/035-auto-commit-after-task.md).
 
 > Auto-draft drives the harness CLI directly, so it needs `opencode` (or
 > `copilot` via `FORGE_RUN_WITH=copilot`). It commits each generated artifact so
@@ -728,7 +738,7 @@ reflect the running build (monitor + resume) rather than the manual
  | `FORGE_ENGINE_GRANULARITY` | 8 | Task granularity for the adapter compile: `fine` (default) or `coarse`. Setting it recompiles the manifest at that granularity |
  | `FORGE_ENGINE_MAX_RETRIES` | 8 | Max retries per engine task (default `2`) |
  | `FORGE_ENGINE_RETRY_DELAY_MS` | 8 | Delay between task retries in ms (default `5000`) |
- | `FORGE_ENGINE_HEARTBEAT_MS` | 8 | Engine heartbeat interval in ms while a task runs (default `15000`; `0` disables) |
+ | `FORGE_ENGINE_HEARTBEAT_MS` | 8 | Engine heartbeat interval in ms while a task runs (default `60000`; `0` disables) |
  | `FORGE_WORKFLOW_ENGINE` | 8 | `1` to append `GO --workflow-engine` to the queued headless command (build executes via the workflow engine) |
   | `FORGE_ENGINE_HARNESS` | 8 | Per-task harness for the workflow engine: `opencode` (default), `copilot`, `openai`, `stub`, or `flowforge-kernel` |
   | `FORGE_ENGINE_VIZ` | 8 | `1` to launch the live Forge Board dashboard with the engine run |

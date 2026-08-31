@@ -77,12 +77,25 @@ function renderHeader(summary: Summary): HTMLElement {
     ? el("span", { className: "badge badge-paused" }, `control: ${summary.control}`)
     : null;
 
+  const launch = el("button", { className: "btn btn-sm" }, `Launch ${summary.harness ?? "harness"} CLI`);
+  launch.addEventListener("click", () => void launchCli());
+
   return el("div", { className: "panel" }, [
     el("div", { className: "row between" }, [
       el("div", null, [el("h1", { className: "no-margin" }, summary.repoName), el("div", { className: "dim mono small" }, summary.repoRoot)]),
-      el("div", { className: "row gap" }, [live, harness, control].filter(Boolean) as HTMLElement[]),
+      el("div", { className: "row gap" }, [live, harness, control, launch].filter(Boolean) as HTMLElement[]),
     ]),
   ]);
+}
+
+/** Opens the project's harness CLI (opencode/copilot/claude) in a new terminal. */
+async function launchCli(): Promise<void> {
+  try {
+    const res = await api.launchCli();
+    toast(res.message ?? (res.ok ? "harness CLI launched." : "launch failed"));
+  } catch (err) {
+    toast(err instanceof Error ? err.message : "launch failed");
+  }
 }
 
 function renderRun(run: RunSummary | null): HTMLElement {
@@ -295,13 +308,36 @@ function renderActions(container: HTMLElement, summary: Summary, actions: Action
   }
 
   const timeouts = renderTimeoutControls(container, tasks);
+  const commit = renderAutoCommitToggle(container, store.summary?.autoCommit ?? true);
 
   return el("div", { className: "panel" }, [
     el("h4", null, "Controls"),
     el("div", { className: "actions" }, buttons),
     replay,
     timeouts,
+    commit,
   ]);
+}
+
+function renderAutoCommitToggle(container: HTMLElement, enabled: boolean): HTMLElement {
+  const cb = el("input", { type: "checkbox", checked: enabled ? true : null });
+  const label = el("label", { className: "checkbox-row" }, [
+    cb,
+    el("span", null, "Auto-commit after each task (one commit per completed task)"),
+  ]);
+  cb.addEventListener("change", () => {
+    const value = (cb as HTMLInputElement).checked;
+    void (async () => {
+      try {
+        const res = await api.setAutoCommit(value);
+        toast(res.message || (res.ok ? "updated" : "update failed"));
+      } catch (err) {
+        toast(err instanceof Error ? err.message : "update failed");
+      }
+      void renderOverview(container);
+    })();
+  });
+  return el("div", { style: "margin-top:10px" }, [label]);
 }
 
 function renderTimeoutControls(container: HTMLElement, tasks: TaskRow[]): HTMLElement {
