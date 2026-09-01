@@ -4,6 +4,20 @@ Detailed release and change notes for MyForge.
 
 ---
 
+## September 2026 - v3.38
+
+### Console: concurrency setting in Overview and New Project
+
+- **Concurrency is now configurable from the browser.** The Overview **Controls** panel gains a "Concurrency (parallel agents)" number input with a **Set** button. Enter a positive integer to run that many agents in parallel on the next run/resume; set it to 0 to revert to the engine default. The value is saved to `docs/engine-config.json` and passed as `--concurrency N` when the engine starts, exactly as the CLI `--concurrency` flag works.
+- **New Project wizard gains a Concurrency field.** Creating a project from the browser now includes an optional "Concurrency (parallel agents)" number field. When set, it is forwarded to the launcher as `FORGE_ENGINE_CONCURRENCY` so the new repo is pre-configured at creation time.
+
+### Engine: output files now recorded for tasks that only modify existing files
+
+- **Fix.** When an agent edited pre-existing files rather than creating new ones, the engine recorded an empty `outputFiles` list for the completed task. This produced warnings about tasks completing without recorded output files, and meant downstream tasks saw no file context in the artifact `filesChanged` field.
+- **Now** the engine takes a worktree snapshot before and after each task (via `git status --porcelain`). Files that transition from clean to dirty during the task are detected by diffing the two snapshots and merged into `outputFiles` before the artifact and run state are saved. Both new files and in-place modifications are captured; files that were already dirty before the task ran are correctly excluded. This requires a git repo; non-git directories fall back to the existing behaviour.
+
+---
+
 ## October 2026 - v3.37
 
 ### Forge Console: user guide refreshed and available in the Help modal
