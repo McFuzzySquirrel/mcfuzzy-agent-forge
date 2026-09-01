@@ -363,6 +363,8 @@ async function executeTask(
         const artifact = store.synthesise({
           type: task.produces,
           taskId: task.id,
+          taskTitle: task.title,
+          taskDescription: task.description,
           producedBy: agent.name,
           outputFiles: result.outputFiles,
           agentOutput: result.stdout,

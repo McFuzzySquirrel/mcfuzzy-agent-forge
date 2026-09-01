@@ -16,6 +16,13 @@ Detailed release and change notes for MyForge.
 - **Fix.** When an agent edited pre-existing files rather than creating new ones, the engine recorded an empty `outputFiles` list for the completed task. This produced warnings about tasks completing without recorded output files, and meant downstream tasks saw no file context in the artifact `filesChanged` field.
 - **Now** the engine takes a worktree snapshot before and after each task (via `git status --porcelain`). Files that transition from clean to dirty during the task are detected by diffing the two snapshots and merged into `outputFiles` before the artifact and run state are saved. Both new files and in-place modifications are captured; files that were already dirty before the task ran are correctly excluded. This requires a git repo; non-git directories fall back to the existing behaviour.
 
+### Engine: richer artifact context projected to downstream agents
+
+- **Problem.** Synthesised artifacts (created automatically when a task completes) had two weaknesses: the summary was grabbed from the first stdout line — often an agent's internal monologue — so downstream agents got unhelpful context; and the projected context block only included `summary` and `confidence`, omitting the `filesChanged` list and the agent output excerpt that were stored in the artifact.
+- **Summary now reflects the task itself.** `synthesise()` now sets the artifact summary to `"<task title>: <task description>"` (up to 200 chars), which always describes what the task was supposed to do — not what the agent said it was going to do. The stdout excerpt is still stored in the payload for diagnostics.
+- **Confidence defaults to 0.9** for all synthesised completion artifacts (was absent, rendering the field as "N/A" in projections).
+- **`filesChanged` and `agentOutputExcerpt` are now projected by default.** The default context field set is expanded from `["summary", "confidence"]` to `["summary", "confidence", "filesChanged", "agentOutputExcerpt"]`. The `filesChanged` list is rendered as a markdown bullet list in the context block; an empty list is suppressed. This means downstream agents automatically receive a list of every file the upstream task touched — including files detected via the new git-diff enrichment above.
+
 ---
 
 ## October 2026 - v3.37

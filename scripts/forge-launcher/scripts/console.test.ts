@@ -544,7 +544,7 @@ test("engine-config sets concurrency and flows into engine-run args", async () =
     assert.equal((await getJson(`${server.url}/api/summary`) as { concurrency: number }).concurrency, 0);
 
     const run2 = await postJson(`${server.url}/api/control`, { action: "run" }, { "X-Forge-Token": token });
-    assert.ok(!(run2.body as { ok: boolean; message?: string }).message?.includes("--concurrency"), "no --concurrency when reset");
+    assert.ok((run2.body as { ok: boolean }).ok, "engine-run after reset should succeed");
     assert.ok(!spawned.calls.at(-1)!.args.includes("--concurrency"), "no --concurrency arg when at default");
   });
 });
