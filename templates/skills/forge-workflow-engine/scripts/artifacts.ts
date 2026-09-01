@@ -179,7 +179,7 @@ export class ArtifactStore {
    *
    * For each artifact type listed in `inputTypes`, loads the most recent
    * successful artifact of that type and selects only the fields listed in
-   * `fields` (defaults to ["summary", "confidence"] when omitted).
+   * `fields` (defaults to ["summary", "confidence", "filesChanged", "agentOutputExcerpt"] when omitted).
    *
    * The returned projection is what gets prepended to the agent's prompt —
    * not the full artifact payload.  This is the primary token-saving mechanism.
