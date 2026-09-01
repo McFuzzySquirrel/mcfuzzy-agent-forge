@@ -500,6 +500,27 @@ test("createProject rejects a missing PRD path", async () => {
   });
 });
 
+test("createProject rejects non-integer concurrency values", async () => {
+  await withServer(async (server) => {
+    const token = server.token;
+    const fraction = await postJson(`${server.url}/api/projects/create`, {
+      name: "my-app",
+      idea: "Build an app.",
+      concurrency: 2.5,
+    }, { "X-Forge-Token": token });
+    assert.equal(fraction.status, 400);
+    assert.match((fraction.body as { message: string }).message, /positive integer/);
+
+    const stringValue = await postJson(`${server.url}/api/projects/create`, {
+      name: "my-app",
+      idea: "Build an app.",
+      concurrency: "3",
+    }, { "X-Forge-Token": token });
+    assert.equal(stringValue.status, 400);
+    assert.match((stringValue.body as { message: string }).message, /positive integer/);
+  });
+});
+
 test("engine-config toggles auto-commit and flows into engine-run args", async () => {
   await withServer(async (server, repo, spawned) => {
     const token = server.token;

@@ -470,6 +470,11 @@ export async function startConsoleServer(options: ConsoleServerOptions = {}): Pr
           if (!req.name || !req.idea) {
             return sendJson(res, 400, { ok: false, message: "name and idea are required" });
           }
+          if (req.concurrency !== undefined) {
+            if (typeof req.concurrency !== "number" || !Number.isInteger(req.concurrency) || req.concurrency <= 0) {
+              return sendJson(res, 400, { ok: false, message: "concurrency must be a positive integer." });
+            }
+          }
           if (req.prdPath && !resolveInputFile(req.prdPath).ok) {
             return sendJson(res, 400, { ok: false, message: `PRD file not found: ${req.prdPath}` });
           }

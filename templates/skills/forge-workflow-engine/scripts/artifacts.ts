@@ -306,10 +306,8 @@ export class ArtifactStore {
         ? `${opts.taskTitle}: ${opts.taskDescription}`.slice(0, 200)
         : opts.taskDescription
         ? opts.taskDescription.slice(0, 200)
-        : opts.taskTitle
-        ? opts.taskTitle.slice(0, 200)
-      : opts.agentOutput.split("\n").find((l) => l.trim().length > 20)?.trim().slice(0, 200) ??
-        `Task ${opts.taskId} completed successfully.`;
+        : opts.agentOutput.split("\n").find((l) => l.trim().length > 20)?.trim().slice(0, 200) ??
+          `Task ${opts.taskId} completed successfully.`;
 
     return this.write({
       type: opts.type,

@@ -90,12 +90,10 @@ test("synthesise falls back to stdout heuristic when no description is provided"
       taskDescription: "",
       producedBy: "agent-a",
       outputFiles: [],
-      agentOutput: "Created the main entry point and wired up the router.",
+      agentOutput: "Created the main entry point and wired up the router.\nAlso added startup wiring.",
       inputArtifactIds: [],
     });
-    // With no description, falls back to the first substantive stdout line
-    assert.ok(artifact.summary.length > 0);
-    assert.ok(!artifact.summary.startsWith("Set up foundation:"), "should not prefix title when no description");
+    assert.equal(artifact.summary, "Created the main entry point and wired up the router.");
   } finally {
     rmSync(root, { recursive: true, force: true });
   }

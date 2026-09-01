@@ -353,14 +353,13 @@ function renderConcurrencyControl(container: HTMLElement, current: number): HTML
   const btn = el("button", { className: "btn btn-sm" }, "Set");
   btn.addEventListener("click", () => {
     const raw = Number((input as HTMLInputElement).value);
-    const value = Number.isFinite(raw) && raw >= 0 ? Math.floor(raw) : -1;
-    if (value < 0) {
+    if (!Number.isInteger(raw) || raw < 0) {
       toast("Enter a positive integer (or 0 for engine default).");
       return;
     }
     void (async () => {
       try {
-        const res = await api.setConcurrency(value);
+        const res = await api.setConcurrency(raw);
         toast(res.message || (res.ok ? "updated" : "update failed"));
       } catch (err) {
         toast(err instanceof Error ? err.message : "update failed");
