@@ -110,6 +110,24 @@ export function worktreeChanged(before: WorktreeSnapshot | null, after: Worktree
 }
 
 /**
+ * Returns the set of relative file paths that are new or newly-modified in
+ * `after` compared to `before`.  Paths present in both snapshots are omitted
+ * because those were already dirty before the task ran.  Returns an empty
+ * array when either snapshot is null (git unavailable).
+ *
+ * This is the primary mechanism for recording `outputFiles` when an agent
+ * modifies existing files rather than creating new ones.
+ */
+export function diffWorktree(before: WorktreeSnapshot | null, after: WorktreeSnapshot | null): string[] {
+  if (!before || !after) return [];
+  const result: string[] = [];
+  for (const p of after.paths) {
+    if (!before.paths.has(p)) result.push(p);
+  }
+  return result;
+}
+
+/**
  * Runs the task's manifest `validationCommands` (if any) and requires them all
  * to exit 0. Used when `--run-validation` is enabled.
  */

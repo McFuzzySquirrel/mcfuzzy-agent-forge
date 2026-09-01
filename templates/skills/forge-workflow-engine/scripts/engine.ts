@@ -31,7 +31,7 @@ import {
 
 import { ArtifactStore } from "./artifacts.ts";
 import { commitTaskWork } from "./commit.ts";
-import { captureWorktree, runTaskValidation, verifyTaskResult } from "./verify.ts";
+import { captureWorktree, diffWorktree, runTaskValidation, verifyTaskResult } from "./verify.ts";
 import { clearControl, readControl } from "./control.ts";
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -340,6 +340,20 @@ async function executeTask(
       if (failReason) {
         if (attempt === opts.maxRetries) return failTask(failReason);
         continue; // hollow success → retry
+      }
+
+      // ── Enrich output files from git diff ─────────────────────────────────
+      // Adapters only check `expectedOutputs` for output files, which misses
+      // files the agent modified in place.  Diff the worktree against the
+      // pre-task baseline to capture every file that changed during this task
+      // and merge with any files the adapter already reported.
+      if (baseline) {
+        const after = await captureWorktree(opts.repoRoot);
+        const gitChanged = diffWorktree(baseline, after);
+        if (gitChanged.length > 0) {
+          const merged = new Set([...result.outputFiles, ...gitChanged]);
+          result = { ...result, outputFiles: [...merged] };
+        }
       }
 
       // ── Artifact creation ─────────────────────────────────────────────────
