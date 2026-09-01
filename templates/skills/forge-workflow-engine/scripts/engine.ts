@@ -471,9 +471,13 @@ export async function runEngine(opts: EngineOptions): Promise<WorkflowState> {
   }
 
   const store = new ArtifactStore({ artifactsPath: opts.artifactsPath });
-  const concurrency = opts.harness.supportsConcurrency && opts.maxConcurrency > 1
+  const requestedConcurrency = opts.harness.supportsConcurrency && opts.maxConcurrency > 1
     ? opts.maxConcurrency
     : 1;
+  // Output attribution compares repository-wide worktree snapshots; running
+  // tasks concurrently can attribute another task's file changes to the current
+  // task. Keep execution serialized until task-isolated attribution is used.
+  const concurrency = requestedConcurrency > 1 ? 1 : requestedConcurrency;
   let currentPhaseId: string | undefined;
 
   // Stop signal: the in-process flag (SIGINT/SIGTERM) OR a pause/stop request

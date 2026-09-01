@@ -826,7 +826,7 @@ test("same-owner ready tasks run in separate waves (serialized) even with concur
   assert.ok(harness.maxOverlap <= 1, `same-owner tasks must never overlap (saw max ${harness.maxOverlap})`);
 });
 
-test("different-owner ready tasks run concurrently with concurrency 2", async () => {
+test("different-owner ready tasks are serialized while using repository-wide output attribution", async () => {
   const fixture = makeEngineFixture();
   writeFileSync(join(fixture.root, ".agents", "agents", "designer.md"), `---
 name: designer
@@ -855,13 +855,13 @@ description: Designs things.
   const harness = new GatedConcurrentHarness();
   const runPromise = runEngine(engineOptionsFor(fixture, harness, 1_000, { maxConcurrency: 2 }));
 
-  // Both different-owner tasks start in the same wave.
+  // Different-owner tasks are still serialized because output attribution
+  // currently relies on repository-wide snapshots.
   await harness.whenStarted("1.1");
-  await harness.whenStarted("1.2");
-  assert.deepEqual(harness.startedOrder, ["1.1", "1.2"], "both should start in wave 1");
-  assert.equal(harness.maxOverlap, 2, "different-owner tasks should overlap");
-
   harness.release("1.1");
+  await harness.whenStarted("1.2");
+  assert.deepEqual(harness.startedOrder, ["1.1", "1.2"]);
+  assert.ok(harness.maxOverlap <= 1, `tasks should not overlap (saw max ${harness.maxOverlap})`);
   harness.release("1.2");
 
   const state = await runPromise;
