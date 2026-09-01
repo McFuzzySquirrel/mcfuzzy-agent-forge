@@ -87,14 +87,19 @@ export async function captureWorktree(repoRoot: string): Promise<WorktreeSnapsho
   if (result.status !== 0) return null;
 
   const paths = new Set<string>();
-  for (const chunk of result.stdout.split("\0")) {
-    if (!chunk) continue;
-    // porcelain -z entry: "<XY> <path>" (renames: "<XY> <orig> -> <new>").
-    const rest = chunk.slice(3);
-    const arrow = rest.indexOf(" -> ");
-    const file = arrow !== -1 ? rest.slice(arrow + 4) : rest;
+  const entries = result.stdout.split("\0");
+  for (let i = 0; i < entries.length; i += 1) {
+    const entry = entries[i];
+    if (!entry) continue;
+
+    // porcelain -z v1 entry: "<XY> <path>\0" and rename/copy records include an
+    // additional NUL-delimited source path field immediately after this entry.
+    const status = entry.slice(0, 2);
+    const file = entry.slice(3);
     const rel = file.replace(/\\/g, "/");
     if (!isEngineOwnedPath(rel)) paths.add(rel);
+
+    if (status.includes("R") || status.includes("C")) i += 1;
   }
   return { paths };
 }

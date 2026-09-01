@@ -66,6 +66,23 @@ test("captureWorktree lists untracked files and excludes engine-owned docs paths
   assert.ok(!snap.paths.has("docs/artifacts/x.json"), "engine artifacts must be excluded");
 });
 
+test("captureWorktree handles porcelain -z rename records without phantom paths", async () => {
+  const dir = mkdtempSync(join(tmpdir(), "verify-git-rename-"));
+  execFileSync("git", ["init", "-q"], { cwd: dir });
+  execFileSync("git", ["config", "user.email", "forge@example.com"], { cwd: dir });
+  execFileSync("git", ["config", "user.name", "Forge Test"], { cwd: dir });
+  writeFileSync(join(dir, "old.ts"), "export const oldValue = 1;\n", "utf8");
+  execFileSync("git", ["add", "old.ts"], { cwd: dir });
+  execFileSync("git", ["commit", "-m", "init", "-q"], { cwd: dir });
+  execFileSync("git", ["mv", "old.ts", "new.ts"], { cwd: dir });
+
+  const snap = await captureWorktree(dir);
+  assert.ok(snap, "should capture a git worktree");
+  assert.ok(snap.paths.has("new.ts"), `expected new.ts in ${[...snap.paths]}`);
+  assert.ok(!snap.paths.has("old.ts"), `did not expect old.ts in ${[...snap.paths]}`);
+  assert.ok(!snap.paths.has(""), "should not include empty phantom paths");
+});
+
 test("worktreeChanged compares snapshots and returns false when either is null", () => {
   const a = { paths: new Set(["src/a.ts"]) };
   const b = { paths: new Set(["src/a.ts", "src/b.ts"]) };
