@@ -604,6 +604,28 @@ class FileWritingHarness implements HarnessAdapter {
   }
 }
 
+/** A harness that edits an already tracked file without reporting outputFiles. */
+class TrackedFileEditingHarness implements HarnessAdapter {
+  readonly name = "tracked-file-editing";
+  readonly supportsConcurrency = false;
+
+  async invoke(
+    _agent: Parameters<HarnessAdapter["invoke"]>[0],
+    _task: ManifestTask,
+    _context: WorkflowState,
+    repoRoot: string,
+  ) {
+    writeFileSync(join(repoRoot, "src", "thing.ts"), "export const thing = 2;\n", "utf8");
+    return {
+      success: true,
+      outputFiles: [],
+      stdout: "Ready for the task.",
+      stderr: "",
+      durationMs: 1,
+    };
+  }
+}
+
 function initGit(root: string): void {
   execFileSync("git", ["init", "-q"], { cwd: root });
   execFileSync("git", ["config", "user.email", "forge-test@local"], { cwd: root });
@@ -637,6 +659,22 @@ test("output gate: --allow-noop relaxes the no-op heuristic", async () => {
 
   assert.equal(state.status, "complete");
   assert.equal(state.tasks["1.1"]?.status, "complete");
+});
+
+test("output gate: --allow-noop still records tracked files changed during the task", async () => {
+  const fixture = makeEngineFixture();
+  initGit(fixture.root);
+  mkdirSync(join(fixture.root, "src"), { recursive: true });
+  writeFileSync(join(fixture.root, "src", "thing.ts"), "export const thing = 1;\n", "utf8");
+  execFileSync("git", ["add", "src/thing.ts"], { cwd: fixture.root });
+  execFileSync("git", ["commit", "-qm", "seed tracked file"], { cwd: fixture.root });
+
+  const harness = new TrackedFileEditingHarness();
+  const state = await runEngine(engineOptionsFor(fixture, harness, 1_000, { allowNoop: true, autoCommit: false }));
+
+  assert.equal(state.status, "complete");
+  assert.equal(state.tasks["1.1"]?.status, "complete");
+  assert.deepEqual(state.tasks["1.1"]?.outputFiles, ["src/thing.ts"]);
 });
 
 test("output gate: a substantive agent response passes the no-op heuristic", async () => {

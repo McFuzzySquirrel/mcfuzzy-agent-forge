@@ -254,10 +254,10 @@ async function executeTask(
   saveState(opts.statePath, currentState);
 
   // Output-verification baseline: a snapshot of the working tree taken before
-  // the harness runs, so a "successful" call that changed nothing can be
-  // detected as a no-op instead of being reported complete. Only needed when
-  // the no-op heuristic is active (--allow-noop disables it).
-  const baseline = opts.allowNoop ? null : await captureWorktree(opts.repoRoot);
+  // the harness runs. It supports both the no-op heuristic and Git-based
+  // output-file enrichment for in-place edits, even when --allow-noop disables
+  // only the no-op rejection check.
+  const baseline = await captureWorktree(opts.repoRoot);
 
   console.log(`[engine] Starting task ${task.id}: ${task.title} (@${agent.name})`);
 
