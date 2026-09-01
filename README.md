@@ -1,3 +1,4 @@
+
 # MyForge
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
@@ -16,6 +17,12 @@ MyForge is a PRD-first workflow for turning product requirements into working so
 - Generates a specialist agent team from the PRD instead of relying on a single generic assistant.
 - Supports both guided, interactive execution and unattended "dark orchestration" runs.
 - Includes a local web console for monitoring and controlling builds.
+
+
+
+https://github.com/user-attachments/assets/f03d855f-4f97-4544-95f2-f14625f42e94
+
+
 
 ## Quick start
 
