@@ -179,6 +179,7 @@ export class RunController {
       env.FORGE_RESEARCH_FILES = req.researchPaths.join(",");
     }
     if (req.autoDraft) env.FORGE_AUTO_DRAFT = "1";
+    if (req.concurrency && req.concurrency > 0) env.FORGE_ENGINE_CONCURRENCY = String(req.concurrency);
 
     const logFile = path.join(parentDir, `${req.name}.forge-create.log`);
     const { cmd, args } = engineDetachedCommand(["--non-interactive"]);

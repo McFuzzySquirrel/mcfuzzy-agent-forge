@@ -132,6 +132,25 @@ export function setAutoCommit(p: RepoPaths, enabled: boolean): { ok: boolean; me
   return { ok: true, message: `Auto-commit ${enabled ? "enabled" : "disabled"}.` };
 }
 
+/** Persists the max-parallelism (concurrency) setting in docs/engine-config.json. */
+export function setConcurrency(p: RepoPaths, value: number): { ok: boolean; message: string } {
+  const existing = loadEngineConfig(p.repoRoot);
+  const cfg = {
+    harness: existing?.harness ?? inferEngineHarness(p.repoRoot),
+    granularity: existing?.granularity ?? "",
+    concurrency: value > 0 ? String(value) : "",
+    taskTimeoutMs: existing?.taskTimeoutMs ?? "",
+    maxRetries: existing?.maxRetries ?? "",
+    viz: existing?.viz ?? false,
+    vizPort: existing?.vizPort ?? "",
+    keepAlive: existing?.keepAlive ?? false,
+    attach: existing?.attach ?? "",
+    autoCommit: existing?.autoCommit,
+  };
+  saveEngineConfig(p.repoRoot, cfg);
+  return { ok: true, message: value > 0 ? `Concurrency set to ${value}.` : "Concurrency reset to engine default." };
+}
+
 export function loadAudit(p: RepoPaths): AuditEvent[] {
   const raw = readText(p.auditPath);
   if (!raw) return [];
@@ -220,6 +239,8 @@ export function summary(p: RepoPaths): Summary {
     ? cfgTimeoutMs
     : DEFAULT_TASK_TIMEOUT_MS;
 
+  const engineCfg = loadEngineConfig(p.repoRoot);
+
   return {
     repoRoot: p.repoRoot,
     repoName: path.basename(p.repoRoot),
@@ -236,7 +257,8 @@ export function summary(p: RepoPaths): Summary {
     control: readControl(p),
     logExists: fs.existsSync(p.logPath),
     defaultTimeoutMs,
-    autoCommit: loadEngineConfig(p.repoRoot)?.autoCommit !== false,
+    autoCommit: engineCfg?.autoCommit !== false,
+    concurrency: Math.max(0, Number(engineCfg?.concurrency) || 0),
   };
 }
 

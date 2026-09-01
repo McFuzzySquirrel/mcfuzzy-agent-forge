@@ -107,6 +107,9 @@ export const api = {
   setAutoCommit(enabled: boolean): Promise<{ ok: boolean; message: string }> {
     return post<{ ok: boolean; message: string }>("/api/engine-config", { autoCommit: enabled });
   },
+  setConcurrency(value: number): Promise<{ ok: boolean; message: string }> {
+    return post<{ ok: boolean; message: string }>("/api/engine-config", { concurrency: value });
+  },
   launchCli(): Promise<LaunchCliResult> {
     return post<LaunchCliResult>("/api/launch-cli", {});
   },

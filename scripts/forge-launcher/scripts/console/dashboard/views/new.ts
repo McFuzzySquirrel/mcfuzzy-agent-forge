@@ -29,6 +29,7 @@ function buildForm(): HTMLElement {
     el("option", { value: "public" }, "public"),
   ]);
   const parentDir = el("input", { type: "text", placeholder: "/path/to/parent (optional)" });
+  const concurrency = el("input", { type: "number", placeholder: "1 (optional)", min: "1" });
   const idea = el("textarea", { rows: "5", placeholder: "Describe the project idea…" });
   const autoDraft = el("input", { type: "checkbox" });
 
@@ -49,6 +50,7 @@ function buildForm(): HTMLElement {
     el("div", { className: "form-row" }, [field("Name", name), field("Harness", harness), field("Visibility", visibility)]),
     field("Description", description),
     field("Parent directory", parentDir),
+    field("Concurrency (parallel agents)", concurrency),
     field("Idea", idea),
     el("div", { className: "doc-section" }, [
       el("h4", null, "Project documents (optional, recommended)"),
@@ -70,6 +72,7 @@ function buildForm(): HTMLElement {
       harness: (harness as HTMLSelectElement).value,
       visibility: (visibility as HTMLSelectElement).value,
       parentDir: (parentDir as HTMLInputElement).value.trim() || undefined,
+      concurrency: Number((concurrency as HTMLInputElement).value) || undefined,
       idea: (idea as HTMLTextAreaElement).value,
       autoDraft: (autoDraft as HTMLInputElement).checked,
       prdFile: prdPicker.input.files,
@@ -151,6 +154,7 @@ async function submitNewProject(req: {
   harness?: string;
   visibility?: string;
   parentDir?: string;
+  concurrency?: number;
   idea: string;
   autoDraft?: boolean;
   prdFile: FileList | null;
@@ -183,6 +187,7 @@ async function submitNewProject(req: {
     parentDir: req.parentDir,
     idea: req.idea,
     autoDraft: req.autoDraft,
+    concurrency: req.concurrency && req.concurrency > 0 ? req.concurrency : undefined,
   };
   if (prdPath) payload.prdPath = prdPath;
   if (researchPaths.length > 0) payload.researchPaths = researchPaths;

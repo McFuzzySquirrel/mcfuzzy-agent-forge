@@ -125,6 +125,8 @@ export interface Summary {
   defaultTimeoutMs: number | null;
   /** Auto-commit after each completed task (engine-config; default on). */
   autoCommit: boolean;
+  /** Max agents to run in parallel (engine-config; 0 means engine default). */
+  concurrency: number;
 }
 
 export interface TaskRow {
@@ -264,6 +266,8 @@ export interface CreateProjectRequest {
   parentDir?: string;
   idea: string;
   autoDraft?: boolean;
+  /** Max agents to run in parallel (0 means engine default). */
+  concurrency?: number;
   /** Server-side path of an existing PRD file to copy into the new repo as docs/PRD.md. */
   prdPath?: string;
   /** Server-side paths of research/seed docs to copy into the new repo's docs/research/. */

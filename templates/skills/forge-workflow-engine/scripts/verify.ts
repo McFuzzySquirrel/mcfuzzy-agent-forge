@@ -110,10 +110,16 @@ export function worktreeChanged(before: WorktreeSnapshot | null, after: Worktree
 }
 
 /**
- * Returns the set of relative file paths that are new or newly-modified in
- * `after` compared to `before`.  Paths present in both snapshots are omitted
- * because those were already dirty before the task ran.  Returns an empty
- * array when either snapshot is null (git unavailable).
+ * Returns the set of relative file paths that became dirty during a task —
+ * i.e. paths that appear in `after` but not in `before`.
+ *
+ * Because `captureWorktree` uses `git status --porcelain`, `before.paths`
+ * contains all files that were already dirty *before* the task ran.  A
+ * pre-existing file modified in place therefore shows up in both snapshots
+ * (already dirty before → still dirty after), so it is correctly excluded.
+ * Only files that moved from clean to dirty during the task are returned.
+ *
+ * Returns an empty array when either snapshot is null (git unavailable).
  *
  * This is the primary mechanism for recording `outputFiles` when an agent
  * modifies existing files rather than creating new ones.

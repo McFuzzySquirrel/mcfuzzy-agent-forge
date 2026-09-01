@@ -521,6 +521,34 @@ test("engine-config toggles auto-commit and flows into engine-run args", async (
   });
 });
 
+test("engine-config sets concurrency and flows into engine-run args", async () => {
+  await withServer(async (server, repo, spawned) => {
+    const token = server.token;
+    assert.equal((await getJson(`${server.url}/api/summary`) as { concurrency: number }).concurrency, 0);
+
+    const set = await postJson(`${server.url}/api/engine-config`, { concurrency: 3 }, { "X-Forge-Token": token });
+    assert.equal((set.body as { ok: boolean }).ok, true);
+    assert.equal(JSON.parse(readFileSync(join(repo, "docs", "engine-config.json"), "utf8")).concurrency, "3");
+    assert.equal((await getJson(`${server.url}/api/summary`) as { concurrency: number }).concurrency, 3);
+
+    const run = await postJson(`${server.url}/api/control`, { action: "run" }, { "X-Forge-Token": token });
+    assert.equal((run.body as { ok: boolean }).ok, true);
+    const runArgs = spawned.calls.at(-1)!.args;
+    const concIdx = runArgs.indexOf("--concurrency");
+    assert.ok(concIdx !== -1 && runArgs[concIdx + 1] === "3", "engine-run should pass --concurrency 3");
+
+    // Reset to engine default (0)
+    const reset = await postJson(`${server.url}/api/engine-config`, { concurrency: 0 }, { "X-Forge-Token": token });
+    assert.equal((reset.body as { ok: boolean }).ok, true);
+    assert.equal(JSON.parse(readFileSync(join(repo, "docs", "engine-config.json"), "utf8")).concurrency, "");
+    assert.equal((await getJson(`${server.url}/api/summary`) as { concurrency: number }).concurrency, 0);
+
+    const run2 = await postJson(`${server.url}/api/control`, { action: "run" }, { "X-Forge-Token": token });
+    assert.ok(!(run2.body as { ok: boolean; message?: string }).message?.includes("--concurrency"), "no --concurrency when reset");
+    assert.ok(!spawned.calls.at(-1)!.args.includes("--concurrency"), "no --concurrency arg when at default");
+  });
+});
+
 test("launch-cli opens the harness CLI in a terminal (opencode for .agents)", async () => {
   const home = mkdtempSync(join(tmpdir(), "forge-home-"));
   const prevHome = process.env.FORGE_HOME;

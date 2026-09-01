@@ -433,6 +433,14 @@ export async function startConsoleServer(options: ConsoleServerOptions = {}): Pr
         }
         if (urlPath === "/api/engine-config") {
           if (!currentRepo) return sendJson(res, 400, { ok: false, message: "no repo selected" });
+          if (typeof body.concurrency === "number") {
+            if (!Number.isInteger(body.concurrency) || body.concurrency < 0) {
+              return sendJson(res, 400, { ok: false, message: "concurrency must be a non-negative integer." });
+            }
+            const result = repo.setConcurrency(currentPaths()!, body.concurrency);
+            broadcast("snapshot", snapshotEvent());
+            return sendJson(res, result.ok ? 200 : 400, result);
+          }
           const autoCommit = body.autoCommit;
           if (typeof autoCommit !== "boolean") {
             return sendJson(res, 400, { ok: false, message: "autoCommit must be a boolean." });
