@@ -326,6 +326,9 @@ step - a set of defaults you can press Enter through:
   [ADR-021](adr/021-parallel-task-dispatch.md)).
 - **Per-task timeout (ms)** - default `600000`.
 - **Max retries per task** - default `2`.
+- **Execution mode** - persisted in `docs/engine-config.json` so browser-driven
+  runs can switch between the full workflow (**auto**) and a saved manual task
+  selection (**manual**).
 - **Live Forge Board dashboard** - launch the visualization during the run
   (default on). A port prompt follows (blank = `4299`). The dashboard starts
   when the engine starts - after the manifest is prepared - and its URL is
@@ -338,7 +341,10 @@ them (env vars still win over the persisted file). All options also have
 env-var equivalents (`FORGE_ENGINE_HARNESS`, `FORGE_ENGINE_GRANULARITY`,
 `FORGE_ENGINE_CONCURRENCY`, `FORGE_ENGINE_TASK_TIMEOUT_MS`,
 `FORGE_ENGINE_MAX_RETRIES`, `FORGE_ENGINE_RETRY_DELAY_MS`,
-`FORGE_ENGINE_HEARTBEAT_MS`, `FORGE_ENGINE_VIZ`, `FORGE_ENGINE_VIZ_PORT`).
+`FORGE_ENGINE_HEARTBEAT_MS`, `FORGE_ENGINE_VIZ`, `FORGE_ENGINE_VIZ_PORT`). The
+same config file now also stores the console's manual-run selection
+(`executionMode`, `selectionScope`, `selectedTaskIds`) so **Run selected** and
+**Resume selected** use the same scoped task set later.
 
 Use `--draft` to pre-answer "yes" to both auto-draft prompts (interactive), or
 set `FORGE_AUTO_DRAFT=1` in non-interactive runs. The workflow-engine run later:

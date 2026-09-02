@@ -93,10 +93,12 @@ so you can review each result and come back later:
 | Paused/incomplete run | **Resume build** | engine resumes from `WORKFLOW-STATE.json` |
 
 Each step runs detached in the background (output is appended to
-`docs/engine-run.log`, visible in the **Logs** view); the Overview polls until
-the stage advances and updates the button label. Nothing runs until you click it,
-and the generated PRD/team are **view-only** in the console - review them in
-**Plan & Team** and edit them in your editor.
+`docs/engine-run.log`, visible in the **Logs** view). The console now tracks
+those detached jobs directly, so the Overview can show whether work is actively
+creating the project, drafting the PRD, generating the team, running the build,
+paused, complete, or failed. Nothing runs until you click it, and the generated
+PRD/team are **view-only** in the console - review them in **Plan & Team** and
+edit them in your editor.
 
 The terminal counterparts are the new `draft-prd` / `draft-team` subcommands:
 
@@ -147,10 +149,10 @@ button shows the exact command to run manually.
 
 | View | What it shows |
 |---|---|
-| **Home** | create a new project or open an existing one (landing). |
-| **Overview** | run status, progress + counts, blockers, the pipeline **Continue** button, run controls, an **auto-commit** toggle, and a **Launch \<harness\> CLI** button. |
+| **Home** | create a new project or open an existing one (landing), including live status labels for detached work. |
+| **Overview** | run status, progress + counts, blockers, the pipeline **Continue** button, background-job status, run controls, an **execution mode** toggle, an **auto-commit** toggle, and a **Launch \<harness\> CLI** button. |
 | **Board** | the PixiJS Forge Board - a live kanban (To Do · In Progress · Done · Failed). |
-| **Tasks** | every task in a filterable/sortable table with a detail drawer (including an editable per-task timeout) and a **Launch \<harness\> CLI** button. |
+| **Tasks** | every task in a filterable/sortable table with a detail drawer, editable per-task timeout, explicit/range selection controls for manual mode, and a **Launch \<harness\> CLI** button. |
 | **Logs** | `docs/engine-run.log` tail + the audit event stream (live via SSE). |
 | **Plan & Team** | the project documents (IDEA, PRD, vision, features, progress, model plan) + agents and skills, in collapsible sections. |
 | **Artifacts** | the structured outputs tasks produced (`docs/artifacts/`), browsable by type/task with previews. |
@@ -173,6 +175,20 @@ does:
 | **Stop** | writes `request: stop` **and** SIGTERMs `docs/engine.pid`. |
 | **Resume** | `forge-launcher engine-run --repo <path> …` (resumes from `WORKFLOW-STATE.json`). |
 | **Replay** | `workflow-engine replay <task-id> --repo <path>` for a failed task. |
+
+### Execution mode
+
+The Overview **Controls** panel now persists how the next run should behave:
+
+- **Auto** - the engine runs the full ready workflow.
+- **Manual** - the engine runs only the selected task set saved from the
+  **Tasks** view. The primary button text changes to **Run selected** /
+  **Resume selected**.
+
+Manual selections are stored in `docs/engine-config.json` with the run mode, the
+selection scope (`single`, `range`, or `list`), and the selected task IDs. The
+engine expands dependencies automatically when a selected task needs them, so
+targeted runs still obey the DAG and phase ordering.
 
 The **Auto-commit after each task** checkbox (Controls panel) toggles
 `autoCommit` in `docs/engine-config.json`, which the console's run/resume
@@ -202,6 +218,21 @@ Storage and precedence (same as the CLI):
 > `run`/`resume` recompiles the manifest from the PRD when a granularity is
 > explicitly set - which regenerates `timeoutMs`. The engine-config default is
 > always preserved.
+
+### Background job tracking
+
+Detached console actions now share one background-job model:
+
+- project creation
+- PRD drafting
+- team generation
+- engine run / resume
+- replay of a failed task
+
+Each job records its PID, repo path, log path, timestamps, status, and latest
+message. The console derives completion from the process plus repo/run state, so
+job status keeps updating even if you switch between **Home**, **Projects**, and
+**Overview**.
 
 ---
 
