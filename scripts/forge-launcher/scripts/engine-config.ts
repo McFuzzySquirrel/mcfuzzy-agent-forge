@@ -21,6 +21,35 @@ export interface PersistedEngineConfig {
   attach: string;
   /** Auto-commit after each completed task; absent means the engine default (on). */
   autoCommit?: boolean;
+  /** Execution mode for future run/resume commands. */
+  executionMode?: ExecutionMode;
+  /** How the selected task set was chosen for manual execution. */
+  selectionScope?: SelectionScope;
+  /** Explicit task ids to run when executionMode is "manual". */
+  selectedTaskIds?: string[];
+}
+
+export type ExecutionMode = "auto" | "manual";
+export type SelectionScope = "single" | "range" | "list";
+
+export function normaliseExecutionMode(value: unknown): ExecutionMode {
+  return value === "manual" ? "manual" : "auto";
+}
+
+export function normaliseSelectionScope(value: unknown, selectedTaskIds: string[]): SelectionScope | null {
+  if (selectedTaskIds.length === 0) return null;
+  return value === "single" || value === "range" || value === "list" ? value : "list";
+}
+
+export function normaliseSelectedTaskIds(value: unknown): string[] {
+  if (!Array.isArray(value)) return [];
+  const unique = new Set<string>();
+  for (const raw of value) {
+    if (typeof raw !== "string") continue;
+    const id = raw.trim();
+    if (id) unique.add(id);
+  }
+  return [...unique];
 }
 
 export function engineConfigPath(repoDir: string): string {

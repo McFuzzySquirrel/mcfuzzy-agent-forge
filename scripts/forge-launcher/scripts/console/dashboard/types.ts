@@ -127,6 +127,11 @@ export interface Summary {
   autoCommit: boolean;
   /** Max agents to run in parallel (engine-config; 0 means engine default). */
   concurrency: number;
+  executionMode: ExecutionMode;
+  selectionScope: SelectionScope | null;
+  selectedTaskIds: string[];
+  selectedTaskCount: number;
+  job: BackgroundJob | null;
 }
 
 export interface TaskRow {
@@ -226,6 +231,7 @@ export interface ProjectInfo {
   createdAt?: string;
   lastOpenedAt?: string;
   stage: string;
+  job?: BackgroundJob | null;
 }
 
 export interface ProjectsIndex {
@@ -245,10 +251,38 @@ export interface FileContent {
 
 export type ControlAction = "run" | "resume" | "pause" | "stop" | "replay" | "draft-prd" | "draft-team";
 
+export type ExecutionMode = "auto" | "manual";
+export type SelectionScope = "single" | "range" | "list";
+
+export type BackgroundJobType =
+  | "create-project"
+  | "draft-prd"
+  | "draft-team"
+  | "engine-run"
+  | "engine-resume"
+  | "engine-replay";
+
+export type BackgroundJobStatus = "running" | "complete" | "failed" | "paused";
+
+export interface BackgroundJob {
+  id: string;
+  type: BackgroundJobType;
+  repoPath: string;
+  pid?: number;
+  taskId?: string;
+  logPath?: string;
+  startedAt: string;
+  updatedAt: string;
+  finishedAt?: string;
+  status: BackgroundJobStatus;
+  message: string;
+}
+
 export interface ControlResult {
   ok: boolean;
   message: string;
   pid?: number;
+  job?: BackgroundJob;
 }
 
 export interface TimeoutUpdateResult {
@@ -280,6 +314,7 @@ export interface CreateProjectResult {
   repoDir?: string;
   logFile?: string;
   pid?: number;
+  job?: BackgroundJob;
 }
 
 export interface UploadResult {
