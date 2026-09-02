@@ -294,6 +294,7 @@ function truncate(text, maxChars) {
     hovered: null,
     currentPhase: null,
     startedAt: null,
+    completedDurationMs: 0,
     status: "idle",
     counts: { pending: 0, running: 0, complete: 0, failed: 0, skipped: 0 },
     total: 0,
@@ -861,6 +862,7 @@ function truncate(text, maxChars) {
     if (entry.expanded) buildDetail(entry);
     layoutCards();
     computeCounts();
+    computeCompletedDurationMs();
     updateHud();
     drawEdges();
   }
@@ -902,6 +904,16 @@ function truncate(text, maxChars) {
       );
     }
     legend.innerHTML = chips.join("");
+  }
+
+  function computeCompletedDurationMs() {
+    let total = 0;
+    for (const entry of state.ordered) {
+      if (entry.status !== "complete") continue;
+      if (typeof entry.durationMs !== "number" || Number.isNaN(entry.durationMs) || entry.durationMs < 0) continue;
+      total += entry.durationMs;
+    }
+    state.completedDurationMs = total;
   }
 
   // ── Tooltip ───────────────────────────────────────────────────────────────
@@ -994,6 +1006,10 @@ function truncate(text, maxChars) {
         if (record.artifactId) entry.artifactId = record.artifactId;
         entry.errorMessage = record.errorMessage;
         if (entry.status !== record.status) applyStatusToCard(entry, record.status);
+        else if (record.status === "complete") {
+          computeCompletedDurationMs();
+          updateHud();
+        }
       }
     }
     setStatus(`connected · run ${ws.runId ?? "—"} · ${ws.status ?? state.status}`, ws.status === "failed" ? "warn" : "live");
@@ -1069,8 +1085,6 @@ function truncate(text, maxChars) {
   }
 
   // ── Ticker ────────────────────────────────────────────────────────────────
-  let elapsedStart = null;
-
   app.ticker.add((ticker) => {
     const dt = ticker.deltaMS / 1000;
     const now = performance.now();
@@ -1118,14 +1132,10 @@ function truncate(text, maxChars) {
     updateTravellers(dt);
     if (moving) drawEdges();
 
-    // elapsed clock
-    if (state.startedAt) {
-      const base = elapsedStart || (elapsedStart = Date.parse(state.startedAt));
-      const s = Math.floor((Date.now() - base) / 1000);
-      const mm = String(Math.floor(s / 60)).padStart(2, "0");
-      const ss = String(s % 60).padStart(2, "0");
-      $id("elapsed").textContent = `${mm}:${ss}`;
-    }
+    const s = Math.floor(state.completedDurationMs / 1000);
+    const mm = String(Math.floor(s / 60)).padStart(2, "0");
+    const ss = String(s % 60).padStart(2, "0");
+    $id("elapsed").textContent = `${mm}:${ss}`;
   });
 
   // ── Data wiring ──────────────────────────────────────────────────────────

@@ -4,6 +4,15 @@ Detailed release and change notes for MyForge.
 
 ---
 
+## September 2026 - v3.41
+
+### Forge Console: elapsed time now reflects completed task work
+
+- **Overview no longer shows wall-clock runtime as elapsed.** The elapsed stat is now the combined duration of all completed tasks in the current visible run scope, so it reflects actual finished work instead of how long the dashboard has been open or how long the run has existed.
+- **The Forge Board HUD now matches Overview.** Its timer uses the same summed completed-task duration, keeping the board and overview consistent during full and manual/scoped runs.
+
+---
+
 ## September 2026 - v3.40
 
 ### Forge Console: manual pre-build now stops at manifest creation

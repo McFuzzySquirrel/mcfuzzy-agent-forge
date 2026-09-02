@@ -93,6 +93,7 @@ export interface RunSummary {
   status: string;
   startedAt: string | null;
   lastUpdatedAt: string | null;
+  completedDurationMs: number;
   currentPhase: string | null;
   currentPhaseTitle: string | null;
   counts: RunCounts;

@@ -106,7 +106,7 @@ function renderRun(run: RunSummary | null): HTMLElement {
   const counts = run.counts;
   const done = counts.complete + counts.skipped;
   const pct = run.total > 0 ? Math.round((done / run.total) * 100) : 0;
-  const elapsed = run.startedAt ? fmtDuration(Date.now() - Date.parse(run.startedAt)) : "—";
+  const elapsed = fmtDuration(run.completedDurationMs);
 
   const stats = el("div", { className: "stats" }, [
     stat("Pending", String(counts.pending)),
