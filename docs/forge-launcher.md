@@ -249,13 +249,14 @@ forge-launcher console [--repo <path>] [--port <n>] [--no-open]
 ```
 
 From it you can pick or create a project, advance the pipeline one stage at a
-time (draft the PRD → generate the agent team → start the build), and
+time (draft the PRD → generate the agent team → create the manifest or start the
+build), and
 monitor/control a run (board, tasks, logs, artifacts, timeline; pause/stop/
 resume/replay). It is a projection over the same `docs/*` files the terminal
 tools write, so the CLI paths stay first-class and interchangeable.
 
 Full reference (views, the Continue pipeline, the project registry, the
-`draft-prd`/`draft-team` headless subcommands, and security):
+`draft-prd`/`draft-team`/`compile-manifest` headless subcommands, and security):
 **[docs/forge-console.md](forge-console.md)**.
 
 ### Stop here and resume later

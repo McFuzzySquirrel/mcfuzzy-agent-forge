@@ -4,6 +4,16 @@ Detailed release and change notes for MyForge.
 
 ---
 
+## September 2026 - v3.40
+
+### Forge Console: manual pre-build now stops at manifest creation
+
+- **Overview's pipeline card is simpler.** Before a manifest exists it now shows only a **Manual build** checkbox plus the next pipeline action, instead of exposing task-selection-oriented controls that cannot work yet.
+- **Manual pre-build no longer dead-ends.** When that checkbox is enabled at the team → build stage, the pipeline action becomes **Create manifest**. The console compiles `docs/EXECUTION-MANIFEST.json` without auto-starting the full workflow, so you can review tasks and make a targeted selection first.
+- **Manifest-driven controls stay in the Controls panel.** Once the manifest exists, build mode selection, task-count feedback, **Choose tasks**, and the existing Run/Resume/Pause/Stop actions remain together in **Overview → Controls** where they are actually actionable.
+
+---
+
 ## September 2026 - v3.39
 
 ### Forge Console: tracked background jobs from project creation through build

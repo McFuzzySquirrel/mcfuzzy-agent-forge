@@ -46,6 +46,36 @@ function makeRepo(harnessRoot = ".agents"): string {
   return dir;
 }
 
+function addStubAdapter(repo: string, harnessRoot = ".agents"): void {
+  const skillDir = path.join(repo, harnessRoot, "skills", "forge-execution-adapter");
+  fs.mkdirSync(path.join(skillDir, "scripts"), { recursive: true });
+  fs.writeFileSync(path.join(skillDir, "package.json"), JSON.stringify({
+    name: "forge-execution-adapter",
+    version: "1.0.0",
+    private: true,
+    scripts: {
+      "forge-execution-adapter": "node scripts/adapter.mjs",
+    },
+  }, null, 2));
+  fs.writeFileSync(path.join(skillDir, "scripts", "adapter.mjs"), `#!/usr/bin/env node
+import fs from "node:fs";
+import path from "node:path";
+
+const args = process.argv.slice(2);
+let repo = process.cwd();
+for (let i = 0; i < args.length; i += 1) {
+  if (args[i] === "--repo" && args[i + 1]) repo = path.resolve(args[i + 1]);
+}
+const docs = path.join(repo, "docs");
+fs.mkdirSync(docs, { recursive: true });
+fs.writeFileSync(path.join(docs, "EXECUTION-MANIFEST.json"), JSON.stringify({
+  version: "1.0",
+  generatedAt: new Date().toISOString(),
+  phases: [],
+}, null, 2));
+`);
+}
+
 function write(repo: string, rel: string, content: string): void {
   const file = path.join(repo, rel);
   fs.mkdirSync(path.dirname(file), { recursive: true });
@@ -100,4 +130,15 @@ test("draft-team with no PRD fails with guidance", async () => {
   const { code, out } = await runCli(["draft-team", "--repo", repo], { FORGE_RUN_WITH: "stub" });
   assert.equal(code, 1, out);
   assert.ok(out.includes("No PRD"), out);
+});
+
+test("compile-manifest installs the adapter and writes docs/EXECUTION-MANIFEST.json", async () => {
+  const repo = makeRepo();
+  write(repo, "docs/PRD.md", "# PRD\n\nBuild a thing.\n");
+  write(repo, ".agents/agents/stub-project-agent.md", "---\nname: stub-project-agent\ndescription: stub\n---\n# stub\n");
+  addStubAdapter(repo);
+  const { code, out } = await runCli(["compile-manifest", "--repo", repo]);
+  assert.equal(code, 0, out);
+  assert.ok(fs.existsSync(path.join(repo, "docs", "EXECUTION-MANIFEST.json")), "manifest should be written");
+  assert.ok(out.includes("Execution manifest compiled"), out);
 });

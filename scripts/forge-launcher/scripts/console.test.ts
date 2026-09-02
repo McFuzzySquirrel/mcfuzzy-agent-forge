@@ -418,8 +418,8 @@ test("timeout update rejects invalid values and missing token", async () => {
   });
 });
 
-test("draft-prd and draft-team actions dispatch and return ok", async () => {
-  await withServer(async (server, repo) => {
+test("draft-prd, draft-team, and compile-manifest actions dispatch and return ok", async () => {
+  await withServer(async (server, repo, spawned) => {
     const token = server.token;
 
     const prd = await postJson(`${server.url}/api/control`, { action: "draft-prd" }, { "X-Forge-Token": token });
@@ -429,6 +429,12 @@ test("draft-prd and draft-team actions dispatch and return ok", async () => {
     const team = await postJson(`${server.url}/api/control`, { action: "draft-team" }, { "X-Forge-Token": token });
     assert.equal((team.body as { ok: boolean }).ok, true);
     assert.ok((team.body as { message: string }).message.includes("team"), "message should mention team");
+
+    renameSync(join(repo, "docs", "EXECUTION-MANIFEST.json"), join(repo, "docs", "EXECUTION-MANIFEST.json.bak"));
+    const compile = await postJson(`${server.url}/api/control`, { action: "compile-manifest" }, { "X-Forge-Token": token });
+    assert.equal((compile.body as { ok: boolean }).ok, true);
+    assert.ok((compile.body as { message: string }).message.includes("Manifest"), "message should mention manifest");
+    assert.ok(spawned.calls.at(-1)?.args.includes("compile-manifest"), "compile-manifest action should spawn the compile-manifest subcommand");
   });
 });
 

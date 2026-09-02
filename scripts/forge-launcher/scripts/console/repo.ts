@@ -673,6 +673,7 @@ function jobLabel(job: BackgroundJob): string {
       case "create-project": return "creating";
       case "draft-prd": return "drafting PRD";
       case "draft-team": return "generating team";
+      case "compile-manifest": return "compiling manifest";
       case "engine-run":
       case "engine-resume": return "running";
       case "engine-replay": return "replaying";
@@ -739,6 +740,10 @@ function resolveJobOutcome(job: BackgroundJob): { status: BackgroundJob["status"
       return hasProjectTeam(job.repoPath)
         ? { status: "complete", message: "Agent team generation completed." }
         : { status: "failed", message: "Agent team generation exited without producing a team." };
+    case "compile-manifest":
+      return fs.existsSync(p.manifestPath)
+        ? { status: "complete", message: "Execution manifest compiled." }
+        : { status: "failed", message: "Manifest compile exited without producing a manifest." };
     case "engine-run":
     case "engine-resume": {
       const state = loadState(p);

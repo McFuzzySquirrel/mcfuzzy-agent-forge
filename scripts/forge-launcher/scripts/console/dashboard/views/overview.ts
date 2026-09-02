@@ -186,11 +186,15 @@ function nextStep(summary: Summary, actions: Actions): PipelineStep | null {
       hint: "Generates the agent team from the PRD (headless). Review it, then come back to continue.",
     };
   }
-  if (actions.canRun) {
-    return { label: "Start build", action: "run", hint: "Compiles the manifest and runs the workflow engine." };
+  if (!summary.hasManifest && summary.executionMode === "manual" && actions.canRun) {
+    return {
+      label: "Create manifest",
+      action: "compile-manifest",
+      hint: "Compiles the manifest without starting a full build so you can choose tasks first.",
+    };
   }
-  if (actions.canResume) {
-    return { label: "Resume build", action: "resume", hint: "Resumes the workflow engine from where it left off." };
+  if (!summary.hasManifest && actions.canRun) {
+    return { label: "Start build", action: "run", hint: "Compiles the manifest and runs the workflow engine." };
   }
   return null;
 }
@@ -230,7 +234,6 @@ async function continuePipeline(container: HTMLElement, step: PipelineStep): Pro
 function renderGuidance(container: HTMLElement, summary: Summary, actions: Actions): HTMLElement {
   const step = nextStep(summary, actions);
   const working = summary.job?.status === "running";
-  const manualNeedsSelection = summary.executionMode === "manual" && summary.selectedTaskCount === 0;
 
   let text: string;
   let hint: string;
@@ -238,10 +241,14 @@ function renderGuidance(container: HTMLElement, summary: Summary, actions: Actio
     text = summary.hasIdea ? "Draft a PRD to get started." : "No project idea yet.";
   } else if (!summary.hasTeam) {
     text = "Generate the agent team.";
+  } else if (!summary.hasManifest && summary.executionMode === "manual") {
+    text = "Manual build enabled — create the manifest first.";
   } else if (actions.canRun) {
     text = "Ready to build.";
   } else if (actions.canResume) {
-    text = "Build paused — resume to continue.";
+    text = "Build paused — use Controls to continue.";
+  } else if (summary.hasManifest) {
+    text = "Manifest ready.";
   } else {
     text = "Build in progress.";
   }
@@ -249,26 +256,22 @@ function renderGuidance(container: HTMLElement, summary: Summary, actions: Actio
   const children: Array<HTMLElement> = [
     el("h4", null, "Pipeline"),
     el("strong", null, text),
-    renderExecutionModeControl(container, summary.executionMode, summary.selectedTaskCount),
+    renderPipelineManualToggle(container, summary.executionMode),
   ];
 
   if (step) {
-    const blockedForManualSelection = (step.action === "run" || step.action === "resume") && manualNeedsSelection;
     hint = step.hint;
-    const btn = el("button", { className: "btn btn-primary", disabled: blockedForManualSelection ? true : null }, blockedForManualSelection ? "Select tasks to build" : step.label);
-    if (!working && !blockedForManualSelection) {
+    const btn = el("button", { className: "btn btn-primary" }, step.label);
+    if (!working) {
       btn.addEventListener("click", () => void continuePipeline(container, step));
     }
     if (!working) children.push(el("div", { className: "actions", style: "margin-top:10px" }, [btn]));
-    if (blockedForManualSelection) {
-      hint = "Manual mode is enabled. Select one or more tasks in Tasks before starting the build.";
-    }
   } else if (!summary.hasPrd && !summary.hasIdea) {
     hint = "Add docs/IDEA.md to describe the project idea, then come back.";
-  } else if (manualNeedsSelection) {
-    hint = "Manual mode is enabled. Select one or more tasks in Tasks before starting the build.";
+  } else if (summary.hasManifest) {
+    hint = "Use the Controls panel below to choose tasks, run, resume, or stop the build.";
   } else {
-    hint = "Run control is available in the Controls panel below.";
+    hint = "Pipeline setup is complete.";
   }
 
   if (working && summary.job) {
@@ -332,11 +335,13 @@ function renderActions(container: HTMLElement, summary: Summary, actions: Action
   }
 
   const timeouts = renderTimeoutControls(container, tasks);
+  const mode = renderBuildModeControl(container, summary.executionMode, summary.selectedTaskCount);
   const commit = renderAutoCommitToggle(container, store.summary?.autoCommit ?? true);
   const concurrency = renderConcurrencyControl(container, store.summary?.concurrency ?? 0);
 
   return el("div", { className: "panel" }, [
     el("h4", null, "Controls"),
+    mode,
     el("div", { className: "actions" }, buttons),
     manualNeedsSelection
       ? el("p", { className: "dim small" }, ["Manual mode needs at least one selected task. ", el("a", { href: "#/tasks" }, "Choose tasks")])
@@ -348,23 +353,35 @@ function renderActions(container: HTMLElement, summary: Summary, actions: Action
   ]);
 }
 
-function renderExecutionModeControl(container: HTMLElement, mode: ExecutionMode, selectedCount: number): HTMLElement {
+function updateExecutionMode(container: HTMLElement, mode: ExecutionMode): void {
+  void (async () => {
+    try {
+      const res = await api.setExecutionMode(mode);
+      toast(res.message || (res.ok ? "updated" : "update failed"));
+    } catch (err) {
+      toast(err instanceof Error ? err.message : "update failed");
+    }
+    void renderOverview(container);
+  })();
+}
+
+function renderPipelineManualToggle(container: HTMLElement, mode: ExecutionMode): HTMLElement {
+  const cb = el("input", { type: "checkbox", checked: mode === "manual" ? true : null }) as HTMLInputElement;
+  cb.addEventListener("change", () => updateExecutionMode(container, cb.checked ? "manual" : "auto"));
+  return el("div", { style: "margin-bottom:10px" }, [
+    el("label", { className: "checkbox-row" }, [
+      cb,
+      el("span", null, "Manual build (do not auto-run the full workflow)"),
+    ]),
+  ]);
+}
+
+function renderBuildModeControl(container: HTMLElement, mode: ExecutionMode, selectedCount: number): HTMLElement {
   const select = el("select", null, [
     el("option", { value: "auto", selected: mode === "auto" }, "auto (full workflow)"),
     el("option", { value: "manual", selected: mode === "manual" }, "manual (selected tasks)"),
   ]);
-  select.addEventListener("change", () => {
-    void (async () => {
-      try {
-        const value = (select as HTMLSelectElement).value as ExecutionMode;
-        const res = await api.setExecutionMode(value);
-        toast(res.message || (res.ok ? "updated" : "update failed"));
-      } catch (err) {
-        toast(err instanceof Error ? err.message : "update failed");
-      }
-      void renderOverview(container);
-    })();
-  });
+  select.addEventListener("change", () => updateExecutionMode(container, (select as HTMLSelectElement).value as ExecutionMode));
   return el("div", { style: "margin-bottom:10px" }, [
     el("div", { className: "row gap" }, [
       el("span", { className: "dim small" }, "Build mode"),

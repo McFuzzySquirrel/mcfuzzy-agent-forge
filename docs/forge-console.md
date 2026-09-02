@@ -150,7 +150,7 @@ button shows the exact command to run manually.
 | View | What it shows |
 |---|---|
 | **Home** | create a new project or open an existing one (landing), including live status labels for detached work. |
-| **Overview** | run status, progress + counts, blockers, the pipeline **Continue** button, background-job status, run controls, an **execution mode** toggle, an **auto-commit** toggle, and a **Launch \<harness\> CLI** button. |
+| **Overview** | run status, progress + counts, blockers, the pipeline next-step card with a **Manual build** checkbox, background-job status, run controls, an **auto-commit** toggle, and a **Launch \<harness\> CLI** button. |
 | **Board** | the PixiJS Forge Board - a live kanban (To Do · In Progress · Done · Failed). |
 | **Tasks** | every task in a filterable/sortable table with a detail drawer, editable per-task timeout, explicit/range selection controls for manual mode, and a **Launch \<harness\> CLI** button. |
 | **Logs** | `docs/engine-run.log` tail + the audit event stream (live via SSE). |
@@ -175,10 +175,21 @@ does:
 | **Stop** | writes `request: stop` **and** SIGTERMs `docs/engine.pid`. |
 | **Resume** | `forge-launcher engine-run --repo <path> …` (resumes from `WORKFLOW-STATE.json`). |
 | **Replay** | `workflow-engine replay <task-id> --repo <path>` for a failed task. |
+| **Create manifest** *(pipeline card, manual pre-build only)* | `forge-launcher compile-manifest --repo <path>` (installs the adapter if needed and writes `docs/EXECUTION-MANIFEST.json` without starting the engine). |
 
 ### Execution mode
 
-The Overview **Controls** panel now persists how the next run should behave:
+The Overview pipeline card now exposes just one pre-build gate: a **Manual build**
+checkbox. Turn it on when you want to prevent the team → build step from
+immediately running the full workflow.
+
+When **Manual build** is enabled and the repo has a generated team but no
+manifest yet, the pipeline action changes from **Start build** to **Create
+manifest**. That compiles `docs/EXECUTION-MANIFEST.json` without starting the
+engine, so task selection can happen only after the manifest exists.
+
+Once the manifest exists, the Overview **Controls** panel persists how the next
+run should behave:
 
 - **Auto** - the engine runs the full ready workflow.
 - **Manual** - the engine runs only the selected task set saved from the
