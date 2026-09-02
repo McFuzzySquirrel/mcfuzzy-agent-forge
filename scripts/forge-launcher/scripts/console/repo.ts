@@ -63,6 +63,11 @@ export function loadState(p: RepoPaths): WorkflowState | null {
   return readJson<WorkflowState>(p.statePath);
 }
 
+function saveState(p: RepoPaths, state: WorkflowState): void {
+  fs.mkdirSync(path.dirname(p.statePath), { recursive: true });
+  fs.writeFileSync(p.statePath, `${JSON.stringify(state, null, 2)}\n`, "utf8");
+}
+
 export function loadManifest(p: RepoPaths): ExecutionManifest | null {
   return readJson<ExecutionManifest>(p.manifestPath);
 }
@@ -147,6 +152,15 @@ export function setTaskSelection(
     selectedTaskIds,
   });
   saveEngineConfig(p.repoRoot, cfg);
+  const state = loadState(p);
+  if (state?.status === "paused" && state.selection?.mode === "manual") {
+    state.selection = {
+      mode: "manual",
+      taskIds: selectedTaskIds,
+      ...(selectionScope ? { scope: selectionScope } : {}),
+    };
+    saveState(p, state);
+  }
   const count = selectedTaskIds.length;
   return { ok: true, message: count > 0 ? `Saved ${count} selected task(s).` : "Cleared the manual task selection." };
 }

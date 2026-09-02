@@ -229,6 +229,7 @@ async function continuePipeline(container: HTMLElement, step: PipelineStep): Pro
 
 function renderGuidance(container: HTMLElement, summary: Summary, actions: Actions): HTMLElement {
   const step = nextStep(summary, actions);
+  const manualNeedsSelection = summary.executionMode === "manual" && summary.selectedTaskCount === 0;
 
   let text: string;
   let hint: string;
@@ -248,19 +249,26 @@ function renderGuidance(container: HTMLElement, summary: Summary, actions: Actio
 
   if (step) {
     const working = summary.job?.status === "running";
+    const blockedForManualSelection = (step.action === "run" || step.action === "resume") && manualNeedsSelection;
     hint = step.hint;
     const btn = el(
       "button",
-      { className: "btn btn-primary", disabled: working ? true : null },
-      working ? jobLabel(summary.job!) : step.label,
+      { className: "btn btn-primary", disabled: working || blockedForManualSelection ? true : null },
+      working ? jobLabel(summary.job!) : blockedForManualSelection ? "Select tasks to build" : step.label,
     );
-    btn.addEventListener("click", () => void continuePipeline(container, step));
+    if (!blockedForManualSelection) {
+      btn.addEventListener("click", () => void continuePipeline(container, step));
+    }
     children.push(el("div", { className: "actions", style: "margin-top:10px" }, [btn]));
     if (working) {
       children.push(el("p", { className: "dim small" }, "Working in the background — watch the Logs tab."));
+    } else if (blockedForManualSelection) {
+      hint = "Manual mode is enabled. Select one or more tasks in Tasks before starting the build.";
     }
   } else if (!summary.hasPrd && !summary.hasIdea) {
     hint = "Add docs/IDEA.md to describe the project idea, then come back.";
+  } else if (manualNeedsSelection) {
+    hint = "Manual mode is enabled. Select one or more tasks in Tasks before starting the build.";
   } else {
     hint = "Run control is available in the Controls panel below.";
   }
@@ -277,6 +285,12 @@ function renderGuidance(container: HTMLElement, summary: Summary, actions: Actio
 }
 
 function renderActions(container: HTMLElement, summary: Summary, actions: Actions, tasks: TaskRow[]): HTMLElement {
+  if (!summary.hasManifest) {
+    return el("div", { className: "panel controls-disabled" }, [
+      el("h4", null, "Controls"),
+      el("p", { className: "dim small" }, "Controls unlock after the execution manifest is generated."),
+    ]);
+  }
   const ctl = (action: ControlAction, taskId?: string): void => {
     void (async () => {
       try {

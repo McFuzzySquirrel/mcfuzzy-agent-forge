@@ -71,7 +71,7 @@ function buildForm(): HTMLElement {
       field("", researchPaths),
       el("p", { className: "dim small" }, "Research and seed docs (design specs, market research, technical notes) are copied to docs/research/ and give the PRD build extra context. An existing PRD is used as-is instead of drafting from the idea."),
     ]),
-    el("label", { className: "checkbox-row" }, [autoDraft, el("span", null, "Auto-draft PRD after creation")]),
+    el("label", { className: "checkbox-row" }, [autoDraft, el("span", null, "Auto-run setup after creation (draft PRD + generate team)")]),
     el("div", { className: "actions" }, [submit, cancel]),
   ]);
 

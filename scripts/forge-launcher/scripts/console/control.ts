@@ -216,17 +216,20 @@ export class RunController {
     const { pid } = this.spawner(cmd, args, { cwd: parentDir, env, logFile });
     const repoDir = path.join(parentDir, req.name);
     upsertProject({ path: repoDir, name: req.name, harness: req.harness });
+    const message = req.autoDraft
+      ? "Project creation started in the background (auto-draft PRD + team enabled)."
+      : "Project creation started in the background.";
     const job = startJob({
       type: "create-project",
       repoPath: repoDir,
       pid,
       logPath: logFile,
-      message: "Project creation started in the background.",
+      message,
     });
 
     return {
       ok: true,
-      message: "Project creation started in the background.",
+      message,
       repoDir,
       logFile,
       pid,
@@ -234,7 +237,22 @@ export class RunController {
     };
   }
 
+  private manualSelectionRequiredMessage(action: "run" | "resume"): ControlResult | null {
+    const cfg = loadEngineConfig(this.repoRoot);
+    if (normaliseExecutionMode(cfg?.executionMode) !== "manual") return null;
+    const selectedTaskIds = normaliseSelectedTaskIds(cfg?.selectedTaskIds);
+    if (selectedTaskIds.length > 0) return null;
+    return {
+      ok: false,
+      message: `Manual mode is enabled. Select at least one task in Tasks before ${action === "run" ? "running" : "resuming"} the build.`,
+    };
+  }
+
   dispatch(action: ControlAction, taskId?: string): ControlResult {
+    if (action === "run" || action === "resume") {
+      const validation = this.manualSelectionRequiredMessage(action);
+      if (validation) return validation;
+    }
     switch (action) {
       case "pause": return this.pause();
       case "stop": return this.stop();

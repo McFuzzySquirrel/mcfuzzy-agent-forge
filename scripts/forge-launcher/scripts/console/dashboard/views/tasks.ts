@@ -110,6 +110,8 @@ export async function renderTasks(container: HTMLElement): Promise<void> {
   const addRange = el("button", { className: "btn btn-sm" }, "Add range");
   const saveSelection = el("button", { className: "btn btn-sm" }, "Save selection");
   const clearSelection = el("button", { className: "btn btn-sm" }, "Clear");
+  const runSelection = el("button", { className: "btn btn-sm btn-primary" }, "Run selected");
+  const resumeSelection = el("button", { className: "btn btn-sm" }, "Resume selected");
 
   const launch = el("button", { className: "btn btn-sm" }, `Launch ${store.summary?.harness ?? "harness"} CLI`);
   launch.addEventListener("click", () => void launchCli());
@@ -129,6 +131,8 @@ export async function renderTasks(container: HTMLElement): Promise<void> {
         addRange,
         saveSelection,
         clearSelection,
+        runSelection,
+        resumeSelection,
       ]),
       el("div", { className: "row gap", style: "margin:0 0 8px" }, [
         el("span", { className: "dim small" }, "Set every task's timeout:"),
@@ -165,6 +169,12 @@ export async function renderTasks(container: HTMLElement): Promise<void> {
     selectedIds.clear();
     selectionScope = null;
     void persistSelection();
+  });
+  runSelection.addEventListener("click", () => {
+    void runSelectionAction("run");
+  });
+  resumeSelection.addEventListener("click", () => {
+    void runSelectionAction("resume");
   });
   if (myGen !== gen) return;
   renderTable();
@@ -317,6 +327,26 @@ async function persistSelection(): Promise<void> {
     toast(res.message || "saved");
   } catch (err) {
     toast(err instanceof Error ? err.message : "save failed");
+  }
+  await refresh();
+}
+
+async function runSelectionAction(action: "run" | "resume"): Promise<void> {
+  const ids = allTasks.map((task) => task.id).filter((id) => selectedIds.has(id));
+  if (ids.length === 0) {
+    toast("Manual mode is enabled. Select at least one task before starting the build.");
+    return;
+  }
+  try {
+    const save = await api.setTaskSelection(selectionScope ?? inferSelectionScope(), ids);
+    if (!save.ok) {
+      toast(save.message || "save failed");
+      return;
+    }
+    const res = await api.control(action);
+    toast(res.message || (res.ok ? "ok" : "failed"));
+  } catch (err) {
+    toast(err instanceof Error ? err.message : "control failed");
   }
   await refresh();
 }

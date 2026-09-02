@@ -615,6 +615,68 @@ test("engine-config stores manual selection and passes it to engine-run", async 
   });
 });
 
+test("manual mode requires at least one selected task before run/resume", async () => {
+  await withServer(async (server) => {
+    const token = server.token;
+    const mode = await postJson(`${server.url}/api/engine-config`, { executionMode: "manual" }, { "X-Forge-Token": token });
+    assert.equal((mode.body as { ok: boolean }).ok, true);
+    const clear = await postJson(`${server.url}/api/engine-config`, { selectionScope: null, selectedTaskIds: [] }, { "X-Forge-Token": token });
+    assert.equal((clear.body as { ok: boolean }).ok, true);
+
+    const run = await postJson(`${server.url}/api/control`, { action: "run" }, { "X-Forge-Token": token });
+    assert.equal((run.body as { ok: boolean }).ok, false);
+    assert.match((run.body as { message: string }).message, /Manual mode is enabled/);
+
+    const resume = await postJson(`${server.url}/api/control`, { action: "resume" }, { "X-Forge-Token": token });
+    assert.equal((resume.body as { ok: boolean }).ok, false);
+    assert.match((resume.body as { message: string }).message, /Manual mode is enabled/);
+  });
+});
+
+test("updating manual selection also updates paused state selection", async () => {
+  await withServer(async (server, repo) => {
+    const token = server.token;
+    const docs = join(repo, "docs");
+    const pausedState = {
+      runId: "run-2",
+      startedAt: new Date().toISOString(),
+      lastUpdatedAt: new Date().toISOString(),
+      manifestPath: join(docs, "EXECUTION-MANIFEST.json"),
+      manifestVersion: "1.0",
+      harness: "opencode",
+      status: "paused",
+      currentPhase: "1",
+      tasks: {
+        "1.1": { taskId: "1.1", status: "complete", ownerAgent: "qa-engineer", attempt: 1, outputFiles: [] },
+        "1.2": { taskId: "1.2", status: "pending", ownerAgent: "qa-engineer", attempt: 0, outputFiles: [] },
+      },
+      blockers: [],
+      selection: { mode: "manual", scope: "single", taskIds: ["1.1"] },
+    };
+    writeFileSync(join(docs, "WORKFLOW-STATE.json"), JSON.stringify(pausedState), "utf8");
+
+    const mode = await postJson(`${server.url}/api/engine-config`, { executionMode: "manual" }, { "X-Forge-Token": token });
+    assert.equal((mode.body as { ok: boolean }).ok, true);
+
+    const selection = await postJson(`${server.url}/api/engine-config`, {
+      selectionScope: "single",
+      selectedTaskIds: ["1.2"],
+    }, { "X-Forge-Token": token });
+    assert.equal((selection.body as { ok: boolean }).ok, true);
+
+    const state = JSON.parse(readFileSync(join(docs, "WORKFLOW-STATE.json"), "utf8")) as {
+      selection?: { mode: string; scope?: string; taskIds: string[] };
+    };
+    assert.equal(state.selection?.mode, "manual");
+    assert.equal(state.selection?.scope, "single");
+    assert.deepEqual(state.selection?.taskIds, ["1.2"]);
+
+    const summary = await getJson(`${server.url}/api/summary`) as { selectedTaskIds: string[]; selectedTaskCount: number };
+    assert.deepEqual(summary.selectedTaskIds, ["1.2"]);
+    assert.equal(summary.selectedTaskCount, 1);
+  });
+});
+
 test("launch-cli opens the harness CLI in a terminal (opencode for .agents)", async () => {
   const home = mkdtempSync(join(tmpdir(), "forge-home-"));
   const prevHome = process.env.FORGE_HOME;
