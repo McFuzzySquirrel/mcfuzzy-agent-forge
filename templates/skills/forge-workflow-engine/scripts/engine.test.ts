@@ -450,6 +450,44 @@ test("manual execution expands dependencies and runs only the selected slice", a
   assert.equal(state.tasks["1.3"]?.status, "pending");
 });
 
+test("manual run can continue with a new selection after a previous selected run completed", async () => {
+  const fixture = makeEngineFixture();
+  const manifest = JSON.parse(readFileSync(fixture.manifestPath, "utf8")) as ExecutionManifest;
+  manifest.phases[0]!.tasks.push({
+    id: "1.2",
+    title: "Second manual task",
+    description: "Should run on the second manual run",
+    ownerAgent: "worker",
+    dependencies: [],
+    expectedOutputs: [],
+    validationCommands: [],
+    approvalRequired: false,
+    sourceLines: ["- Task 1.2: Second manual task"],
+  });
+  writeFileSync(fixture.manifestPath, JSON.stringify(manifest), "utf8");
+
+  const firstHarness = new RecordingHarness();
+  const first = await runEngine(engineOptionsFor(fixture, firstHarness, 1_000, {
+    executionMode: "manual",
+    selectionScope: "single",
+    selectedTaskIds: ["1.1"],
+  }));
+  assert.equal(first.status, "complete");
+  assert.deepEqual(firstHarness.taskIds, ["1.1"]);
+  assert.equal(first.tasks["1.2"]?.status, "pending");
+
+  const secondHarness = new RecordingHarness();
+  const second = await runEngine(engineOptionsFor(fixture, secondHarness, 1_000, {
+    executionMode: "manual",
+    selectionScope: "single",
+    selectedTaskIds: ["1.2"],
+  }));
+  assert.equal(second.status, "complete");
+  assert.deepEqual(secondHarness.taskIds, ["1.2"]);
+  assert.equal(second.tasks["1.1"]?.status, "complete");
+  assert.equal(second.tasks["1.2"]?.status, "complete");
+});
+
 test("runEngine recovers a leftover 'running' task as pending (crash recovery)", async () => {
   const fixture = makeEngineFixture();
   const statePath = join(fixture.root, "docs", "WORKFLOW-STATE.json");

@@ -502,8 +502,11 @@ export async function runEngine(opts: EngineOptions): Promise<WorkflowState> {
   clearControl(opts.controlPath);
 
   if (state.status === "complete") {
-    console.log("[engine] Workflow already complete. Nothing to do.");
-    return state;
+    if (isComplete(manifest, state)) {
+      console.log("[engine] Workflow already complete. Nothing to do.");
+      return state;
+    }
+    console.log("[engine] Previous run was complete for a different selection. Continuing.");
   }
 
   if (state.status === "failed") {
