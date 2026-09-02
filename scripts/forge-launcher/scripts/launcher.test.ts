@@ -5,7 +5,7 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import { defaultEngineHarness, engineDetachedCommand, headlessSkillMsg } from "./launcher.ts";
+import { buildTeamPrompt, defaultEngineHarness, engineDetachedCommand, headlessSkillMsg } from "./launcher.ts";
 import { spawnDetached } from "./format.ts";
 
 const CLI = fileURLToPath(new URL("./cli.ts", import.meta.url));
@@ -78,6 +78,13 @@ test("headless PRD message includes the gap check the manual flow runs", () => {
   assert.ok(msg.includes("acceptance criteria"), msg);
   assert.ok(msg.includes("non-functional requirements"), msg);
   assert.ok(msg.includes("implementation phases"), msg);
+});
+
+test("team-generation prompt targets the selected harness directories", () => {
+  assert.ok(buildTeamPrompt("docs/PRD.md", "opencode").includes(".opencode/agents/"));
+  assert.ok(buildTeamPrompt("docs/PRD.md", "opencode").includes(".opencode/skills/"));
+  assert.ok(buildTeamPrompt("docs/PRD.md", "github").includes(".github/agents/"));
+  assert.ok(buildTeamPrompt("docs/PRD.md", "github").includes(".github/skills/"));
 });
 
 test("auto-draft engine command carries configured granularity/concurrency/timeout/retries", async () => {

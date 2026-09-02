@@ -33,12 +33,12 @@ function runCli(args: string[], env: Record<string, string> = {}): Promise<{ cod
 }
 
 /** Bootstraps a bare git repo with a forge harness root + stub skill files. */
-function makeRepo(): string {
+function makeRepo(harnessRoot = ".agents"): string {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), "fl-draft-"));
   execFileSync("git", ["-C", dir, "init", "-q"], { env: { ...process.env, ...GIT_ENV } });
-  fs.mkdirSync(path.join(dir, ".agents", "agents"), { recursive: true });
+  fs.mkdirSync(path.join(dir, harnessRoot, "agents"), { recursive: true });
   for (const skill of ["forge-auto-build-prd", "forge-build-agent-team"]) {
-    const skillDir = path.join(dir, ".agents", "skills", skill);
+    const skillDir = path.join(dir, harnessRoot, "skills", skill);
     fs.mkdirSync(skillDir, { recursive: true });
     fs.writeFileSync(path.join(skillDir, "SKILL.md"), `---\nname: ${skill}\ndescription: stub\n---\n# stub\n`);
   }
@@ -75,6 +75,24 @@ test("draft-team writes an agent file via the stub runner", async () => {
   assert.equal(code, 0, out);
   assert.ok(fs.existsSync(path.join(repo, ".agents", "agents", "stub-project-agent.md")), "agent file should be written");
   assert.ok(out.includes("Agent team generated"), out);
+});
+
+test("draft-team honors the opencode harness root", async () => {
+  const repo = makeRepo(".opencode");
+  write(repo, "docs/PRD.md", "# PRD\n\nBuild a thing.\n");
+  const { code, out } = await runCli(["draft-team", "--repo", repo], { FORGE_RUN_WITH: "stub" });
+  assert.equal(code, 0, out);
+  assert.ok(fs.existsSync(path.join(repo, ".opencode", "agents", "stub-project-agent.md")), "agent file should be written");
+  assert.ok(!fs.existsSync(path.join(repo, ".agents", "agents", "stub-project-agent.md")), "generic harness path should stay unused");
+});
+
+test("draft-team honors the GitHub harness root", async () => {
+  const repo = makeRepo(".github");
+  write(repo, "docs/PRD.md", "# PRD\n\nBuild a thing.\n");
+  const { code, out } = await runCli(["draft-team", "--repo", repo], { FORGE_RUN_WITH: "stub" });
+  assert.equal(code, 0, out);
+  assert.ok(fs.existsSync(path.join(repo, ".github", "agents", "stub-project-agent.md")), "agent file should be written");
+  assert.ok(!fs.existsSync(path.join(repo, ".agents", "agents", "stub-project-agent.md")), "generic harness path should stay unused");
 });
 
 test("draft-team with no PRD fails with guidance", async () => {

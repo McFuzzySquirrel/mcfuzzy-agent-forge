@@ -146,6 +146,10 @@ function harnessAgentsDir(): string {
   return path.join(state.repoDir, harnessRootDir(), "agents");
 }
 
+function harnessSkillsDir(): string {
+  return path.join(state.repoDir, harnessRootDir(), "skills");
+}
+
 function harnessRootDir(): string {
   switch (state.harness) {
     case "github": return ".github";
@@ -192,6 +196,18 @@ function prdSourceForTeam(): string {
     }
   }
   return "docs/PRD.md";
+}
+
+export function buildTeamPrompt(prdSource: string, harness: HarnessName): string {
+  const harnessRoot = harness === "github"
+    ? ".github"
+    : harness === "claude"
+      ? ".claude"
+      : harness === "opencode"
+        ? ".opencode"
+        : ".agents";
+  return `/forge-build-agent-team Use ${prdSource} to build the agent team. ` +
+    `Write agent files under ${harnessRoot}/agents/ and skill files under ${harnessRoot}/skills/.`;
 }
 
 // --- auto-build command selection ------------------------------------------
@@ -785,7 +801,7 @@ async function autoDraftTeam(opts: LauncherOptions): Promise<void> {
   const prdSource = prdSourceForTeam();
   const skill = "forge-build-agent-team";
   const ran = await runSkillHeadless(
-    `/${skill} Use ${prdSource} to build the agent team. Auto-proceed with default assumptions and no questions.`,
+    `${buildTeamPrompt(prdSource, state.harness)} Auto-proceed with default assumptions and no questions.`,
     opts,
   );
   if (!ran) return;
@@ -796,7 +812,7 @@ async function autoDraftTeam(opts: LauncherOptions): Promise<void> {
     out("");
     out("  Review the generated team before building:");
     out(`    - Agents : ${link(harnessAgentsDir() + "/")}`);
-    out(`    - Skills : ${link(path.dirname(harnessAgentsDir()) + "/skills/")}`);
+    out(`    - Skills : ${link(harnessSkillsDir() + "/")}`);
     await pauseForResume(opts, "team generated");
     if (stopped) return;
     await planAndValidateStep(opts);
@@ -1518,7 +1534,7 @@ async function resumeTeamStep(opts: ResumeOptions): Promise<boolean> {
   if (!hasPrd()) return true;
   if (opts.nonInteractive) {
     out("  No agent team yet. Next: generate the team from the PRD:");
-    command(headlessCmdFor(`/forge-build-agent-team Use ${prdSourceForTeam()} to build the agent team. Auto-proceed with default assumptions and no questions.`));
+    command(headlessCmdFor(`${buildTeamPrompt(prdSourceForTeam(), state.harness)} Auto-proceed with default assumptions and no questions.`));
     return false;
   }
   out("  No agent team yet. docs/PRD.md is ready for team generation.");
@@ -1530,12 +1546,12 @@ async function resumeTeamStep(opts: ResumeOptions): Promise<boolean> {
   ], { initial: "draft" });
   if (choice === "stop") return false;
   if (choice === "cli") {
-    await openCliFor("/forge-build-agent-team Use docs/PRD.md to build the agent team");
+    await openCliFor(buildTeamPrompt("docs/PRD.md", state.harness));
     return false;
   }
   const prdSource = prdSourceForTeam();
   const ran = await runSkillHeadless(
-    `/forge-build-agent-team Use ${prdSource} to build the agent team. Auto-proceed with default assumptions and no questions.`,
+    `${buildTeamPrompt(prdSource, state.harness)} Auto-proceed with default assumptions and no questions.`,
     opts,
   );
   if (!ran) return false;
@@ -1545,7 +1561,7 @@ async function resumeTeamStep(opts: ResumeOptions): Promise<boolean> {
     out("");
     out("  Review the generated team before building:");
     out(`    - Agents : ${link(harnessAgentsDir() + "/")}`);
-    out(`    - Skills : ${link(path.dirname(harnessAgentsDir()) + "/skills/")}`);
+    out(`    - Skills : ${link(harnessSkillsDir() + "/")}`);
   } else {
     await diagnoseAutoDraftFail("forge-build-agent-team");
     return false;
@@ -1598,7 +1614,7 @@ export async function runDraftTeam(repoDir: string): Promise<number> {
   out("Generating the agent team from the PRD (headless) …");
   const prdSource = prdSourceForTeam();
   const ran = await runSkillHeadless(
-    `/forge-build-agent-team Use ${prdSource} to build the agent team. Auto-proceed with default assumptions and no questions.`,
+    `${buildTeamPrompt(prdSource, state.harness)} Auto-proceed with default assumptions and no questions.`,
     { nonInteractive: true },
   );
   if (!ran) return 1;
