@@ -174,7 +174,7 @@ Tasks without `inputs` or `produces` behave exactly as before - the artifact lay
 1. Read task.inputs from the manifest
 2. For each input type:
      load the most recent complete artifact of that type
-3. Select only: summary + confidence + any task-declared fields
+3. Select only: summary + confidence + filesChanged + agentOutputExcerpt + any task-declared fields
 4. Render a compact markdown block:
 
    ## Context from previous tasks
@@ -289,9 +289,9 @@ The research document describes a concrete example. Consider a typical review ta
 |---|---|
 | Dump full workflow state + previous agent stdout | ~12 000–15 000 |
 | Dump full architecture + implementation artifacts | ~8 000–10 000 |
-| **Projected context (summary + confidence only)** | **~400–600** |
+| **Projected context (summary + confidence + filesChanged + agentOutputExcerpt)** | **~500–900** |
 
-At 80–95% reduction, a 4K-context local model can now handle review tasks that previously required a 16K+ cloud model. The pattern makes local-model workflows viable for multi-step builds.
+At 75–95% reduction, a 4K-context local model can now handle review tasks that previously required a 16K+ cloud model. The pattern makes local-model workflows viable for multi-step builds.
 
 ---
 

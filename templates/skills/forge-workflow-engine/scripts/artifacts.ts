@@ -179,7 +179,7 @@ export class ArtifactStore {
    *
    * For each artifact type listed in `inputTypes`, loads the most recent
    * successful artifact of that type and selects only the fields listed in
-   * `fields` (defaults to ["summary", "confidence"] when omitted).
+   * `fields` (defaults to ["summary", "confidence", "filesChanged", "agentOutputExcerpt"] when omitted).
    *
    * The returned projection is what gets prepended to the agent's prompt —
    * not the full artifact payload.  This is the primary token-saving mechanism.
@@ -189,7 +189,7 @@ export class ArtifactStore {
     inputTypes: string[];
     fields?: string[];
   }): ArtifactProjection {
-    const defaultFields = ["summary", "confidence"];
+    const defaultFields = ["summary", "confidence", "filesChanged", "agentOutputExcerpt"];
     const fieldSet = opts.fields ?? defaultFields;
 
     let sourceTokenEstimate = 0;
@@ -252,7 +252,14 @@ export class ArtifactStore {
       }
       const extras = Object.entries(a.selectedFields).filter(([k]) => k !== "summary" && k !== "confidence");
       for (const [key, value] of extras) {
-        lines.push(`**${key}:** ${typeof value === "string" ? value : JSON.stringify(value)}`);
+        if (key === "filesChanged" && Array.isArray(value) && value.length > 0) {
+          lines.push(`**Files changed:**`);
+          for (const f of value as string[]) {
+            lines.push(`- ${f}`);
+          }
+        } else if (value !== undefined && value !== null && !(Array.isArray(value) && value.length === 0)) {
+          lines.push(`**${key}:** ${typeof value === "string" ? value : JSON.stringify(value)}`);
+        }
       }
       lines.push("");
     }
@@ -284,15 +291,23 @@ export class ArtifactStore {
   synthesise(opts: {
     type: string;
     taskId: string;
+    taskTitle: string;
+    taskDescription: string;
     producedBy: string;
     outputFiles: string[];
     agentOutput: string;
     inputArtifactIds: string[];
   }): Artifact {
-    const summary = opts.agentOutput
-      ? opts.agentOutput.split("\n").find((l) => l.trim().length > 20)?.trim().slice(0, 200) ??
-        `Task ${opts.taskId} completed successfully.`
-      : `Task ${opts.taskId} completed successfully.`;
+    // Prefer the task description as the summary — it is always meaningful
+    // and unambiguous.  Fall back to the first substantive stdout line if no
+    // description was provided (shouldn't happen in practice).
+    const summary =
+      opts.taskDescription && opts.taskTitle
+        ? `${opts.taskTitle}: ${opts.taskDescription}`.slice(0, 200)
+        : opts.taskDescription
+        ? opts.taskDescription.slice(0, 200)
+        : opts.agentOutput.split("\n").find((l) => l.trim().length > 20)?.trim().slice(0, 200) ??
+          `Task ${opts.taskId} completed successfully.`;
 
     return this.write({
       type: opts.type,
@@ -301,10 +316,14 @@ export class ArtifactStore {
       producedBy: opts.producedBy,
       status: "complete",
       summary,
+      // 0.9 is a sensible default for a completed synthesis artifact.
+      // Agents that write structured artifacts can override this.
+      confidence: 0.9,
       inputs: opts.inputArtifactIds,
       filesChanged: opts.outputFiles,
       payload: {
         agentOutputExcerpt: opts.agentOutput.slice(0, 500),
+        taskDescription: opts.taskDescription,
       },
       nextActions: [],
     });

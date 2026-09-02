@@ -500,6 +500,27 @@ test("createProject rejects a missing PRD path", async () => {
   });
 });
 
+test("createProject rejects non-integer concurrency values", async () => {
+  await withServer(async (server) => {
+    const token = server.token;
+    const fraction = await postJson(`${server.url}/api/projects/create`, {
+      name: "my-app",
+      idea: "Build an app.",
+      concurrency: 2.5,
+    }, { "X-Forge-Token": token });
+    assert.equal(fraction.status, 400);
+    assert.match((fraction.body as { message: string }).message, /positive integer/);
+
+    const stringValue = await postJson(`${server.url}/api/projects/create`, {
+      name: "my-app",
+      idea: "Build an app.",
+      concurrency: "3",
+    }, { "X-Forge-Token": token });
+    assert.equal(stringValue.status, 400);
+    assert.match((stringValue.body as { message: string }).message, /positive integer/);
+  });
+});
+
 test("engine-config toggles auto-commit and flows into engine-run args", async () => {
   await withServer(async (server, repo, spawned) => {
     const token = server.token;
@@ -518,6 +539,34 @@ test("engine-config toggles auto-commit and flows into engine-run args", async (
     assert.equal((on.body as { ok: boolean }).ok, true);
     const run2 = await postJson(`${server.url}/api/control`, { action: "run" }, { "X-Forge-Token": token });
     assert.ok(!spawned.calls.at(-1)!.args.includes("--no-auto-commit"), "default on: no --no-auto-commit flag");
+  });
+});
+
+test("engine-config sets concurrency and flows into engine-run args", async () => {
+  await withServer(async (server, repo, spawned) => {
+    const token = server.token;
+    assert.equal((await getJson(`${server.url}/api/summary`) as { concurrency: number }).concurrency, 0);
+
+    const set = await postJson(`${server.url}/api/engine-config`, { concurrency: 3 }, { "X-Forge-Token": token });
+    assert.equal((set.body as { ok: boolean }).ok, true);
+    assert.equal(JSON.parse(readFileSync(join(repo, "docs", "engine-config.json"), "utf8")).concurrency, "3");
+    assert.equal((await getJson(`${server.url}/api/summary`) as { concurrency: number }).concurrency, 3);
+
+    const run = await postJson(`${server.url}/api/control`, { action: "run" }, { "X-Forge-Token": token });
+    assert.equal((run.body as { ok: boolean }).ok, true);
+    const runArgs = spawned.calls.at(-1)!.args;
+    const concIdx = runArgs.indexOf("--concurrency");
+    assert.ok(concIdx !== -1 && runArgs[concIdx + 1] === "3", "engine-run should pass --concurrency 3");
+
+    // Reset to engine default (0)
+    const reset = await postJson(`${server.url}/api/engine-config`, { concurrency: 0 }, { "X-Forge-Token": token });
+    assert.equal((reset.body as { ok: boolean }).ok, true);
+    assert.equal(JSON.parse(readFileSync(join(repo, "docs", "engine-config.json"), "utf8")).concurrency, "");
+    assert.equal((await getJson(`${server.url}/api/summary`) as { concurrency: number }).concurrency, 0);
+
+    const run2 = await postJson(`${server.url}/api/control`, { action: "run" }, { "X-Forge-Token": token });
+    assert.ok((run2.body as { ok: boolean }).ok, "engine-run after reset should succeed");
+    assert.ok(!spawned.calls.at(-1)!.args.includes("--concurrency"), "no --concurrency arg when at default");
   });
 });
 

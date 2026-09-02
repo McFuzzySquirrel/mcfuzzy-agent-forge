@@ -5,7 +5,7 @@ import { mkdtempSync, mkdirSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
-import { captureWorktree, isTrivialOutput, runTaskValidation, verifyTaskResult, worktreeChanged } from "./verify.ts";
+import { captureWorktree, diffWorktree, isTrivialOutput, runTaskValidation, verifyTaskResult, worktreeChanged } from "./verify.ts";
 import type { ManifestTask, TaskResult } from "./types.ts";
 
 function makeTask(overrides: Partial<ManifestTask> = {}): ManifestTask {
@@ -66,6 +66,23 @@ test("captureWorktree lists untracked files and excludes engine-owned docs paths
   assert.ok(!snap.paths.has("docs/artifacts/x.json"), "engine artifacts must be excluded");
 });
 
+test("captureWorktree handles porcelain -z rename records without phantom paths", async () => {
+  const dir = mkdtempSync(join(tmpdir(), "verify-git-rename-"));
+  execFileSync("git", ["init", "-q"], { cwd: dir });
+  execFileSync("git", ["config", "user.email", "forge@example.com"], { cwd: dir });
+  execFileSync("git", ["config", "user.name", "Forge Test"], { cwd: dir });
+  writeFileSync(join(dir, "old.ts"), "export const oldValue = 1;\n", "utf8");
+  execFileSync("git", ["add", "old.ts"], { cwd: dir });
+  execFileSync("git", ["commit", "-m", "init", "-q"], { cwd: dir });
+  execFileSync("git", ["mv", "old.ts", "new.ts"], { cwd: dir });
+
+  const snap = await captureWorktree(dir);
+  assert.ok(snap, "should capture a git worktree");
+  assert.ok(snap.paths.has("new.ts"), `expected new.ts in ${[...snap.paths]}`);
+  assert.ok(!snap.paths.has("old.ts"), `did not expect old.ts in ${[...snap.paths]}`);
+  assert.ok(!snap.paths.has(""), "should not include empty phantom paths");
+});
+
 test("worktreeChanged compares snapshots and returns false when either is null", () => {
   const a = { paths: new Set(["src/a.ts"]) };
   const b = { paths: new Set(["src/a.ts", "src/b.ts"]) };
@@ -73,6 +90,24 @@ test("worktreeChanged compares snapshots and returns false when either is null",
   assert.equal(worktreeChanged(a, b), true);
   assert.equal(worktreeChanged(null, b), false);
   assert.equal(worktreeChanged(a, null), false);
+});
+
+test("diffWorktree returns paths present in after but not in before", () => {
+  const before = { paths: new Set(["src/a.ts", "src/b.ts"]) };
+  const after  = { paths: new Set(["src/a.ts", "src/b.ts", "src/c.ts", "src/d.ts"]) };
+  const diff = diffWorktree(before, after);
+  assert.deepEqual(diff.sort(), ["src/c.ts", "src/d.ts"]);
+});
+
+test("diffWorktree returns empty array when before and after are identical", () => {
+  const snap = { paths: new Set(["src/a.ts"]) };
+  assert.deepEqual(diffWorktree(snap, snap), []);
+});
+
+test("diffWorktree returns empty array when either snapshot is null", () => {
+  const snap = { paths: new Set(["src/a.ts"]) };
+  assert.deepEqual(diffWorktree(null, snap), []);
+  assert.deepEqual(diffWorktree(snap, null), []);
 });
 
 test("verifyTaskResult requires all expectedOutputs to exist", async () => {

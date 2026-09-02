@@ -46,6 +46,9 @@ If you are creating a repo from the browser, the wizard collects:
   be `.md`, `.txt`, `.pdf`, or `.docx`; they are copied to `docs/PRD.md` /
   `docs/research/` and inform the PRD build,
 - and whether the PRD should be **drafted automatically** after creation.
+- **Concurrency (parallel agents)** (optional): the number of agents to run in
+  parallel. Leave blank to use the engine default or adjust it later from the
+  Overview Controls panel.
 
 Once it finishes, the console opens that project's Overview view.
 
@@ -101,6 +104,7 @@ The Overview controls panel offers the same actions you would otherwise issue fr
 - **Resume**: continue the run from the saved state.
 - **Replay**: retry a failed task.
 - **Auto-commit after each task**: toggles one-commit-per-task git history (on by default).
+- **Concurrency (parallel agents)**: sets how many agents the engine runs in parallel. Enter a positive integer (e.g. `3`) and click **Set**; enter `0` to return to the engine default. The setting is saved to `docs/engine-config.json` and takes effect on the next Run or Resume.
 - **Launch \<harness\> CLI**: opens the project's harness CLI (opencode/copilot/claude) in a new terminal from the project folder, so you can watch the live run and take over manually. Also available on the Tasks header.
 
 If a task times out or fails, open its detail drawer in the Tasks view and adjust the timeout before replaying it.

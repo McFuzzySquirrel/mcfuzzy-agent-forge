@@ -31,7 +31,7 @@ import {
 
 import { ArtifactStore } from "./artifacts.ts";
 import { commitTaskWork } from "./commit.ts";
-import { captureWorktree, runTaskValidation, verifyTaskResult } from "./verify.ts";
+import { captureWorktree, diffWorktree, runTaskValidation, verifyTaskResult } from "./verify.ts";
 import { clearControl, readControl } from "./control.ts";
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -254,10 +254,10 @@ async function executeTask(
   saveState(opts.statePath, currentState);
 
   // Output-verification baseline: a snapshot of the working tree taken before
-  // the harness runs, so a "successful" call that changed nothing can be
-  // detected as a no-op instead of being reported complete. Only needed when
-  // the no-op heuristic is active (--allow-noop disables it).
-  const baseline = opts.allowNoop ? null : await captureWorktree(opts.repoRoot);
+  // the harness runs. It supports both the no-op heuristic and Git-based
+  // output-file enrichment for in-place edits, even when --allow-noop disables
+  // only the no-op rejection check.
+  const baseline = await captureWorktree(opts.repoRoot);
 
   console.log(`[engine] Starting task ${task.id}: ${task.title} (@${agent.name})`);
 
@@ -342,6 +342,20 @@ async function executeTask(
         continue; // hollow success → retry
       }
 
+      // ── Enrich output files from git diff ─────────────────────────────────
+      // Adapters only check `expectedOutputs` for output files, which misses
+      // files the agent modified in place.  Diff the worktree against the
+      // pre-task baseline to capture every file that changed during this task
+      // and merge with any files the adapter already reported.
+      if (baseline) {
+        const after = await captureWorktree(opts.repoRoot);
+        const gitChanged = diffWorktree(baseline, after);
+        if (gitChanged.length > 0) {
+          const merged = new Set([...result.outputFiles, ...gitChanged]);
+          result = { ...result, outputFiles: [...merged] };
+        }
+      }
+
       // ── Artifact creation ─────────────────────────────────────────────────
       let artifactId: string | undefined;
 
@@ -349,6 +363,8 @@ async function executeTask(
         const artifact = store.synthesise({
           type: task.produces,
           taskId: task.id,
+          taskTitle: task.title,
+          taskDescription: task.description,
           producedBy: agent.name,
           outputFiles: result.outputFiles,
           agentOutput: result.stdout,
@@ -455,9 +471,10 @@ export async function runEngine(opts: EngineOptions): Promise<WorkflowState> {
   }
 
   const store = new ArtifactStore({ artifactsPath: opts.artifactsPath });
-  const concurrency = opts.harness.supportsConcurrency && opts.maxConcurrency > 1
-    ? opts.maxConcurrency
-    : 1;
+  // Output attribution compares repository-wide worktree snapshots; running
+  // tasks concurrently can attribute another task's file changes to the current
+  // task. Keep execution serialized until task-isolated attribution is used.
+  const concurrency = 1;
   let currentPhaseId: string | undefined;
 
   // Stop signal: the in-process flag (SIGINT/SIGTERM) OR a pause/stop request

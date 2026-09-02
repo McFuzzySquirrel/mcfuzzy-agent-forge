@@ -87,14 +87,19 @@ export async function captureWorktree(repoRoot: string): Promise<WorktreeSnapsho
   if (result.status !== 0) return null;
 
   const paths = new Set<string>();
-  for (const chunk of result.stdout.split("\0")) {
-    if (!chunk) continue;
-    // porcelain -z entry: "<XY> <path>" (renames: "<XY> <orig> -> <new>").
-    const rest = chunk.slice(3);
-    const arrow = rest.indexOf(" -> ");
-    const file = arrow !== -1 ? rest.slice(arrow + 4) : rest;
+  const entries = result.stdout.split("\0");
+  for (let i = 0; i < entries.length; i += 1) {
+    const entry = entries[i];
+    if (!entry) continue;
+
+    // porcelain -z v1 entry: "<XY> <path>\0" and rename/copy records include an
+    // additional NUL-delimited source path field immediately after this entry.
+    const status = entry.slice(0, 2);
+    const file = entry.slice(3);
     const rel = file.replace(/\\/g, "/");
     if (!isEngineOwnedPath(rel)) paths.add(rel);
+
+    if (status.includes("R") || status.includes("C")) i += 1;
   }
   return { paths };
 }
@@ -107,6 +112,30 @@ export function worktreeChanged(before: WorktreeSnapshot | null, after: Worktree
     if (!after.paths.has(p)) return true;
   }
   return false;
+}
+
+/**
+ * Returns the set of relative file paths that became dirty during a task —
+ * i.e. paths that appear in `after` but not in `before`.
+ *
+ * Because `captureWorktree` uses `git status --porcelain`, `before.paths`
+ * contains all files that were already dirty *before* the task ran.  A
+ * pre-existing file modified in place therefore shows up in both snapshots
+ * (already dirty before → still dirty after), so it is correctly excluded.
+ * Only files that moved from clean to dirty during the task are returned.
+ *
+ * Returns an empty array when either snapshot is null (git unavailable).
+ *
+ * This is the primary mechanism for recording `outputFiles` when an agent
+ * modifies existing files rather than creating new ones.
+ */
+export function diffWorktree(before: WorktreeSnapshot | null, after: WorktreeSnapshot | null): string[] {
+  if (!before || !after) return [];
+  const result: string[] = [];
+  for (const p of after.paths) {
+    if (!before.paths.has(p)) result.push(p);
+  }
+  return result;
 }
 
 /**

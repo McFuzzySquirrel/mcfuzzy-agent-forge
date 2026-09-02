@@ -309,6 +309,7 @@ function renderActions(container: HTMLElement, summary: Summary, actions: Action
 
   const timeouts = renderTimeoutControls(container, tasks);
   const commit = renderAutoCommitToggle(container, store.summary?.autoCommit ?? true);
+  const concurrency = renderConcurrencyControl(container, store.summary?.concurrency ?? 0);
 
   return el("div", { className: "panel" }, [
     el("h4", null, "Controls"),
@@ -316,6 +317,7 @@ function renderActions(container: HTMLElement, summary: Summary, actions: Action
     replay,
     timeouts,
     commit,
+    concurrency,
   ]);
 }
 
@@ -338,6 +340,42 @@ function renderAutoCommitToggle(container: HTMLElement, enabled: boolean): HTMLE
     })();
   });
   return el("div", { style: "margin-top:10px" }, [label]);
+}
+
+function renderConcurrencyControl(container: HTMLElement, current: number): HTMLElement {
+  const input = el("input", {
+    type: "number",
+    placeholder: "1",
+    min: "0",
+    className: "timeout-input",
+    value: current > 0 ? String(current) : "",
+  });
+  const btn = el("button", { className: "btn btn-sm" }, "Set");
+  btn.addEventListener("click", () => {
+    const raw = Number((input as HTMLInputElement).value);
+    if (!Number.isInteger(raw) || raw < 0) {
+      toast("Enter a positive integer (or 0 for engine default).");
+      return;
+    }
+    void (async () => {
+      try {
+        const res = await api.setConcurrency(raw);
+        toast(res.message || (res.ok ? "updated" : "update failed"));
+      } catch (err) {
+        toast(err instanceof Error ? err.message : "update failed");
+      }
+      void renderOverview(container);
+    })();
+  });
+  const hint = el("span", { className: "dim small" }, current > 0 ? `current: ${current}` : "current: engine default");
+  return el("div", { style: "margin-top:10px" }, [
+    el("div", { className: "row gap" }, [
+      el("span", { className: "dim small" }, "Concurrency (parallel agents)"),
+      input,
+      btn,
+      hint,
+    ]),
+  ]);
 }
 
 function renderTimeoutControls(container: HTMLElement, tasks: TaskRow[]): HTMLElement {

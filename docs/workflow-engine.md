@@ -421,8 +421,9 @@ artifact payloads or previous conversations.
 
 When a task declares `inputs`, the engine (`ArtifactStore.project`) takes the
 latest **completed** artifact of each input type and keeps only a few fields:
-`artifactId`, `type`, `summary`, `confidence` (plus any task-requested
-`fields`). `renderProjection` turns that into a compact markdown block
+`artifactId`, `type`, `summary`, `confidence`, `filesChanged`, and
+`agentOutputExcerpt` (plus any task-requested `fields`). `renderProjection`
+turns that into a compact markdown block
 (`## Context from previous tasks`), and the harness adapter prepends only that
 block to the agent's prompt - the full `WorkflowState` and the artifact JSONs
 are never sent. That is where the tokens are saved: the agent receives a few
@@ -441,8 +442,9 @@ What the percentage does *not* mean:
 - It is relative to the artifact payloads, not the entire prompt.
 - It is a character-count proxy, not the model's real tokenizer.
 - It only trims input tokens; output tokens are unaffected.
-- The default projection is deliberately tiny (`summary` + `confidence`), so
-  the larger the artifacts, the larger the real saving.
+- The default projection stays compact (`summary`, `confidence`,
+  `filesChanged`, and `agentOutputExcerpt`), so the larger the artifacts, the
+  larger the real saving.
 
 Plainly: each task hands off a short typed summary of what it produced, not its
 full output; the engine estimates the reduction (~4 chars/token) from the full

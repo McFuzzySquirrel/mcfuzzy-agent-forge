@@ -146,16 +146,18 @@ test("checkForUpdate skips when skip is set", async () => {
 });
 
 test("checkForUpdate honors a fresh cache without hitting the network", async () => {
-  const file = tmpCacheFile();
-  fs.writeFileSync(
-    file,
-    JSON.stringify({ checkedAt: new Date().toISOString(), latest: "9.9.9" }),
-  );
-  const counter = { calls: 0 };
-  const info = await checkForUpdate({ fetcher: countingFetcher(counter), cacheFile: file });
-  assert.ok(info);
-  assert.equal(info!.latest, "9.9.9");
-  assert.equal(counter.calls, 0);
+  await withEnv({ FORGE_SKIP_UPDATE_CHECK: undefined, CI: undefined }, async () => {
+    const file = tmpCacheFile();
+    fs.writeFileSync(
+      file,
+      JSON.stringify({ checkedAt: new Date().toISOString(), latest: "9.9.9" }),
+    );
+    const counter = { calls: 0 };
+    const info = await checkForUpdate({ fetcher: countingFetcher(counter), cacheFile: file });
+    assert.ok(info);
+    assert.equal(info!.latest, "9.9.9");
+    assert.equal(counter.calls, 0);
+  });
 });
 
 test("checkForUpdate returns null from a fresh cache when up to date", async () => {
