@@ -149,6 +149,17 @@ h4 { font-size: 12px; text-transform: uppercase; letter-spacing: 0.6px; color: v
 .btn-sm { padding: 4px 10px; font-size: 12px; }
 
 .actions { display: flex; gap: 8px; flex-wrap: wrap; }
+.spinner-row { display: inline-flex; align-items: center; gap: 8px; }
+.spinner {
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  border: 2px solid rgba(140, 170, 255, 0.22);
+  border-top-color: var(--blue);
+  border-right-color: var(--accent);
+  animation: spin .8s linear infinite;
+}
+@keyframes spin { to { transform: rotate(360deg); } }
 
 .progress { margin: 8px 0; }
 .progress-bar { height: 10px; border-radius: 6px; background: rgba(140, 170, 255, 0.12); overflow: hidden; }

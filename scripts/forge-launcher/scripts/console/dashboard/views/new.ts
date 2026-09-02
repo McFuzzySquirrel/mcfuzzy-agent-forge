@@ -225,29 +225,48 @@ async function submitNewProject(req: {
 }
 
 async function renderCreateStatus(host: HTMLElement, repoDir: string): Promise<void> {
-  host.textContent = "";
   const project = await lookupProject(repoDir);
   const running = project?.job?.status === "running";
   const message = project?.job?.message ?? "Project creation started in the background.";
-  const panel = el("div", { className: "panel hint" }, [
-    el("strong", null, running ? "Background progress" : "Background result"),
-    el("div", { className: "mono small", style: "margin:6px 0" }, repoDir),
-    el("p", { className: project?.job?.status === "failed" ? "error-text" : "dim" }, `${project?.stage ?? "creating"} — ${message}`),
-    el("div", { className: "actions" }, [
-      el("button", { className: "btn btn-primary", disabled: project ? null : true }, "Select this project"),
-      el("a", { className: "btn", href: "#/projects" }, "View projects"),
-    ]),
-  ]);
-  const selectBtn = panel.querySelector<HTMLElement>("button");
-  if (selectBtn) {
-    selectBtn.addEventListener("click", () => {
-      void api.selectRepo(repoDir).then((r) => {
-        if (r.ok) location.hash = "#/overview";
-        else toast(r.message ?? "select failed");
+  let panel = host.querySelector<HTMLElement>(".create-status-panel");
+  if (!panel) {
+    panel = el("div", { className: "panel hint create-status-panel" }, [
+      el("strong", { className: "create-status-title" }, "Background progress"),
+      el("div", { className: "mono small", style: "margin:6px 0" }, repoDir),
+      el("div", { className: "spinner-row create-status-spinner" }, [
+        el("span", { className: "spinner", "aria-hidden": "true" }),
+        el("span", { className: "dim small" }, "Still running…"),
+      ]),
+      el("p", { className: "create-status-message dim" }, `${project?.stage ?? "creating"} — ${message}`),
+      el("div", { className: "actions" }, [
+        el("button", { className: "btn btn-primary", disabled: project ? null : true }, "Select this project"),
+        el("a", { className: "btn", href: "#/projects" }, "View projects"),
+      ]),
+    ]);
+    const selectBtn = panel.querySelector<HTMLElement>("button");
+    if (selectBtn) {
+      selectBtn.addEventListener("click", () => {
+        void api.selectRepo(repoDir).then((r) => {
+          if (r.ok) location.hash = "#/overview";
+          else toast(r.message ?? "select failed");
+        });
       });
-    });
+    }
+    host.textContent = "";
+    host.appendChild(panel);
   }
-  host.appendChild(panel);
+
+  const title = panel.querySelector<HTMLElement>(".create-status-title");
+  const status = panel.querySelector<HTMLElement>(".create-status-message");
+  const spinner = panel.querySelector<HTMLElement>(".create-status-spinner");
+  const selectBtn = panel.querySelector<HTMLButtonElement>("button");
+  if (title) title.textContent = running ? "Background progress" : "Background result";
+  if (status) {
+    status.className = project?.job?.status === "failed" ? "create-status-message error-text" : "create-status-message dim";
+    status.textContent = `${project?.stage ?? "creating"} — ${message}`;
+  }
+  if (spinner) spinner.style.display = running ? "" : "none";
+  if (selectBtn) selectBtn.disabled = !project;
 
   if (createPoll !== undefined) window.clearInterval(createPoll);
   if (running) {

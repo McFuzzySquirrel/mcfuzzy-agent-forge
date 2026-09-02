@@ -229,6 +229,7 @@ async function continuePipeline(container: HTMLElement, step: PipelineStep): Pro
 
 function renderGuidance(container: HTMLElement, summary: Summary, actions: Actions): HTMLElement {
   const step = nextStep(summary, actions);
+  const working = summary.job?.status === "running";
   const manualNeedsSelection = summary.executionMode === "manual" && summary.selectedTaskCount === 0;
 
   let text: string;
@@ -245,24 +246,21 @@ function renderGuidance(container: HTMLElement, summary: Summary, actions: Actio
     text = "Build in progress.";
   }
 
-  const children: Array<HTMLElement> = [el("h4", null, "Pipeline"), el("strong", null, text)];
+  const children: Array<HTMLElement> = [
+    el("h4", null, "Pipeline"),
+    el("strong", null, text),
+    renderExecutionModeControl(container, summary.executionMode, summary.selectedTaskCount),
+  ];
 
   if (step) {
-    const working = summary.job?.status === "running";
     const blockedForManualSelection = (step.action === "run" || step.action === "resume") && manualNeedsSelection;
     hint = step.hint;
-    const btn = el(
-      "button",
-      { className: "btn btn-primary", disabled: working || blockedForManualSelection ? true : null },
-      working ? jobLabel(summary.job!) : blockedForManualSelection ? "Select tasks to build" : step.label,
-    );
-    if (!blockedForManualSelection) {
+    const btn = el("button", { className: "btn btn-primary", disabled: blockedForManualSelection ? true : null }, blockedForManualSelection ? "Select tasks to build" : step.label);
+    if (!working && !blockedForManualSelection) {
       btn.addEventListener("click", () => void continuePipeline(container, step));
     }
-    children.push(el("div", { className: "actions", style: "margin-top:10px" }, [btn]));
-    if (working) {
-      children.push(el("p", { className: "dim small" }, "Working in the background — watch the Logs tab."));
-    } else if (blockedForManualSelection) {
+    if (!working) children.push(el("div", { className: "actions", style: "margin-top:10px" }, [btn]));
+    if (blockedForManualSelection) {
       hint = "Manual mode is enabled. Select one or more tasks in Tasks before starting the build.";
     }
   } else if (!summary.hasPrd && !summary.hasIdea) {
@@ -271,6 +269,14 @@ function renderGuidance(container: HTMLElement, summary: Summary, actions: Actio
     hint = "Manual mode is enabled. Select one or more tasks in Tasks before starting the build.";
   } else {
     hint = "Run control is available in the Controls panel below.";
+  }
+
+  if (working && summary.job) {
+    children.push(el("div", { className: "spinner-row", style: "margin-top:10px" }, [
+      el("span", { className: "spinner", "aria-hidden": "true" }),
+      el("span", { className: "dim small" }, jobLabel(summary.job)),
+    ]));
+    children.push(el("p", { className: "dim small" }, ["Working in the background — watch the ", el("a", { href: "#/logs" }, "Logs"), " tab."]));
   }
 
   if (summary.job && summary.job.status !== "running") {
@@ -328,11 +334,9 @@ function renderActions(container: HTMLElement, summary: Summary, actions: Action
   const timeouts = renderTimeoutControls(container, tasks);
   const commit = renderAutoCommitToggle(container, store.summary?.autoCommit ?? true);
   const concurrency = renderConcurrencyControl(container, store.summary?.concurrency ?? 0);
-  const mode = renderExecutionModeControl(container, summary.executionMode, summary.selectedTaskCount);
 
   return el("div", { className: "panel" }, [
     el("h4", null, "Controls"),
-    mode,
     el("div", { className: "actions" }, buttons),
     manualNeedsSelection
       ? el("p", { className: "dim small" }, ["Manual mode needs at least one selected task. ", el("a", { href: "#/tasks" }, "Choose tasks")])
@@ -346,8 +350,8 @@ function renderActions(container: HTMLElement, summary: Summary, actions: Action
 
 function renderExecutionModeControl(container: HTMLElement, mode: ExecutionMode, selectedCount: number): HTMLElement {
   const select = el("select", null, [
-    el("option", { value: "auto", selected: mode === "auto" }, "auto"),
-    el("option", { value: "manual", selected: mode === "manual" }, "manual"),
+    el("option", { value: "auto", selected: mode === "auto" }, "auto (full workflow)"),
+    el("option", { value: "manual", selected: mode === "manual" }, "manual (selected tasks)"),
   ]);
   select.addEventListener("change", () => {
     void (async () => {
@@ -363,7 +367,7 @@ function renderExecutionModeControl(container: HTMLElement, mode: ExecutionMode,
   });
   return el("div", { style: "margin-bottom:10px" }, [
     el("div", { className: "row gap" }, [
-      el("span", { className: "dim small" }, "Execution mode"),
+      el("span", { className: "dim small" }, "Build mode"),
       select,
       el("span", { className: "dim small" }, mode === "manual" ? `${selectedCount} task(s) selected` : "full workflow"),
       el("a", { href: "#/tasks", className: "btn btn-sm" }, "Choose tasks"),
