@@ -16,6 +16,7 @@ import type {
   ControlResult,
   CreateProjectRequest,
   CreateProjectResult,
+  WorkflowState,
 } from "./types.ts";
 
 // ─── Spawn seam (testable) ───────────────────────────────────────────────────
@@ -240,12 +241,26 @@ export class RunController {
   private manualSelectionRequiredMessage(action: "run" | "resume"): ControlResult | null {
     const cfg = loadEngineConfig(this.repoRoot);
     if (normaliseExecutionMode(cfg?.executionMode) !== "manual") return null;
-    const selectedTaskIds = normaliseSelectedTaskIds(cfg?.selectedTaskIds);
+    const selectedTaskIds = this.selectedTaskIdsForAction(action, cfg?.selectedTaskIds);
     if (selectedTaskIds.length > 0) return null;
     return {
       ok: false,
       message: `Manual mode is enabled. Select at least one task in Tasks before ${action === "run" ? "running" : "resuming"} the build.`,
     };
+  }
+
+  private selectedTaskIdsForAction(action: "run" | "resume", configSelectedTaskIds: unknown): string[] {
+    const selectedTaskIds = normaliseSelectedTaskIds(configSelectedTaskIds);
+    if (selectedTaskIds.length > 0 || action !== "resume") return selectedTaskIds;
+    if (!fs.existsSync(this.p.statePath)) return selectedTaskIds;
+    try {
+      const state = JSON.parse(fs.readFileSync(this.p.statePath, "utf8")) as WorkflowState;
+      if (state.status !== "paused") return selectedTaskIds;
+      if (state.selection?.mode !== "manual") return selectedTaskIds;
+      return normaliseSelectedTaskIds(state.selection.taskIds);
+    } catch {
+      return selectedTaskIds;
+    }
   }
 
   dispatch(action: ControlAction, taskId?: string): ControlResult {

@@ -332,12 +332,22 @@ async function persistSelection(): Promise<void> {
 }
 
 async function runSelectionAction(action: "run" | "resume"): Promise<void> {
+  const mode = store.summary?.executionMode ?? "auto";
   const ids = allTasks.map((task) => task.id).filter((id) => selectedIds.has(id));
   if (ids.length === 0) {
-    toast("Manual mode is enabled. Select at least one task before starting the build.");
+    toast(mode === "manual"
+      ? "Manual mode is enabled. Select at least one task before starting the build."
+      : "Select at least one task before starting the build.");
     return;
   }
   try {
+    if (mode !== "manual") {
+      const setMode = await api.setExecutionMode("manual");
+      if (!setMode.ok) {
+        toast(setMode.message || "failed to enable manual mode");
+        return;
+      }
+    }
     const save = await api.setTaskSelection(selectionScope ?? inferSelectionScope(), ids);
     if (!save.ok) {
       toast(save.message || "save failed");

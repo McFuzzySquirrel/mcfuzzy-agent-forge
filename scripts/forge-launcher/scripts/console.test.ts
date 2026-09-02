@@ -633,6 +633,41 @@ test("manual mode requires at least one selected task before run/resume", async 
   });
 });
 
+test("manual resume accepts paused state selection when config selection is empty", async () => {
+  await withServer(async (server, repo) => {
+    const token = server.token;
+    const docs = join(repo, "docs");
+    const pausedState = {
+      runId: "run-2",
+      startedAt: new Date().toISOString(),
+      lastUpdatedAt: new Date().toISOString(),
+      manifestPath: join(docs, "EXECUTION-MANIFEST.json"),
+      manifestVersion: "1.0",
+      harness: "opencode",
+      status: "paused",
+      currentPhase: "1",
+      tasks: {
+        "1.1": { taskId: "1.1", status: "complete", ownerAgent: "qa-engineer", attempt: 1, outputFiles: [] },
+        "1.2": { taskId: "1.2", status: "pending", ownerAgent: "qa-engineer", attempt: 0, outputFiles: [] },
+      },
+      blockers: [],
+      selection: { mode: "manual", scope: "single", taskIds: ["1.2"] },
+    };
+    writeFileSync(join(docs, "WORKFLOW-STATE.json"), JSON.stringify(pausedState), "utf8");
+
+    const mode = await postJson(`${server.url}/api/engine-config`, { executionMode: "manual" }, { "X-Forge-Token": token });
+    assert.equal((mode.body as { ok: boolean }).ok, true);
+    const configPath = join(docs, "engine-config.json");
+    const config = JSON.parse(readFileSync(configPath, "utf8")) as { executionMode: string; selectionScope?: string; selectedTaskIds?: string[] };
+    delete config.selectionScope;
+    config.selectedTaskIds = [];
+    writeFileSync(configPath, `${JSON.stringify(config, null, 2)}\n`, "utf8");
+
+    const resume = await postJson(`${server.url}/api/control`, { action: "resume" }, { "X-Forge-Token": token });
+    assert.equal((resume.body as { ok: boolean }).ok, true);
+  });
+});
+
 test("updating manual selection also updates paused state selection", async () => {
   await withServer(async (server, repo) => {
     const token = server.token;
