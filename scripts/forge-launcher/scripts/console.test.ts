@@ -65,8 +65,24 @@ function makeRepo(): string {
     status: "running",
     currentPhase: "1",
     tasks: {
-      "1.1": { taskId: "1.1", status: "complete", ownerAgent: "qa-engineer", attempt: 1, outputFiles: ["src/index.ts"], artifactId: "solution-001" },
-      "1.2": { taskId: "1.2", status: "running", ownerAgent: "qa-engineer", attempt: 1, outputFiles: [] },
+      "1.1": {
+        taskId: "1.1",
+        status: "complete",
+        ownerAgent: "qa-engineer",
+        attempt: 1,
+        startedAt: "2026-01-01T00:00:00.000Z",
+        completedAt: "2026-01-01T00:02:00.000Z",
+        outputFiles: ["src/index.ts"],
+        artifactId: "solution-001",
+      },
+      "1.2": {
+        taskId: "1.2",
+        status: "running",
+        ownerAgent: "qa-engineer",
+        attempt: 1,
+        startedAt: "2026-01-01T00:03:00.000Z",
+        outputFiles: [],
+      },
     },
     blockers: ["waiting for review"],
   };
@@ -222,19 +238,21 @@ async function withServer<T>(
 
 test("serves summary, tasks, docs, team, and actions", async () => {
   await withServer(async (server, repo) => {
-    const summary = await getJson(`${server.url}/api/summary`) as { repoName: string; hasPrd: boolean; hasTeam: boolean; defaultTimeoutMs: number; run: { status: string; counts: { complete: number; running: number } } };
+    const summary = await getJson(`${server.url}/api/summary`) as { repoName: string; hasPrd: boolean; hasTeam: boolean; defaultTimeoutMs: number; run: { status: string; counts: { complete: number; running: number }; completedDurationMs: number } };
     assert.equal(summary.repoName, repo.split("/").pop());
     assert.equal(summary.hasPrd, true);
     assert.equal(summary.hasTeam, true);
     assert.equal(summary.run.status, "running");
     assert.equal(summary.run.counts.complete, 1);
     assert.equal(summary.run.counts.running, 1);
+    assert.equal(summary.run.completedDurationMs, 120000);
     assert.equal(summary.defaultTimeoutMs, 600000);
 
-    const tasks = await getJson(`${server.url}/api/tasks`) as Array<{ id: string; status: string; phaseTitle: string }>;
+    const tasks = await getJson(`${server.url}/api/tasks`) as Array<{ id: string; status: string; phaseTitle: string; durationMs: number | null }>;
     assert.equal(tasks.length, 2);
     assert.equal(tasks[0]!.status, "complete");
     assert.equal(tasks[0]!.phaseTitle, "Foundation");
+    assert.equal(tasks[0]!.durationMs, 120000);
 
     const docs = await getJson(`${server.url}/api/docs`) as { entries: Array<{ kind: string }> };
     assert.ok(docs.entries.some((e) => e.kind === "prd"));
@@ -418,8 +436,8 @@ test("timeout update rejects invalid values and missing token", async () => {
   });
 });
 
-test("draft-prd and draft-team actions dispatch and return ok", async () => {
-  await withServer(async (server, repo) => {
+test("draft-prd, draft-team, and compile-manifest actions dispatch and return ok", async () => {
+  await withServer(async (server, repo, spawned) => {
     const token = server.token;
 
     const prd = await postJson(`${server.url}/api/control`, { action: "draft-prd" }, { "X-Forge-Token": token });
@@ -429,6 +447,12 @@ test("draft-prd and draft-team actions dispatch and return ok", async () => {
     const team = await postJson(`${server.url}/api/control`, { action: "draft-team" }, { "X-Forge-Token": token });
     assert.equal((team.body as { ok: boolean }).ok, true);
     assert.ok((team.body as { message: string }).message.includes("team"), "message should mention team");
+
+    renameSync(join(repo, "docs", "EXECUTION-MANIFEST.json"), join(repo, "docs", "EXECUTION-MANIFEST.json.bak"));
+    const compile = await postJson(`${server.url}/api/control`, { action: "compile-manifest" }, { "X-Forge-Token": token });
+    assert.equal((compile.body as { ok: boolean }).ok, true);
+    assert.ok((compile.body as { message: string }).message.includes("Manifest"), "message should mention manifest");
+    assert.ok(spawned.calls.at(-1)?.args.includes("compile-manifest"), "compile-manifest action should spawn the compile-manifest subcommand");
   });
 });
 

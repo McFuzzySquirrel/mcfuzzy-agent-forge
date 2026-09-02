@@ -36,6 +36,7 @@ the queued command it prints.
 | `forge-launcher resume [--repo <path>]` | Pick up a paused/finished setup where it left off. |
 | `forge-launcher console [--repo <path>]` | Local web UI (`http://127.0.0.1:4300`) for authoring, build monitoring, and run controls. |
 | `forge-launcher draft-prd \| draft-team [--repo <path>]` | Headless authoring stages (idea → PRD, PRD → agent team). |
+| `forge-launcher compile-manifest [--repo <path>]` | Headless build-prep stage: install the adapter if needed and write `docs/EXECUTION-MANIFEST.json` without starting the engine. |
 
 ### Autonomous build
 

@@ -8,6 +8,7 @@ export type BackgroundJobType =
   | "create-project"
   | "draft-prd"
   | "draft-team"
+  | "compile-manifest"
   | "engine-run"
   | "engine-resume"
   | "engine-replay";

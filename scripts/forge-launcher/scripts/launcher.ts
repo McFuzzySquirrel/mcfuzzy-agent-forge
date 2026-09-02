@@ -172,6 +172,14 @@ function findEngineDir(repoDir: string): string | null {
   return null;
 }
 
+function findAdapterDir(repoDir: string): string | null {
+  for (const root of [".agents", ".opencode", ".claude", ".github"]) {
+    const candidate = path.join(repoDir, root, "skills", "forge-execution-adapter");
+    if (fs.existsSync(candidate)) return candidate;
+  }
+  return null;
+}
+
 function debugMode(): boolean {
   return process.env.FORGE_LAUNCHER_DEBUG === "1";
 }
@@ -1626,6 +1634,39 @@ export async function runDraftTeam(repoDir: string): Promise<number> {
   }
   await diagnoseAutoDraftFail("forge-build-agent-team");
   return 1;
+}
+
+export async function runCompileManifest(repoDir: string): Promise<number> {
+  setupStateForRepo(repoDir);
+  const manifestPath = path.join(repoDir, "docs", "EXECUTION-MANIFEST.json");
+  if (fs.existsSync(manifestPath)) {
+    out("Execution manifest already exists.");
+    out(`    - ${link(manifestPath)}`);
+    return 0;
+  }
+  if (!hasGeneratedTeam()) {
+    fail("No generated agent team yet; generate the team first.");
+    return 1;
+  }
+  const adapterDir = findAdapterDir(repoDir);
+  if (!adapterDir) {
+    fail("forge-execution-adapter is not installed under this repo.");
+    return 1;
+  }
+  out("Preparing the build by compiling the execution manifest …");
+  let code = await runLoggedStep("Installing execution adapter dependencies", "npm", ["install"], { cwd: adapterDir });
+  if (code !== 0) return code;
+  const compileArgs = ["run", "forge-execution-adapter", "--", "compile", "--repo", repoDir];
+  if (state.engineConfig.granularity) compileArgs.push("--granularity", state.engineConfig.granularity);
+  code = await runLoggedStep("Compiling execution manifest", "npm", compileArgs, { cwd: adapterDir });
+  if (code !== 0) return code;
+  if (!fs.existsSync(manifestPath)) {
+    fail("Manifest compile exited without producing docs/EXECUTION-MANIFEST.json.");
+    return 1;
+  }
+  ok("Execution manifest compiled.");
+  out(`    - ${link(manifestPath)}`);
+  return 0;
 }
 
 function printEngineStatus(engine: ResumeEngineState): void {

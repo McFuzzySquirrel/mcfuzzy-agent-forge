@@ -4,6 +4,25 @@ Detailed release and change notes for MyForge.
 
 ---
 
+## September 2026 - v3.41
+
+### Forge Console: elapsed time now reflects completed task work
+
+- **Overview no longer shows wall-clock runtime as elapsed.** The elapsed stat is now the combined duration of all completed tasks in the current visible run scope, so it reflects actual finished work instead of how long the dashboard has been open or how long the run has existed.
+- **The Forge Board HUD now matches Overview.** Its timer uses the same summed completed-task duration, keeping the board and overview consistent during full and manual/scoped runs.
+
+---
+
+## September 2026 - v3.40
+
+### Forge Console: manual pre-build now stops at manifest creation
+
+- **Overview's pipeline card is simpler.** Before a manifest exists it now shows only a **Manual build** checkbox plus the next pipeline action, instead of exposing task-selection-oriented controls that cannot work yet.
+- **Manual pre-build no longer dead-ends.** When that checkbox is enabled at the team → build stage, the pipeline action becomes **Create manifest**. The console compiles `docs/EXECUTION-MANIFEST.json` without auto-starting the full workflow, so you can review tasks and make a targeted selection first.
+- **Manifest-driven controls stay in the Controls panel.** Once the manifest exists, build mode selection, task-count feedback, **Choose tasks**, and the existing Run/Resume/Pause/Stop actions remain together in **Overview → Controls** where they are actually actionable.
+
+---
+
 ## September 2026 - v3.39
 
 ### Forge Console: tracked background jobs from project creation through build

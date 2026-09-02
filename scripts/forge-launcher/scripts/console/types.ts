@@ -100,6 +100,7 @@ export interface RunSummary {
   status: string;
   startedAt: string | null;
   lastUpdatedAt: string | null;
+  completedDurationMs: number;
   currentPhase: string | null;
   currentPhaseTitle: string | null;
   counts: RunCounts;
@@ -262,7 +263,7 @@ export interface FileContent {
   content: string;
 }
 
-export type ControlAction = "run" | "resume" | "pause" | "stop" | "replay" | "draft-prd" | "draft-team";
+export type ControlAction = "run" | "resume" | "pause" | "stop" | "replay" | "draft-prd" | "draft-team" | "compile-manifest";
 
 export type ExecutionMode = "auto" | "manual";
 export type SelectionScope = "single" | "range" | "list";
@@ -271,6 +272,7 @@ export type BackgroundJobType =
   | "create-project"
   | "draft-prd"
   | "draft-team"
+  | "compile-manifest"
   | "engine-run"
   | "engine-resume"
   | "engine-replay";

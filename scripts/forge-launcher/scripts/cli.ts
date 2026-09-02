@@ -4,7 +4,7 @@ import { bootstrapCli } from "./bootstrap.ts";
 import { consoleCli } from "./console/cli.ts";
 import { engineRunCli } from "./engine-run.ts";
 import { fail } from "./format.ts";
-import { runDraftPrd, runDraftTeam, runLauncher, runResume } from "./launcher.ts";
+import { runCompileManifest, runDraftPrd, runDraftTeam, runLauncher, runResume } from "./launcher.ts";
 import { detectRepoRoot } from "./paths.ts";
 import { PromptCancelled, prompts } from "./prompts.ts";
 import { checkForUpdate, printUpdateNotice } from "./update-check.ts";
@@ -24,6 +24,7 @@ Usage:
   forge-launcher resume [--repo <path>] [--non-interactive] [--dry-run]
   forge-launcher draft-prd [--repo <path>]      # headless: idea → PRD (Forge Console pipeline)
   forge-launcher draft-team [--repo <path>]     # headless: PRD → agent team
+  forge-launcher compile-manifest [--repo <path>]  # headless: team → execution manifest
 
 Launcher options:
   --non-interactive   Skip all interactive prompts (requires env vars; see docs/forge-launcher.md).
@@ -62,7 +63,7 @@ async function main(): Promise<number> {
   if (args[0] === "bootstrap") return bootstrapCli(args.slice(1));
   if (args[0] === "console") return consoleCli(args.slice(1));
   if (args[0] === "engine-run") return engineRunCli(args.slice(1));
-  if (args[0] === "draft-prd" || args[0] === "draft-team") {
+  if (args[0] === "draft-prd" || args[0] === "draft-team" || args[0] === "compile-manifest") {
     let repo: string | undefined;
     const rest = args.slice(1);
     for (let i = 0; i < rest.length; i++) {
@@ -76,7 +77,9 @@ async function main(): Promise<number> {
       }
     }
     const repoDir = repo ? path.resolve(repo) : detectRepoRoot();
-    return args[0] === "draft-prd" ? runDraftPrd(repoDir) : runDraftTeam(repoDir);
+    if (args[0] === "draft-prd") return runDraftPrd(repoDir);
+    if (args[0] === "draft-team") return runDraftTeam(repoDir);
+    return runCompileManifest(repoDir);
   }
   if (args[0] === "resume") {
     const opts = { repo: undefined as string | undefined, nonInteractive: false, dryRun: false };

@@ -250,8 +250,13 @@ function runSummary(p: RepoPaths, state: WorkflowState | null, manifest: Executi
   const counts = { pending: 0, running: 0, complete: 0, failed: 0, skipped: 0 };
   const visible = scopedTaskIds(state);
   const tasks = Object.values(state.tasks ?? {}).filter((task) => !visible || visible.has(task.taskId));
+  let completedDurationMs = 0;
   for (const t of tasks) {
     if (t.status in counts) (counts as unknown as Record<string, number>)[t.status] += 1;
+    if (t.status === "complete" && t.startedAt && t.completedAt) {
+      const durationMs = Date.parse(t.completedAt) - Date.parse(t.startedAt);
+      if (!Number.isNaN(durationMs) && durationMs >= 0) completedDurationMs += durationMs;
+    }
   }
   let currentPhaseTitle: string | null = null;
   if (state.currentPhase && manifest) {
@@ -262,6 +267,7 @@ function runSummary(p: RepoPaths, state: WorkflowState | null, manifest: Executi
     status: state.status,
     startedAt: state.startedAt ?? null,
     lastUpdatedAt: state.lastUpdatedAt ?? null,
+    completedDurationMs,
     currentPhase: state.currentPhase ?? null,
     currentPhaseTitle,
     counts,
@@ -673,6 +679,7 @@ function jobLabel(job: BackgroundJob): string {
       case "create-project": return "creating";
       case "draft-prd": return "drafting PRD";
       case "draft-team": return "generating team";
+      case "compile-manifest": return "compiling manifest";
       case "engine-run":
       case "engine-resume": return "running";
       case "engine-replay": return "replaying";
@@ -739,6 +746,10 @@ function resolveJobOutcome(job: BackgroundJob): { status: BackgroundJob["status"
       return hasProjectTeam(job.repoPath)
         ? { status: "complete", message: "Agent team generation completed." }
         : { status: "failed", message: "Agent team generation exited without producing a team." };
+    case "compile-manifest":
+      return fs.existsSync(p.manifestPath)
+        ? { status: "complete", message: "Execution manifest compiled." }
+        : { status: "failed", message: "Manifest compile exited without producing a manifest." };
     case "engine-run":
     case "engine-resume": {
       const state = loadState(p);

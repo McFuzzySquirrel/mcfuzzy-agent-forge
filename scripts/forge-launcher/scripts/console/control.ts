@@ -169,6 +169,19 @@ export class RunController {
     return this.draft("draft-team", "Agent team generation");
   }
 
+  compileManifest(): ControlResult {
+    const { cmd, args } = engineDetachedCommand(["compile-manifest", "--repo", this.repoRoot]);
+    const { pid } = this.spawner(cmd, args, { cwd: this.repoRoot, logFile: this.p.logPath });
+    const job = startJob({
+      type: "compile-manifest",
+      repoPath: this.repoRoot,
+      pid,
+      logPath: this.p.logPath,
+      message: "Manifest compile started in the background.",
+    });
+    return { ok: true, message: "Manifest compile started in the background.", pid, job };
+  }
+
   replay(taskId: string): ControlResult {
     const engineDir = findEngineDir(this.repoRoot);
     if (!engineDir) {
@@ -276,6 +289,7 @@ export class RunController {
       case "replay": return taskId ? this.replay(taskId) : { ok: false, message: "replay requires a taskId." };
       case "draft-prd": return this.draftPrd();
       case "draft-team": return this.draftTeam();
+      case "compile-manifest": return this.compileManifest();
       default: return { ok: false, message: `Unknown action: ${action}` };
     }
   }

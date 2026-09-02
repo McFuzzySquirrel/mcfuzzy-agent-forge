@@ -74,7 +74,7 @@ Typical progression:
 
 1. **Idea → PRD**: draft the PRD.
 2. **PRD → team**: generate the agent team.
-3. **Team → build**: start the build.
+3. **Team → build**: start the build, or enable **Manual build** first if you want to stop after manifest creation.
 4. **Paused or incomplete run**: resume the build.
 
 The console polls for state changes and updates the button label as each stage
@@ -108,16 +108,17 @@ The Overview controls panel offers the same actions you would otherwise issue fr
 - **Stop**: terminate the running engine.
 - **Resume**: continue the run from the saved state.
 - **Replay**: retry a failed task.
-- **Execution mode**: choose **auto** to run the full workflow, or **manual** to
-  run only the saved task selection from the Tasks view.
+- **Build mode**: once the manifest exists, choose **auto** to run the full
+  workflow, or **manual** to run only the saved task selection from the Tasks
+  view.
 - **Auto-commit after each task**: toggles one-commit-per-task git history (on by default).
 - **Concurrency (parallel agents)**: sets how many agents the engine runs in parallel. Enter a positive integer (e.g. `3`) and click **Set**; enter `0` to return to the engine default. The setting is saved to `docs/engine-config.json` and takes effect on the next Run or Resume.
 - **Launch \<harness\> CLI**: opens the project's harness CLI (opencode/copilot/claude) in a new terminal from the project folder, so you can watch the live run and take over manually. Also available on the Tasks header.
 
-If a task times out or fails, open its detail drawer in the Tasks view and adjust the timeout before replaying it.
-If you want a targeted run, use the checkboxes and range picker in **Tasks**,
-save the selection, switch Overview to **manual**, and then click
-**Run selected**.
+If you want a targeted run before the first build starts, enable the **Manual
+build** checkbox in the Overview pipeline card and click **Create manifest**.
+Then use the checkboxes and range picker in **Tasks**, save the selection,
+switch the Overview **Controls** panel to **manual**, and click **Run selected**.
 
 ---
 
