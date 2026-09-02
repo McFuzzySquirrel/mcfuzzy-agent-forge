@@ -2,14 +2,21 @@ import fs from "node:fs";
 import path from "node:path";
 import spawn from "cross-spawn";
 
-import { loadEngineConfig } from "../engine-config.ts";
+import {
+  loadEngineConfig,
+  normaliseExecutionMode,
+  normaliseSelectedTaskIds,
+  normaliseSelectionScope,
+} from "../engine-config.ts";
 import { engineDetachedCommand } from "../launcher.ts";
-import { findEngineDir, inferEngineHarness, repoPaths } from "./paths.ts";
+import { startJob } from "./jobs.ts";
+import { findEngineDir, inferEngineHarness, repoPaths, upsertProject } from "./paths.ts";
 import type {
   ControlAction,
   ControlResult,
   CreateProjectRequest,
   CreateProjectResult,
+  WorkflowState,
 } from "./types.ts";
 
 // ─── Spawn seam (testable) ───────────────────────────────────────────────────
@@ -70,6 +77,14 @@ function engineRunArgs(repoRoot: string): string[] {
   if (cfg?.keepAlive) args.push("--keep-alive");
   if (cfg?.attach) args.push("--attach", cfg.attach);
   if (cfg?.autoCommit === false) args.push("--no-auto-commit");
+  const selectedTaskIds = normaliseSelectedTaskIds(cfg?.selectedTaskIds);
+  const executionMode = normaliseExecutionMode(cfg?.executionMode);
+  const selectionScope = normaliseSelectionScope(cfg?.selectionScope, selectedTaskIds);
+  if (executionMode === "manual") {
+    args.push("--execution-mode", "manual");
+    if (selectionScope) args.push("--selection-scope", selectionScope);
+    if (selectedTaskIds.length > 0) args.push("--selected-tasks", selectedTaskIds.join(","));
+  }
   args.push("--yes");
   return args;
 }
@@ -124,18 +139,26 @@ export class RunController {
     return { ok: true, message: "Stop request written; no live engine PID found to signal." };
   }
 
-  run(): ControlResult {
+  run(jobType: "engine-run" | "engine-resume" = "engine-run"): ControlResult {
     const logFile = this.p.logPath;
     const { cmd, args } = engineDetachedCommand(engineRunArgs(this.repoRoot));
     const { pid } = this.spawner(cmd, args, { cwd: this.repoRoot, logFile });
-    return { ok: true, message: "Engine started in the background.", pid };
+    const job = startJob({ type: jobType, repoPath: this.repoRoot, pid, logPath: logFile, message: "Engine started in the background." });
+    return { ok: true, message: "Engine started in the background.", pid, job };
   }
 
   /** Spawns a headless launcher pipeline step (draft-prd / draft-team). */
   private draft(action: "draft-prd" | "draft-team", label: string): ControlResult {
     const { cmd, args } = engineDetachedCommand([action, "--repo", this.repoRoot]);
     const { pid } = this.spawner(cmd, args, { cwd: this.repoRoot, logFile: this.p.logPath });
-    return { ok: true, message: `${label} started in the background.`, pid };
+    const job = startJob({
+      type: action,
+      repoPath: this.repoRoot,
+      pid,
+      logPath: this.p.logPath,
+      message: `${label} started in the background.`,
+    });
+    return { ok: true, message: `${label} started in the background.`, pid, job };
   }
 
   draftPrd(): ControlResult {
@@ -156,7 +179,15 @@ export class RunController {
       ["run", "workflow-engine", "--", "replay", taskId, "--repo", this.repoRoot],
       { cwd: engineDir, logFile: this.p.logPath },
     );
-    return { ok: true, message: `Replay of ${taskId} started in the background.`, pid };
+    const job = startJob({
+      type: "engine-replay",
+      repoPath: this.repoRoot,
+      pid,
+      taskId,
+      logPath: this.p.logPath,
+      message: `Replay of ${taskId} started in the background.`,
+    });
+    return { ok: true, message: `Replay of ${taskId} started in the background.`, pid, job };
   }
 
   createProject(req: CreateProjectRequest): CreateProjectResult {
@@ -184,22 +215,64 @@ export class RunController {
     const logFile = path.join(parentDir, `${req.name}.forge-create.log`);
     const { cmd, args } = engineDetachedCommand(["--non-interactive"]);
     const { pid } = this.spawner(cmd, args, { cwd: parentDir, env, logFile });
+    const repoDir = path.join(parentDir, req.name);
+    upsertProject({ path: repoDir, name: req.name, harness: req.harness });
+    const message = req.autoDraft
+      ? "Project creation started in the background (auto-draft PRD + team enabled)."
+      : "Project creation started in the background.";
+    const job = startJob({
+      type: "create-project",
+      repoPath: repoDir,
+      pid,
+      logPath: logFile,
+      message,
+    });
 
     return {
       ok: true,
-      message: "Project creation started in the background.",
-      repoDir: path.join(parentDir, req.name),
+      message,
+      repoDir,
       logFile,
       pid,
+      job,
     };
   }
 
+  private manualSelectionRequiredMessage(action: "run" | "resume"): ControlResult | null {
+    const cfg = loadEngineConfig(this.repoRoot);
+    if (normaliseExecutionMode(cfg?.executionMode) !== "manual") return null;
+    const selectedTaskIds = this.selectedTaskIdsForAction(action, cfg?.selectedTaskIds);
+    if (selectedTaskIds.length > 0) return null;
+    return {
+      ok: false,
+      message: `Manual mode is enabled. Select at least one task in Tasks before ${action === "run" ? "running" : "resuming"} the build.`,
+    };
+  }
+
+  private selectedTaskIdsForAction(action: "run" | "resume", configSelectedTaskIds: unknown): string[] {
+    const selectedTaskIds = normaliseSelectedTaskIds(configSelectedTaskIds);
+    if (selectedTaskIds.length > 0 || action !== "resume") return selectedTaskIds;
+    if (!fs.existsSync(this.p.statePath)) return selectedTaskIds;
+    try {
+      const state = JSON.parse(fs.readFileSync(this.p.statePath, "utf8")) as WorkflowState;
+      if (state.status !== "paused") return selectedTaskIds;
+      if (state.selection?.mode !== "manual") return selectedTaskIds;
+      return normaliseSelectedTaskIds(state.selection.taskIds);
+    } catch {
+      return selectedTaskIds;
+    }
+  }
+
   dispatch(action: ControlAction, taskId?: string): ControlResult {
+    if (action === "run" || action === "resume") {
+      const validation = this.manualSelectionRequiredMessage(action);
+      if (validation) return validation;
+    }
     switch (action) {
       case "pause": return this.pause();
       case "stop": return this.stop();
-      case "run":
-      case "resume": return this.run();
+      case "run": return this.run();
+      case "resume": return this.run("engine-resume");
       case "replay": return taskId ? this.replay(taskId) : { ok: false, message: "replay requires a taskId." };
       case "draft-prd": return this.draftPrd();
       case "draft-team": return this.draftTeam();

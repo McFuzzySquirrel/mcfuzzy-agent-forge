@@ -10,12 +10,14 @@ import type {
   CreateProjectRequest,
   CreateProjectResult,
   DocsIndex,
+  ExecutionMode,
   ExecutionManifest,
   FileContent,
   LaunchCliResult,
   LogsResponse,
   OpenResult,
   ProjectsIndex,
+  SelectionScope,
   SelectResult,
   Summary,
   TaskRow,
@@ -109,6 +111,12 @@ export const api = {
   },
   setConcurrency(value: number): Promise<{ ok: boolean; message: string }> {
     return post<{ ok: boolean; message: string }>("/api/engine-config", { concurrency: value });
+  },
+  setExecutionMode(mode: ExecutionMode): Promise<{ ok: boolean; message: string }> {
+    return post<{ ok: boolean; message: string }>("/api/engine-config", { executionMode: mode });
+  },
+  setTaskSelection(selectionScope: SelectionScope | null, selectedTaskIds: string[]): Promise<{ ok: boolean; message: string }> {
+    return post<{ ok: boolean; message: string }>("/api/engine-config", { selectionScope, selectedTaskIds });
   },
   launchCli(): Promise<LaunchCliResult> {
     return post<LaunchCliResult>("/api/launch-cli", {});

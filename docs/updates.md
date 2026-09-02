@@ -4,6 +4,22 @@ Detailed release and change notes for MyForge.
 
 ---
 
+## September 2026 - v3.39
+
+### Forge Console: tracked background jobs from project creation through build
+
+- **Detached work is now a first-class console concept.** The console records a shared background-job model for project creation, headless PRD drafting, team generation, engine runs/resumes, and task replay. Each job keeps its repo path, PID, log path, timestamps, status, and the latest status message.
+- **Home, Projects, Overview, and New Project now surface live job state.** Instead of a one-shot "started" toast, the browser can now show whether a project is **creating**, **drafting PRD**, **generating team**, **running**, **paused**, **ready**, or **failed**, with status derived from the live PID plus repo/run artifacts rather than brittle log scraping.
+- **Project creation is visibly asynchronous.** The New Project wizard now shows a live status card for the background bootstrap job and lets you select the repo once it exists, while the Overview pipeline shows completion/failure banners with a direct path to the Logs view.
+
+### Forge Console + Workflow Engine: manual execution mode for targeted task runs
+
+- **Manual mode is now persisted in `docs/engine-config.json`.** In addition to harness, granularity, concurrency, timeouts, retries, and auto-commit, the engine config now stores an execution mode (`auto` vs `manual`), the selection scope (`single`, `range`, or `list`), and the selected task IDs to use on Run/Resume.
+- **Overview and Tasks now support targeted runs.** The Overview **Controls** panel gains an execution-mode toggle and switches its primary action copy between **Run** and **Run selected**. The Tasks view now supports explicit multi-select plus contiguous range selection, shows the selected-task count, and saves that selection back to engine config for later resumes.
+- **Scoped execution happens in the engine, not by mutating task state.** Manual runs pass the selected task IDs into `forge-launcher engine-run` / `workflow-engine run`, the engine auto-expands unmet dependencies, and only the scoped slice contributes to ready-frontier selection and progress counts. Unselected tasks remain untouched for future full or manual runs, while paused scoped runs keep their active selection in `docs/WORKFLOW-STATE.json`.
+
+---
+
 ## September 2026 - v3.38
 
 ### Console: concurrency setting in Overview and New Project

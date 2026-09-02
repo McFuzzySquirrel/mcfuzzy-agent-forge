@@ -42,6 +42,7 @@ export interface WorkflowState {
   currentPhase?: string;
   tasks: Record<string, TaskRecord>;
   blockers: string[];
+  selection?: { mode: ExecutionMode; scope?: SelectionScope; taskIds: string[] };
 }
 
 export interface ManifestTask {
@@ -134,6 +135,16 @@ export interface Summary {
   autoCommit: boolean;
   /** Max agents to run in parallel (engine-config; 0 or absent means engine default). */
   concurrency: number;
+  /** Auto runs the full ready workflow; manual runs only the selected task set. */
+  executionMode: ExecutionMode;
+  /** How the current manual task set was selected. */
+  selectionScope: SelectionScope | null;
+  /** Explicit task ids to run when executionMode is "manual". */
+  selectedTaskIds: string[];
+  /** Convenience count for UI labels. */
+  selectedTaskCount: number;
+  /** Most recent background job associated with this repo, if any. */
+  job: BackgroundJob | null;
 }
 
 export interface TaskRow {
@@ -233,6 +244,7 @@ export interface ProjectInfo {
   createdAt?: string;
   lastOpenedAt?: string;
   stage: string;
+  job?: BackgroundJob | null;
 }
 
 export interface ProjectsIndex {
@@ -252,10 +264,38 @@ export interface FileContent {
 
 export type ControlAction = "run" | "resume" | "pause" | "stop" | "replay" | "draft-prd" | "draft-team";
 
+export type ExecutionMode = "auto" | "manual";
+export type SelectionScope = "single" | "range" | "list";
+
+export type BackgroundJobType =
+  | "create-project"
+  | "draft-prd"
+  | "draft-team"
+  | "engine-run"
+  | "engine-resume"
+  | "engine-replay";
+
+export type BackgroundJobStatus = "running" | "complete" | "failed" | "paused";
+
+export interface BackgroundJob {
+  id: string;
+  type: BackgroundJobType;
+  repoPath: string;
+  pid?: number;
+  taskId?: string;
+  logPath?: string;
+  startedAt: string;
+  updatedAt: string;
+  finishedAt?: string;
+  status: BackgroundJobStatus;
+  message: string;
+}
+
 export interface ControlResult {
   ok: boolean;
   message: string;
   pid?: number;
+  job?: BackgroundJob;
 }
 
 export interface TimeoutUpdateResult {
@@ -302,6 +342,7 @@ export interface CreateProjectResult {
   repoDir?: string;
   logFile?: string;
   pid?: number;
+  job?: BackgroundJob;
 }
 
 export interface SelectResult {

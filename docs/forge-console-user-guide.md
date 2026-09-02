@@ -50,7 +50,9 @@ If you are creating a repo from the browser, the wizard collects:
   parallel. Leave blank to use the engine default or adjust it later from the
   Overview Controls panel.
 
-Once it finishes, the console opens that project's Overview view.
+Once it finishes, the console opens that project's Overview view. If creation
+continues in the background, the wizard now shows a live status card so you can
+tell when the repo is ready to open.
 
 ---
 
@@ -62,6 +64,7 @@ The Overview is the main control center for a project. It shows:
 - progress counters,
 - blockers or failures,
 - the **Manifest** panel (compiled phase/task counts),
+- the latest detached-job status,
 - the pipeline status,
 - and the run controls.
 
@@ -74,7 +77,9 @@ Typical progression:
 3. **Team → build**: start the build.
 4. **Paused or incomplete run**: resume the build.
 
-The console polls for state changes and updates the button label as each stage completes.
+The console polls for state changes and updates the button label as each stage
+completes. When a detached step finishes or fails, Overview keeps the result
+visible and links you straight to **Logs**.
 
 ---
 
@@ -103,11 +108,16 @@ The Overview controls panel offers the same actions you would otherwise issue fr
 - **Stop**: terminate the running engine.
 - **Resume**: continue the run from the saved state.
 - **Replay**: retry a failed task.
+- **Execution mode**: choose **auto** to run the full workflow, or **manual** to
+  run only the saved task selection from the Tasks view.
 - **Auto-commit after each task**: toggles one-commit-per-task git history (on by default).
 - **Concurrency (parallel agents)**: sets how many agents the engine runs in parallel. Enter a positive integer (e.g. `3`) and click **Set**; enter `0` to return to the engine default. The setting is saved to `docs/engine-config.json` and takes effect on the next Run or Resume.
 - **Launch \<harness\> CLI**: opens the project's harness CLI (opencode/copilot/claude) in a new terminal from the project folder, so you can watch the live run and take over manually. Also available on the Tasks header.
 
 If a task times out or fails, open its detail drawer in the Tasks view and adjust the timeout before replaying it.
+If you want a targeted run, use the checkboxes and range picker in **Tasks**,
+save the selection, switch Overview to **manual**, and then click
+**Run selected**.
 
 ---
 

@@ -260,20 +260,23 @@ export async function startConsoleServer(options: ConsoleServerOptions = {}): Pr
   resetOffsets();
 
   const poller = setInterval(() => {
+    const jobsChanged = repo.refreshJobs();
     const p = currentPaths();
-    if (!p) return;
-    for (const line of readNewLines(p.auditPath, auditOffsetRef)) {
-      const trimmed = line.trim();
-      if (!trimmed) continue;
-      try {
-        broadcast("audit", JSON.parse(trimmed));
-      } catch {
-        // partial line mid-append
+    if (p) {
+      for (const line of readNewLines(p.auditPath, auditOffsetRef)) {
+        const trimmed = line.trim();
+        if (!trimmed) continue;
+        try {
+          broadcast("audit", JSON.parse(trimmed));
+        } catch {
+          // partial line mid-append
+        }
+      }
+      for (const line of readNewLines(p.logPath, logOffsetRef)) {
+        broadcast("log", { line });
       }
     }
-    for (const line of readNewLines(p.logPath, logOffsetRef)) {
-      broadcast("log", { line });
-    }
+    if (jobsChanged) broadcast("snapshot", snapshotEvent());
   }, POLL_INTERVAL_MS);
   poller.unref?.();
 
@@ -314,6 +317,7 @@ export async function startConsoleServer(options: ConsoleServerOptions = {}): Pr
         const p = currentPaths();
         switch (urlPath) {
           case "/api/summary":
+            repo.refreshJobs();
             return p ? sendJson(res, 200, repo.summary(p)) : sendJson(res, 200, null);
           case "/api/tasks":
             return p ? sendJson(res, 200, repo.tasks(p)) : sendJson(res, 200, []);
@@ -334,8 +338,9 @@ export async function startConsoleServer(options: ConsoleServerOptions = {}): Pr
           case "/api/actions":
             return p ? sendJson(res, 200, repo.actions(p)) : sendJson(res, 200, { canRun: false, canResume: false, canPause: false, canStop: false, failedTasks: [] });
           case "/api/projects": {
+            repo.refreshJobs();
             const projects = loadRegistry()
-              .map((pr) => ({ ...pr, stage: repo.projectStage(pr.path) }))
+              .map((pr) => ({ ...pr, stage: repo.projectDisplayStage(pr.path), job: repo.projectInfo(pr.path).job }))
               .sort((a, b) => (b.lastOpenedAt ?? "").localeCompare(a.lastOpenedAt ?? ""));
             return sendJson(res, 200, { projects, current: currentRepo });
           }
@@ -438,6 +443,25 @@ export async function startConsoleServer(options: ConsoleServerOptions = {}): Pr
               return sendJson(res, 400, { ok: false, message: "concurrency must be a non-negative integer." });
             }
             const result = repo.setConcurrency(currentPaths()!, body.concurrency);
+            broadcast("snapshot", snapshotEvent());
+            return sendJson(res, result.ok ? 200 : 400, result);
+          }
+          if (body.executionMode !== undefined) {
+            if (body.executionMode !== "auto" && body.executionMode !== "manual") {
+              return sendJson(res, 400, { ok: false, message: "executionMode must be 'auto' or 'manual'." });
+            }
+            const result = repo.setExecutionMode(currentPaths()!, body.executionMode);
+            broadcast("snapshot", snapshotEvent());
+            return sendJson(res, result.ok ? 200 : 400, result);
+          }
+          if (body.selectedTaskIds !== undefined || body.selectionScope !== undefined) {
+            const rawIds = Array.isArray(body.selectedTaskIds) ? body.selectedTaskIds : [];
+            const selectedTaskIds = rawIds.filter((id): id is string => typeof id === "string" && id.trim().length > 0);
+            const selectionScope = body.selectionScope;
+            if (selectionScope !== undefined && selectionScope !== null && !["single", "range", "list"].includes(String(selectionScope))) {
+              return sendJson(res, 400, { ok: false, message: "selectionScope must be single, range, or list." });
+            }
+            const result = repo.setTaskSelection(currentPaths()!, selectionScope as "single" | "range" | "list" | null | undefined ?? null, selectedTaskIds);
             broadcast("snapshot", snapshotEvent());
             return sendJson(res, result.ok ? 200 : 400, result);
           }

@@ -109,6 +109,19 @@ test("nextReadyTasks blocks a downstream phase while its dependency is pending",
   assert.deepEqual(ready.map((entry) => entry.task.id), ["1.2"]);
 });
 
+test("nextReadyTasks filters to the manual selection", () => {
+  const manifest = makeManifest([
+    makePhase("1", [makeTask("1.1"), makeTask("1.2")]),
+  ]);
+  const state = {
+    ...makeState({ "1.1": "pending", "1.2": "pending" }),
+    selection: { mode: "manual" as const, scope: "single" as const, taskIds: ["1.2"] },
+  };
+
+  const ready = nextReadyTasks(manifest, state);
+  assert.deepEqual(ready.map((entry) => entry.task.id), ["1.2"]);
+});
+
 test("ownerUniqueReady keeps one task per owner in manifest order", () => {
   const withOwner = (id: string, owner: string) => ({ ...makeTask(id), ownerAgent: owner });
   const ready = [
@@ -185,16 +198,18 @@ class RecordingHarness implements HarnessAdapter {
   readonly supportsConcurrency = false;
   timeouts: number[] = [];
   retries: number[] = [];
+  taskIds: string[] = [];
 
   async invoke(
     _agent: Parameters<HarnessAdapter["invoke"]>[0],
-    _task: ManifestTask,
+    task: ManifestTask,
     _context: WorkflowState,
     _repoRoot: string,
     _contextBlock?: string,
     timeoutMs?: number,
     maxRetries?: number,
   ) {
+    this.taskIds.push(task.id);
     this.timeouts.push(timeoutMs ?? -1);
     this.retries.push(maxRetries ?? -1);
     return {
@@ -393,6 +408,84 @@ test("engine forwards maxRetries to the harness invoke call", async () => {
 
   assert.equal(state.status, "complete");
   assert.deepEqual(harness.retries, [3]);
+});
+
+test("manual execution expands dependencies and runs only the selected slice", async () => {
+  const fixture = makeEngineFixture();
+  const manifest = JSON.parse(readFileSync(fixture.manifestPath, "utf8")) as ExecutionManifest;
+  manifest.phases[0]!.tasks.push({
+    id: "1.2",
+    title: "Follow-up",
+    description: "Depends on 1.1",
+    ownerAgent: "worker",
+    dependencies: ["1.1"],
+    expectedOutputs: [],
+    validationCommands: [],
+    approvalRequired: false,
+    sourceLines: ["- Task 1.2: Follow-up"],
+  });
+  manifest.phases[0]!.tasks.push({
+    id: "1.3",
+    title: "Unselected",
+    description: "Should stay pending",
+    ownerAgent: "worker",
+    dependencies: [],
+    expectedOutputs: [],
+    validationCommands: [],
+    approvalRequired: false,
+    sourceLines: ["- Task 1.3: Unselected"],
+  });
+  writeFileSync(fixture.manifestPath, JSON.stringify(manifest), "utf8");
+
+  const harness = new RecordingHarness();
+  const state = await runEngine(engineOptionsFor(fixture, harness, 1_000, {
+    executionMode: "manual",
+    selectionScope: "single",
+    selectedTaskIds: ["1.2"],
+  }));
+
+  assert.equal(state.status, "complete");
+  assert.deepEqual(harness.taskIds, ["1.1", "1.2"]);
+  assert.deepEqual(state.selection?.taskIds, ["1.1", "1.2"]);
+  assert.equal(state.tasks["1.3"]?.status, "pending");
+});
+
+test("manual run can continue with a new selection after a previous selected run completed", async () => {
+  const fixture = makeEngineFixture();
+  const manifest = JSON.parse(readFileSync(fixture.manifestPath, "utf8")) as ExecutionManifest;
+  manifest.phases[0]!.tasks.push({
+    id: "1.2",
+    title: "Second manual task",
+    description: "Should run on the second manual run",
+    ownerAgent: "worker",
+    dependencies: [],
+    expectedOutputs: [],
+    validationCommands: [],
+    approvalRequired: false,
+    sourceLines: ["- Task 1.2: Second manual task"],
+  });
+  writeFileSync(fixture.manifestPath, JSON.stringify(manifest), "utf8");
+
+  const firstHarness = new RecordingHarness();
+  const first = await runEngine(engineOptionsFor(fixture, firstHarness, 1_000, {
+    executionMode: "manual",
+    selectionScope: "single",
+    selectedTaskIds: ["1.1"],
+  }));
+  assert.equal(first.status, "complete");
+  assert.deepEqual(firstHarness.taskIds, ["1.1"]);
+  assert.equal(first.tasks["1.2"]?.status, "pending");
+
+  const secondHarness = new RecordingHarness();
+  const second = await runEngine(engineOptionsFor(fixture, secondHarness, 1_000, {
+    executionMode: "manual",
+    selectionScope: "single",
+    selectedTaskIds: ["1.2"],
+  }));
+  assert.equal(second.status, "complete");
+  assert.deepEqual(secondHarness.taskIds, ["1.2"]);
+  assert.equal(second.tasks["1.1"]?.status, "complete");
+  assert.equal(second.tasks["1.2"]?.status, "complete");
 });
 
 test("runEngine recovers a leftover 'running' task as pending (crash recovery)", async () => {

@@ -13,6 +13,13 @@
 3. Dispatches each task to a **harness adapter** (`opencode`, `copilot`, `openai`, `stub`, or `flowforge-kernel`).
 4. Persists state after every transition, so a run can be resumed, replayed, or audited at any time.
 
+It can now run in two execution modes:
+
+- **Auto** - execute the full ready workflow.
+- **Manual** - execute only a selected task set (plus any transitive
+  dependencies the selected tasks require), while leaving the rest of the
+  manifest untouched for later runs.
+
 It is the execution alternative to the prompt-driven flows: start it from the terminal with `forge-launcher engine-run`, drive it in-harness with `@workflow-orchestrator`, or select it inside the `forge-auto-build` terminal fast-path with `GO --workflow-engine`.
 
 ---
@@ -190,6 +197,8 @@ npm run workflow-engine -- run     [--repo <path>] [--harness <name>] [--max-ret
                                    [--concurrency <n>] [--task-timeout-ms <ms>] [--yes]
                                    [--allow-noop] [--run-validation]
                                    [--auto-commit|--no-auto-commit] [--commit-message-template <tmpl>]
+                                   [--execution-mode <auto|manual>] [--selection-scope <single|range|list>]
+                                   [--selected-tasks <id,id,...>]
                                    [--keep-alive] [--keep-alive-port <n>] [--no-keep-alive] [--attach <url>]
                                    [--viz [port]] [--no-open]
 npm run workflow-engine -- status  [--repo <path>]
@@ -220,6 +229,9 @@ npm run workflow-engine -- viz     [--repo <path>] [--port <n>] [--no-open]
 | `--auto-commit` | **on** | Commit the working tree after each completed task (one commit per task; see *Auto-commit* below) |
 | `--no-auto-commit` | *(off)* | Disable per-task auto-commit (e.g. mid-rebase or with a dirty working tree) |
 | `--commit-message-template <tmpl>` | *(built-in)* | Commit message with `{taskId}` / `{taskTitle}` placeholders; default `feat(forge-engine): complete task {taskId} - {taskTitle}` |
+| `--execution-mode <auto\|manual>` | `auto` | Run the full workflow (`auto`) or only the selected task slice (`manual`) |
+| `--selection-scope <single\|range\|list>` | inferred | Metadata describing how the manual task set was chosen |
+| `--selected-tasks <id,id,...>` | *(unset)* | Explicit task IDs to run in manual mode; dependencies are auto-included |
 
 ### Pre-run gate
 

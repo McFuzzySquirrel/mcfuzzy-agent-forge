@@ -27,6 +27,9 @@ export interface EngineRunOptions {
   autoCommit?: boolean;
   noAutoCommit?: boolean;
   commitMessageTemplate?: string;
+  executionMode?: string;
+  selectionScope?: string;
+  selectedTasks?: string;
   stop?: boolean;
   pause?: boolean;
 }
@@ -62,11 +65,17 @@ export async function engineRun(opts: EngineRunOptions = {}): Promise<number> {
   const runValidation = opts.runValidation ?? process.env.FORGE_ENGINE_RUN_VALIDATION === "1";
   const autoCommit = opts.autoCommit ?? !(process.env.FORGE_ENGINE_AUTO_COMMIT === "0");
   const commitMessageTemplate = opts.commitMessageTemplate ?? process.env.FORGE_ENGINE_COMMIT_MESSAGE_TEMPLATE ?? "";
+  const executionMode = opts.executionMode ?? "auto";
+  const selectionScope = opts.selectionScope ?? "";
+  const selectedTasks = opts.selectedTasks ?? "";
   const stop = opts.stop ?? false;
   const pause = opts.pause ?? false;
 
   if (granularity && granularity !== "fine" && granularity !== "coarse") {
     throw new Error(`Invalid --granularity '${granularity}'. Choose 'fine' or 'coarse'.`);
+  }
+  if (executionMode !== "auto" && executionMode !== "manual") {
+    throw new Error(`Invalid --execution-mode '${executionMode}'. Choose 'auto' or 'manual'.`);
   }
 
   const repo = opts.repo
@@ -177,6 +186,11 @@ export async function engineRun(opts: EngineRunOptions = {}): Promise<number> {
   if (runValidation) engineFlags.push("--run-validation");
   if (autoCommit === false) engineFlags.push("--no-auto-commit");
   if (commitMessageTemplate) engineFlags.push("--commit-message-template", commitMessageTemplate);
+  if (executionMode === "manual") {
+    engineFlags.push("--execution-mode", "manual");
+    if (selectionScope) engineFlags.push("--selection-scope", selectionScope);
+    if (selectedTasks) engineFlags.push("--selected-tasks", selectedTasks);
+  }
 
   if (dryRun) {
     out(`  [dry-run] (cd '${engineDir}' && npm run workflow-engine -- run ${engineFlags.join(" ")})`);
@@ -216,6 +230,9 @@ export function engineRunCli(args: string[]): Promise<number> {
       case "--auto-commit": opts.autoCommit = true; break;
       case "--no-auto-commit": opts.noAutoCommit = true; opts.autoCommit = false; break;
       case "--commit-message-template": opts.commitMessageTemplate = args[++i]; break;
+      case "--execution-mode": opts.executionMode = args[++i]; break;
+      case "--selection-scope": opts.selectionScope = args[++i]; break;
+      case "--selected-tasks": opts.selectedTasks = args[++i]; break;
       case "--stop": opts.stop = true; break;
       case "--pause": opts.pause = true; break;
       default: throw new Error(`Unknown option: ${a}`);

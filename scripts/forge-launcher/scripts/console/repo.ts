@@ -6,6 +6,7 @@ import type {
   AgentInfo,
   ArtifactIndex,
   ArtifactMeta,
+  BackgroundJob,
   AuditEvent,
   DocEntry,
   DocsIndex,
@@ -22,7 +23,16 @@ import type {
   TimeoutUpdateResult,
   WorkflowState,
 } from "./types.ts";
-import { loadEngineConfig, saveEngineConfig } from "../engine-config.ts";
+import {
+  loadEngineConfig,
+  normaliseExecutionMode,
+  normaliseSelectedTaskIds,
+  normaliseSelectionScope,
+  saveEngineConfig,
+  type ExecutionMode,
+  type SelectionScope,
+} from "../engine-config.ts";
+import { currentJobForRepo, loadJobs, saveJobs } from "./jobs.ts";
 import { resolveResources } from "../resources.ts";
 import { detectHarnessRoot, findAdapterDir, inferEngineHarness, looksLikeForgeRepo, type RepoPaths, repoPaths } from "./paths.ts";
 
@@ -51,6 +61,11 @@ function readText(file: string): string | null {
 
 export function loadState(p: RepoPaths): WorkflowState | null {
   return readJson<WorkflowState>(p.statePath);
+}
+
+function saveState(p: RepoPaths, state: WorkflowState): void {
+  fs.mkdirSync(path.dirname(p.statePath), { recursive: true });
+  fs.writeFileSync(p.statePath, `${JSON.stringify(state, null, 2)}\n`, "utf8");
 }
 
 export function loadManifest(p: RepoPaths): ExecutionManifest | null {
@@ -97,18 +112,7 @@ export function setAllTaskTimeouts(p: RepoPaths, timeoutMs: number): TimeoutUpda
 /** Persists the engine-wide default task timeout in docs/engine-config.json. */
 export function setDefaultTimeout(p: RepoPaths, timeoutMs: number): TimeoutUpdateResult {
   const existing = loadEngineConfig(p.repoRoot);
-  const cfg = {
-    harness: existing?.harness ?? inferEngineHarness(p.repoRoot),
-    granularity: existing?.granularity ?? "",
-    concurrency: existing?.concurrency ?? "",
-    taskTimeoutMs: String(timeoutMs),
-    maxRetries: existing?.maxRetries ?? "",
-    viz: existing?.viz ?? false,
-    vizPort: existing?.vizPort ?? "",
-    keepAlive: existing?.keepAlive ?? false,
-    attach: existing?.attach ?? "",
-    autoCommit: existing?.autoCommit,
-  };
+  const cfg = nextEngineConfig(p, existing, { taskTimeoutMs: String(timeoutMs) });
   saveEngineConfig(p.repoRoot, cfg);
   return { ok: true, message: `Default timeout set to ${timeoutMs}ms.` };
 }
@@ -116,18 +120,7 @@ export function setDefaultTimeout(p: RepoPaths, timeoutMs: number): TimeoutUpdat
 /** Persists the auto-commit-after-each-task toggle in docs/engine-config.json. */
 export function setAutoCommit(p: RepoPaths, enabled: boolean): { ok: boolean; message: string } {
   const existing = loadEngineConfig(p.repoRoot);
-  const cfg = {
-    harness: existing?.harness ?? inferEngineHarness(p.repoRoot),
-    granularity: existing?.granularity ?? "",
-    concurrency: existing?.concurrency ?? "",
-    taskTimeoutMs: existing?.taskTimeoutMs ?? "",
-    maxRetries: existing?.maxRetries ?? "",
-    viz: existing?.viz ?? false,
-    vizPort: existing?.vizPort ?? "",
-    keepAlive: existing?.keepAlive ?? false,
-    attach: existing?.attach ?? "",
-    autoCommit: enabled,
-  };
+  const cfg = nextEngineConfig(p, existing, { autoCommit: enabled });
   saveEngineConfig(p.repoRoot, cfg);
   return { ok: true, message: `Auto-commit ${enabled ? "enabled" : "disabled"}.` };
 }
@@ -135,20 +128,41 @@ export function setAutoCommit(p: RepoPaths, enabled: boolean): { ok: boolean; me
 /** Persists the max-parallelism (concurrency) setting in docs/engine-config.json. */
 export function setConcurrency(p: RepoPaths, value: number): { ok: boolean; message: string } {
   const existing = loadEngineConfig(p.repoRoot);
-  const cfg = {
-    harness: existing?.harness ?? inferEngineHarness(p.repoRoot),
-    granularity: existing?.granularity ?? "",
-    concurrency: value > 0 ? String(value) : "",
-    taskTimeoutMs: existing?.taskTimeoutMs ?? "",
-    maxRetries: existing?.maxRetries ?? "",
-    viz: existing?.viz ?? false,
-    vizPort: existing?.vizPort ?? "",
-    keepAlive: existing?.keepAlive ?? false,
-    attach: existing?.attach ?? "",
-    autoCommit: existing?.autoCommit,
-  };
+  const cfg = nextEngineConfig(p, existing, { concurrency: value > 0 ? String(value) : "" });
   saveEngineConfig(p.repoRoot, cfg);
   return { ok: true, message: value > 0 ? `Concurrency set to ${value}.` : "Concurrency reset to engine default." };
+}
+
+export function setExecutionMode(p: RepoPaths, mode: ExecutionMode): { ok: boolean; message: string } {
+  const existing = loadEngineConfig(p.repoRoot);
+  const cfg = nextEngineConfig(p, existing, { executionMode: mode });
+  saveEngineConfig(p.repoRoot, cfg);
+  return { ok: true, message: `Execution mode set to ${mode}.` };
+}
+
+export function setTaskSelection(
+  p: RepoPaths,
+  selectionScope: SelectionScope | null,
+  taskIds: string[],
+): { ok: boolean; message: string } {
+  const existing = loadEngineConfig(p.repoRoot);
+  const selectedTaskIds = [...new Set(taskIds.map((id) => id.trim()).filter(Boolean))];
+  const cfg = nextEngineConfig(p, existing, {
+    selectionScope: selectionScope ?? undefined,
+    selectedTaskIds,
+  });
+  saveEngineConfig(p.repoRoot, cfg);
+  const state = loadState(p);
+  if (state?.status === "paused" && state.selection?.mode === "manual") {
+    state.selection = {
+      mode: "manual",
+      taskIds: selectedTaskIds,
+      ...(selectionScope ? { scope: selectionScope } : {}),
+    };
+    saveState(p, state);
+  }
+  const count = selectedTaskIds.length;
+  return { ok: true, message: count > 0 ? `Saved ${count} selected task(s).` : "Cleared the manual task selection." };
 }
 
 export function loadAudit(p: RepoPaths): AuditEvent[] {
@@ -189,12 +203,53 @@ export function isPidAlive(pid: number | null): boolean {
   }
 }
 
+function nextEngineConfig(
+  p: RepoPaths,
+  existing: ReturnType<typeof loadEngineConfig>,
+  patch: Partial<NonNullable<ReturnType<typeof loadEngineConfig>>>,
+) {
+  return {
+    harness: existing?.harness ?? inferEngineHarness(p.repoRoot),
+    granularity: existing?.granularity ?? "",
+    concurrency: existing?.concurrency ?? "",
+    taskTimeoutMs: existing?.taskTimeoutMs ?? "",
+    maxRetries: existing?.maxRetries ?? "",
+    viz: existing?.viz ?? false,
+    vizPort: existing?.vizPort ?? "",
+    keepAlive: existing?.keepAlive ?? false,
+    attach: existing?.attach ?? "",
+    autoCommit: existing?.autoCommit,
+    executionMode: normaliseExecutionMode(existing?.executionMode),
+    selectionScope: normaliseSelectionScope(existing?.selectionScope, normaliseSelectedTaskIds(existing?.selectedTaskIds)) ?? undefined,
+    selectedTaskIds: normaliseSelectedTaskIds(existing?.selectedTaskIds),
+    ...patch,
+  };
+}
+
+function activeSelection(state: WorkflowState | null, engineCfg: ReturnType<typeof loadEngineConfig>) {
+  const stateSelection = state && (state.status === "running" || state.status === "paused") ? state.selection : undefined;
+  const selectedTaskIds = normaliseSelectedTaskIds(stateSelection?.taskIds ?? engineCfg?.selectedTaskIds);
+  const executionMode = normaliseExecutionMode(stateSelection?.mode ?? engineCfg?.executionMode);
+  const selectionScope = normaliseSelectionScope(stateSelection?.scope ?? engineCfg?.selectionScope, selectedTaskIds);
+  return { executionMode, selectionScope, selectedTaskIds };
+}
+
+function scopedTaskIds(state: WorkflowState | null): Set<string> | null {
+  const selected = normaliseSelectedTaskIds(state?.selection?.taskIds);
+  return state?.selection?.mode === "manual" && selected.length > 0 ? new Set(selected) : null;
+}
+
+function currentJob(repoRoot: string): BackgroundJob | null {
+  return currentJobForRepo(repoRoot);
+}
+
 // ─── Summary ─────────────────────────────────────────────────────────────────
 
 function runSummary(p: RepoPaths, state: WorkflowState | null, manifest: ExecutionManifest | null): RunSummary | null {
   if (!state) return null;
   const counts = { pending: 0, running: 0, complete: 0, failed: 0, skipped: 0 };
-  const tasks = Object.values(state.tasks ?? {});
+  const visible = scopedTaskIds(state);
+  const tasks = Object.values(state.tasks ?? {}).filter((task) => !visible || visible.has(task.taskId));
   for (const t of tasks) {
     if (t.status in counts) (counts as unknown as Record<string, number>)[t.status] += 1;
   }
@@ -216,6 +271,7 @@ function runSummary(p: RepoPaths, state: WorkflowState | null, manifest: Executi
 }
 
 export function summary(p: RepoPaths): Summary {
+  refreshJobs();
   const state = loadState(p);
   const manifest = loadManifest(p);
   const harness = detectHarnessRoot(p.repoRoot);
@@ -240,6 +296,8 @@ export function summary(p: RepoPaths): Summary {
     : DEFAULT_TASK_TIMEOUT_MS;
 
   const engineCfg = loadEngineConfig(p.repoRoot);
+  const selection = activeSelection(state, engineCfg);
+  const job = currentJob(p.repoRoot);
 
   return {
     repoRoot: p.repoRoot,
@@ -259,6 +317,11 @@ export function summary(p: RepoPaths): Summary {
     defaultTimeoutMs,
     autoCommit: engineCfg?.autoCommit !== false,
     concurrency: Math.max(0, Number(engineCfg?.concurrency) || 0),
+    executionMode: selection.executionMode,
+    selectionScope: selection.selectionScope,
+    selectedTaskIds: selection.selectedTaskIds,
+    selectedTaskCount: selection.selectedTaskIds.length,
+    job,
   };
 }
 
@@ -602,12 +665,107 @@ export function projectStage(repoPath: string): string {
   return "idea";
 }
 
+function jobLabel(job: BackgroundJob): string {
+  if (job.status === "failed") return "failed";
+  if (job.status === "paused") return "paused";
+  if (job.status === "running") {
+    switch (job.type) {
+      case "create-project": return "creating";
+      case "draft-prd": return "drafting PRD";
+      case "draft-team": return "generating team";
+      case "engine-run":
+      case "engine-resume": return "running";
+      case "engine-replay": return "replaying";
+    }
+  }
+  return "ready";
+}
+
+export function projectDisplayStage(repoPath: string): string {
+  const job = currentJob(repoPath);
+  if (job && (job.status === "running" || job.status === "failed" || job.status === "paused")) {
+    return jobLabel(job);
+  }
+  const stage = projectStage(repoPath);
+  if (stage === "unknown") return "unknown";
+  if (stage === "failed" || stage === "running" || stage === "paused") return stage;
+  return "ready";
+}
+
 export function projectInfo(repoPath: string): ProjectInfo {
   return {
     path: repoPath,
     name: path.basename(repoPath),
-    stage: projectStage(repoPath),
+    stage: projectDisplayStage(repoPath),
+    job: currentJob(repoPath),
   };
+}
+
+export function refreshJobs(): boolean {
+  const jobs = loadJobs();
+  let changed = false;
+  for (const job of jobs) {
+    if (job.status !== "running" || isPidAlive(job.pid ?? null)) continue;
+    const outcome = resolveJobOutcome(job);
+    job.status = outcome.status;
+    job.message = outcome.message;
+    job.updatedAt = new Date().toISOString();
+    job.finishedAt = job.updatedAt;
+    changed = true;
+  }
+  if (changed) saveJobs(jobs);
+  return changed;
+}
+
+function resolveJobOutcome(job: BackgroundJob): { status: BackgroundJob["status"]; message: string } {
+  if (job.type === "create-project") {
+    if (!looksLikeForgeRepo(job.repoPath)) {
+      return { status: "failed", message: "Project creation ended before the forge repo was ready." };
+    }
+    return { status: "complete", message: "Project creation finished." };
+  }
+
+  if (!looksLikeForgeRepo(job.repoPath)) {
+    return { status: "failed", message: "The project folder is not a forge repo." };
+  }
+
+  const p = repoPaths(job.repoPath);
+  switch (job.type) {
+    case "draft-prd":
+      return hasProjectPrd(p)
+        ? { status: "complete", message: "PRD draft completed." }
+        : { status: "failed", message: "PRD draft exited without producing a PRD." };
+    case "draft-team":
+      return hasProjectTeam(job.repoPath)
+        ? { status: "complete", message: "Agent team generation completed." }
+        : { status: "failed", message: "Agent team generation exited without producing a team." };
+    case "engine-run":
+    case "engine-resume": {
+      const state = loadState(p);
+      if (!state) return { status: "failed", message: "Engine exited without writing workflow state." };
+      if (state.status === "complete") return { status: "complete", message: "Build completed." };
+      if (state.status === "paused") return { status: "paused", message: "Build paused." };
+      if (state.status === "failed") return { status: "failed", message: "Build failed." };
+      return { status: "failed", message: "Engine exited before reaching a terminal state." };
+    }
+    case "engine-replay": {
+      const state = loadState(p);
+      const record = state?.tasks?.[job.taskId ?? ""];
+      if (record?.status === "complete") return { status: "complete", message: `Replay of ${job.taskId} completed.` };
+      if (record?.status === "failed") return { status: "failed", message: `Replay of ${job.taskId} failed.` };
+      if (state?.status === "paused") return { status: "paused", message: `Replay of ${job.taskId} paused.` };
+      return { status: "failed", message: `Replay of ${job.taskId ?? "task"} exited before completion.` };
+    }
+  }
+}
+
+function hasProjectPrd(p: RepoPaths): boolean {
+  return fs.existsSync(p.prdPath) || (fs.existsSync(p.visionPath) && listMarkdown(p.featuresDir).length > 0);
+}
+
+function hasProjectTeam(repoRoot: string): boolean {
+  const harness = detectHarnessRoot(repoRoot);
+  return harness ? listAgents(repoRoot, harness).length > 0 : false;
 }
 
 // ─── File content (guarded) ──────────────────────────────────────────────────

@@ -50,12 +50,14 @@ export function shouldKeepAlive(opts: {
  * records from a killed run count as remaining, matching the engine's reset
  * logic (a fresh `run` normalizes them back to pending).
  */
-export function remainingTaskCount(manifestPath: string, sp: string): number {
+export function remainingTaskCount(manifestPath: string, sp: string, selectedTaskIds: string[] = []): number {
   const manifest = JSON.parse(readFileSync(manifestPath, "utf8")) as ExecutionManifest;
   const state = loadState(sp);
+  const scoped = selectedTaskIds.length > 0 ? new Set(selectedTaskIds) : null;
   let remaining = 0;
   for (const phase of manifest.phases) {
     for (const task of phase.tasks ?? []) {
+      if (scoped && !scoped.has(task.id)) continue;
       const record = state?.tasks[task.id];
       const status = record?.status ?? "pending";
       if (status !== "complete" && status !== "skipped") remaining += 1;
