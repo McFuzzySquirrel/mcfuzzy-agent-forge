@@ -2,10 +2,16 @@
 
 import { api } from "../api.js";
 import { el, toast } from "../render/dom.js";
-import type { CreateProjectRequest } from "../types.js";
+import type { CreateProjectRequest, ProjectInfo } from "../types.js";
+
+let createRepoDir: string | null = null;
+let createPoll: number | undefined;
 
 export function unmountNew(): void {
-  // nothing to tear down
+  if (createPoll !== undefined) {
+    window.clearInterval(createPoll);
+    createPoll = undefined;
+  }
 }
 
 export function renderNew(container: HTMLElement): void {
@@ -13,6 +19,11 @@ export function renderNew(container: HTMLElement): void {
   container.appendChild(el("h1", null, "New project"));
   container.appendChild(el("p", { className: "dim" }, "Creates the repo and bootstraps MyForge, then drafts the PRD and agent team."));
   container.appendChild(buildForm());
+  if (createRepoDir) {
+    const host = el("div");
+    container.appendChild(host);
+    void renderCreateStatus(host, createRepoDir);
+  }
 }
 
 function buildForm(): HTMLElement {
@@ -200,25 +211,55 @@ async function submitNewProject(req: {
     }
     toast(res.message);
     if (res.repoDir) {
-      const panel = el("div", { className: "panel hint" }, [
-        el("strong", null, "Project creation started."),
-        el("div", { className: "mono small", style: "margin:6px 0" }, res.repoDir),
-        el("button", { className: "btn btn-primary" }, "Select this project"),
-      ]);
-      const selectBtn = panel.querySelector<HTMLElement>("button");
-      if (selectBtn) {
-        selectBtn.addEventListener("click", () => {
-          void api.selectRepo(res.repoDir!).then((r) => {
-            if (r.ok) location.hash = "#/overview";
-            else toast(r.message ?? "select failed");
-          });
-        });
+      createRepoDir = res.repoDir;
+      const view = document.querySelector<HTMLElement>("#view");
+      const host = view ? el("div") : null;
+      if (host && view) {
+        view.appendChild(host);
+        void renderCreateStatus(host, res.repoDir);
       }
-      const forms = document.querySelectorAll<HTMLElement>("#view .panel");
-      const last = forms[forms.length - 1];
-      if (last) last.after(panel);
     }
   } catch (err) {
     toast(err instanceof Error ? err.message : "creation failed");
+  }
+}
+
+async function renderCreateStatus(host: HTMLElement, repoDir: string): Promise<void> {
+  host.textContent = "";
+  const project = await lookupProject(repoDir);
+  const running = project?.job?.status === "running";
+  const message = project?.job?.message ?? "Project creation started in the background.";
+  const panel = el("div", { className: "panel hint" }, [
+    el("strong", null, running ? "Background progress" : "Background result"),
+    el("div", { className: "mono small", style: "margin:6px 0" }, repoDir),
+    el("p", { className: project?.job?.status === "failed" ? "error-text" : "dim" }, `${project?.stage ?? "creating"} — ${message}`),
+    el("div", { className: "actions" }, [
+      el("button", { className: "btn btn-primary", disabled: project ? null : true }, "Select this project"),
+      el("a", { className: "btn", href: "#/projects" }, "View projects"),
+    ]),
+  ]);
+  const selectBtn = panel.querySelector<HTMLElement>("button");
+  if (selectBtn) {
+    selectBtn.addEventListener("click", () => {
+      void api.selectRepo(repoDir).then((r) => {
+        if (r.ok) location.hash = "#/overview";
+        else toast(r.message ?? "select failed");
+      });
+    });
+  }
+  host.appendChild(panel);
+
+  if (createPoll !== undefined) window.clearInterval(createPoll);
+  if (running) {
+    createPoll = window.setInterval(() => void renderCreateStatus(host, repoDir), 2000);
+  }
+}
+
+async function lookupProject(repoDir: string): Promise<ProjectInfo | null> {
+  try {
+    const index = await api.projects();
+    return index.projects.find((project) => project.path === repoDir) ?? null;
+  } catch {
+    return null;
   }
 }

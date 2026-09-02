@@ -570,6 +570,51 @@ test("engine-config sets concurrency and flows into engine-run args", async () =
   });
 });
 
+test("engine-config stores manual selection and passes it to engine-run", async () => {
+  await withServer(async (server, repo, spawned) => {
+    const token = server.token;
+
+    const mode = await postJson(`${server.url}/api/engine-config`, { executionMode: "manual" }, { "X-Forge-Token": token });
+    assert.equal((mode.body as { ok: boolean }).ok, true);
+
+    const selection = await postJson(`${server.url}/api/engine-config`, {
+      selectionScope: "range",
+      selectedTaskIds: ["1.1", "1.2"],
+    }, { "X-Forge-Token": token });
+    assert.equal((selection.body as { ok: boolean }).ok, true);
+
+    const summary = await getJson(`${server.url}/api/summary`) as {
+      executionMode: string;
+      selectedTaskCount: number;
+      selectedTaskIds: string[];
+    };
+    assert.equal(summary.executionMode, "manual");
+    assert.equal(summary.selectedTaskCount, 2);
+    assert.deepEqual(summary.selectedTaskIds, ["1.1", "1.2"]);
+
+    const run = await postJson(`${server.url}/api/control`, { action: "run" }, { "X-Forge-Token": token });
+    assert.equal((run.body as { ok: boolean }).ok, true);
+    assert.equal((run.body as { job?: { type: string } }).job?.type, "engine-run");
+
+    const args = spawned.calls.at(-1)!.args;
+    assert.ok(args.includes("--execution-mode"), "engine-run should pass --execution-mode");
+    assert.ok(args.includes("manual"), "engine-run should pass manual mode");
+    assert.ok(args.includes("--selection-scope"), "engine-run should pass --selection-scope");
+    assert.ok(args.includes("range"), "engine-run should pass range scope");
+    const taskIdx = args.indexOf("--selected-tasks");
+    assert.ok(taskIdx !== -1 && args[taskIdx + 1] === "1.1,1.2", "engine-run should pass the selected task ids");
+
+    const config = JSON.parse(readFileSync(join(repo, "docs", "engine-config.json"), "utf8")) as {
+      executionMode: string;
+      selectionScope: string;
+      selectedTaskIds: string[];
+    };
+    assert.equal(config.executionMode, "manual");
+    assert.equal(config.selectionScope, "range");
+    assert.deepEqual(config.selectedTaskIds, ["1.1", "1.2"]);
+  });
+});
+
 test("launch-cli opens the harness CLI in a terminal (opencode for .agents)", async () => {
   const home = mkdtempSync(join(tmpdir(), "forge-home-"));
   const prevHome = process.env.FORGE_HOME;

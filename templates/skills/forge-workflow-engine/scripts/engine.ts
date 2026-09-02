@@ -3,11 +3,14 @@ import { readFileSync } from "node:fs";
 import type {
   AgentDescriptor,
   AuditEvent,
+  ExecutionMode,
   EngineOptions,
   ExecutionManifest,
   ManifestTask,
+  SelectionScope,
   TaskResult,
   TaskStatus,
+  TaskSelection,
   WorkflowState,
 } from "./types.ts";
 
@@ -24,6 +27,7 @@ import {
   markTaskStarted,
   saveState,
   setCurrentPhase,
+  setSelection,
   statePath as defaultStatePath,
   syncProgressMd,
   writeAuditEvent,
@@ -108,11 +112,60 @@ function flattenManifest(manifest: ExecutionManifest): FlatTask[] {
   );
 }
 
+function scopedTaskSet(selection: TaskSelection | undefined): Set<string> | null {
+  return selection?.mode === "manual" && selection.taskIds.length > 0
+    ? new Set(selection.taskIds)
+    : null;
+}
+
+function findManifestTask(manifest: ExecutionManifest, taskId: string): ManifestTask | undefined {
+  return flattenManifest(manifest).find((entry) => entry.task.id === taskId)?.task;
+}
+
+function expandSelectedTaskIds(manifest: ExecutionManifest, selectedTaskIds: string[]): string[] {
+  const selected = new Set<string>();
+  const visiting = new Set<string>();
+
+  const visit = (taskId: string): void => {
+    if (selected.has(taskId) || visiting.has(taskId)) return;
+    const task = findManifestTask(manifest, taskId);
+    if (!task) return;
+    visiting.add(taskId);
+    for (const depId of task.dependencies ?? []) visit(depId);
+    visiting.delete(taskId);
+    selected.add(taskId);
+  };
+
+  for (const taskId of selectedTaskIds) visit(taskId);
+  return flattenManifest(manifest).map((entry) => entry.task.id).filter((id) => selected.has(id));
+}
+
+function resolveSelection(manifest: ExecutionManifest, state: WorkflowState, opts: EngineOptions): TaskSelection | undefined {
+  const executionMode = opts.executionMode === "manual" || state.selection?.mode === "manual" ? "manual" as ExecutionMode : "auto" as ExecutionMode;
+  const requested = opts.selectedTaskIds && opts.selectedTaskIds.length > 0
+    ? opts.selectedTaskIds
+    : state.selection?.mode === "manual"
+      ? state.selection.taskIds
+      : [];
+  if (executionMode !== "manual") return undefined;
+  const taskIds = expandSelectedTaskIds(manifest, requested);
+  if (taskIds.length === 0) {
+    throw new Error("Manual execution mode requires at least one valid selected task.");
+  }
+  return {
+    mode: "manual",
+    scope: opts.selectionScope ?? state.selection?.scope ?? (taskIds.length === 1 ? "single" : "list") as SelectionScope,
+    taskIds,
+  };
+}
+
 export function nextReadyTasks(manifest: ExecutionManifest, state: WorkflowState): FlatTask[] {
   const flat = flattenManifest(manifest);
   const ready: FlatTask[] = [];
+  const selected = scopedTaskSet(state.selection);
 
   for (const entry of flat) {
+    if (selected && !selected.has(entry.task.id)) continue;
     const record = state.tasks[entry.task.id];
     if (!record || record.status !== "pending") continue;
 
@@ -159,13 +212,17 @@ export function ownerUniqueReady(ready: FlatTask[]): FlatTask[] {
 }
 
 export function isComplete(manifest: ExecutionManifest, state: WorkflowState): boolean {
-  return flattenManifest(manifest).every(
+  const selected = scopedTaskSet(state.selection);
+  return flattenManifest(manifest)
+    .filter(({ task }) => !selected || selected.has(task.id))
+    .every(
     ({ task }) => isTaskDone(state.tasks[task.id]?.status),
   );
 }
 
 function hasFailed(state: WorkflowState): boolean {
-  return Object.values(state.tasks).some((t) => t.status === "failed");
+  const selected = scopedTaskSet(state.selection);
+  return Object.values(state.tasks).some((t) => t.status === "failed" && (!selected || selected.has(t.taskId)));
 }
 
 // ─── Single-task executor ─────────────────────────────────────────────────────
@@ -421,6 +478,8 @@ export async function runEngine(opts: EngineOptions): Promise<WorkflowState> {
 
   let state = loadState(opts.statePath)
     ?? initState(manifest, opts.manifestPath, opts.harness.name);
+  const selection = resolveSelection(manifest, state, opts);
+  state = setSelection(state, selection);
 
   // A previous run that died mid-task may have left tasks marked "running".
   // Reset those to "pending" so they are picked up again instead of deadlocking.
@@ -616,6 +675,7 @@ export async function replayTask(taskId: string, opts: EngineOptions): Promise<W
   state = {
     ...state,
     status: "running",
+    selection: undefined,
     tasks: {
       ...state.tasks,
       [taskId]: { ...record, status: "pending", errorMessage: undefined },

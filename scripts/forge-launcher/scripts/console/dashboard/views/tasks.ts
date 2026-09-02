@@ -3,7 +3,7 @@
 import { api } from "../api.js";
 import { store } from "../state.js";
 import { el, fmtDuration, fmtTime, minutesToTimeoutMs, statusBadge, timeoutToMinutes, toast } from "../render/dom.js";
-import type { TaskRow } from "../types.js";
+import type { SelectionScope, TaskRow } from "../types.js";
 
 type SortKey = "status" | "phase" | "owner" | "duration" | "attempt";
 
@@ -19,6 +19,8 @@ let sortDir: 1 | -1 = 1;
 let expandedId: string | null = null;
 let tableHost: HTMLElement | null = null;
 let countLine: HTMLElement | null = null;
+let selectedIds = new Set<string>();
+let selectionScope: SelectionScope | null = null;
 
 export function unmountTasks(): void {
   for (const u of unsub) u();
@@ -31,6 +33,8 @@ export function unmountTasks(): void {
   expandedId = null;
   tableHost = null;
   countLine = null;
+  selectedIds = new Set<string>();
+  selectionScope = null;
 }
 
 function taskFilterFromHash(): string | null {
@@ -98,6 +102,14 @@ export async function renderTasks(container: HTMLElement): Promise<void> {
 
   countLine = el("div", { className: "dim small" });
   tableHost = el("div", null);
+  selectedIds = new Set(store.summary?.selectedTaskIds ?? []);
+  selectionScope = store.summary?.selectionScope ?? null;
+
+  const rangeStart = el("select", { className: "replay-select" });
+  const rangeEnd = el("select", { className: "replay-select" });
+  const addRange = el("button", { className: "btn btn-sm" }, "Add range");
+  const saveSelection = el("button", { className: "btn btn-sm" }, "Save selection");
+  const clearSelection = el("button", { className: "btn btn-sm" }, "Clear");
 
   const launch = el("button", { className: "btn btn-sm" }, `Launch ${store.summary?.harness ?? "harness"} CLI`);
   launch.addEventListener("click", () => void launchCli());
@@ -110,6 +122,14 @@ export async function renderTasks(container: HTMLElement): Promise<void> {
       ]),
       statusChips,
       el("div", { className: "row gap", style: "margin:8px 0" }, [searchInput]),
+      el("div", { className: "row gap wrap", style: "margin:0 0 8px" }, [
+        el("span", { className: "dim small" }, "Manual selection"),
+        rangeStart,
+        rangeEnd,
+        addRange,
+        saveSelection,
+        clearSelection,
+      ]),
       el("div", { className: "row gap", style: "margin:0 0 8px" }, [
         el("span", { className: "dim small" }, "Set every task's timeout:"),
         allTimeoutInput,
@@ -124,6 +144,28 @@ export async function renderTasks(container: HTMLElement): Promise<void> {
   } catch {
     allTasks = [];
   }
+  for (const task of allTasks) {
+    rangeStart.appendChild(el("option", { value: task.id }, `${task.id} — ${task.title}`));
+    rangeEnd.appendChild(el("option", { value: task.id }, `${task.id} — ${task.title}`));
+  }
+  addRange.addEventListener("click", () => {
+    const ordered = allTasks.map((task) => task.id);
+    const from = ordered.indexOf((rangeStart as HTMLSelectElement).value);
+    const to = ordered.indexOf((rangeEnd as HTMLSelectElement).value);
+    if (from === -1 || to === -1) return;
+    const [start, end] = from <= to ? [from, to] : [to, from];
+    for (const id of ordered.slice(start, end + 1)) selectedIds.add(id);
+    selectionScope = "range";
+    renderTable();
+  });
+  saveSelection.addEventListener("click", () => {
+    void persistSelection();
+  });
+  clearSelection.addEventListener("click", () => {
+    selectedIds.clear();
+    selectionScope = null;
+    void persistSelection();
+  });
   if (myGen !== gen) return;
   renderTable();
 }
@@ -197,7 +239,7 @@ function renderTable(): void {
   if (countLine) {
     countLine.textContent = `${rows.length}/${allTasks.length} — ${[...counts.entries()]
       .map(([s, n]) => `${s}: ${n}`)
-      .join(", ")}`;
+      .join(", ")} — selected: ${selectedIds.size}`;
   }
 
   if (rows.length === 0) {
@@ -208,6 +250,7 @@ function renderTable(): void {
   const tbody = el("tbody", null);
   for (const t of rows) {
     const tr = el("tr", { className: "clickable" }, [
+      el("td", null, checkboxCell(t.id)),
       el("td", null, statusBadge(t.status)),
       el("td", { className: "mono small" }, t.id),
       el("td", null, t.title),
@@ -222,7 +265,7 @@ function renderTable(): void {
     });
     tbody.appendChild(tr);
     if (expandedId === t.id) {
-      tbody.appendChild(el("tr", { className: "detail-row" }, [el("td", { colspan: "7" }, detail(t))]));
+      tbody.appendChild(el("tr", { className: "detail-row" }, [el("td", { colspan: "8" }, detail(t))]));
     }
   }
 
@@ -230,6 +273,7 @@ function renderTable(): void {
     el("table", null, [
       el("thead", null, [
         el("tr", null, [
+          plainTh("Pick"),
           th("Status", "status"),
           plainTh("ID"),
           plainTh("Title"),
@@ -242,6 +286,39 @@ function renderTable(): void {
       tbody,
     ]),
   );
+}
+
+function checkboxCell(taskId: string): HTMLElement {
+  const input = el("input", { type: "checkbox", checked: selectedIds.has(taskId) ? true : null }) as HTMLInputElement;
+  input.addEventListener("click", (event) => event.stopPropagation());
+  input.addEventListener("change", () => {
+    if (input.checked) selectedIds.add(taskId);
+    else selectedIds.delete(taskId);
+    selectionScope = inferSelectionScope();
+    renderTable();
+  });
+  return input;
+}
+
+function inferSelectionScope(): SelectionScope | null {
+  const ordered = allTasks.map((task) => task.id);
+  const picked = ordered.filter((id) => selectedIds.has(id));
+  if (picked.length === 0) return null;
+  if (picked.length === 1) return "single";
+  const indices = picked.map((id) => ordered.indexOf(id)).filter((i) => i >= 0).sort((a, b) => a - b);
+  const contiguous = indices.every((value, index) => index === 0 || value === indices[index - 1]! + 1);
+  return contiguous ? "range" : "list";
+}
+
+async function persistSelection(): Promise<void> {
+  try {
+    const ids = allTasks.map((task) => task.id).filter((id) => selectedIds.has(id));
+    const res = await api.setTaskSelection(selectionScope ?? inferSelectionScope(), ids);
+    toast(res.message || "saved");
+  } catch (err) {
+    toast(err instanceof Error ? err.message : "save failed");
+  }
+  await refresh();
 }
 
 function plainTh(label: string): HTMLElement {

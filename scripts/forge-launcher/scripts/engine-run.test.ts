@@ -89,3 +89,18 @@ test("engine-run --pause delegates to the engine pause command", async () => {
   assert.ok(out.includes("forge-engine-pause"), out);
   assert.ok(out.includes("workflow-engine -- pause --repo"), out);
 });
+
+test("engine-run forwards manual execution flags", async () => {
+  const repo = tmpRepo();
+  const { code, out } = await runCli([
+    "engine-run", "--repo", repo, "--harness", "opencode",
+    "--execution-mode", "manual",
+    "--selection-scope", "range",
+    "--selected-tasks", "1.1,1.2",
+    "--yes", "--dry-run",
+  ]);
+  assert.equal(code, 0, out);
+  assert.ok(out.includes("--execution-mode manual"), out);
+  assert.ok(out.includes("--selection-scope range"), out);
+  assert.ok(out.includes("--selected-tasks 1.1,1.2"), out);
+});

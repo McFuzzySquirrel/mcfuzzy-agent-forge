@@ -97,6 +97,9 @@ export function updateJob(jobId: string, patch: Partial<BackgroundJob>): Backgro
 export function currentJobForRepo(repoPath: string): BackgroundJob | null {
   const matches = loadJobs().filter((job) => path.resolve(job.repoPath) === path.resolve(repoPath));
   if (matches.length === 0) return null;
-  const running = matches.findLast((job) => job.status === "running");
-  return running ?? matches.toSorted((a, b) => a.updatedAt.localeCompare(b.updatedAt)).at(-1) ?? null;
+  for (let i = matches.length - 1; i >= 0; i -= 1) {
+    if (matches[i]!.status === "running") return matches[i]!;
+  }
+  matches.sort((a, b) => a.updatedAt.localeCompare(b.updatedAt));
+  return matches[matches.length - 1] ?? null;
 }

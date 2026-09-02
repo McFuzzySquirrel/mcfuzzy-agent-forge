@@ -7,7 +7,13 @@ import { runEngine, replayTask } from "./engine.ts";
 import { loadState, statePath, auditPath } from "./state.ts";
 import { startVizServer, type VizServer } from "./viz/server.ts";
 import { controlPath, pidPath, readPid, removePid, writeControl, writePid } from "./control.ts";
-import { DEFAULT_TASK_TIMEOUT_MS, DEFAULT_HEARTBEAT_MS, type ExecutionManifest, type HarnessAdapter, type EngineOptions } from "./types.ts";
+import {
+  DEFAULT_TASK_TIMEOUT_MS,
+  DEFAULT_HEARTBEAT_MS,
+  type ExecutionManifest,
+  type HarnessAdapter,
+  type EngineOptions,
+} from "./types.ts";
 import { OpenCodeAdapter } from "./harness/opencode-adapter.ts";
 import { CopilotAdapter } from "./harness/copilot-adapter.ts";
 import { OpenAIAdapter } from "./harness/openai-adapter.ts";
@@ -25,6 +31,7 @@ Usage:
                                      [--max-retries <n>] [--retry-delay-ms <ms>] [--heartbeat-ms <ms>] [--concurrency <n>] [--task-timeout-ms <ms>] [--yes]
                                      [--allow-noop] [--run-validation]
                                      [--auto-commit|--no-auto-commit] [--commit-message-template <tmpl>]
+                                     [--execution-mode <auto|manual>] [--selection-scope <single|range|list>] [--selected-tasks <id,id,...>]
                                      [--viz [port]] [--no-open]
                                      [--keep-alive] [--keep-alive-port <port>] [--attach <url>] [--no-keep-alive]
   npm run workflow-engine -- status  [--repo <path>]
@@ -176,6 +183,15 @@ function buildOptions(
     runValidation: hasFlag(args, "--run-validation") || process.env["FORGE_ENGINE_RUN_VALIDATION"] === "1",
     autoCommit: !(hasFlag(args, "--no-auto-commit") || process.env["FORGE_ENGINE_AUTO_COMMIT"] === "0"),
     commitMessageTemplate: flag(args, "--commit-message-template") ?? process.env["FORGE_ENGINE_COMMIT_MESSAGE_TEMPLATE"],
+    executionMode: flag(args, "--execution-mode") === "manual" ? "manual" : "auto",
+    selectionScope: (() => {
+      const scope = flag(args, "--selection-scope");
+      return scope === "single" || scope === "range" || scope === "list" ? scope : undefined;
+    })(),
+    selectedTaskIds: (flag(args, "--selected-tasks") ?? "")
+      .split(",")
+      .map((id) => id.trim())
+      .filter(Boolean),
     pauseRequested: false,
   };
 }
@@ -186,7 +202,10 @@ function buildOptions(
 // or when stdin is not a TTY (CI / headless) - the gate is interactive-only.
 async function confirmPreRun(opts: EngineOptions, args: string[], keepAlive?: KeepAliveDecision): Promise<void> {
   const manifest = JSON.parse(readFileSync(opts.manifestPath, "utf8")) as ExecutionManifest;
-  const taskCount = manifest.phases.reduce((n, p) => n + (p.tasks?.length ?? 0), 0);
+  const selectedTaskIds = opts.executionMode === "manual" ? (opts.selectedTaskIds ?? []) : [];
+  const taskCount = selectedTaskIds.length > 0
+    ? selectedTaskIds.length
+    : manifest.phases.reduce((n, p) => n + (p.tasks?.length ?? 0), 0);
   const skip = hasFlag(args, "--yes") || process.env["FORGE_ENGINE_YES"] === "1";
 
   const keepAliveLabel = keepAlive
@@ -218,6 +237,10 @@ async function confirmPreRun(opts: EngineOptions, args: string[], keepAlive?: Ke
       ? "on (one commit per completed task, custom template)"
       : "on (one commit per completed task)";
   console.log(`  Auto-commit: ${autoCommitLabel}`);
+  console.log(`  Execution mode: ${opts.executionMode === "manual" ? "manual" : "auto"}`);
+  if (opts.executionMode === "manual") {
+    console.log(`  Selection: ${(opts.selectedTaskIds ?? []).join(", ") || "none"}${opts.selectionScope ? ` (${opts.selectionScope})` : ""}`);
+  }
   console.log(`  Manifest: ${opts.manifestPath}`);
   if (manifest.featureOrder) console.log(`  Features: ${manifest.featureOrder.join(" → ")}`);
   if (manifest.responsibilityMatrixPath) console.log(`  Matrix  : ${manifest.responsibilityMatrixPath}`);
@@ -270,7 +293,7 @@ async function cmdRun(args: string[]): Promise<void> {
     keepAlive,
     noKeepAlive,
     harness: harnessName,
-    remaining: remainingTaskCount(manifestPath, statePath(repoRoot)),
+    remaining: remainingTaskCount(manifestPath, statePath(repoRoot), buildOptions(args, repoRoot, harnessName, attachUrl).selectedTaskIds ?? []),
   });
 
   if (decision.mode === "keep-alive" && harnessName !== "opencode") {

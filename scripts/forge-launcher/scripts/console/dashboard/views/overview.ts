@@ -3,12 +3,11 @@
 import { api } from "../api.js";
 import { store } from "../state.js";
 import { el, fmtDuration, fmtTime, minutesToTimeoutMs, statusBadge, toast } from "../render/dom.js";
-import type { Actions, ControlAction, RunSummary, Summary, TaskRow } from "../types.js";
+import type { Actions, BackgroundJob, ControlAction, ExecutionMode, RunSummary, Summary, TaskRow } from "../types.js";
 
 let gen = 0;
 let unsub: Array<() => void> = [];
 let pollTimer: number | undefined;
-let pendingStage: "prd" | "team" | null = null;
 
 function stopPoll(): void {
   if (pollTimer !== undefined) {
@@ -20,7 +19,6 @@ function stopPoll(): void {
 export function unmountOverview(): void {
   for (const u of unsub) u();
   unsub = [];
-  pendingStage = null;
   stopPoll();
 }
 
@@ -197,8 +195,10 @@ function nextStep(summary: Summary, actions: Actions): PipelineStep | null {
   return null;
 }
 
-function pendingLabel(): string {
-  return pendingStage === "prd" ? "Drafting PRD…" : "Generating team…";
+function jobLabel(job: BackgroundJob): string {
+  if (job.status === "failed") return job.message || "Background job failed.";
+  if (job.status === "paused") return job.message || "Background job paused.";
+  return job.message || "Background job running.";
 }
 
 function startPoll(container: HTMLElement): void {
@@ -207,9 +207,7 @@ function startPoll(container: HTMLElement): void {
     void api.summary()
       .then((s) => {
         if (!s) return;
-        const advanced = (pendingStage === "prd" && s.hasPrd) || (pendingStage === "team" && s.hasTeam);
-        if (advanced) {
-          pendingStage = null;
+        if (!s.job || s.job.status !== "running") {
           stopPoll();
         }
       })
@@ -219,13 +217,10 @@ function startPoll(container: HTMLElement): void {
 }
 
 async function continuePipeline(container: HTMLElement, step: PipelineStep): Promise<void> {
-  if (step.action === "draft-prd") pendingStage = "prd";
-  else if (step.action === "draft-team") pendingStage = "team";
   try {
     const res = await api.control(step.action);
     toast(res.message || (res.ok ? "ok" : "failed"));
   } catch (err) {
-    pendingStage = null;
     toast(err instanceof Error ? err.message : "control failed");
   }
   void renderOverview(container);
@@ -252,12 +247,12 @@ function renderGuidance(container: HTMLElement, summary: Summary, actions: Actio
   const children: Array<HTMLElement> = [el("h4", null, "Pipeline"), el("strong", null, text)];
 
   if (step) {
-    const working = pendingStage !== null;
+    const working = summary.job?.status === "running";
     hint = step.hint;
     const btn = el(
       "button",
       { className: "btn btn-primary", disabled: working ? true : null },
-      working ? pendingLabel() : step.label,
+      working ? jobLabel(summary.job!) : step.label,
     );
     btn.addEventListener("click", () => void continuePipeline(container, step));
     children.push(el("div", { className: "actions", style: "margin-top:10px" }, [btn]));
@@ -270,6 +265,13 @@ function renderGuidance(container: HTMLElement, summary: Summary, actions: Actio
     hint = "Run control is available in the Controls panel below.";
   }
 
+  if (summary.job && summary.job.status !== "running") {
+    children.push(el("p", { className: summary.job.status === "failed" ? "error-text" : "dim" }, [
+      `${jobLabel(summary.job)} `,
+      el("a", { href: "#/logs" }, "Open logs"),
+    ]));
+  }
+
   children.push(el("p", { className: "dim" }, hint));
   return el("div", { className: "panel hint" }, children);
 }
@@ -280,6 +282,7 @@ function renderActions(container: HTMLElement, summary: Summary, actions: Action
       try {
         const res = await api.control(action, taskId);
         toast(res.message || (res.ok ? "ok" : "failed"));
+        if (res.job?.status === "running") startPoll(container);
       } catch (err) {
         toast(err instanceof Error ? err.message : "control failed");
       }
@@ -287,9 +290,10 @@ function renderActions(container: HTMLElement, summary: Summary, actions: Action
     })();
   };
 
+  const manualNeedsSelection = summary.executionMode === "manual" && summary.selectedTaskCount === 0;
   const buttons = [
-    el("button", { className: "btn btn-primary", disabled: actions.canRun ? null : true }, "Run"),
-    el("button", { className: "btn", disabled: actions.canResume ? null : true }, "Resume"),
+    el("button", { className: "btn btn-primary", disabled: actions.canRun && !manualNeedsSelection ? null : true }, summary.executionMode === "manual" ? "Run selected" : "Run"),
+    el("button", { className: "btn", disabled: actions.canResume && !manualNeedsSelection ? null : true }, summary.executionMode === "manual" ? "Resume selected" : "Resume"),
     el("button", { className: "btn", disabled: actions.canPause ? null : true }, "Pause"),
     el("button", { className: "btn btn-danger", disabled: actions.canStop ? null : true }, "Stop"),
   ];
@@ -310,14 +314,46 @@ function renderActions(container: HTMLElement, summary: Summary, actions: Action
   const timeouts = renderTimeoutControls(container, tasks);
   const commit = renderAutoCommitToggle(container, store.summary?.autoCommit ?? true);
   const concurrency = renderConcurrencyControl(container, store.summary?.concurrency ?? 0);
+  const mode = renderExecutionModeControl(container, summary.executionMode, summary.selectedTaskCount);
 
   return el("div", { className: "panel" }, [
     el("h4", null, "Controls"),
+    mode,
     el("div", { className: "actions" }, buttons),
+    manualNeedsSelection
+      ? el("p", { className: "dim small" }, ["Manual mode needs at least one selected task. ", el("a", { href: "#/tasks" }, "Choose tasks")])
+      : null,
     replay,
     timeouts,
     commit,
     concurrency,
+  ]);
+}
+
+function renderExecutionModeControl(container: HTMLElement, mode: ExecutionMode, selectedCount: number): HTMLElement {
+  const select = el("select", null, [
+    el("option", { value: "auto", selected: mode === "auto" }, "auto"),
+    el("option", { value: "manual", selected: mode === "manual" }, "manual"),
+  ]);
+  select.addEventListener("change", () => {
+    void (async () => {
+      try {
+        const value = (select as HTMLSelectElement).value as ExecutionMode;
+        const res = await api.setExecutionMode(value);
+        toast(res.message || (res.ok ? "updated" : "update failed"));
+      } catch (err) {
+        toast(err instanceof Error ? err.message : "update failed");
+      }
+      void renderOverview(container);
+    })();
+  });
+  return el("div", { style: "margin-bottom:10px" }, [
+    el("div", { className: "row gap" }, [
+      el("span", { className: "dim small" }, "Execution mode"),
+      select,
+      el("span", { className: "dim small" }, mode === "manual" ? `${selectedCount} task(s) selected` : "full workflow"),
+      el("a", { href: "#/tasks", className: "btn btn-sm" }, "Choose tasks"),
+    ]),
   ]);
 }
 

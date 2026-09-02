@@ -12,6 +12,15 @@ export const DEFAULT_HEARTBEAT_MS = 60 * 1000;
 
 export type TaskStatus = "pending" | "running" | "complete" | "failed" | "skipped";
 
+export type ExecutionMode = "auto" | "manual";
+export type SelectionScope = "single" | "range" | "list";
+
+export interface TaskSelection {
+  mode: ExecutionMode;
+  scope?: SelectionScope;
+  taskIds: string[];
+}
+
 export interface TaskRecord {
   taskId: string;
   status: TaskStatus;
@@ -44,6 +53,7 @@ export interface WorkflowState {
   tasks: Record<string, TaskRecord>;
   blockers: string[];
   auditLog: AuditEvent[];
+  selection?: TaskSelection;
 }
 
 // ─── Harness adapter interface ────────────────────────────────────────────────
@@ -149,6 +159,9 @@ export interface EngineOptions {
    * Default: `feat(forge-engine): complete task {taskId} - {taskTitle}`.
    */
   commitMessageTemplate?: string;
+  executionMode?: ExecutionMode;
+  selectionScope?: SelectionScope;
+  selectedTaskIds?: string[];
   pauseRequested: boolean;
   /**
    * In-process stop flag (e.g. set by SIGINT/SIGTERM handlers). The engine

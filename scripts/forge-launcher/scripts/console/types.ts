@@ -42,6 +42,7 @@ export interface WorkflowState {
   currentPhase?: string;
   tasks: Record<string, TaskRecord>;
   blockers: string[];
+  selection?: { mode: ExecutionMode; scope?: SelectionScope; taskIds: string[] };
 }
 
 export interface ManifestTask {

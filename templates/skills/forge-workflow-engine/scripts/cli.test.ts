@@ -107,3 +107,23 @@ test("remainingTaskCount counts leftover 'running' tasks (crash recovery) as rem
 
   assert.equal(remainingTaskCount(manifestPath, statePath), 2);
 });
+
+test("remainingTaskCount can be limited to a selected task set", () => {
+  const root = mkdtempSync(join(tmpdir(), "forge-remaining4-"));
+  mkdirSync(join(root, "docs"), { recursive: true });
+  const manifestPath = join(root, "docs", "EXECUTION-MANIFEST.json");
+  writeFileSync(manifestPath, JSON.stringify({
+    version: "1.0",
+    phases: [{ id: "A", title: "A", tasks: [{ id: "A.1" }, { id: "A.2" }, { id: "A.3" }] }],
+  }));
+  const statePath = join(root, "docs", "WORKFLOW-STATE.json");
+  writeFileSync(statePath, JSON.stringify({
+    tasks: {
+      "A.1": { taskId: "A.1", status: "complete" },
+      "A.2": { taskId: "A.2", status: "pending" },
+      "A.3": { taskId: "A.3", status: "pending" },
+    },
+  }));
+
+  assert.equal(remainingTaskCount(manifestPath, statePath, ["A.1", "A.2"]), 1);
+});

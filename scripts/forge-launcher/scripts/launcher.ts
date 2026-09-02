@@ -67,6 +67,9 @@ interface LauncherState {
     keepAlive: boolean;
     attach: string;
     autoCommit: boolean;
+    executionMode: "auto" | "manual";
+    selectionScope?: "single" | "range" | "list";
+    selectedTaskIds: string[];
   };
 }
 
@@ -93,6 +96,9 @@ const state: LauncherState = {
     keepAlive: envFlag("FORGE_ENGINE_ATTACH"),
     attach: process.env.FORGE_ENGINE_ATTACH_URL ?? "",
     autoCommit: process.env.FORGE_ENGINE_AUTO_COMMIT !== "0",
+    executionMode: "auto",
+    selectionScope: undefined,
+    selectedTaskIds: [],
   },
 };
 
@@ -587,6 +593,11 @@ function engineRunArgs(): string[] {
   if (cfg.keepAlive) args.push("--keep-alive");
   if (cfg.attach) args.push("--attach", cfg.attach);
   if (cfg.autoCommit === false) args.push("--no-auto-commit");
+  if (cfg.executionMode === "manual") {
+    args.push("--execution-mode", "manual");
+    if (cfg.selectionScope) args.push("--selection-scope", cfg.selectionScope);
+    if (cfg.selectedTaskIds.length > 0) args.push("--selected-tasks", cfg.selectedTaskIds.join(","));
+  }
   args.push("--yes");
   return args;
 }
@@ -1364,6 +1375,13 @@ function setupStateForRepo(repoDir: string): void {
   state.engineConfig.keepAlive = envFlagOrUndefined("FORGE_ENGINE_ATTACH") ?? persisted?.keepAlive ?? false;
   state.engineConfig.attach = process.env.FORGE_ENGINE_ATTACH_URL ?? persisted?.attach ?? "";
   state.engineConfig.autoCommit = envFlagOrUndefined("FORGE_ENGINE_AUTO_COMMIT") ?? persisted?.autoCommit ?? true;
+  state.engineConfig.executionMode = persisted?.executionMode === "manual" ? "manual" : "auto";
+  state.engineConfig.selectionScope = persisted?.selectionScope === "single" || persisted?.selectionScope === "range" || persisted?.selectionScope === "list"
+    ? persisted.selectionScope
+    : undefined;
+  state.engineConfig.selectedTaskIds = Array.isArray(persisted?.selectedTaskIds)
+    ? persisted!.selectedTaskIds.filter((id): id is string => typeof id === "string" && id.trim().length > 0)
+    : [];
 }
 
 function readEngineState(): ResumeEngineState | null {
