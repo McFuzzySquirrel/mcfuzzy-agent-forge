@@ -4,6 +4,15 @@ Detailed release and change notes for MyForge.
 
 ---
 
+## September 2026 - v3.47
+
+### Preserve provider-qualified OpenCode model IDs
+
+- The OpenCode workflow adapter now passes provider-qualified model IDs (for example, `github-copilot/gpt-5.6-luna`) unchanged to `opencode run`.
+- Added regression coverage for model IDs containing a provider prefix.
+
+---
+
 ## September 2026 - v3.46
 
 ### Live model inventory and agent-level model overrides
