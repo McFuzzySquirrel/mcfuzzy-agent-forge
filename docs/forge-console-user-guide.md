@@ -42,10 +42,11 @@ If you are creating a repo from the browser, the wizard collects:
 - the **parent directory**,
 - the initial **idea**,
 - optionally an **existing PRD** and **research/seed documents** — browse a file
-  picker or type absolute paths (comma-separated for multiple). Picked files can
-  be `.md`, `.txt`, `.pdf`, or `.docx`; they are copied to `docs/PRD.md` /
+  picker or type absolute paths (comma-separated for multiple research files).
+  Existing PRDs must be `.md` or `.txt`; research/seed files may be `.md`,
+  `.txt`, `.pdf`, or `.docx`. They are copied to `docs/PRD.md` /
   `docs/research/` and inform the PRD build,
-- and whether the PRD should be **drafted automatically** after creation.
+- and whether setup should run automatically after creation (draft the PRD and generate the agent team).
 - **Concurrency (parallel agents)** (optional): the number of agents to run in
   parallel. Leave blank to use the engine default or adjust it later from the
   Overview Controls panel.
@@ -81,6 +82,26 @@ The console polls for state changes and updates the button label as each stage
 completes. When a detached step finishes or fails, Overview keeps the result
 visible and links you straight to **Logs**.
 
+To use MyForge with an application that already exists, open **Projects** and
+choose **Bootstrap an existing repo**. The folder must be a Git repository;
+enable **Initialize git if needed** explicitly for a non-Git folder. Existing
+application files are preserved, and Forge files are overwritten only when
+**Overwrite existing Forge files** is selected.
+
+After a build completes, use **Add a feature** on Overview. This runs
+`forge-build-feature-prd` against the existing codebase and team, writes an
+additive document under `docs/features/`, and leaves the original PRD intact.
+Choose **Prepare increment** to update affected agents and reconcile the manifest,
+or enable **Run new feature tasks** to execute only tasks emitted by that feature.
+The Overview reconciliation panel lists preserved, new, changed, and removed task
+IDs. Changed completed tasks are preserved but flagged for review.
+
+For a complete increment, use **Run Feature Increment**. The launcher performs
+Feature PRD authoring, an affected-team update, and manifest compilation. It
+then stops for review or selects only the new feature task IDs for execution.
+Stable task IDs preserve completed work; new tasks start pending, changed
+contracts are called out for review, and removed tasks are not runnable.
+
 ---
 
 ## 4. Monitor a build in the main views
@@ -89,7 +110,7 @@ Once the build starts, switch between the views to follow the work:
 
 - **Board**: a live kanban view for tasks in To Do, In Progress, Done, and Failed.
 - **Tasks**: a sortable, filterable task table with a detail drawer for each task.
-- **Logs**: the engine log tail plus the live audit event stream.
+- **Logs**: the engine and authoring log tail plus the live audit event stream.
 - **Plan & Team**: the project documents and the generated agent/skill files.
   Documents open in a detail pane with an **Open externally** button; skills are
   shown as cards grouped into **Forge skills** and **Project skills**.
@@ -98,9 +119,15 @@ Once the build starts, switch between the views to follow the work:
 
 The most useful combination for day-to-day work is usually Overview + Board + Logs.
 
+Authoring lifecycle records use the `FORGE_EVENT {json}` prefix in
+`docs/engine-run.log` and are also sent as `authoring` SSE events. Ordinary
+process output remains unchanged and continues as `log` events, preserving
+plain log tails and compatibility with older clients. Failed stages leave both
+the lifecycle failure record and the command output in the same log.
+
 ---
 
-## 5. Control a running build
+## 5. Prepare and control a build
 
 The Overview controls panel offers the same actions you would otherwise issue from the CLI:
 
@@ -108,21 +135,40 @@ The Overview controls panel offers the same actions you would otherwise issue fr
 - **Stop**: terminate the running engine.
 - **Resume**: continue the run from the saved state.
 - **Replay**: retry a failed task.
-- **Build mode**: once the manifest exists, choose **auto** to run the full
+- **Manual build**: before a manifest exists, prevent the team → build step from
+  starting the full workflow. The pipeline action becomes **Create manifest**.
+- **Build mode**: after the manifest exists, choose **auto** to run the full
   workflow, or **manual** to run only the saved task selection from the Tasks
-  view.
+  view. Manual mode requires at least one selected task.
 - **Auto-commit after each task**: toggles one-commit-per-task git history (on by default).
 - **Concurrency (parallel agents)**: sets how many agents the engine runs in parallel. Enter a positive integer (e.g. `3`) and click **Set**; enter `0` to return to the engine default. The setting is saved to `docs/engine-config.json` and takes effect on the next Run or Resume.
+- **Reset changed tasks for review**: after feature reconciliation, resets completed or skipped tasks whose contracts changed back to pending. Review the changed task IDs before using this action.
 - **Launch \<harness\> CLI**: opens the project's harness CLI (opencode/copilot/claude) in a new terminal from the project folder, so you can watch the live run and take over manually. Also available on the Tasks header.
 
-If you want a targeted run before the first build starts, enable the **Manual
-build** checkbox in the Overview pipeline card and click **Create manifest**.
-Then use the checkboxes and range picker in **Tasks**, save the selection,
-switch the Overview **Controls** panel to **manual**, and click **Run selected**.
+For a targeted run before the first build starts, enable the **Manual build**
+checkbox in the Overview pipeline card and click **Create manifest**. The
+manifest is created without starting the engine. Then use the checkboxes or
+range picker in **Tasks**, click **Save selection**, switch the Overview
+**Controls** panel to **manual**, and click **Run selected**. The engine expands
+selected tasks to include unmet dependencies while leaving unselected tasks
+untouched.
 
 ---
 
-## 6. Tune task timeouts
+## 6. Review incremental changes
+
+After a project has a PRD and agent team, **Add a feature** on Overview authors
+an additive Feature PRD under `docs/features/`. It does not replace the
+original PRD or start the engine. **Run Feature Increment** prepares the
+affected team and recompiles the manifest; enable **Run the workflow after
+preparing** only when the new feature tasks should run immediately.
+
+The Manifest panel shows preserved, new, changed, and removed task IDs. Stable
+task IDs preserve completed work. Review changed contracts, use **Reset changed
+tasks for review** when those tasks need to run again, and select new pending
+tasks in **Tasks** before a targeted run.
+
+## 7. Tune task timeouts
 
 The console can edit task timeouts without leaving the UI:
 
@@ -134,17 +180,22 @@ You can also set the same timeout for every task at once from the Tasks header o
 
 ---
 
-## 7. Switch between projects
+## 8. Switch between projects
 
 If you are working across several repos, use the **Projects** view or the project picker to switch contexts. This keeps the current workspace and run state separate while preserving your recent-project history.
 
 ---
 
-## 8. Troubleshoot common issues
+## 9. Troubleshoot common issues
 
 - If the page does not open, check the terminal output for the local URL and try opening it manually.
 - If a build does not advance, confirm the current stage in Overview and look for blockers in the Logs view.
 - If a task keeps failing, bump its timeout and replay it.
+- If **Run selected** is disabled, switch to **Tasks**, select one or more
+  tasks, and click **Save selection**.
+- If a feature increment reports changed tasks, review the reconciliation in
+  Manifest before running; reset changed tasks only when they should execute
+  again.
 - If you want to inspect the underlying documents, open the Plan & Team view or read the files in the repo directly.
 
 For more detail on the console’s architecture and capabilities, see [forge-console.md](forge-console.md).

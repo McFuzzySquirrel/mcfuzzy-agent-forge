@@ -55,6 +55,16 @@ test("bootstrap adds gitignore entries without duplicating existing ones", async
   assert.equal(lines.filter((l) => l === "node_modules/").length, 1);
 });
 
+test("bootstrap writes progress to the repository-local Console log", async () => {
+  const target = tmpDir();
+  fs.mkdirSync(path.join(target, ".git"));
+  await bootstrap({ targetDir: target, harness: "agents", force: true, nonInteractive: true });
+
+  const log = path.join(target, "docs", "engine-run.log");
+  assert.ok(fs.existsSync(log));
+  assert.match(fs.readFileSync(log, "utf8"), /Bootstrap complete/);
+});
+
 test("expandPath expands ~, ~/..., $VAR and ${VAR}", () => {
   assert.equal(expandPath("~"), os.homedir());
   assert.equal(expandPath("~/x"), path.join(os.homedir(), "x"));

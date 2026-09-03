@@ -125,6 +125,40 @@ export function setAutoCommit(p: RepoPaths, enabled: boolean): { ok: boolean; me
   return { ok: true, message: `Auto-commit ${enabled ? "enabled" : "disabled"}.` };
 }
 
+/** Reset completed tasks whose contract changed during manifest reconciliation. */
+export function resetChangedCompletedTasks(p: RepoPaths): { ok: boolean; message: string; affected: number; taskIds: string[] } {
+  const manifest = loadManifest(p);
+  const state = loadState(p);
+  const changed = new Set(manifest?.reconciliation?.changedTaskIds ?? []);
+  if (!manifest || !state) return { ok: false, message: "Manifest and workflow state are required.", affected: 0, taskIds: [] };
+  const taskIds: string[] = [];
+  for (const id of changed) {
+    const record = state.tasks?.[id];
+    if (record && (record.status === "complete" || record.status === "skipped")) {
+      record.status = "pending";
+      delete record.startedAt;
+      delete record.completedAt;
+      delete record.errorMessage;
+      delete record.artifactId;
+      record.outputFiles = [];
+      taskIds.push(id);
+    }
+  }
+  if (taskIds.length) {
+    state.lastUpdatedAt = new Date().toISOString();
+    saveState(p, state);
+  }
+  return { ok: true, affected: taskIds.length, taskIds, message: taskIds.length ? `Reset ${taskIds.length} changed completed task(s) to pending.` : "No changed completed tasks needed reset." };
+}
+
+export function authoringEvents(p: RepoPaths): Record<string, unknown>[] {
+  const raw = readText(p.authoringEventsPath);
+  if (!raw) return [];
+  return raw.split("\n").filter(Boolean).flatMap((line) => {
+    try { const value = JSON.parse(line); return value && typeof value === "object" ? [value as Record<string, unknown>] : []; } catch { return []; }
+  });
+}
+
 /** Persists the max-parallelism (concurrency) setting in docs/engine-config.json. */
 export function setConcurrency(p: RepoPaths, value: number): { ok: boolean; message: string } {
   const existing = loadEngineConfig(p.repoRoot);
@@ -293,6 +327,7 @@ export function summary(p: RepoPaths): Summary {
       granularity: manifest.granularity,
       phases: manifest.phases.length,
       tasks: taskCount,
+      reconciliation: manifest.reconciliation,
     };
   }
 
@@ -732,6 +767,36 @@ function resolveJobOutcome(job: BackgroundJob): { status: BackgroundJob["status"
     return { status: "complete", message: "Project creation finished." };
   }
 
+  if (job.type === "bootstrap") {
+    return looksLikeForgeRepo(job.repoPath)
+      ? { status: "complete", message: "Repository bootstrap finished." }
+      : { status: "failed", message: "Bootstrap exited before creating a forge repo." };
+  }
+
+  if (job.type === "feature-prd") {
+    const p = repoPaths(job.repoPath);
+    return fs.existsSync(p.featuresDir) && listMarkdown(p.featuresDir).length > 0
+      ? { status: "complete", message: "Feature PRD authoring completed." }
+      : { status: "failed", message: "Feature PRD exited without producing docs/features/*.md." };
+  }
+
+  if (job.type === "feature-increment") {
+    const p = repoPaths(job.repoPath);
+    if (!fs.existsSync(p.featuresDir) || listMarkdown(p.featuresDir).length === 0) {
+      return { status: "failed", message: "Feature increment exited without producing docs/features/*.md." };
+    }
+    if (!fs.existsSync(p.manifestPath)) {
+      return { status: "failed", message: "Feature increment exited without producing an execution manifest." };
+    }
+    if (job.run) {
+      const state = loadState(p);
+      if (state?.status === "complete") return { status: "complete", message: "Feature increment and build completed." };
+      if (state?.status === "paused") return { status: "paused", message: "Feature increment prepared and build paused." };
+      return { status: "failed", message: "Feature increment build exited before reaching a terminal state." };
+    }
+    return { status: "complete", message: "Feature increment prepared; manifest compiled." };
+  }
+
   if (!looksLikeForgeRepo(job.repoPath)) {
     return { status: "failed", message: "The project folder is not a forge repo." };
   }
@@ -742,6 +807,10 @@ function resolveJobOutcome(job: BackgroundJob): { status: BackgroundJob["status"
       return hasProjectPrd(p)
         ? { status: "complete", message: "PRD draft completed." }
         : { status: "failed", message: "PRD draft exited without producing a PRD." };
+    case "draft-existing-prd":
+      return hasProjectPrd(p)
+        ? { status: "complete", message: "Existing-project PRD authoring completed." }
+        : { status: "failed", message: "Existing-project PRD authoring exited without producing a PRD." };
     case "draft-team":
       return hasProjectTeam(job.repoPath)
         ? { status: "complete", message: "Agent team generation completed." }

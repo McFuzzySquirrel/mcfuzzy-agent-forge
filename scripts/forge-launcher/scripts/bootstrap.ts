@@ -1,6 +1,6 @@
 import fs from "node:fs";
 import path from "node:path";
-import { ok, out, warn } from "./format.ts";
+import { ok, out, runCommand, warn } from "./format.ts";
 import { prompt, promptYesNo, prompts } from "./prompts.ts";
 import { resolveResources } from "./resources.ts";
 
@@ -17,9 +17,15 @@ export interface BootstrapOptions {
   targetDir: string;
   harness?: Harness;
   force?: boolean;
+  initGit?: boolean;
   nonInteractive?: boolean;
   /** When set, all progress output is appended here instead of stdout. */
   logFile?: string;
+}
+
+/** Canonical log consumed by the Console for work performed in a repository. */
+export function repositoryLogFile(repoDir: string): string {
+  return path.join(path.resolve(repoDir), "docs", "engine-run.log");
 }
 
 function makeLogger(logFile?: string) {
@@ -32,12 +38,13 @@ function makeLogger(logFile?: string) {
     };
   }
   fs.mkdirSync(path.dirname(logFile), { recursive: true });
-  const stream = fs.createWriteStream(logFile, { flags: "a" });
   return {
-    out: (l: string) => stream.write(l + "\n"),
-    ok: (l: string) => stream.write(`✔  ${l}\n`),
-    warn: (l: string) => stream.write(`⚠  ${l}\n`),
-    end: () => stream.end(),
+    // Synchronous appends keep short-lived bootstrap jobs observable as soon
+    // as they finish; the Console poller can read each line immediately.
+    out: (l: string) => fs.appendFileSync(logFile, l + "\n"),
+    ok: (l: string) => fs.appendFileSync(logFile, `✔  ${l}\n`),
+    warn: (l: string) => fs.appendFileSync(logFile, `⚠  ${l}\n`),
+    end: () => {},
   };
 }
 
@@ -86,9 +93,16 @@ export async function bootstrap(opts: BootstrapOptions): Promise<number> {
   if (!fs.existsSync(targetDir) || !fs.statSync(targetDir).isDirectory()) {
     throw new Error(`Error: Target directory does not exist: ${targetDir}`);
   }
+  if (!fs.existsSync(path.join(targetDir, ".git"))) {
+    if (!opts.initGit) throw new Error(`Error: Target directory is not a git repository: ${targetDir} (use --init-git to initialize it)`);
+    const result = await runCommand("git", ["init"], { cwd: targetDir, capture: true });
+    if (result.code !== 0) throw new Error(`Error: git init failed: ${result.stderr || result.stdout}`);
+  }
 
   const { templatesDir, docsDir, usingBundled } = resolveResources();
-  const log = makeLogger(opts.logFile);
+  // Keep bootstrap output beside the artifacts it is preparing. This also makes
+  // it visible to the Console's existing docs/engine-run.log poller.
+  const log = makeLogger(opts.logFile ?? repositoryLogFile(targetDir));
 
   try {
     if (usingBundled) log.out("  (using bundled resources)");
@@ -184,10 +198,12 @@ export async function bootstrapCli(args: string[]): Promise<number> {
   let targetDir = "";
   let harness: Harness = "agents";
   let force = false;
+  let initGit = false;
   let i = 0;
   for (; i < args.length; i++) {
     const a = args[i];
     if (a === "--force") force = true;
+    else if (a === "--init-git") initGit = true;
     else if (a === "--harness") {
       const v = args[++i];
       if (!v || !(v in HARNESS_ROOTS)) {
@@ -206,5 +222,5 @@ export async function bootstrapCli(args: string[]): Promise<number> {
     }
     targetDir = await prompt("Target repository path [.]", ".");
   }
-  return bootstrap({ targetDir: targetDir || ".", harness, force, nonInteractive: prompts.nonInteractive });
+  return bootstrap({ targetDir: targetDir || ".", harness, force, initGit, nonInteractive: prompts.nonInteractive });
 }

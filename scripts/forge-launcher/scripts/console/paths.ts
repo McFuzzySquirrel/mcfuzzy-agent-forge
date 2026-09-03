@@ -83,6 +83,7 @@ export interface RepoPaths {
   controlPath: string;
   pidPath: string;
   logPath: string;
+  authoringEventsPath: string;
   artifactsDir: string;
   engineConfigPath: string;
   ideaPath: string;
@@ -93,9 +94,10 @@ export interface RepoPaths {
 }
 
 export function repoPaths(repoRoot: string): RepoPaths {
-  const docs = path.join(repoRoot, "docs");
+  const root = path.resolve(repoRoot);
+  const docs = path.join(root, "docs");
   return {
-    repoRoot,
+    repoRoot: root,
     manifestPath: path.join(docs, "EXECUTION-MANIFEST.json"),
     statePath: path.join(docs, "WORKFLOW-STATE.json"),
     auditPath: path.join(docs, "EXECUTION-AUDIT.jsonl"),
@@ -103,6 +105,7 @@ export function repoPaths(repoRoot: string): RepoPaths {
     controlPath: path.join(docs, "engine-control.json"),
     pidPath: path.join(docs, "engine.pid"),
     logPath: path.join(docs, "engine-run.log"),
+    authoringEventsPath: path.join(docs, "AUTHORING-EVENTS.jsonl"),
     artifactsDir: path.join(docs, "artifacts"),
     engineConfigPath: path.join(docs, "engine-config.json"),
     ideaPath: path.join(docs, "IDEA.md"),

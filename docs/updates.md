@@ -4,6 +4,55 @@ Detailed release and change notes for MyForge.
 
 ---
 
+## September 2026 - v3.45
+
+### Forge Console: synchronize the user guide and Quick help
+
+- Refreshed the in-console user guide to match the current Console workflow, including manual manifest preparation, targeted task selection, dependency expansion, incremental feature work, reconciliation review, task timeouts, concurrency, auto-commit, and background job behavior.
+- Corrected the New Project document guidance so existing PRDs are limited to the formats accepted by the PRD picker, while research/seed documents retain their broader format support.
+- Expanded the Help dialog's Quick help with the current build controls, incremental-work flow, and updated view descriptions. The User guide tab continues to render the canonical `docs/forge-console-user-guide.md` source.
+
+---
+
+## September 2026 - v3.44
+
+### Reviewable authoring and incremental execution controls
+
+- Authoring lifecycle events are persisted as structured JSON Lines in `docs/AUTHORING-EVENTS.jsonl`. The existing `FORGE_EVENT` records in `docs/engine-run.log` and Console SSE `authoring` stream remain compatible with existing consumers.
+- The Console exposes `POST /api/tasks/reset-changed` and a matching Overview control to reset completed or skipped tasks listed in manifest reconciliation's `changedTaskIds` back to pending after review. Task output, timestamps, errors, and artifact references are cleared so the task can execute against its revised contract.
+- Added `npm run check:version`, an automated guard that verifies README's Latest version matches the first release heading in `docs/updates.md`, with unit coverage for matching, drift, and missing metadata.
+
+---
+
+## September 2026 - v3.43
+
+### Increment authoring observability and reconciliation guidance
+
+- Launcher feature authoring emits structured `FORGE_EVENT` lifecycle records while preserving ordinary process-log lines.
+- Console SSE exposes lifecycle records as `authoring` events alongside the existing `log` stream.
+- Overview shows reconciliation counts, changed task IDs, and the next action for new pending feature tasks.
+- Added coverage for authoring SSE/plain-log compatibility and reconciliation projection.
+- Documented Feature Increment Mode review and recovery actions.
+
+---
+
+## September 2026 - v3.42
+
+### Existing repository bootstrap and incremental project work
+
+- The Forge Console Home and Projects views can bootstrap MyForge into an existing repository with explicit harness, overwrite, and Git initialization controls.
+- Existing repositories can author context-aware project PRDs and additive Feature PRDs through `forge-build-feature-prd`, including after a completed build.
+- Manifest recompilation preserves task state by stable task ID and adds new feature tasks as pending.
+- Bootstrap and authoring output is written to the repository's `docs/engine-run.log` for live Console streaming.
+- Linux users may install `xdg-utils` for automatic browser/document opening; manual URL and path fallbacks remain available.
+- Feature increment runs are scoped to their newly emitted task IDs, reject missing Feature PRD output, and expose reconciliation details for review.
+- `forge-launcher draft-prd` now authors from an existing repository when `docs/IDEA.md` is absent, using source, docs, tests, manifests, and history as context.
+- Added `forge-launcher feature-increment --prompt ... [--run]` to author a feature, invoke Feature Increment Mode, reconcile the manifest, and optionally run it.
+- Monolithic PRD repositories may add `docs/features/*.md`; those tasks compile additively after existing PRD phases. Reconciliation now reports changed task contracts as well as added and removed IDs.
+- Authoring remains a launcher job and its process output is streamed through the existing repository log and Console SSE endpoint. See [ADR-037](adr/037-existing-repository-incremental-authoring.md).
+
+---
+
 ## September 2026 - v3.41
 
 ### Forge Console: elapsed time now reflects completed task work

@@ -25,6 +25,7 @@ import {
   markTaskFailed,
   markTaskSkipped,
   markTaskStarted,
+  reconcileState,
   saveState,
   setCurrentPhase,
   setSelection,
@@ -110,6 +111,32 @@ function flattenManifest(manifest: ExecutionManifest): FlatTask[] {
   return manifest.phases.flatMap((phase, phaseIndex) =>
     phase.tasks.map((task) => ({ phaseId: phase.id, phaseIndex, task })),
   );
+}
+
+/** Validate the graph before execution so malformed manifests fail clearly. */
+export function validateManifestDependencies(manifest: ExecutionManifest): string[] {
+  const owners = new Map<string, string>();
+  const orphanWarnings: string[] = [];
+  for (const phase of manifest.phases) {
+    for (const task of phase.tasks) {
+      const previous = owners.get(task.id);
+      if (previous) throw new Error(`Duplicate global task id '${task.id}' in phases '${previous}' and '${phase.id}'.`);
+      owners.set(task.id, phase.id);
+    }
+  }
+  for (const phase of manifest.phases) {
+    for (const phaseDependency of phase.dependencies ?? []) {
+      if (!manifest.phases.some((candidate) => candidate.id === phaseDependency)) {
+        orphanWarnings.push(`Phase '${phase.id}' depends on orphan phase '${phaseDependency}'.`);
+      }
+    }
+    for (const task of phase.tasks) {
+      for (const dependency of task.dependencies ?? []) {
+        if (!owners.has(dependency)) orphanWarnings.push(`Task '${task.id}' depends on orphan task '${dependency}'.`);
+      }
+    }
+  }
+  return orphanWarnings;
 }
 
 function scopedTaskSet(selection: TaskSelection | undefined): Set<string> | null {
@@ -475,9 +502,21 @@ async function executeTask(
 
 export async function runEngine(opts: EngineOptions): Promise<WorkflowState> {
   const manifest = loadManifest(opts.manifestPath);
+  const graphWarnings = validateManifestDependencies(manifest);
+  for (const warning of graphWarnings) console.warn(`[engine] Warning: ${warning}`);
 
   let state = loadState(opts.statePath)
     ?? initState(manifest, opts.manifestPath, opts.harness.name);
+  const reconciledState = reconcileState(state, manifest);
+  const wasReconciled = reconciledState !== state;
+  state = reconciledState;
+  if (wasReconciled) {
+    saveState(opts.statePath, state);
+    writeAuditEvent(opts.auditPath, {
+      timestamp: new Date().toISOString(), action: "state.reconciled", runId: state.runId,
+      note: `manifest=${manifest.generatedAt}`,
+    });
+  }
   const selection = resolveSelection(manifest, state, opts);
   state = setSelection(state, selection);
 

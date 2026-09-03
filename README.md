@@ -7,7 +7,7 @@
 
 > MyForge turns an idea into a reviewed PRD, a specialist agent team, and an autonomous build.
 
-**Latest: v3.41** — see [docs/updates.md](docs/updates.md) for release notes.
+**Latest: v3.45** — see [docs/updates.md](docs/updates.md) for release notes.
 
 MyForge is a PRD-first workflow for turning product requirements into working software. It combines structured planning, agent-based implementation, and execution orchestration in one path so a project can move from concept to build without losing the review checkpoints that matter.
 
@@ -17,6 +17,7 @@ MyForge is a PRD-first workflow for turning product requirements into working so
 - Generates a specialist agent team from the PRD instead of relying on a single generic assistant.
 - Supports both guided, interactive execution and unattended "dark orchestration" runs.
 - Includes a local web console for monitoring and controlling builds.
+- Can bootstrap MyForge into an existing Git repository without replacing its application code.
 
 
 
@@ -51,7 +52,7 @@ git clone https://github.com/McFuzzySquirrel/mcfuzzy-agent-forge.git
 cd mcfuzzy-agent-forge/scripts/forge-launcher
 npm install
 npm pack
-npm install -g ./forge-launcher-1.0.0-beta.3.tgz
+npm install -g ./forge-launcher-1.0.0-beta.4.tgz
 ```
 
 Once installed, run:
@@ -60,7 +61,7 @@ Once installed, run:
 forge-launcher
 ```
 
-The launcher walks you through repo bootstrap, idea capture, PRD drafting, team generation, and build execution.
+The launcher walks you through repo bootstrap, idea capture, PRD drafting, team generation, and build execution. The Console also supports bootstrapping an existing repository and adding Feature PRDs to completed projects.
 
 For the manual prompting flow and the CLI’s expected prompts, see [docs/prompt-playbook.md](docs/prompt-playbook.md). For the latest changes and release notes, see [docs/updates.md](docs/updates.md).
 

@@ -32,6 +32,12 @@ export function renderHome(container: HTMLElement): void {
         "#/projects",
         "Open existing",
       ),
+      actionCard(
+        "Bootstrap an existing repo",
+        "Add MyForge's harness and skills to an application you already have, without replacing its code.",
+        "#/projects?bootstrap=1",
+        "Bootstrap repo",
+      ),
     ]),
   );
 

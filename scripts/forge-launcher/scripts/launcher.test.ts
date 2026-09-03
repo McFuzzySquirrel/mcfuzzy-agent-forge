@@ -5,7 +5,15 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import { buildTeamPrompt, defaultEngineHarness, engineDetachedCommand, headlessSkillMsg } from "./launcher.ts";
+import {
+  buildTeamPrompt,
+  compareFeatureIncrementFiles,
+  defaultEngineHarness,
+  engineDetachedCommand,
+  featureTaskIds,
+  headlessSkillMsg,
+  snapshotFeatureIncrementFiles,
+} from "./launcher.ts";
 import { spawnDetached } from "./format.ts";
 
 const CLI = fileURLToPath(new URL("./cli.ts", import.meta.url));
@@ -37,6 +45,42 @@ function runCli(args: string[], env: Record<string, string>): Promise<{ code: nu
     );
   });
 }
+
+test("feature-increment filesystem guard allows added/modified agents and excludes Forge-owned files", () => {
+  const repo = tmpDir();
+  fs.mkdirSync(path.join(repo, ".agents", "agents"), { recursive: true });
+  fs.mkdirSync(path.join(repo, ".agents", "skills", "forge-build-agent-team"), { recursive: true });
+  fs.writeFileSync(path.join(repo, ".agents", "agents", "existing.md"), "before\n");
+  fs.writeFileSync(path.join(repo, ".agents", "agents", "project-orchestrator.md"), "template\n");
+  fs.writeFileSync(path.join(repo, ".agents", "skills", "forge-build-agent-team", "SKILL.md"), "before\n");
+
+  const before = snapshotFeatureIncrementFiles(repo);
+  fs.writeFileSync(path.join(repo, ".agents", "agents", "existing.md"), "after\n");
+  fs.writeFileSync(path.join(repo, ".agents", "agents", "new-agent.md"), "new\n");
+  fs.writeFileSync(path.join(repo, ".agents", "agents", "project-orchestrator.md"), "updated template\n");
+  fs.writeFileSync(path.join(repo, ".agents", "skills", "forge-build-agent-team", "SKILL.md"), "after\n");
+
+  assert.deepEqual(compareFeatureIncrementFiles(before, repo), {
+    addedAgents: [".agents/agents/new-agent.md"],
+    modifiedAgents: [".agents/agents/existing.md"],
+    deletedAgents: [],
+    unrelatedFiles: [],
+  });
+});
+
+test("feature-increment filesystem guard reports deletions and unrelated changes", () => {
+  const repo = tmpDir();
+  fs.mkdirSync(path.join(repo, ".agents", "agents"), { recursive: true });
+  fs.writeFileSync(path.join(repo, ".agents", "agents", "existing.md"), "agent\n");
+  fs.writeFileSync(path.join(repo, "README.md"), "before\n");
+  const before = snapshotFeatureIncrementFiles(repo);
+  fs.rmSync(path.join(repo, ".agents", "agents", "existing.md"));
+  fs.writeFileSync(path.join(repo, "README.md"), "unexpected\n");
+
+  const changes = compareFeatureIncrementFiles(before, repo);
+  assert.deepEqual(changes.deletedAgents, [".agents/agents/existing.md"]);
+  assert.deepEqual(changes.unrelatedFiles, ["README.md"]);
+});
 
 test("non-interactive run with no PRD bootstraps and queues forge-auto-build-prd", async () => {
   const parent = tmpDir();
@@ -204,6 +248,47 @@ test("detached engine command resolves a runnable CLI entry", () => {
   if (import.meta.url.endsWith(".ts")) {
     assert.equal(args[0], "--import");
   }
+});
+
+test("feature-prd fails when the skill exits without a new feature document", async () => {
+  const repo = tmpDir();
+  execFileSync("git", ["init", "-q", repo]);
+  fs.mkdirSync(path.join(repo, ".agents", "skills", "forge-build-feature-prd"), { recursive: true });
+  fs.writeFileSync(path.join(repo, ".agents", "skills", "forge-build-feature-prd", "SKILL.md"), "# feature skill\n");
+
+  const result = await runCli(["feature-prd", "--repo", repo, "--prompt", "safe feature"], {
+    FORGE_RUN_WITH: "stub",
+    FORGE_STUB_NOOP: "1",
+  });
+
+  assert.equal(result.code, 1, result.out);
+  assert.match(result.out, /without creating a new non-empty/);
+});
+
+test("feature-prd accepts a newly created non-empty feature document", async () => {
+  const repo = tmpDir();
+  execFileSync("git", ["init", "-q", repo]);
+  fs.mkdirSync(path.join(repo, ".agents", "skills", "forge-build-feature-prd"), { recursive: true });
+  fs.writeFileSync(path.join(repo, ".agents", "skills", "forge-build-feature-prd", "SKILL.md"), "# feature skill\n");
+
+  const result = await runCli(["feature-prd", "--repo", repo, "--prompt", "safe feature"], {
+    FORGE_RUN_WITH: "stub",
+  });
+
+  assert.equal(result.code, 0, result.out);
+  assert.ok(fs.readFileSync(path.join(repo, "docs", "features", "stub-feature.md"), "utf8").trim());
+  const log = fs.readFileSync(path.join(repo, "docs", "engine-run.log"), "utf8");
+  const event = log.split("\n").find((line) => line.startsWith("FORGE_EVENT "));
+  assert.ok(event, "feature authoring should emit a structured lifecycle event");
+  assert.equal(JSON.parse(event!.slice("FORGE_EVENT ".length)).type, "authoring.started");
+});
+
+test("feature increment selection excludes unrelated manifest tasks", () => {
+  const selected = featureTaskIds({ phases: [
+    { id: "OLD-1", feature: "Old Feature", tasks: [{ id: "OLD-1.1" }] },
+    { id: "NEW-FEATURE-1", feature: "new-feature", tasks: [{ id: "NEW-FEATURE-1.1" }, { id: "NEW-FEATURE-1.2" }] },
+  ] }, ["new-feature"]);
+  assert.deepEqual(selected, ["NEW-FEATURE-1.1", "NEW-FEATURE-1.2"]);
 });
 
 test("headless skill command pins the repo dir with --dir", async () => {

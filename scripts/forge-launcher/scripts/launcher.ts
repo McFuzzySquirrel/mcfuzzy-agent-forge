@@ -1,15 +1,15 @@
 import fs from "node:fs";
 import { createRequire } from "node:module";
-import os from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import { bootstrap } from "./bootstrap.ts";
+import { bootstrap, repositoryLogFile } from "./bootstrap.ts";
 import { upsertProject } from "./console/paths.ts";
 import { command, fail, header, info, link, ok, out, printLogTail, runCommand, runLogged, runWithHeartbeat, spawnDetached, step, warn } from "./format.ts";
 import { detectRepoRoot, expandPath, resolveInputFile } from "./paths.ts";
 import { prompt, promptMultiline, promptPath, promptPathLoop, promptSelect, promptYesNo, prompts } from "./prompts.ts";
 import { launchCliInTerminal } from "./terminal.ts";
 import { loadEngineConfig, saveEngineConfig } from "./engine-config.ts";
+import { engineRunCli } from "./engine-run.ts";
 
 const nodeRequire = createRequire(import.meta.url);
 
@@ -103,8 +103,21 @@ const state: LauncherState = {
 };
 
 /** Single tee-log for all long-running step output during this launcher run. */
-function runLogFile(): string {
-  return path.join(os.tmpdir(), `forge-launcher-${process.pid}.log`);
+function runLogFile(repoDir = state.repoDir): string {
+  return repositoryLogFile(repoDir);
+}
+
+/** Append a machine-readable authoring lifecycle record to the same stream as
+ * process output. Consumers must ignore ordinary lines, preserving plain log
+ * streaming for terminals and older Console clients. */
+function authoringEvent(type: string, data: Record<string, unknown> = {}): void {
+  const record = { type, timestamp: new Date().toISOString(), ...data };
+  fs.mkdirSync(path.dirname(runLogFile()), { recursive: true });
+  const encoded = `${JSON.stringify(record)}\n`;
+  // Keep the human/process log and its FORGE_EVENT compatibility prefix, while
+  // giving consumers a lossless structured stream that does not need log parsing.
+  fs.appendFileSync(runLogFile(), `FORGE_EVENT ${encoded}`, "utf8");
+  fs.appendFileSync(path.join(path.dirname(runLogFile()), "AUTHORING-EVENTS.jsonl"), encoded, "utf8");
 }
 
 function runLoggedStep(
@@ -193,6 +206,97 @@ function hasGeneratedTeam(): boolean {
     .filter((f) => f.endsWith(".md") && !excluded.has(f)).length > 0;
 }
 
+const FORGE_TEMPLATE_AGENTS = new Set(["forge-team-builder.md", "project-orchestrator.md", "workflow-orchestrator.md"]);
+
+/**
+ * Filesystem snapshot used by feature-increment team generation.  This is
+ * deliberately a snapshot of the repository rather than git state: a caller
+ * may have uncommitted work, and the guard must not mistake that work for the
+ * result of the skill. Forge skills are excluded because team generation is
+ * allowed to refresh them, while template agents are excluded because they
+ * are bootstrap-owned rather than project-owned agents.
+ */
+export type FeatureIncrementSnapshot = Map<string, string>;
+
+function walkSnapshotFiles(dir: string, root: string, out: FeatureIncrementSnapshot): void {
+  if (!fs.existsSync(dir) || !fs.statSync(dir).isDirectory()) return;
+  for (const entry of fs.readdirSync(dir)) {
+    const full = path.join(dir, entry);
+    const relative = path.relative(root, full);
+    if (relative === ".git" || relative.startsWith(`.git${path.sep}`)) continue;
+    const relativePosix = relative.split(path.sep).join("/");
+    // The launcher appends its own diagnostic stream while the skill runs; it
+    // is not a project change and must not make a valid team update fail.
+    if (relativePosix === "docs/engine-run.log") continue;
+    const forgeSkillsPrefix = `${harnessRootDir()}/skills/`;
+    const projectAgentsPrefix = `${harnessRootDir()}/agents/`;
+    // Only the selected harness's Forge skills are excluded. A project's own
+    // src/skills (or another harness root) remains visible to the guard.
+    if (relativePosix.startsWith(forgeSkillsPrefix)) continue;
+    if (relativePosix.startsWith(projectAgentsPrefix) && FORGE_TEMPLATE_AGENTS.has(entry)) continue;
+    const stat = fs.statSync(full);
+    if (stat.isDirectory()) walkSnapshotFiles(full, root, out);
+    else if (stat.isFile()) out.set(relativePosix, fs.readFileSync(full, "utf8"));
+  }
+}
+
+/** Snapshot all non-Forge-owned files before a feature team update. */
+export function snapshotFeatureIncrementFiles(repoDir: string): FeatureIncrementSnapshot {
+  const snapshot: FeatureIncrementSnapshot = new Map();
+  walkSnapshotFiles(repoDir, repoDir, snapshot);
+  return snapshot;
+}
+
+export interface FeatureIncrementFileChanges {
+  addedAgents: string[];
+  modifiedAgents: string[];
+  deletedAgents: string[];
+  unrelatedFiles: string[];
+}
+
+/** Compare a feature-increment snapshot, allowing only project-agent changes. */
+export function compareFeatureIncrementFiles(
+  before: FeatureIncrementSnapshot,
+  repoDir: string,
+): FeatureIncrementFileChanges {
+  const after = snapshotFeatureIncrementFiles(repoDir);
+  const changed = new Set([...before.keys(), ...after.keys()]);
+  const result: FeatureIncrementFileChanges = { addedAgents: [], modifiedAgents: [], deletedAgents: [], unrelatedFiles: [] };
+  for (const file of [...changed].sort()) {
+    const oldValue = before.get(file);
+    const newValue = after.get(file);
+    if (oldValue === newValue) continue;
+    const isAgent = file.startsWith(`${harnessRootDir()}/agents/`) && file.endsWith(".md");
+    if (!isAgent) {
+      result.unrelatedFiles.push(file);
+    } else if (oldValue === undefined) {
+      result.addedAgents.push(file);
+    } else if (newValue === undefined) {
+      // Feature increments must preserve untouched agents; deletion is never
+      // an intended update, even though the file is project-owned.
+      result.deletedAgents.push(file);
+    } else {
+      result.modifiedAgents.push(file);
+    }
+  }
+  return result;
+}
+
+function validateFeatureIncrementFiles(before: FeatureIncrementSnapshot): boolean {
+  const changes = compareFeatureIncrementFiles(before, state.repoDir);
+  const unexpected = [...changes.deletedAgents, ...changes.unrelatedFiles];
+  if (unexpected.length === 0) {
+    if (changes.addedAgents.length || changes.modifiedAgents.length) {
+      info(`Feature increment preserved project agents; changed ${changes.addedAgents.length + changes.modifiedAgents.length} agent file(s).`);
+    }
+    return true;
+  }
+  fail("Feature increment changed files outside its intended project-agent update:");
+  for (const file of unexpected) out(`    - ${file}`);
+  warn("No team-update commit was created. Review and revert the unexpected changes before retrying.");
+  return false;
+}
+
 function prdSourceForTeam(): string {
   if (
     fs.existsSync(path.join(state.repoDir, "docs", "product-vision.md")) &&
@@ -225,6 +329,9 @@ export function buildTeamPrompt(prdSource: string, harness: HarnessName): string
  * non-functional requirements, phases) and fill any gaps before approving. */
 const PRD_HEADLESS_MSG =
   "Use docs/IDEA.md as the project idea. Headless mode: auto-proceed with default assumptions and approve the PRD. After drafting, run a PRD gap check: every major component must have clear acceptance criteria, a defined tech stack, non-functional requirements (performance, security, privacy), and implementation phases; fill any gaps before approving.";
+
+const EXISTING_PROJECT_PRD_MSG =
+  "Author the project's PRD using forge-build-prd authoring semantics, not an auto-build or implementation workflow. This is an existing repository: inspect source code, documentation, tests, package manifests, configuration, and git history as context; infer the product purpose and current capabilities. Produce docs/PRD.md as a project PRD. Headless mode: ask no questions and use explicit assumptions. Include functional requirements with acceptance criteria, technology stack, non-functional requirements (performance, security, privacy), constraints, and implementation phases. Do not implement code, generate agents, compile a manifest, or run the workflow.";
 
 /**
  * In-harness command to queue when the launcher opens the CLI (or prints
@@ -372,6 +479,14 @@ async function runStubSkill(msg: string, opts: LauncherOptions): Promise<boolean
       "",
     ].join("\n"));
     fs.appendFileSync(logFile, `[stub] wrote ${agentFile}\n`);
+    return true;
+  }
+
+  if (skillName.includes("forge-build-feature-prd")) {
+    const feature = path.join(state.repoDir, "docs", "features", "stub-feature.md");
+    fs.mkdirSync(path.dirname(feature), { recursive: true });
+    fs.writeFileSync(feature, "# Stub Feature\n\n## Functional Requirements\n- FR-1: implement the stub feature.\n");
+    fs.appendFileSync(logFile, `[stub] wrote ${feature}\n`);
     return true;
   }
 
@@ -1588,12 +1703,12 @@ export async function runDraftPrd(repoDir: string): Promise<number> {
     out("PRD already exists.");
     return 0;
   }
-  if (!fs.existsSync(path.join(repoDir, "docs", "IDEA.md"))) {
-    fail("No docs/IDEA.md found; add a project idea first.");
-    return 1;
-  }
-  out("Auto-drafting the PRD from docs/IDEA.md (headless) …");
-  const ran = await runSkillHeadless(`/forge-auto-build-prd ${PRD_HEADLESS_MSG}`, { nonInteractive: true });
+  const ideaPath = path.join(repoDir, "docs", "IDEA.md");
+  const context = fs.existsSync(ideaPath)
+    ? "Use docs/IDEA.md as the project idea."
+    : "This is an existing repository with no IDEA.md. Inspect the existing source code, docs, tests, package manifests, and git history as the project context; infer the product purpose and ask no questions.";
+  out(fs.existsSync(ideaPath) ? "Auto-drafting the PRD from docs/IDEA.md (headless) …" : "Auto-drafting a context-aware PRD from the existing repository (headless) …");
+  const ran = await runSkillHeadless(`/forge-auto-build-prd ${context} ${PRD_HEADLESS_MSG}`, { nonInteractive: true });
   if (!ran) return 1;
   await draftCommit("docs: add auto-drafted PRD");
   if (hasPrd()) {
@@ -1605,13 +1720,137 @@ export async function runDraftPrd(repoDir: string): Promise<number> {
   return 1;
 }
 
+/** Authors a project PRD from an existing repository without an IDEA.md. */
+export async function runDraftExistingPrd(repoDir: string): Promise<number> {
+  setupStateForRepo(repoDir);
+  if (hasPrd()) { out("PRD already exists."); return 0; }
+  out("Authoring a project PRD from the existing repository (headless) …");
+  const skill = "forge-build-prd";
+  const ran = await runSkillHeadless(`/${skill} ${EXISTING_PROJECT_PRD_MSG}`, { nonInteractive: true });
+  if (!ran) return 1;
+  await draftCommit("docs: add project PRD");
+  if (hasPrd()) {
+    ok("Project PRD generated.");
+    out(`    - ${link(path.join(repoDir, "docs", "PRD.md"))}`);
+    return 0;
+  }
+  await diagnoseAutoDraftFail(skill);
+  return 1;
+}
+
+/** Authors a Feature PRD through the authoring skill; workflow execution is intentionally separate. */
+export async function runFeaturePrd(repoDir: string, featurePrompt?: string): Promise<number> {
+  setupStateForRepo(repoDir);
+  authoringEvent("authoring.started", { operation: "feature-prd" });
+  const featuresDir = path.join(repoDir, "docs", "features");
+  const before = new Set(fs.existsSync(featuresDir)
+    ? fs.readdirSync(featuresDir).filter((name) => name.endsWith(".md"))
+    : []);
+  if (!featurePrompt?.trim()) {
+    if (prompts.nonInteractive) throw new Error("feature-prd requires --prompt in non-interactive mode");
+    featurePrompt = await prompt("What feature should be added?", "");
+  }
+  if (!featurePrompt.trim()) return 1;
+  const message = `/forge-build-feature-prd I want to add ${featurePrompt.trim()} to this project. Analyze the existing codebase and agent team, then produce a self-contained Feature PRD and save it under docs/features/. Do not modify the original PRD or start the workflow engine.`;
+  const ran = await runSkillHeadless(message, { nonInteractive: true });
+  if (!ran) {
+    authoringEvent("authoring.failed", { operation: "feature-prd", stage: "authoring" });
+    return 1;
+  }
+  const added = fs.existsSync(featuresDir)
+    ? fs.readdirSync(featuresDir)
+      .filter((name) => name.endsWith(".md") && !before.has(name))
+      .filter((name) => fs.statSync(path.join(featuresDir, name)).isFile())
+      .filter((name) => fs.readFileSync(path.join(featuresDir, name), "utf8").trim().length > 0)
+    : [];
+  if (added.length === 0) {
+    fail("Feature PRD authoring exited without creating a new non-empty docs/features/*.md file.");
+    await diagnoseAutoDraftFail("forge-build-feature-prd");
+    authoringEvent("authoring.failed", { operation: "feature-prd", stage: "validation" });
+    return 1;
+  }
+  await draftCommit("docs: add feature PRD");
+  ok(`Feature PRD generated: ${added.join(", ")}`);
+  authoringEvent("authoring.completed", { operation: "feature-prd", features: added });
+  return 0;
+}
+
+/** Author a feature, update only affected team members, compile, and optionally run it. */
+export async function runFeatureIncrement(repoDir: string, featurePrompt: string | undefined, run = false): Promise<number> {
+  setupStateForRepo(repoDir);
+  authoringEvent("authoring.started", { operation: "feature-increment", run });
+  const featuresDir = path.join(repoDir, "docs", "features");
+  const beforeFeatures = new Set(fs.existsSync(featuresDir)
+    ? fs.readdirSync(featuresDir).filter((name) => name.endsWith(".md"))
+    : []);
+  const featureCode = await runFeaturePrd(repoDir, featurePrompt);
+  if (featureCode !== 0) { authoringEvent("authoring.failed", { operation: "feature-increment", stage: "feature-prd", code: featureCode }); return featureCode; }
+  authoringEvent("authoring.stage.completed", { operation: "feature-increment", stage: "feature-prd" });
+  const teamCode = await runDraftTeam(repoDir, true);
+  if (teamCode !== 0) { authoringEvent("authoring.failed", { operation: "feature-increment", stage: "team", code: teamCode }); return teamCode; }
+  authoringEvent("authoring.stage.completed", { operation: "feature-increment", stage: "team" });
+  const manifestCode = await runCompileManifest(repoDir);
+  if (manifestCode !== 0) { authoringEvent("authoring.failed", { operation: "feature-increment", stage: "manifest", code: manifestCode }); return manifestCode; }
+  authoringEvent("authoring.stage.completed", { operation: "feature-increment", stage: "manifest" });
+  if (!run) {
+    out("Feature increment prepared. Review the manifest, then run: forge-launcher engine-run --repo \"" + path.resolve(repoDir) + "\" --yes");
+    authoringEvent("authoring.completed", { operation: "feature-increment", run: false });
+    return 0;
+  }
+  const newFeatures = fs.existsSync(featuresDir)
+    ? fs.readdirSync(featuresDir).filter((name) => name.endsWith(".md") && !beforeFeatures.has(name))
+    : [];
+  const code = await engineRunCliForIncrement(repoDir, newFeatures.map((name) => path.basename(name, ".md")));
+  authoringEvent(code === 0 ? "authoring.completed" : "authoring.failed", { operation: "feature-increment", run: true, code });
+  return code;
+}
+
+async function engineRunCliForIncrement(repoDir: string, featureNames: string[]): Promise<number> {
+  const manifestPath = path.join(repoDir, "docs", "EXECUTION-MANIFEST.json");
+  try {
+    const manifest = JSON.parse(fs.readFileSync(manifestPath, "utf8")) as {
+      phases?: Array<{ id?: string; feature?: string; tasks?: Array<{ id: string }> }>;
+    };
+    const selected = featureTaskIds(manifest, featureNames);
+    if (selected.length === 0) {
+      fail("Cannot run feature increment: no task IDs were emitted for the feature PRD.");
+      return 1;
+    }
+    const cfg = state.engineConfig;
+    const args = ["--repo", path.resolve(repoDir), "--harness", cfg.harness || "opencode", "--execution-mode", "manual", "--selected-tasks", selected.join(","), "--yes"];
+    if (cfg.granularity) args.push("--granularity", cfg.granularity);
+    if (cfg.concurrency) args.push("--concurrency", cfg.concurrency);
+    if (cfg.taskTimeoutMs) args.push("--task-timeout-ms", cfg.taskTimeoutMs);
+    if (cfg.maxRetries) args.push("--max-retries", cfg.maxRetries);
+    if (cfg.viz) args.push("--viz", ...(cfg.vizPort ? ["--viz-port", cfg.vizPort] : []));
+    if (cfg.keepAlive) args.push("--keep-alive");
+    if (cfg.attach) args.push("--attach", cfg.attach);
+    if (cfg.autoCommit === false) args.push("--no-auto-commit");
+    return engineRunCli(args);
+  } catch {
+    fail("Cannot run feature increment: execution manifest is missing or invalid.");
+    return 1;
+  }
+}
+
+/** Returns only task IDs belonging to the newly authored feature documents. */
+export function featureTaskIds(
+  manifest: { phases?: Array<{ id?: string; feature?: string; tasks?: Array<{ id: string }> }> },
+  featureNames: string[],
+): string[] {
+  const featureCodes = new Set(featureNames.map((name) => name.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "").toUpperCase()));
+  return (manifest.phases ?? [])
+    .filter((phase) => phase.feature && (featureNames.includes(phase.feature) || featureCodes.has((phase.id ?? "").split("-")[0] ?? "")))
+    .flatMap((phase) => (phase.tasks ?? []).map((task) => task.id));
+}
+
 /**
  * Headless pipeline advancement for the Forge Console: generate the agent team
  * from the PRD (when absent).
  */
-export async function runDraftTeam(repoDir: string): Promise<number> {
+export async function runDraftTeam(repoDir: string, featureIncrement = false): Promise<number> {
   setupStateForRepo(repoDir);
-  if (hasGeneratedTeam()) {
+  if (hasGeneratedTeam() && !featureIncrement) {
     out("Agent team already exists.");
     return 0;
   }
@@ -1620,12 +1859,19 @@ export async function runDraftTeam(repoDir: string): Promise<number> {
     return 1;
   }
   out("Generating the agent team from the PRD (headless) …");
+  // Capture this immediately before invoking the team skill. In feature mode
+  // the preceding feature-PRD stage is expected to change docs, so those
+  // changes must not be attributed to team generation.
+  const featureSnapshot = featureIncrement ? snapshotFeatureIncrementFiles(repoDir) : undefined;
   const prdSource = prdSourceForTeam();
   const ran = await runSkillHeadless(
-    `${buildTeamPrompt(prdSource, state.harness)} Auto-proceed with default assumptions and no questions.`,
+    `${buildTeamPrompt(prdSource, state.harness)} ${featureIncrement
+      ? "This is Feature Increment Mode. Preserve every untouched existing agent and skill; update or add only agents affected by the new feature. Review the existing codebase and team before making changes."
+      : "Auto-proceed with default assumptions and no questions."}`,
     { nonInteractive: true },
   );
   if (!ran) return 1;
+  if (featureSnapshot && !validateFeatureIncrementFiles(featureSnapshot)) return 1;
   await draftCommit("feat: generate auto-drafted agent team");
   if (hasGeneratedTeam()) {
     ok("Agent team generated.");
@@ -1639,11 +1885,7 @@ export async function runDraftTeam(repoDir: string): Promise<number> {
 export async function runCompileManifest(repoDir: string): Promise<number> {
   setupStateForRepo(repoDir);
   const manifestPath = path.join(repoDir, "docs", "EXECUTION-MANIFEST.json");
-  if (fs.existsSync(manifestPath)) {
-    out("Execution manifest already exists.");
-    out(`    - ${link(manifestPath)}`);
-    return 0;
-  }
+  if (fs.existsSync(manifestPath)) out("Recompiling the execution manifest (existing task state will be reconciled) …");
   if (!hasGeneratedTeam()) {
     fail("No generated agent team yet; generate the team first.");
     return 1;

@@ -26,6 +26,7 @@ const CLIENT_DIR = fileURLToPath(new URL("../../resources/console/client", impor
 const DEFAULT_PORT = 4300;
 const POLL_INTERVAL_MS = 500;
 const HEARTBEAT_MS = 15_000;
+const FORGE_EVENT_PREFIX = "FORGE_EVENT ";
 
 export interface ConsoleServerOptions {
   /** Initial repo to open (optional; when absent the landing/picker shows). */
@@ -85,6 +86,9 @@ function openBrowser(url: string): void {
   }
   try {
     const child = spawn(command, args, { stdio: "ignore", detached: true });
+    // spawn reports missing launchers asynchronously; keep browser opening
+    // best-effort rather than allowing an unhandled ChildProcess error.
+    child.on("error", () => {});
     child.unref?.();
   } catch {
     // best-effort
@@ -274,6 +278,14 @@ export async function startConsoleServer(options: ConsoleServerOptions = {}): Pr
       }
       for (const line of readNewLines(p.logPath, logOffsetRef)) {
         broadcast("log", { line });
+        if (line.startsWith(FORGE_EVENT_PREFIX)) {
+          try {
+            const event = JSON.parse(line.slice(FORGE_EVENT_PREFIX.length));
+            if (event && typeof event.type === "string") broadcast("authoring", event);
+          } catch {
+            // Keep malformed or partial authoring records as ordinary log lines.
+          }
+        }
       }
     }
     if (jobsChanged) broadcast("snapshot", snapshotEvent());
@@ -323,6 +335,8 @@ export async function startConsoleServer(options: ConsoleServerOptions = {}): Pr
             return p ? sendJson(res, 200, repo.tasks(p)) : sendJson(res, 200, []);
           case "/api/audit":
             return p ? sendJson(res, 200, repo.loadAudit(p)) : sendJson(res, 200, []);
+          case "/api/authoring-events":
+            return p ? sendJson(res, 200, repo.authoringEvents(p)) : sendJson(res, 200, []);
           case "/api/logs": {
             if (!p) return sendJson(res, 200, { lines: [], truncated: false });
             const q = new URLSearchParams(rawUrl.split("?")[1] ?? "");
@@ -384,7 +398,23 @@ export async function startConsoleServer(options: ConsoleServerOptions = {}): Pr
           const action = body.action as ControlAction;
           const taskId = typeof body.taskId === "string" ? body.taskId : undefined;
           if (!currentRepo) return sendJson(res, 400, { ok: false, message: "no repo selected" });
+          if (action === "feature-prd") {
+            const prompt = typeof body.prompt === "string" ? body.prompt.trim() : "";
+            if (!prompt) return sendJson(res, 400, { ok: false, message: "prompt is required" });
+            return sendJson(res, 200, controller.featurePrd(prompt));
+          }
+          if (action === "feature-increment") {
+            const prompt = typeof body.prompt === "string" ? body.prompt.trim() : "";
+            if (!prompt) return sendJson(res, 400, { ok: false, message: "prompt is required" });
+            return sendJson(res, 200, controller.featureIncrement(prompt, body.run === true));
+          }
           return sendJson(res, 200, controller.dispatch(action, taskId));
+        }
+        if (urlPath === "/api/tasks/reset-changed") {
+          if (!currentRepo) return sendJson(res, 400, { ok: false, message: "no repo selected" });
+          const result = repo.resetChangedCompletedTasks(currentPaths()!);
+          if (result.ok) broadcast("snapshot", snapshotEvent());
+          return sendJson(res, result.ok ? 200 : 400, result);
         }
         if (urlPath === "/api/tasks/timeout") {
           const timeoutMs = Number(body.timeoutMs);
@@ -510,6 +540,22 @@ export async function startConsoleServer(options: ConsoleServerOptions = {}): Pr
           const result = controller.createProject(req);
           return sendJson(res, 200, result);
         }
+        if (urlPath === "/api/projects/bootstrap") {
+          const requestedPath = typeof body.path === "string" ? body.path.trim() : "";
+          if (!requestedPath) return sendJson(res, 400, { ok: false, message: "repository path is required" });
+          const target = path.resolve(requestedPath);
+          if (!fs.existsSync(target) || !fs.statSync(target).isDirectory()) return sendJson(res, 400, { ok: false, message: "directory not found" });
+          const harness = typeof body.harness === "string" ? body.harness : undefined;
+          if (harness !== undefined && !["agents", "github", "claude", "opencode"].includes(harness)) {
+            return sendJson(res, 400, { ok: false, message: "harness must be agents, github, claude, or opencode" });
+          }
+          try {
+            const result = controller.bootstrap({ path: target, harness, force: body.force === true, initGit: body.initGit === true });
+            return sendJson(res, result.ok ? 200 : 400, result);
+          } catch (err) {
+            return sendJson(res, 500, { ok: false, message: err instanceof Error ? err.message : "failed to start bootstrap" });
+          }
+        }
         if (urlPath === "/api/open") {
           if (!options.allowExternalOpen) return sendJson(res, 200, { ok: false, message: "open not enabled" });
           const target = String(body.path ?? "");
@@ -560,7 +606,9 @@ export async function startConsoleServer(options: ConsoleServerOptions = {}): Pr
 
       sendText(res, 404, "not found");
     } catch (err) {
-      sendText(res, 500, err instanceof Error ? err.message : "internal error");
+      const message = err instanceof Error ? err.message : "internal error";
+      if (urlPath.startsWith("/api/")) sendJson(res, 500, { ok: false, message });
+      else sendText(res, 500, message);
     }
   });
 

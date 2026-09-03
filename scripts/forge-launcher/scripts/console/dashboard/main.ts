@@ -86,6 +86,10 @@ function connectEvents(): void {
     const data = JSON.parse((event as MessageEvent).data as string) as { line: string };
     store.emitLog(data.line);
   });
+  es.addEventListener("authoring", (event: Event) => {
+    const data = JSON.parse((event as MessageEvent).data as string) as Record<string, unknown>;
+    store.emitAuthoring(data);
+  });
   es.onerror = () => {
     // EventSource auto-reconnects; nothing to do here.
   };

@@ -89,6 +89,7 @@ function makeRepo(): string {
   writeFileSync(join(docs, "WORKFLOW-STATE.json"), JSON.stringify(state), "utf8");
   writeFileSync(join(docs, "EXECUTION-AUDIT.jsonl"), "", "utf8");
   writeFileSync(join(docs, "engine-run.log"), "line one\nline two\n", "utf8");
+  writeFileSync(join(docs, "AUTHORING-EVENTS.jsonl"), "", "utf8");
 
   mkdirSync(join(docs, "artifacts", "solution"), { recursive: true });
   writeFileSync(
@@ -317,6 +318,24 @@ test("streams a snapshot and audit/log events over SSE", async () => {
     }
     assert.ok(events.some((e) => e.type === "audit" && (e.data as { action: string }).action === "task.complete"));
     assert.ok(events.some((e) => e.type === "log"));
+
+    appendFileSync(join(repo, "docs", "engine-run.log"), `FORGE_EVENT ${JSON.stringify({ type: "authoring.started", operation: "feature-increment" })}\nplain after event\n`, "utf8");
+    const eventDeadline = Date.now() + 3000;
+    while (Date.now() < eventDeadline && !events.some((e) => e.type === "authoring")) await sleep(50);
+    assert.ok(events.some((e) => e.type === "authoring" && (e.data as { type: string }).type === "authoring.started"));
+    assert.ok(events.some((e) => e.type === "log" && (e.data as { line: string }).line === "plain after event"));
+  });
+});
+
+test("projects reconciliation details for Console review", async () => {
+  await withServer(async (server, repo) => {
+    const file = join(repo, "docs", "EXECUTION-MANIFEST.json");
+    const manifest = JSON.parse(readFileSync(file, "utf8")) as Record<string, unknown>;
+    manifest.reconciliation = { preservedTaskIds: ["1.1"], newTaskIds: ["NEW-1.1"], removedTaskIds: ["OLD-1.1"], changedTaskIds: ["1.2"] };
+    writeFileSync(file, JSON.stringify(manifest), "utf8");
+    const summary = await getJson(`${server.url}/api/summary`) as { manifest: { reconciliation: { newTaskIds: string[]; changedTaskIds: string[] } } };
+    assert.deepEqual(summary.manifest.reconciliation.newTaskIds, ["NEW-1.1"]);
+    assert.deepEqual(summary.manifest.reconciliation.changedTaskIds, ["1.2"]);
   });
 });
 
@@ -436,13 +455,17 @@ test("timeout update rejects invalid values and missing token", async () => {
   });
 });
 
-test("draft-prd, draft-team, and compile-manifest actions dispatch and return ok", async () => {
+test("PRD, team, and manifest actions dispatch and return ok", async () => {
   await withServer(async (server, repo, spawned) => {
     const token = server.token;
 
     const prd = await postJson(`${server.url}/api/control`, { action: "draft-prd" }, { "X-Forge-Token": token });
     assert.equal((prd.body as { ok: boolean }).ok, true);
     assert.ok((prd.body as { message: string }).message.includes("PRD"), "message should mention PRD");
+
+    const existingPrd = await postJson(`${server.url}/api/control`, { action: "draft-existing-prd" }, { "X-Forge-Token": token });
+    assert.equal((existingPrd.body as { ok: boolean }).ok, true);
+    assert.ok(spawned.calls.at(-1)?.args.includes("draft-existing-prd"), "existing-project PRD action should spawn its dedicated subcommand");
 
     const team = await postJson(`${server.url}/api/control`, { action: "draft-team" }, { "X-Forge-Token": token });
     assert.equal((team.body as { ok: boolean }).ok, true);
@@ -453,6 +476,32 @@ test("draft-prd, draft-team, and compile-manifest actions dispatch and return ok
     assert.equal((compile.body as { ok: boolean }).ok, true);
     assert.ok((compile.body as { message: string }).message.includes("Manifest"), "message should mention manifest");
     assert.ok(spawned.calls.at(-1)?.args.includes("compile-manifest"), "compile-manifest action should spawn the compile-manifest subcommand");
+    for (const call of spawned.calls.slice(-3)) {
+      assert.equal(call.opts.logFile, join(repo, "docs", "engine-run.log"));
+    }
+  });
+});
+
+test("feature-increment accepts a prompt and optional run flag", async () => {
+  await withServer(async (server, repo, spawned) => {
+    const token = server.token;
+    const missing = await postJson(`${server.url}/api/control`, { action: "feature-increment" }, { "X-Forge-Token": token });
+    assert.equal(missing.status, 400);
+
+    const result = await postJson(`${server.url}/api/control`, {
+      action: "feature-increment",
+      prompt: "Add a search screen",
+      run: true,
+    }, { "X-Forge-Token": token });
+    assert.equal((result.body as { ok: boolean }).ok, true);
+    const call = spawned.calls.at(-1);
+    assert.ok(call?.args.includes("feature-increment"));
+    assert.ok(call?.args.includes("--prompt"));
+    assert.ok(call?.args.includes("Add a search screen"));
+    assert.ok(call?.args.includes("--run"));
+    assert.equal((result.body as { job: { type: string; run: boolean } }).job.type, "feature-increment");
+    assert.equal((result.body as { job: { type: string; run: boolean } }).job.run, true);
+    assert.equal(call?.opts.cwd, repo);
   });
 });
 

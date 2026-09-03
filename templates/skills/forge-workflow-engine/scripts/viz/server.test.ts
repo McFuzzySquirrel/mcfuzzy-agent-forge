@@ -4,11 +4,23 @@ import { mkdtempSync, mkdirSync, writeFileSync, appendFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { get as httpGet, request as httpRequest } from "node:http";
+import { EventEmitter } from "node:events";
 
-import { startVizServer, type VizServer } from "./server.ts";
+import { openBrowser, startVizServer, type VizServer } from "./server.ts";
 import type { AuditEvent, WorkflowState } from "../types.ts";
 
 const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
+
+test("browser opening consumes asynchronous spawn errors", () => {
+  const child = new EventEmitter() as EventEmitter & { unref: () => void };
+  child.unref = () => {};
+  const fakeSpawn = ((_command: string, _args: string[], _options: object) => {
+    return child;
+  }) as unknown as typeof import("node:child_process").spawn;
+
+  assert.doesNotThrow(() => openBrowser("http://127.0.0.1:4299", fakeSpawn));
+  assert.doesNotThrow(() => child.emit("error", new Error("browser unavailable")));
+});
 
 let portCounter = 0;
 function nextPort(): number {

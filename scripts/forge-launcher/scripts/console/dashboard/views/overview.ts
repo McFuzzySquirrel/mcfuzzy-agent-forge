@@ -83,7 +83,33 @@ export async function renderOverview(container: HTMLElement): Promise<void> {
     renderManifest(summary),
     renderGuidance(container, summary, actions),
     renderActions(container, summary, actions, tasks),
+    summary.hasPrd && summary.hasTeam ? renderFeatureIncrement(container) : renderFeaturePrd(container),
   ]);
+}
+
+function renderFeatureIncrement(container: HTMLElement): HTMLElement {
+  const input = el("textarea", { rows: "3", placeholder: "Describe the feature to add…" });
+  const run = el("input", { type: "checkbox" }) as HTMLInputElement;
+  const button = el("button", { className: "btn btn-primary" }, "Run Feature Increment");
+  button.addEventListener("click", () => {
+    const prompt = (input as HTMLTextAreaElement).value.trim();
+    if (!prompt) { toast("Describe the feature first."); return; }
+    button.setAttribute("disabled", "true");
+    void api.featureIncrement(prompt, run.checked).then((r) => toast(r.message)).catch((e) => toast(e instanceof Error ? e.message : "feature increment failed"));
+  });
+  return el("div", { className: "panel" }, [el("h4", null, "Increment the project"), el("p", { className: "dim small" }, "Authors the feature, updates affected agents, recompiles the manifest, and optionally runs it."), input, el("label", { className: "checkbox" }, [run, " Run the workflow after preparing"]), el("div", { className: "actions" }, [button])]);
+}
+
+function renderFeaturePrd(container: HTMLElement): HTMLElement {
+  const input = el("textarea", { rows: "3", placeholder: "Describe the feature to add…" });
+  const button = el("button", { className: "btn btn-primary" }, "Author Feature PRD");
+  button.addEventListener("click", () => {
+    const prompt = (input as HTMLTextAreaElement).value.trim();
+    if (!prompt) { toast("Describe the feature first."); return; }
+    button.setAttribute("disabled", "true");
+    void api.featurePrd(prompt).then((r) => toast(r.message)).catch((e) => toast(e instanceof Error ? e.message : "feature PRD failed"));
+  });
+  return el("div", { className: "panel" }, [el("h4", null, "Add a feature"), el("p", { className: "dim small" }, "Authoring writes a new document under docs/features/ and does not start the workflow engine."), input, el("div", { className: "actions" }, [button])]);
 }
 
 function renderHeader(summary: Summary): HTMLElement {
@@ -181,6 +207,24 @@ function renderManifest(summary: Summary): HTMLElement {
           stat("Generated", fmtTime(m.generatedAt)),
         ])
       : el("p", { className: "dim" }, "No execution manifest yet."),
+    m?.reconciliation
+      ? el("div", { className: "detail" }, [
+          el("h4", null, "Reconciliation"),
+          el("p", { className: "dim small" }, "Completed task records are preserved by stable task ID. Review changed contracts before running."),
+          el("div", { className: "stats" }, [
+            stat("Preserved", String(m.reconciliation.preservedTaskIds.length)),
+            stat("New", String(m.reconciliation.newTaskIds.length)),
+            stat("Changed", String(m.reconciliation.changedTaskIds.length)),
+            stat("Removed", String(m.reconciliation.removedTaskIds.length)),
+          ]),
+          m.reconciliation.changedTaskIds.length > 0
+            ? el("p", { className: "dim small mono" }, `Changed: ${m.reconciliation.changedTaskIds.join(", ")}`)
+            : null,
+          m.reconciliation.newTaskIds.length > 0
+            ? el("p", { className: "dim small" }, "Next action: review and select the new pending tasks in Tasks, then run the targeted workflow.")
+            : null,
+        ])
+      : null,
   ]);
 }
 
@@ -193,13 +237,13 @@ interface PipelineStep {
 /** Determines the next pipeline step, or null when there's nothing to advance. */
 function nextStep(summary: Summary, actions: Actions): PipelineStep | null {
   if (!summary.hasPrd) {
-    return summary.hasIdea
-      ? {
-          label: "Draft PRD",
-          action: "draft-prd",
-          hint: "Turns docs/IDEA.md into a reviewed PRD (headless). Review it in Plan & Team, then come back to continue.",
-        }
-      : null;
+    return {
+      label: summary.hasIdea ? "Draft PRD" : "Author project PRD",
+      action: summary.hasIdea ? "draft-prd" : "draft-existing-prd",
+      hint: summary.hasIdea
+        ? "Turns docs/IDEA.md into a reviewed PRD (headless). Review it in Plan & Team, then come back to continue."
+        : "Inspects this existing repository and authors docs/PRD.md using forge-build-prd semantics.",
+    };
   }
   if (!summary.hasTeam) {
     return {
@@ -260,7 +304,7 @@ function renderGuidance(container: HTMLElement, summary: Summary, actions: Actio
   let text: string;
   let hint: string;
   if (!summary.hasPrd) {
-    text = summary.hasIdea ? "Draft a PRD to get started." : "No project idea yet.";
+    text = summary.hasIdea ? "Draft a PRD to get started." : "Author a project PRD from this existing repository.";
   } else if (!summary.hasTeam) {
     text = "Generate the agent team.";
   } else if (!summary.hasManifest && summary.executionMode === "manual") {
@@ -360,6 +404,10 @@ function renderActions(container: HTMLElement, summary: Summary, actions: Action
   const mode = renderBuildModeControl(container, summary.executionMode, summary.selectedTaskCount);
   const commit = renderAutoCommitToggle(container, store.summary?.autoCommit ?? true);
   const concurrency = renderConcurrencyControl(container, store.summary?.concurrency ?? 0);
+  const reset = el("button", { className: "btn btn-sm" }, "Reset changed tasks for review");
+  reset.addEventListener("click", () => {
+    void api.resetChangedTasks().then((res) => { toast(res.message); void renderOverview(container); }).catch((err) => toast(err instanceof Error ? err.message : "reset failed"));
+  });
 
   return el("div", { className: "panel" }, [
     el("h4", null, "Controls"),
@@ -372,6 +420,7 @@ function renderActions(container: HTMLElement, summary: Summary, actions: Action
     timeouts,
     commit,
     concurrency,
+    el("div", { style: "margin-top:10px" }, [reset, el("span", { className: "dim small" }, " Re-run completed tasks whose manifest contract changed.")]),
   ]);
 }
 

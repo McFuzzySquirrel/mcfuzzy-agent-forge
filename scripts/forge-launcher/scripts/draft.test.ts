@@ -37,7 +37,7 @@ function makeRepo(harnessRoot = ".agents"): string {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), "fl-draft-"));
   execFileSync("git", ["-C", dir, "init", "-q"], { env: { ...process.env, ...GIT_ENV } });
   fs.mkdirSync(path.join(dir, harnessRoot, "agents"), { recursive: true });
-  for (const skill of ["forge-auto-build-prd", "forge-build-agent-team"]) {
+  for (const skill of ["forge-auto-build-prd", "forge-build-prd", "forge-build-agent-team"]) {
     const skillDir = path.join(dir, harnessRoot, "skills", skill);
     fs.mkdirSync(skillDir, { recursive: true });
     fs.writeFileSync(path.join(skillDir, "SKILL.md"), `---\nname: ${skill}\ndescription: stub\n---\n# stub\n`);
@@ -91,11 +91,22 @@ test("draft-prd writes docs/PRD.md via the stub runner", async () => {
   assert.ok(out.includes("PRD generated"), out);
 });
 
-test("draft-prd with no idea fails with guidance", async () => {
+test("draft-prd with no idea uses existing repository context", async () => {
   const repo = makeRepo();
   const { code, out } = await runCli(["draft-prd", "--repo", repo], { FORGE_RUN_WITH: "stub" });
-  assert.equal(code, 1, out);
-  assert.ok(out.includes("IDEA.md"), out);
+  assert.equal(code, 0, out);
+  assert.ok(out.includes("existing repository"), out);
+  assert.ok(fs.existsSync(path.join(repo, "docs", "PRD.md")), "PRD.md should be written");
+});
+
+test("draft-existing-prd uses the project PRD authoring path", async () => {
+  const repo = makeRepo();
+  write(repo, "src/index.ts", "export const product = 'existing';\n");
+  const { code, out } = await runCli(["draft-existing-prd", "--repo", repo], { FORGE_RUN_WITH: "stub" });
+  assert.equal(code, 0, out);
+  assert.ok(out.includes("existing repository"), out);
+  assert.ok(out.includes("Project PRD generated"), out);
+  assert.ok(fs.existsSync(path.join(repo, "docs", "PRD.md")), "PRD.md should be written");
 });
 
 test("draft-team writes an agent file via the stub runner", async () => {

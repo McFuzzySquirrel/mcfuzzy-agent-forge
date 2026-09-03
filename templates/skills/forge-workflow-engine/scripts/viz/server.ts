@@ -162,7 +162,7 @@ async function findFreePort(start: number, onLog: (m: string) => void): Promise<
   throw new Error(`No free port available starting at ${start}`);
 }
 
-function openBrowser(url: string): void {
+export function openBrowser(url: string, spawnProcess: typeof spawn = spawn): void {
   const platform = process.platform;
   let command: string;
   let args: string[];
@@ -177,7 +177,10 @@ function openBrowser(url: string): void {
     args = [url];
   }
   try {
-    const child = spawn(command, args, { stdio: "ignore", detached: true });
+    const child = spawnProcess(command, args, { stdio: "ignore", detached: true });
+    // spawn reports missing launchers asynchronously; keep browser opening
+    // best-effort rather than allowing an unhandled ChildProcess error.
+    child.on("error", () => {});
     child.unref?.();
   } catch {
     // Browser opening is best-effort; never fail the server over it.

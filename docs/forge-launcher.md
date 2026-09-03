@@ -26,6 +26,7 @@
 |------|----------|---------|
 | `node` (18+) | For the npm package | Runs the `forge-launcher` package (canonical implementation) |
 | `git` | **Yes** | All harnesses |
+| `xdg-open` | Linux desktop optional | Opens the Console, workflow board, and documents automatically |
 | `gh` (GitHub CLI) | For GitHub harness | Creates and clones the GitHub repo |
 | `opencode` | For opencode harness auto-launch | Spawns the opencode session |
 | `claude` | For Claude Code harness auto-launch | Spawns the Claude Code session |
@@ -37,19 +38,35 @@
 > `.sh` / `.ps1` scripts in `scripts/` are thin delegating wrappers kept for
 > compatibility and are scheduled for removal.
 
+On Linux, install `xdg-open` from the `xdg-utils` package for automatic browser
+and document opening:
+
+```bash
+# Debian/Ubuntu
+sudo apt install xdg-utils
+# Fedora
+sudo dnf install xdg-utils
+# Arch
+sudo pacman -S xdg-utils
+```
+
+It is optional. If it is unavailable, MyForge prints the URL or file path for
+manual opening. Headless and CI workflows do not require it.
+
 ---
 
 ## Usage
 
 ### npm package (recommended, cross-platform)
 
-> The npm package is a **pre-release** (`forge-launcher@beta`, v1.0.0-beta.3).
+> The npm package is a **pre-release** (`forge-launcher@beta`, v1.0.0-beta.4).
 > Until it is published, install it locally from the clone (see the README
 > "Try the npm launcher locally" section) or use the legacy wrappers below.
 
 ```bash
 npx forge-launcher@beta [--non-interactive] [--headless] [--draft] [--dry-run] [--debug]
 npx forge-launcher@beta bootstrap [TARGET_DIR] [--harness agents|github|claude|opencode] [--force]
+npx forge-launcher@beta bootstrap [TARGET_DIR] ... [--init-git]
 npx forge-launcher@beta engine-run [--repo <path>] [--harness <h>] [--concurrency <n>]
                               [--task-timeout-ms <ms>] [--yes] [--dry-run]
                               [--keep-alive [--keep-alive-port <n>]] [--no-keep-alive] [--attach <url>]
@@ -57,6 +74,7 @@ npx forge-launcher@beta engine-run [--repo <path>] [--harness <h>] [--concurrenc
                               [--auto-commit|--no-auto-commit] [--commit-message-template <tmpl>]
 npx forge-launcher@beta resume [--repo <path>] [--non-interactive] [--dry-run]
 npx forge-launcher@beta console [--repo <path>] [--port <n>] [--no-open]
+npx forge-launcher@beta feature-prd --repo <path> --prompt "Describe the feature"
 ```
 
 When installed globally (`npm install -g forge-launcher@beta`), drop the `npx`.
@@ -69,8 +87,8 @@ development:
 ```bash
 cd scripts/forge-launcher
 npm install                               # build deps
-npm pack                                  # build + stage templates → forge-launcher-1.0.0-beta.3.tgz
-npm install -g ./forge-launcher-1.0.0-beta.3.tgz   # global `forge-launcher`
+npm pack                                  # build + stage templates → forge-launcher-1.0.0-beta.4.tgz
+npm install -g ./forge-launcher-1.0.0-beta.4.tgz   # global `forge-launcher`
 
 # dev alternative (once dist/ is built): global symlink
 npm run build && npm link
@@ -859,3 +877,17 @@ rationale (now **superseded** for the implementation layer by
 package with a clack TUI rather than dual shell scripts). The flow-level
 decisions still stand - harness selection is step 2, `IDEA.md` is the hand-off
 artifact, and bootstrap is delegated rather than reimplemented.
+### Existing-repository and feature increment authoring
+
+`forge-launcher draft-prd --repo <path>` can author a PRD directly from an
+existing repository; `docs/IDEA.md` is optional. It inspects the repository
+context through the selected harness. For additive work use:
+
+```bash
+forge-launcher feature-increment --repo <path> --prompt "Add ..."
+forge-launcher feature-increment --repo <path> --prompt "Add ..." --run
+```
+
+This authors `docs/features/*.md`, updates affected agents in Feature Increment
+Mode, recompiles the manifest, and reports preserved/new/removed/changed task
+IDs. The optional `--run` starts the engine after review.

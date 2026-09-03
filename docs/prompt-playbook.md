@@ -22,6 +22,17 @@ git init
 
 If you prefer a browser-based workflow for creating, opening, and monitoring projects after bootstrap, see the [Forge Console user guide](forge-console-user-guide.md).
 
+To use MyForge with an application that already exists, open the Console and
+choose **Bootstrap an existing repo**, or run:
+
+```bash
+forge-launcher bootstrap ~/Projects/existing-app --harness opencode
+```
+
+The directory must already be a Git repository. For a non-Git directory, use
+`--init-git` explicitly; non-interactive workflows must also provide that flag.
+Bootstrap does not overwrite existing Forge files unless `--force` is supplied.
+
 Copy the agent and skill templates into your project's harness directory with the launcher (Node, cross-platform):
 
 ```bash

@@ -35,7 +35,17 @@ function token(): string {
 async function request<T>(url: string, init?: RequestInit): Promise<T> {
   const res = await fetch(url, init);
   if (!res.ok) {
-    throw new Error(`request failed: ${res.status} ${res.statusText}`);
+    // The console API returns structured errors. Preserve their message so a
+    // failed bootstrap (or any other action) is actionable in the UI instead
+    // of collapsing everything into "400 Bad Request".
+    let detail = "";
+    try {
+      const body = await res.clone().json() as { message?: unknown };
+      if (typeof body.message === "string") detail = `: ${body.message}`;
+    } catch {
+      // Some proxy/server failures are plain text; the status is still useful.
+    }
+    throw new Error(`request failed: ${res.status} ${res.statusText}${detail}`);
   }
   return res.json() as Promise<T>;
 }
@@ -124,12 +134,25 @@ export const api = {
   control(action: ControlAction, taskId?: string): Promise<ControlResult> {
     return post<ControlResult>("/api/control", { action, taskId });
   },
+  bootstrap(req: { path: string; harness?: string; force?: boolean; initGit?: boolean }): Promise<ControlResult> {
+    return post<ControlResult>("/api/projects/bootstrap", req);
+  },
+  featurePrd(prompt: string): Promise<ControlResult> {
+    return post<ControlResult>("/api/control", { action: "feature-prd", prompt });
+  },
+  featureIncrement(prompt: string, run = false): Promise<ControlResult> {
+    return post<ControlResult>("/api/control", { action: "feature-increment", prompt, run });
+  },
   setTaskTimeout(taskId: string, timeoutMs: number): Promise<TimeoutUpdateResult> {
     return post<TimeoutUpdateResult>("/api/tasks/timeout", { taskId, timeoutMs });
   },
   setAllTaskTimeouts(timeoutMs: number): Promise<TimeoutUpdateResult> {
     return post<TimeoutUpdateResult>("/api/tasks/timeout", { timeoutMs });
   },
+  resetChangedTasks(): Promise<{ ok: boolean; message: string; affected?: number; taskIds?: string[] }> {
+    return post("/api/tasks/reset-changed", {});
+  },
+  authoringEvents(): Promise<Record<string, unknown>[]> { return request<Record<string, unknown>[]>("/api/authoring-events"); },
   openExternal(path: string): Promise<OpenResult> {
     return post<OpenResult>("/api/open", { path });
   },
