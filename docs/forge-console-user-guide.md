@@ -91,6 +91,12 @@ After a build completes, use **Add a feature** on Overview. This runs
 `forge-build-feature-prd` against the existing codebase and team, writes an
 additive document under `docs/features/`, and leaves the original PRD intact.
 
+For a complete increment, use **Run Feature Increment**. The launcher performs
+Feature PRD authoring, an affected-team update, and manifest compilation. It
+then stops for review or selects only the new feature task IDs for execution.
+Stable task IDs preserve completed work; new tasks start pending, changed
+contracts are called out for review, and removed tasks are not runnable.
+
 ---
 
 ## 4. Monitor a build in the main views
@@ -107,6 +113,12 @@ Once the build starts, switch between the views to follow the work:
 - **Timeline**: a chronological record of important events and failures.
 
 The most useful combination for day-to-day work is usually Overview + Board + Logs.
+
+Authoring lifecycle records use the `FORGE_EVENT {json}` prefix in
+`docs/engine-run.log` and are also sent as `authoring` SSE events. Ordinary
+process output remains unchanged and continues as `log` events, preserving
+plain log tails and compatibility with older clients. Failed stages leave both
+the lifecycle failure record and the command output in the same log.
 
 ---
 

@@ -293,6 +293,7 @@ export function summary(p: RepoPaths): Summary {
       granularity: manifest.granularity,
       phases: manifest.phases.length,
       tasks: taskCount,
+      reconciliation: manifest.reconciliation,
     };
   }
 

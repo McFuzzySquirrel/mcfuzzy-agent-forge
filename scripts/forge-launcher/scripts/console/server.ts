@@ -26,6 +26,7 @@ const CLIENT_DIR = fileURLToPath(new URL("../../resources/console/client", impor
 const DEFAULT_PORT = 4300;
 const POLL_INTERVAL_MS = 500;
 const HEARTBEAT_MS = 15_000;
+const FORGE_EVENT_PREFIX = "FORGE_EVENT ";
 
 export interface ConsoleServerOptions {
   /** Initial repo to open (optional; when absent the landing/picker shows). */
@@ -277,6 +278,14 @@ export async function startConsoleServer(options: ConsoleServerOptions = {}): Pr
       }
       for (const line of readNewLines(p.logPath, logOffsetRef)) {
         broadcast("log", { line });
+        if (line.startsWith(FORGE_EVENT_PREFIX)) {
+          try {
+            const event = JSON.parse(line.slice(FORGE_EVENT_PREFIX.length));
+            if (event && typeof event.type === "string") broadcast("authoring", event);
+          } catch {
+            // Keep malformed or partial authoring records as ordinary log lines.
+          }
+        }
       }
     }
     if (jobsChanged) broadcast("snapshot", snapshotEvent());

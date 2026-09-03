@@ -12,6 +12,7 @@ export interface Snapshot {
 type ChangeListener = () => void;
 type AuditListener = (event: AuditEvent) => void;
 type LogListener = (line: string) => void;
+type AuthoringListener = (event: Record<string, unknown>) => void;
 
 class AppStore {
   summary: Summary | null = null;
@@ -21,6 +22,7 @@ class AppStore {
   private changeListeners = new Set<ChangeListener>();
   private auditListeners = new Set<AuditListener>();
   private logListeners = new Set<LogListener>();
+  private authoringListeners = new Set<AuthoringListener>();
 
   applySnapshot(snapshot: Snapshot): void {
     this.summary = snapshot.summary;
@@ -40,6 +42,15 @@ class AppStore {
 
   emitLog(line: string): void {
     for (const fn of [...this.logListeners]) fn(line);
+  }
+
+  emitAuthoring(event: Record<string, unknown>): void {
+    for (const fn of [...this.authoringListeners]) fn(event);
+  }
+
+  onAuthoring(fn: AuthoringListener): () => void {
+    this.authoringListeners.add(fn);
+    return () => this.authoringListeners.delete(fn);
   }
 
   subscribe(fn: ChangeListener): () => void {

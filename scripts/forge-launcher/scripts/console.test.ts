@@ -317,6 +317,24 @@ test("streams a snapshot and audit/log events over SSE", async () => {
     }
     assert.ok(events.some((e) => e.type === "audit" && (e.data as { action: string }).action === "task.complete"));
     assert.ok(events.some((e) => e.type === "log"));
+
+    appendFileSync(join(repo, "docs", "engine-run.log"), `FORGE_EVENT ${JSON.stringify({ type: "authoring.started", operation: "feature-increment" })}\nplain after event\n`, "utf8");
+    const eventDeadline = Date.now() + 3000;
+    while (Date.now() < eventDeadline && !events.some((e) => e.type === "authoring")) await sleep(50);
+    assert.ok(events.some((e) => e.type === "authoring" && (e.data as { type: string }).type === "authoring.started"));
+    assert.ok(events.some((e) => e.type === "log" && (e.data as { line: string }).line === "plain after event"));
+  });
+});
+
+test("projects reconciliation details for Console review", async () => {
+  await withServer(async (server, repo) => {
+    const file = join(repo, "docs", "EXECUTION-MANIFEST.json");
+    const manifest = JSON.parse(readFileSync(file, "utf8")) as Record<string, unknown>;
+    manifest.reconciliation = { preservedTaskIds: ["1.1"], newTaskIds: ["NEW-1.1"], removedTaskIds: ["OLD-1.1"], changedTaskIds: ["1.2"] };
+    writeFileSync(file, JSON.stringify(manifest), "utf8");
+    const summary = await getJson(`${server.url}/api/summary`) as { manifest: { reconciliation: { newTaskIds: string[]; changedTaskIds: string[] } } };
+    assert.deepEqual(summary.manifest.reconciliation.newTaskIds, ["NEW-1.1"]);
+    assert.deepEqual(summary.manifest.reconciliation.changedTaskIds, ["1.2"]);
   });
 });
 

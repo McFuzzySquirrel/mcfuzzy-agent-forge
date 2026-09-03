@@ -85,6 +85,7 @@ export interface ExecutionManifest {
   approvalGates: { preflight: boolean; betweenPhases: boolean };
   phases: ManifestPhase[];
   warnings: string[];
+  reconciliation?: { previousGeneratedAt?: string; preservedTaskIds: string[]; newTaskIds: string[]; removedTaskIds: string[]; changedTaskIds: string[] };
 }
 
 export interface RunCounts {
@@ -114,6 +115,12 @@ export interface ManifestSummary {
   granularity?: string;
   phases: number;
   tasks: number;
+  reconciliation?: {
+    preservedTaskIds: string[];
+    newTaskIds: string[];
+    removedTaskIds: string[];
+    changedTaskIds: string[];
+  };
 }
 
 export interface Summary {

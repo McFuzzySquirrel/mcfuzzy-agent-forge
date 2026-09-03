@@ -207,6 +207,24 @@ function renderManifest(summary: Summary): HTMLElement {
           stat("Generated", fmtTime(m.generatedAt)),
         ])
       : el("p", { className: "dim" }, "No execution manifest yet."),
+    m?.reconciliation
+      ? el("div", { className: "detail" }, [
+          el("h4", null, "Reconciliation"),
+          el("p", { className: "dim small" }, "Completed task records are preserved by stable task ID. Review changed contracts before running."),
+          el("div", { className: "stats" }, [
+            stat("Preserved", String(m.reconciliation.preservedTaskIds.length)),
+            stat("New", String(m.reconciliation.newTaskIds.length)),
+            stat("Changed", String(m.reconciliation.changedTaskIds.length)),
+            stat("Removed", String(m.reconciliation.removedTaskIds.length)),
+          ]),
+          m.reconciliation.changedTaskIds.length > 0
+            ? el("p", { className: "dim small mono" }, `Changed: ${m.reconciliation.changedTaskIds.join(", ")}`)
+            : null,
+          m.reconciliation.newTaskIds.length > 0
+            ? el("p", { className: "dim small" }, "Next action: review and select the new pending tasks in Tasks, then run the targeted workflow.")
+            : null,
+        ])
+      : null,
   ]);
 }
 

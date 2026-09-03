@@ -4,6 +4,18 @@ Detailed release and change notes for MyForge.
 
 ---
 
+## September 2026 - v3.43
+
+### Increment authoring observability and reconciliation guidance
+
+- Launcher feature authoring emits structured `FORGE_EVENT` lifecycle records while preserving ordinary process-log lines.
+- Console SSE exposes lifecycle records as `authoring` events alongside the existing `log` stream.
+- Overview shows reconciliation counts, changed task IDs, and the next action for new pending feature tasks.
+- Added coverage for authoring SSE/plain-log compatibility and reconciliation projection.
+- Documented Feature Increment Mode review and recovery actions.
+
+---
+
 ## September 2026 - v3.42
 
 ### Existing repository bootstrap and incremental project work
