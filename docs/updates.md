@@ -12,6 +12,7 @@ Detailed release and change notes for MyForge.
 - Plan & Team exposes agent-level primary/fallback model overrides backed by `docs/model-overrides.json`; overrides are inherited by every task owned by that agent.
 - The Console can launch an interactive OpenCode or Copilot model-planning terminal from the Model Plan view.
 - OpenCode agent and skill discovery is explicitly supported, including `.opencode/agents` and `.opencode/skills`.
+- Windows terminal launch now detects installed Windows Terminal and PowerShell executables, preserves interactive `-NoExit` sessions, resolves npm CLI shims, and reports spawn failures instead of claiming success.
 
 ---
 

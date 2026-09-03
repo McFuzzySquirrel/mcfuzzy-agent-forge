@@ -52,38 +52,35 @@ function launchPosix(cliName: string, repoDir: string, args: string[]): Promise<
         return;
       }
       const [first, ...rest] = cands;
-      const child = spawn(first.cmd, first.args(repoDir, launchScript), {
-        stdio: "ignore",
-        detached: true,
-      });
-      child.on("error", () => tryNext(rest));
-      child.on("spawn", () => {
-        child.unref();
-        resolve(true);
+      void spawnDetached(first.cmd, first.args(repoDir, launchScript)).then((started) => {
+        if (started) resolve(true);
+        else tryNext(rest);
       });
     };
     tryNext(candidates);
   });
 }
 
-function launchWindows(cliName: string, repoDir: string, args: string[]): Promise<boolean> {
+async function launchWindows(cliName: string, repoDir: string, args: string[]): Promise<boolean> {
   const escapedDir = repoDir.replace(/'/g, "''");
-  const escapedExe = cliName.replace(/'/g, "''");
+  const cliExe = commandExists(cliName) ?? cliName;
+  const escapedExe = cliExe.replace(/'/g, "''");
   const argStr = args.map((a) => `'${a.replace(/'/g, "''")}'`).join(" ");
   const launchScript = `Set-Location '${escapedDir}'; & '${escapedExe}' ${argStr}`;
 
-  const wt = process.env.WT_SESSION ? "wt" : undefined; // Windows Terminal (Win11+) sessions set WT_SESSION
+  const wt = commandExists("wt");
   const pwsh = commandExists("pwsh");
   const ps5 = commandExists("powershell");
 
-  const psExe = pwsh ?? ps5;
-  if (wt && psExe) {
-    spawnDetached("wt", ["new-tab", "--", psExe, "-NoExit", "-Command", launchScript]);
-    return Promise.resolve(true);
+  if (wt) {
+    const powershell = pwsh ?? ps5;
+    if (powershell && await spawnDetached(wt, ["new-tab", "--", powershell, "-NoProfile", "-NoExit", "-Command", launchScript])) {
+      return true;
+    }
   }
-  if (psExe) {
-    spawnDetached(psExe, ["-NoExit", "-Command", launchScript]);
-    return Promise.resolve(true);
+  const powershell = pwsh ?? ps5;
+  if (powershell && await spawnDetached(powershell, ["-NoProfile", "-NoExit", "-Command", launchScript])) {
+    return true;
   }
   warn("No supported Windows terminal found. Open a terminal manually and run:");
   command(`cd "${repoDir}"; ${cliName} ${args.join(" ")}`);
@@ -93,7 +90,15 @@ function launchWindows(cliName: string, repoDir: string, args: string[]): Promis
 function commandExists(cmd: string): string | undefined {
   const isWin = process.platform === "win32";
   const exts = isWin ? ["", ".exe", ".cmd", ".bat"] : [""];
-  for (const dir of (process.env.PATH ?? "").split(path.delimiter)) {
+  const dirs = (process.env.PATH ?? "").split(path.delimiter);
+  if (isWin) {
+    const systemRoot = process.env.SystemRoot ?? process.env.WINDIR;
+    const localAppData = process.env.LOCALAPPDATA;
+    if (systemRoot) dirs.push(path.join(systemRoot, "System32"));
+    if (systemRoot && cmd.toLowerCase() === "powershell") dirs.push(path.join(systemRoot, "System32", "WindowsPowerShell", "v1.0"));
+    if (localAppData) dirs.push(path.join(localAppData, "Microsoft", "WindowsApps"));
+  }
+  for (const dir of [...new Set(dirs)]) {
     if (!dir) continue;
     for (const ext of exts) {
       const full = path.join(dir, cmd + ext);
@@ -108,8 +113,17 @@ function commandExists(cmd: string): string | undefined {
   return undefined;
 }
 
-function spawnDetached(cmd: string, args: string[]): void {
-  const child = spawn(cmd, args, { stdio: "ignore", detached: true });
-  child.on("error", () => {});
-  child.unref();
+function spawnDetached(cmd: string, args: string[]): Promise<boolean> {
+  return new Promise((resolve) => {
+    const child = spawn(cmd, args, { stdio: "ignore", detached: true });
+    let settled = false;
+    const finish = (started: boolean) => {
+      if (settled) return;
+      settled = true;
+      if (started) child.unref();
+      resolve(started);
+    };
+    child.once("error", () => finish(false));
+    child.once("spawn", () => finish(true));
+  });
 }
