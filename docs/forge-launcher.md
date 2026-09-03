@@ -59,7 +59,7 @@ manual opening. Headless and CI workflows do not require it.
 
 ### npm package (recommended, cross-platform)
 
-> The npm package is a **pre-release** (`forge-launcher@beta`, v1.0.0-beta.3).
+> The npm package is a **pre-release** (`forge-launcher@beta`, v1.0.0-beta.4).
 > Until it is published, install it locally from the clone (see the README
 > "Try the npm launcher locally" section) or use the legacy wrappers below.
 
@@ -87,8 +87,8 @@ development:
 ```bash
 cd scripts/forge-launcher
 npm install                               # build deps
-npm pack                                  # build + stage templates → forge-launcher-1.0.0-beta.3.tgz
-npm install -g ./forge-launcher-1.0.0-beta.3.tgz   # global `forge-launcher`
+npm pack                                  # build + stage templates → forge-launcher-1.0.0-beta.4.tgz
+npm install -g ./forge-launcher-1.0.0-beta.4.tgz   # global `forge-launcher`
 
 # dev alternative (once dist/ is built): global symlink
 npm run build && npm link

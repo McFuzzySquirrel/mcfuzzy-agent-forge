@@ -52,7 +52,7 @@ git clone https://github.com/McFuzzySquirrel/mcfuzzy-agent-forge.git
 cd mcfuzzy-agent-forge/scripts/forge-launcher
 npm install
 npm pack
-npm install -g ./forge-launcher-1.0.0-beta.3.tgz
+npm install -g ./forge-launcher-1.0.0-beta.4.tgz
 ```
 
 Once installed, run:
