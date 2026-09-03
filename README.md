@@ -17,6 +17,7 @@ MyForge is a PRD-first workflow for turning product requirements into working so
 - Generates a specialist agent team from the PRD instead of relying on a single generic assistant.
 - Supports both guided, interactive execution and unattended "dark orchestration" runs.
 - Includes a local web console for monitoring and controlling builds.
+- Can bootstrap MyForge into an existing Git repository without replacing its application code.
 
 
 
@@ -60,7 +61,7 @@ Once installed, run:
 forge-launcher
 ```
 
-The launcher walks you through repo bootstrap, idea capture, PRD drafting, team generation, and build execution.
+The launcher walks you through repo bootstrap, idea capture, PRD drafting, team generation, and build execution. The Console also supports bootstrapping an existing repository and adding Feature PRDs to completed projects.
 
 For the manual prompting flow and the CLI’s expected prompts, see [docs/prompt-playbook.md](docs/prompt-playbook.md). For the latest changes and release notes, see [docs/updates.md](docs/updates.md).
 

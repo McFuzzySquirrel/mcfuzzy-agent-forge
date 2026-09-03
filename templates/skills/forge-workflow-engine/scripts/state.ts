@@ -53,6 +53,31 @@ export function initState(
   };
 }
 
+/** Preserve persisted task records by stable ID while adopting a new manifest. */
+export function reconcileState(state: WorkflowState, manifest: ExecutionManifest): WorkflowState {
+  const nextTasks: Record<string, TaskRecord> = {};
+  for (const phase of manifest.phases) {
+    for (const task of phase.tasks) {
+      nextTasks[task.id] = state.tasks[task.id] ?? {
+        taskId: task.id, status: "pending", ownerAgent: task.ownerAgent, attempt: 0, outputFiles: [],
+      };
+      if (state.tasks[task.id]) nextTasks[task.id] = { ...state.tasks[task.id], ownerAgent: task.ownerAgent };
+    }
+  }
+  const added = Object.keys(nextTasks).filter((id) => !state.tasks[id]);
+  const removed = Object.keys(state.tasks).filter((id) => !nextTasks[id]);
+  if (added.length === 0 && removed.length === 0 && state.manifestVersion === manifest.version) return state;
+  return {
+    ...state,
+    manifestVersion: manifest.version,
+    tasks: nextTasks,
+    blockers: [...state.blockers,
+      ...(added.length ? [`Manifest reconciliation added ${added.length} pending task(s): ${added.join(", ")}`] : []),
+      ...(removed.length ? [`Manifest reconciliation removed ${removed.length} task(s): ${removed.join(", ")}`] : [])],
+    lastUpdatedAt: new Date().toISOString(),
+  };
+}
+
 export function markTaskStarted(state: WorkflowState, taskId: string): WorkflowState {
   const task = state.tasks[taskId];
   if (!task) throw new Error(`Unknown task: ${taskId}`);

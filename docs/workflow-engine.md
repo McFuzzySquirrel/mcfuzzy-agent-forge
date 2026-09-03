@@ -77,6 +77,13 @@ This installs the adapter and engine dependencies, compiles the manifest if miss
 
 At `forge-auto-build`'s pre-flight gate, type `GO --workflow-engine`. The team is generated, the manifest is compiled, and the engine starts **detached** (log: `docs/engine-run.log`) while `forge-auto-build` polls `docs/WORKFLOW-STATE.json` to completion. To pick up a run later from any terminal, use `forge-launcher resume` or `forge-launcher engine-run`.
 
+For incremental work, add a Feature PRD with `forge-build-feature-prd`, update
+the affected team in Feature Increment Mode, and recompile the canonical
+manifest. Stable task IDs retain their completed state; new feature tasks are
+pending and can be selected for execution. On Linux, `xdg-open` from the
+`xdg-utils` package is optional for opening the dashboard automatically; the
+engine remains usable without desktop integration.
+
 ---
 
 ## Output verification gate

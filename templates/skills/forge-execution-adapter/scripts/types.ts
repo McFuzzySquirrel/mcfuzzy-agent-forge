@@ -106,6 +106,15 @@ export interface ExecutionManifest {
   };
   phases: ManifestPhase[];
   warnings: string[];
+  /** Information about task preservation when this manifest was recompiled. */
+  reconciliation?: ManifestReconciliation;
+}
+
+export interface ManifestReconciliation {
+  previousGeneratedAt?: string;
+  preservedTaskIds: string[];
+  newTaskIds: string[];
+  removedTaskIds: string[];
 }
 
 export type ProgressStatus = "In Progress" | "Paused" | "Complete";

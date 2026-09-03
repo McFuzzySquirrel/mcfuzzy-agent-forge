@@ -4,6 +4,18 @@ Detailed release and change notes for MyForge.
 
 ---
 
+## September 2026 - v3.42
+
+### Existing repository bootstrap and incremental project work
+
+- The Forge Console Home and Projects views can bootstrap MyForge into an existing repository with explicit harness, overwrite, and Git initialization controls.
+- Existing repositories can author context-aware project PRDs and additive Feature PRDs through `forge-build-feature-prd`, including after a completed build.
+- Manifest recompilation preserves task state by stable task ID and adds new feature tasks as pending.
+- Bootstrap and authoring output is written to the repository's `docs/engine-run.log` for live Console streaming.
+- Linux users may install `xdg-utils` for automatic browser/document opening; manual URL and path fallbacks remain available.
+
+---
+
 ## September 2026 - v3.41
 
 ### Forge Console: elapsed time now reflects completed task work

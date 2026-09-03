@@ -1,9 +1,8 @@
 import fs from "node:fs";
 import { createRequire } from "node:module";
-import os from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import { bootstrap } from "./bootstrap.ts";
+import { bootstrap, repositoryLogFile } from "./bootstrap.ts";
 import { upsertProject } from "./console/paths.ts";
 import { command, fail, header, info, link, ok, out, printLogTail, runCommand, runLogged, runWithHeartbeat, spawnDetached, step, warn } from "./format.ts";
 import { detectRepoRoot, expandPath, resolveInputFile } from "./paths.ts";
@@ -103,8 +102,8 @@ const state: LauncherState = {
 };
 
 /** Single tee-log for all long-running step output during this launcher run. */
-function runLogFile(): string {
-  return path.join(os.tmpdir(), `forge-launcher-${process.pid}.log`);
+function runLogFile(repoDir = state.repoDir): string {
+  return repositoryLogFile(repoDir);
 }
 
 function runLoggedStep(
@@ -1603,6 +1602,21 @@ export async function runDraftPrd(repoDir: string): Promise<number> {
   }
   await diagnoseAutoDraftFail("forge-auto-build-prd");
   return 1;
+}
+
+/** Authors a Feature PRD through the authoring skill; workflow execution is intentionally separate. */
+export async function runFeaturePrd(repoDir: string, featurePrompt?: string): Promise<number> {
+  setupStateForRepo(repoDir);
+  if (!featurePrompt?.trim()) {
+    if (prompts.nonInteractive) throw new Error("feature-prd requires --prompt in non-interactive mode");
+    featurePrompt = await prompt("What feature should be added?", "");
+  }
+  if (!featurePrompt.trim()) return 1;
+  const message = `/forge-build-feature-prd I want to add ${featurePrompt.trim()} to this project. Analyze the existing codebase and agent team, then produce a self-contained Feature PRD and save it under docs/features/. Do not modify the original PRD or start the workflow engine.`;
+  const ran = await runSkillHeadless(message, { nonInteractive: true });
+  if (!ran) return 1;
+  await draftCommit("docs: add feature PRD");
+  return 0;
 }
 
 /**

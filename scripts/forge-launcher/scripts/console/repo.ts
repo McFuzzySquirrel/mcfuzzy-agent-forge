@@ -732,6 +732,19 @@ function resolveJobOutcome(job: BackgroundJob): { status: BackgroundJob["status"
     return { status: "complete", message: "Project creation finished." };
   }
 
+  if (job.type === "bootstrap") {
+    return looksLikeForgeRepo(job.repoPath)
+      ? { status: "complete", message: "Repository bootstrap finished." }
+      : { status: "failed", message: "Bootstrap exited before creating a forge repo." };
+  }
+
+  if (job.type === "feature-prd") {
+    const p = repoPaths(job.repoPath);
+    return fs.existsSync(p.featuresDir) && listMarkdown(p.featuresDir).length > 0
+      ? { status: "complete", message: "Feature PRD authoring completed." }
+      : { status: "failed", message: "Feature PRD exited without producing docs/features/*.md." };
+  }
+
   if (!looksLikeForgeRepo(job.repoPath)) {
     return { status: "failed", message: "The project folder is not a forge repo." };
   }

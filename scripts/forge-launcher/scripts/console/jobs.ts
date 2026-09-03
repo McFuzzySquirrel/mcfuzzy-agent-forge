@@ -6,6 +6,8 @@ import { registryPath } from "./paths.ts";
 
 export type BackgroundJobType =
   | "create-project"
+  | "bootstrap"
+  | "feature-prd"
   | "draft-prd"
   | "draft-team"
   | "compile-manifest"

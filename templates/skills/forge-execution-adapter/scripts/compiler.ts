@@ -735,6 +735,26 @@ export function compileExecutionManifestDetailed(
   options: CompileOptions = {},
 ): { manifest: ExecutionManifest; matrix: string; validation: TeamValidation } {
   const manifest = compileExecutionManifest(repo, options);
+  // Compilation is intentionally deterministic, but the source can evolve. Record
+  // the ID delta so consumers can reconcile state without treating a recompile as
+  // a brand-new run.
+  if (existsSync(repo.manifestPath)) {
+    try {
+      const previous = JSON.parse(readFileSync(repo.manifestPath, "utf8")) as ExecutionManifest;
+      const oldIds = previous.phases.flatMap((phase) => phase.tasks.map((task) => task.id));
+      const newIds = manifest.phases.flatMap((phase) => phase.tasks.map((task) => task.id));
+      const oldSet = new Set(oldIds);
+      const newSet = new Set(newIds);
+      const preservedTaskIds = newIds.filter((id) => oldSet.has(id));
+      const newTaskIds = newIds.filter((id) => !oldSet.has(id));
+      const removedTaskIds = oldIds.filter((id) => !newSet.has(id));
+      manifest.reconciliation = { previousGeneratedAt: previous.generatedAt, preservedTaskIds, newTaskIds, removedTaskIds };
+      if (newTaskIds.length > 0) manifest.warnings.push(`Manifest reconciliation: ${newTaskIds.length} new task(s) start pending.`);
+      if (removedTaskIds.length > 0) manifest.warnings.push(`Manifest reconciliation: ${removedTaskIds.length} removed task(s) will be dropped from workflow state.`);
+    } catch {
+      manifest.warnings.push("Manifest reconciliation: existing manifest could not be read; compiled without preservation metadata.");
+    }
+  }
   const validation = validateTeam(manifest, repo.agents);
   if (validation.unassignedTasks.length > 0) {
     manifest.warnings.push(`Team validation: ${validation.unassignedTasks.length} unassigned task(s): ${validation.unassignedTasks.join(", ")}`);

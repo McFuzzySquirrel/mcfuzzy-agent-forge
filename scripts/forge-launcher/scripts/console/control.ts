@@ -8,6 +8,7 @@ import {
   normaliseSelectedTaskIds,
   normaliseSelectionScope,
 } from "../engine-config.ts";
+import { repositoryLogFile } from "../bootstrap.ts";
 import { engineDetachedCommand } from "../launcher.ts";
 import { startJob } from "./jobs.ts";
 import { findEngineDir, inferEngineHarness, repoPaths, upsertProject } from "./paths.ts";
@@ -100,7 +101,10 @@ export class RunController {
     repoRoot: string,
     deps: ControlDeps = {},
   ) {
-    this.repoRoot = repoRoot;
+    // Jobs may be created from a relative project selection. Persist one
+    // canonical absolute root so their docs log is the same file the Console
+    // poller follows.
+    this.repoRoot = path.resolve(repoRoot);
     this.spawner = deps.spawner ?? defaultSpawner;
     this.kill = deps.kill ?? defaultKill;
   }
@@ -167,6 +171,28 @@ export class RunController {
 
   draftTeam(): ControlResult {
     return this.draft("draft-team", "Agent team generation");
+  }
+
+  featurePrd(prompt: string): ControlResult {
+    const logFile = this.p.logPath;
+    const { cmd, args } = engineDetachedCommand(["feature-prd", "--repo", this.repoRoot, "--prompt", prompt]);
+    const { pid } = this.spawner(cmd, args, { cwd: this.repoRoot, logFile });
+    const job = startJob({ type: "feature-prd", repoPath: this.repoRoot, pid, logPath: logFile, message: "Feature PRD authoring started in the background." });
+    return { ok: true, message: "Feature PRD authoring started in the background.", pid, job };
+  }
+
+  bootstrap(req: { path: string; harness?: string; force?: boolean; initGit?: boolean }): ControlResult {
+    const target = path.resolve(req.path);
+    const logFile = repositoryLogFile(target);
+    const args = ["bootstrap", target];
+    if (req.harness) args.push("--harness", req.harness);
+    if (req.force) args.push("--force");
+    if (req.initGit) args.push("--init-git");
+    const { cmd, args: fullArgs } = engineDetachedCommand(args);
+    const { pid } = this.spawner(cmd, fullArgs, { cwd: target, logFile });
+    const job = startJob({ type: "bootstrap", repoPath: target, pid, logPath: logFile, message: "Repository bootstrap started in the background." });
+    upsertProject({ path: target });
+    return { ok: true, message: "Repository bootstrap started in the background.", pid, job };
   }
 
   compileManifest(): ControlResult {
@@ -289,6 +315,7 @@ export class RunController {
       case "replay": return taskId ? this.replay(taskId) : { ok: false, message: "replay requires a taskId." };
       case "draft-prd": return this.draftPrd();
       case "draft-team": return this.draftTeam();
+      case "feature-prd": return this.featurePrd("");
       case "compile-manifest": return this.compileManifest();
       default: return { ok: false, message: `Unknown action: ${action}` };
     }

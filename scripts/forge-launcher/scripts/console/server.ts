@@ -384,6 +384,11 @@ export async function startConsoleServer(options: ConsoleServerOptions = {}): Pr
           const action = body.action as ControlAction;
           const taskId = typeof body.taskId === "string" ? body.taskId : undefined;
           if (!currentRepo) return sendJson(res, 400, { ok: false, message: "no repo selected" });
+          if (action === "feature-prd") {
+            const prompt = typeof body.prompt === "string" ? body.prompt.trim() : "";
+            if (!prompt) return sendJson(res, 400, { ok: false, message: "prompt is required" });
+            return sendJson(res, 200, controller.featurePrd(prompt));
+          }
           return sendJson(res, 200, controller.dispatch(action, taskId));
         }
         if (urlPath === "/api/tasks/timeout") {
@@ -508,6 +513,14 @@ export async function startConsoleServer(options: ConsoleServerOptions = {}): Pr
             }
           }
           const result = controller.createProject(req);
+          return sendJson(res, 200, result);
+        }
+        if (urlPath === "/api/projects/bootstrap") {
+          const requestedPath = typeof body.path === "string" ? body.path.trim() : "";
+          if (!requestedPath) return sendJson(res, 400, { ok: false, message: "repository path is required" });
+          const target = path.resolve(requestedPath);
+          if (!fs.existsSync(target) || !fs.statSync(target).isDirectory()) return sendJson(res, 400, { ok: false, message: "directory not found" });
+          const result = controller.bootstrap({ path: target, harness: typeof body.harness === "string" ? body.harness : undefined, force: body.force === true, initGit: body.initGit === true });
           return sendJson(res, 200, result);
         }
         if (urlPath === "/api/open") {

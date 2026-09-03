@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
 
 import { compileExecutionManifestDetailed } from "./compiler.ts";
@@ -65,6 +65,7 @@ function main() {
 
     case "compile": {
       const repo = discoverForgeRepo(repoRoot);
+      const oldManifest = existsSync(repo.manifestPath) ? loadManifest(repo.manifestPath) : undefined;
       const granularityArg = flag(args, "--granularity");
       const granularity = granularityArg === "coarse" ? "coarse" : "fine";
       const { manifest, matrix, validation } = compileExecutionManifestDetailed(repo, { granularity });
@@ -77,6 +78,10 @@ function main() {
       const output = resolve(flag(args, "--output") ?? repo.manifestPath);
       mkdirSync(dirname(output), { recursive: true });
       writeFileSync(output, `${JSON.stringify(manifest, null, 2)}\n`, "utf8");
+      if (oldManifest && resolve(output) === resolve(repo.manifestPath) && existsSync(repo.progressPath)) {
+        const progress = parseProgress(repo.progressPath, oldManifest);
+        writeProgress(repo.progressPath, manifest, progress);
+      }
       appendAuditEvent(repo.auditPath, { timestamp: new Date().toISOString(), action: "manifest.compiled", note: output });
       console.log(`Wrote execution manifest to ${output}`);
       console.log(`Wrote responsibility matrix to ${matrixPath}`);

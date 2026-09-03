@@ -192,7 +192,8 @@ export interface AuditEvent {
     | "phase.complete"
     | "state.saved"
     | "artifact.created"
-    | "context.projected";
+     | "context.projected"
+     | "state.reconciled";
   runId?: string;
   taskId?: string;
   phaseId?: string;

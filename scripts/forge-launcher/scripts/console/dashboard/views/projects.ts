@@ -34,8 +34,24 @@ export function renderProjects(container: HTMLElement): void {
 
   container.appendChild(list);
   container.appendChild(buildAddFolder());
+  container.appendChild(buildBootstrap());
 
   void refreshProjects();
+}
+
+function buildBootstrap(): HTMLElement {
+  const input = el("input", { type: "text", placeholder: "/path/to/existing repository" });
+  const init = el("input", { type: "checkbox" });
+  const force = el("input", { type: "checkbox" });
+  const button = el("button", { className: "btn btn-primary" }, "Bootstrap repository");
+  button.addEventListener("click", () => void api.bootstrap({ path: (input as HTMLInputElement).value.trim(), initGit: (init as HTMLInputElement).checked, force: (force as HTMLInputElement).checked }).then((r) => toast(r.message)));
+  return el("div", { className: "panel" }, [
+    el("h4", null, "Bootstrap an existing repository"),
+    el("p", { className: "dim small" }, "Copy the Forge harness and skills into a repository. This runs as a tracked background job."),
+    el("div", { className: "dropdown-row" }, [input, button]),
+    el("label", { className: "checkbox-row" }, [init, el("span", null, "Initialize git if needed")]),
+    el("label", { className: "checkbox-row" }, [force, el("span", null, "Overwrite existing Forge files")]),
+  ]);
 }
 
 function openSelected(): void {

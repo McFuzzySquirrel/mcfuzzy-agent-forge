@@ -67,6 +67,17 @@ test("discoverForgeRepo resolves canonical harness root", () => {
   assert.equal(repo.skills.length, 1);
 });
 
+test("detailed compilation reports stable task reconciliation", () => {
+  const root = createFixture();
+  const repo = discoverForgeRepo(root);
+  const first = compileExecutionManifest(repo);
+  writeFileSync(repo.manifestPath, JSON.stringify(first), "utf8");
+  writeFileSync(join(root, "docs", "PRD.md"), readFileSync(join(root, "docs", "PRD.md"), "utf8") + "\n- Task 1.3: Add API tests in `tests/api.test.ts`\n", "utf8");
+  const next = compileExecutionManifestDetailed(repo).manifest;
+  assert.deepEqual(next.reconciliation?.preservedTaskIds, ["1.1", "1.2", "2.1"]);
+  assert.deepEqual(next.reconciliation?.newTaskIds, ["2.2"]);
+});
+
 test("discoverForgeRepo supports non-default harness roots", () => {
   const root = createFixture(".github");
   const repo = discoverForgeRepo(root);

@@ -8,6 +8,7 @@ import { join } from "node:path";
 import { allDepsComplete, isComplete, isTaskDone, mapLimit, nextReadyTasks, ownerUniqueReady, replayTask, runEngine } from "./engine.ts";
 import { runCommand } from "./harness/run.ts";
 import { readControl, writeControl } from "./control.ts";
+import { reconcileState } from "./state.ts";
 import type { EngineOptions, ExecutionManifest, HarnessAdapter, ManifestTask, TaskResult, TaskStatus, WorkflowState } from "./types.ts";
 
 type ManifestPhase = ExecutionManifest["phases"][number];
@@ -79,6 +80,14 @@ test("isTaskDone treats complete and skipped as done", () => {
   assert.equal(isTaskDone("running"), false);
   assert.equal(isTaskDone("failed"), false);
   assert.equal(isTaskDone(undefined), false);
+});
+
+test("reconcileState preserves completed records and adds pending tasks", () => {
+  const old = makeState({ "1.1": "complete" });
+  const manifest = makeManifest([makePhase("1", [makeTask("1.1"), makeTask("1.2", ["1.1"])])]);
+  const next = reconcileState(old, manifest);
+  assert.equal(next.tasks["1.1"]?.status, "complete");
+  assert.equal(next.tasks["1.2"]?.status, "pending");
 });
 
 test("allDepsComplete accepts skipped dependencies", () => {

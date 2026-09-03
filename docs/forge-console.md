@@ -64,7 +64,7 @@ project was created with (`opencode` or `copilot`) - see
 
 Projects you create or open are remembered in a registry at
 `~/.myforge/projects.json` (honors `FORGE_HOME`, then `XDG_CONFIG_HOME`). The
-**Home** view lists recent projects (most-recent-first) and offers two actions:
+**Home** view lists recent projects (most-recent-first) and offers three actions:
 
 - **Create a new project** - the New Project wizard collects a name, harness,
   visibility, parent directory, and idea, then spawns
@@ -74,6 +74,10 @@ Projects you create or open are remembered in a registry at
   below), mirroring the CLI's Step 6.
 - **Open an existing project** - a dropdown of your projects plus an
   "Add folder" input for a forge repo you have on disk but haven't opened yet.
+- **Bootstrap an existing repo** - copies MyForge into an existing application
+  repository. Existing files are preserved unless overwrite is explicitly
+  selected. A non-Git folder requires the explicit **Initialize git if needed**
+  option.
 
 The **Projects** tab has the same dropdown + add-folder flow.
 
@@ -93,12 +97,18 @@ so you can review each result and come back later:
 | Paused/incomplete run | **Resume build** | engine resumes from `WORKFLOW-STATE.json` |
 
 Each step runs detached in the background (output is appended to
-`docs/engine-run.log`, visible in the **Logs** view). The console now tracks
+`docs/engine-run.log`, visible in the **Logs** view). This includes bootstrap,
+PRD, team, and manifest-authoring jobs as well as engine output. The console now tracks
 those detached jobs directly, so the Overview can show whether work is actively
 creating the project, drafting the PRD, generating the team, running the build,
 paused, complete, or failed. Nothing runs until you click it, and the generated
 PRD/team are **view-only** in the console - review them in **Plan & Team** and
 edit them in your editor.
+
+Completed projects remain extensible. Use **Add a feature** on Overview to run
+`forge-build-feature-prd`. The skill inspects the existing codebase, PRD, and
+agent team and writes an additive document under `docs/features/`; it does not
+replace the original PRD or start the engine.
 
 The terminal counterparts are the new `draft-prd` / `draft-team` subcommands:
 

@@ -124,6 +124,12 @@ export const api = {
   control(action: ControlAction, taskId?: string): Promise<ControlResult> {
     return post<ControlResult>("/api/control", { action, taskId });
   },
+  bootstrap(req: { path: string; harness?: string; force?: boolean; initGit?: boolean }): Promise<ControlResult> {
+    return post<ControlResult>("/api/projects/bootstrap", req);
+  },
+  featurePrd(prompt: string): Promise<ControlResult> {
+    return post<ControlResult>("/api/control", { action: "feature-prd", prompt });
+  },
   setTaskTimeout(taskId: string, timeoutMs: number): Promise<TimeoutUpdateResult> {
     return post<TimeoutUpdateResult>("/api/tasks/timeout", { taskId, timeoutMs });
   },

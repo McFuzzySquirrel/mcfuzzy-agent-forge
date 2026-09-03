@@ -453,6 +453,9 @@ test("draft-prd, draft-team, and compile-manifest actions dispatch and return ok
     assert.equal((compile.body as { ok: boolean }).ok, true);
     assert.ok((compile.body as { message: string }).message.includes("Manifest"), "message should mention manifest");
     assert.ok(spawned.calls.at(-1)?.args.includes("compile-manifest"), "compile-manifest action should spawn the compile-manifest subcommand");
+    for (const call of spawned.calls.slice(-3)) {
+      assert.equal(call.opts.logFile, join(repo, "docs", "engine-run.log"));
+    }
   });
 });
 

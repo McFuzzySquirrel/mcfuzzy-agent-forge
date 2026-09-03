@@ -83,7 +83,20 @@ export async function renderOverview(container: HTMLElement): Promise<void> {
     renderManifest(summary),
     renderGuidance(container, summary, actions),
     renderActions(container, summary, actions, tasks),
+    renderFeaturePrd(container),
   ]);
+}
+
+function renderFeaturePrd(container: HTMLElement): HTMLElement {
+  const input = el("textarea", { rows: "3", placeholder: "Describe the feature to add…" });
+  const button = el("button", { className: "btn btn-primary" }, "Author Feature PRD");
+  button.addEventListener("click", () => {
+    const prompt = (input as HTMLTextAreaElement).value.trim();
+    if (!prompt) { toast("Describe the feature first."); return; }
+    button.setAttribute("disabled", "true");
+    void api.featurePrd(prompt).then((r) => toast(r.message)).catch((e) => toast(e instanceof Error ? e.message : "feature PRD failed"));
+  });
+  return el("div", { className: "panel" }, [el("h4", null, "Add a feature"), el("p", { className: "dim small" }, "Authoring writes a new document under docs/features/ and does not start the workflow engine."), input, el("div", { className: "actions" }, [button])]);
 }
 
 function renderHeader(summary: Summary): HTMLElement {

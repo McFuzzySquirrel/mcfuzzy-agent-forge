@@ -26,6 +26,7 @@
 |------|----------|---------|
 | `node` (18+) | For the npm package | Runs the `forge-launcher` package (canonical implementation) |
 | `git` | **Yes** | All harnesses |
+| `xdg-open` | Linux desktop optional | Opens the Console, workflow board, and documents automatically |
 | `gh` (GitHub CLI) | For GitHub harness | Creates and clones the GitHub repo |
 | `opencode` | For opencode harness auto-launch | Spawns the opencode session |
 | `claude` | For Claude Code harness auto-launch | Spawns the Claude Code session |
@@ -36,6 +37,21 @@
 > package** (see [ADR-023](adr/023-forge-launcher-npm-package.md)). The
 > `.sh` / `.ps1` scripts in `scripts/` are thin delegating wrappers kept for
 > compatibility and are scheduled for removal.
+
+On Linux, install `xdg-open` from the `xdg-utils` package for automatic browser
+and document opening:
+
+```bash
+# Debian/Ubuntu
+sudo apt install xdg-utils
+# Fedora
+sudo dnf install xdg-utils
+# Arch
+sudo pacman -S xdg-utils
+```
+
+It is optional. If it is unavailable, MyForge prints the URL or file path for
+manual opening. Headless and CI workflows do not require it.
 
 ---
 
@@ -50,6 +66,7 @@
 ```bash
 npx forge-launcher@beta [--non-interactive] [--headless] [--draft] [--dry-run] [--debug]
 npx forge-launcher@beta bootstrap [TARGET_DIR] [--harness agents|github|claude|opencode] [--force]
+npx forge-launcher@beta bootstrap [TARGET_DIR] ... [--init-git]
 npx forge-launcher@beta engine-run [--repo <path>] [--harness <h>] [--concurrency <n>]
                               [--task-timeout-ms <ms>] [--yes] [--dry-run]
                               [--keep-alive [--keep-alive-port <n>]] [--no-keep-alive] [--attach <url>]
@@ -57,6 +74,7 @@ npx forge-launcher@beta engine-run [--repo <path>] [--harness <h>] [--concurrenc
                               [--auto-commit|--no-auto-commit] [--commit-message-template <tmpl>]
 npx forge-launcher@beta resume [--repo <path>] [--non-interactive] [--dry-run]
 npx forge-launcher@beta console [--repo <path>] [--port <n>] [--no-open]
+npx forge-launcher@beta feature-prd --repo <path> --prompt "Describe the feature"
 ```
 
 When installed globally (`npm install -g forge-launcher@beta`), drop the `npx`.

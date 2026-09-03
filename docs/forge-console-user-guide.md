@@ -81,6 +81,16 @@ The console polls for state changes and updates the button label as each stage
 completes. When a detached step finishes or fails, Overview keeps the result
 visible and links you straight to **Logs**.
 
+To use MyForge with an application that already exists, open **Projects** and
+choose **Bootstrap an existing repo**. The folder must be a Git repository;
+enable **Initialize git if needed** explicitly for a non-Git folder. Existing
+application files are preserved, and Forge files are overwritten only when
+**Overwrite existing Forge files** is selected.
+
+After a build completes, use **Add a feature** on Overview. This runs
+`forge-build-feature-prd` against the existing codebase and team, writes an
+additive document under `docs/features/`, and leaves the original PRD intact.
+
 ---
 
 ## 4. Monitor a build in the main views
@@ -89,7 +99,7 @@ Once the build starts, switch between the views to follow the work:
 
 - **Board**: a live kanban view for tasks in To Do, In Progress, Done, and Failed.
 - **Tasks**: a sortable, filterable task table with a detail drawer for each task.
-- **Logs**: the engine log tail plus the live audit event stream.
+- **Logs**: the engine and authoring log tail plus the live audit event stream.
 - **Plan & Team**: the project documents and the generated agent/skill files.
   Documents open in a detail pane with an **Open externally** button; skills are
   shown as cards grouped into **Forge skills** and **Project skills**.

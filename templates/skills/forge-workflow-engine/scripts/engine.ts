@@ -25,6 +25,7 @@ import {
   markTaskFailed,
   markTaskSkipped,
   markTaskStarted,
+  reconcileState,
   saveState,
   setCurrentPhase,
   setSelection,
@@ -478,6 +479,16 @@ export async function runEngine(opts: EngineOptions): Promise<WorkflowState> {
 
   let state = loadState(opts.statePath)
     ?? initState(manifest, opts.manifestPath, opts.harness.name);
+  const reconciledState = reconcileState(state, manifest);
+  const wasReconciled = reconciledState !== state;
+  state = reconciledState;
+  if (wasReconciled) {
+    saveState(opts.statePath, state);
+    writeAuditEvent(opts.auditPath, {
+      timestamp: new Date().toISOString(), action: "state.reconciled", runId: state.runId,
+      note: `manifest=${manifest.generatedAt}`,
+    });
+  }
   const selection = resolveSelection(manifest, state, opts);
   state = setSelection(state, selection);
 

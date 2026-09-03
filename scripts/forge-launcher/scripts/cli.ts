@@ -4,7 +4,7 @@ import { bootstrapCli } from "./bootstrap.ts";
 import { consoleCli } from "./console/cli.ts";
 import { engineRunCli } from "./engine-run.ts";
 import { fail } from "./format.ts";
-import { runCompileManifest, runDraftPrd, runDraftTeam, runLauncher, runResume } from "./launcher.ts";
+import { runCompileManifest, runDraftPrd, runDraftTeam, runFeaturePrd, runLauncher, runResume } from "./launcher.ts";
 import { detectRepoRoot } from "./paths.ts";
 import { PromptCancelled, prompts } from "./prompts.ts";
 import { checkForUpdate, printUpdateNotice } from "./update-check.ts";
@@ -13,7 +13,7 @@ const USAGE = `forge-launcher - One command from zero to auto-build
 
 Usage:
   forge-launcher [options]
-  forge-launcher bootstrap [TARGET_DIR] [--harness agents|github|claude|opencode] [--force]
+  forge-launcher bootstrap [TARGET_DIR] [--harness agents|github|claude|opencode] [--force] [--init-git]
   forge-launcher engine-run [--repo <path>] [--harness <h>] [--granularity <fine|coarse>]
                             [--concurrency <n>] [--task-timeout-ms <ms>] [--max-retries <n>]
                             [--retry-delay-ms <ms>] [--heartbeat-ms <ms>] [--yes] [--dry-run]
@@ -24,6 +24,7 @@ Usage:
   forge-launcher resume [--repo <path>] [--non-interactive] [--dry-run]
   forge-launcher draft-prd [--repo <path>]      # headless: idea → PRD (Forge Console pipeline)
   forge-launcher draft-team [--repo <path>]     # headless: PRD → agent team
+  forge-launcher feature-prd [--repo <path>] [--prompt <text>] # author in docs/features/
   forge-launcher compile-manifest [--repo <path>]  # headless: team → execution manifest
 
 Launcher options:
@@ -63,12 +64,14 @@ async function main(): Promise<number> {
   if (args[0] === "bootstrap") return bootstrapCli(args.slice(1));
   if (args[0] === "console") return consoleCli(args.slice(1));
   if (args[0] === "engine-run") return engineRunCli(args.slice(1));
-  if (args[0] === "draft-prd" || args[0] === "draft-team" || args[0] === "compile-manifest") {
+  if (args[0] === "draft-prd" || args[0] === "draft-team" || args[0] === "compile-manifest" || args[0] === "feature-prd") {
     let repo: string | undefined;
+    let featurePrompt: string | undefined;
     const rest = args.slice(1);
     for (let i = 0; i < rest.length; i++) {
       const a = rest[i];
       if (a === "--repo") repo = rest[++i];
+      else if (a === "--prompt") featurePrompt = rest[++i];
       else if (a === "-h" || a === "--help") { process.stdout.write(USAGE); return 0; }
       else {
         fail(`Unknown option: ${a}`);
@@ -79,6 +82,7 @@ async function main(): Promise<number> {
     const repoDir = repo ? path.resolve(repo) : detectRepoRoot();
     if (args[0] === "draft-prd") return runDraftPrd(repoDir);
     if (args[0] === "draft-team") return runDraftTeam(repoDir);
+    if (args[0] === "feature-prd") return runFeaturePrd(repoDir, featurePrompt);
     return runCompileManifest(repoDir);
   }
   if (args[0] === "resume") {
