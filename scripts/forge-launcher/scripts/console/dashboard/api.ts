@@ -149,6 +149,10 @@ export const api = {
   setAllTaskTimeouts(timeoutMs: number): Promise<TimeoutUpdateResult> {
     return post<TimeoutUpdateResult>("/api/tasks/timeout", { timeoutMs });
   },
+  resetChangedTasks(): Promise<{ ok: boolean; message: string; affected?: number; taskIds?: string[] }> {
+    return post("/api/tasks/reset-changed", {});
+  },
+  authoringEvents(): Promise<Record<string, unknown>[]> { return request<Record<string, unknown>[]>("/api/authoring-events"); },
   openExternal(path: string): Promise<OpenResult> {
     return post<OpenResult>("/api/open", { path });
   },

@@ -270,7 +270,7 @@ export interface FileContent {
   content: string;
 }
 
-export type ControlAction = "run" | "resume" | "pause" | "stop" | "replay" | "draft-prd" | "draft-existing-prd" | "draft-team" | "compile-manifest" | "feature-prd" | "feature-increment";
+export type ControlAction = "run" | "resume" | "pause" | "stop" | "replay" | "reset-changed" | "draft-prd" | "draft-existing-prd" | "draft-team" | "compile-manifest" | "feature-prd" | "feature-increment";
 
 export type ExecutionMode = "auto" | "manual";
 export type SelectionScope = "single" | "range" | "list";

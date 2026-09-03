@@ -335,6 +335,8 @@ export async function startConsoleServer(options: ConsoleServerOptions = {}): Pr
             return p ? sendJson(res, 200, repo.tasks(p)) : sendJson(res, 200, []);
           case "/api/audit":
             return p ? sendJson(res, 200, repo.loadAudit(p)) : sendJson(res, 200, []);
+          case "/api/authoring-events":
+            return p ? sendJson(res, 200, repo.authoringEvents(p)) : sendJson(res, 200, []);
           case "/api/logs": {
             if (!p) return sendJson(res, 200, { lines: [], truncated: false });
             const q = new URLSearchParams(rawUrl.split("?")[1] ?? "");
@@ -407,6 +409,12 @@ export async function startConsoleServer(options: ConsoleServerOptions = {}): Pr
             return sendJson(res, 200, controller.featureIncrement(prompt, body.run === true));
           }
           return sendJson(res, 200, controller.dispatch(action, taskId));
+        }
+        if (urlPath === "/api/tasks/reset-changed") {
+          if (!currentRepo) return sendJson(res, 400, { ok: false, message: "no repo selected" });
+          const result = repo.resetChangedCompletedTasks(currentPaths()!);
+          if (result.ok) broadcast("snapshot", snapshotEvent());
+          return sendJson(res, result.ok ? 200 : 400, result);
         }
         if (urlPath === "/api/tasks/timeout") {
           const timeoutMs = Number(body.timeoutMs);

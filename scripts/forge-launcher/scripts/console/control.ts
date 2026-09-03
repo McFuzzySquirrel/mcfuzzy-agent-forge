@@ -12,6 +12,7 @@ import { repositoryLogFile } from "../bootstrap.ts";
 import { engineDetachedCommand } from "../launcher.ts";
 import { startJob } from "./jobs.ts";
 import { findEngineDir, inferEngineHarness, repoPaths, upsertProject } from "./paths.ts";
+import { resetChangedCompletedTasks } from "./repo.ts";
 import type {
   ControlAction,
   ControlResult,
@@ -328,6 +329,10 @@ export class RunController {
       case "run": return this.run();
       case "resume": return this.run("engine-resume");
       case "replay": return taskId ? this.replay(taskId) : { ok: false, message: "replay requires a taskId." };
+      case "reset-changed": {
+        const result = resetChangedCompletedTasks(this.p);
+        return { ok: result.ok, message: result.message };
+      }
       case "draft-prd": return this.draftPrd();
       case "draft-existing-prd": return this.draftExistingPrd();
       case "draft-team": return this.draftTeam();

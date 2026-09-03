@@ -89,6 +89,7 @@ function makeRepo(): string {
   writeFileSync(join(docs, "WORKFLOW-STATE.json"), JSON.stringify(state), "utf8");
   writeFileSync(join(docs, "EXECUTION-AUDIT.jsonl"), "", "utf8");
   writeFileSync(join(docs, "engine-run.log"), "line one\nline two\n", "utf8");
+  writeFileSync(join(docs, "AUTHORING-EVENTS.jsonl"), "", "utf8");
 
   mkdirSync(join(docs, "artifacts", "solution"), { recursive: true });
   writeFileSync(

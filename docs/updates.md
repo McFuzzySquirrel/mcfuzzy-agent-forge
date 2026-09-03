@@ -4,6 +4,16 @@ Detailed release and change notes for MyForge.
 
 ---
 
+## September 2026 - v3.44
+
+### Reviewable authoring and incremental execution controls
+
+- Authoring lifecycle events are persisted as structured JSON Lines in `docs/AUTHORING-EVENTS.jsonl`. The existing `FORGE_EVENT` records in `docs/engine-run.log` and Console SSE `authoring` stream remain compatible with existing consumers.
+- The Console exposes `POST /api/tasks/reset-changed` and a matching Overview control to reset completed or skipped tasks listed in manifest reconciliation's `changedTaskIds` back to pending after review. Task output, timestamps, errors, and artifact references are cleared so the task can execute against its revised contract.
+- Added `npm run check:version`, an automated guard that verifies README's Latest version matches the first release heading in `docs/updates.md`, with unit coverage for matching, drift, and missing metadata.
+
+---
+
 ## September 2026 - v3.43
 
 ### Increment authoring observability and reconciliation guidance

@@ -404,6 +404,10 @@ function renderActions(container: HTMLElement, summary: Summary, actions: Action
   const mode = renderBuildModeControl(container, summary.executionMode, summary.selectedTaskCount);
   const commit = renderAutoCommitToggle(container, store.summary?.autoCommit ?? true);
   const concurrency = renderConcurrencyControl(container, store.summary?.concurrency ?? 0);
+  const reset = el("button", { className: "btn btn-sm" }, "Reset changed tasks for review");
+  reset.addEventListener("click", () => {
+    void api.resetChangedTasks().then((res) => { toast(res.message); void renderOverview(container); }).catch((err) => toast(err instanceof Error ? err.message : "reset failed"));
+  });
 
   return el("div", { className: "panel" }, [
     el("h4", null, "Controls"),
@@ -416,6 +420,7 @@ function renderActions(container: HTMLElement, summary: Summary, actions: Action
     timeouts,
     commit,
     concurrency,
+    el("div", { style: "margin-top:10px" }, [reset, el("span", { className: "dim small" }, " Re-run completed tasks whose manifest contract changed.")]),
   ]);
 }
 

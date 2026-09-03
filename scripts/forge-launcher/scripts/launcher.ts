@@ -113,7 +113,11 @@ function runLogFile(repoDir = state.repoDir): string {
 function authoringEvent(type: string, data: Record<string, unknown> = {}): void {
   const record = { type, timestamp: new Date().toISOString(), ...data };
   fs.mkdirSync(path.dirname(runLogFile()), { recursive: true });
-  fs.appendFileSync(runLogFile(), `FORGE_EVENT ${JSON.stringify(record)}\n`, "utf8");
+  const encoded = `${JSON.stringify(record)}\n`;
+  // Keep the human/process log and its FORGE_EVENT compatibility prefix, while
+  // giving consumers a lossless structured stream that does not need log parsing.
+  fs.appendFileSync(runLogFile(), `FORGE_EVENT ${encoded}`, "utf8");
+  fs.appendFileSync(path.join(path.dirname(runLogFile()), "AUTHORING-EVENTS.jsonl"), encoded, "utf8");
 }
 
 function runLoggedStep(
