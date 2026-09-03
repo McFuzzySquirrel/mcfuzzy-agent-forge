@@ -846,3 +846,27 @@ test("launch-cli chooses copilot for a GitHub harness and reports the manual fal
     else process.env.FORGE_HOME = prevHome;
   }
 });
+
+test("model planning endpoint launches the selected interactive CLI", async () => {
+  await withServer(async (server, repo) => {
+    const calls: Array<{ cli: string; dir: string; args: string[] }> = [];
+    // This test uses a second server seam because the shared fixture intentionally
+    // does not enable external terminal launches.
+    await server.stop();
+    const replacement = await startConsoleServer({
+      repoRoot: repo,
+      port: nextPort(),
+      open: false,
+      allowExternalOpen: true,
+      onLog: () => {},
+      launchCli: async (cli, dir, args) => { calls.push({ cli, dir, args }); return true; },
+    });
+    try {
+      const result = await postJson(`${replacement.url}/api/model-plan/terminal`, { provider: "copilot", message: "Review MODEL-PLAN.md" }, { "X-Forge-Token": replacement.token });
+      assert.equal((result.body as { ok: boolean }).ok, true);
+      assert.deepEqual(calls[0], { cli: "copilot", dir: repo, args: ["-i", "Review MODEL-PLAN.md"] });
+    } finally {
+      await replacement.stop();
+    }
+  });
+});

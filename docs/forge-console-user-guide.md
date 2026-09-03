@@ -113,7 +113,9 @@ Once the build starts, switch between the views to follow the work:
 - **Logs**: the engine and authoring log tail plus the live audit event stream.
 - **Plan & Team**: the project documents and the generated agent/skill files.
   Documents open in a detail pane with an **Open externally** button; skills are
-  shown as cards grouped into **Forge skills** and **Project skills**.
+  shown as cards grouped into **Forge skills** and **Project skills**. Agent
+  cards also expose primary and fallback model selectors when a model inventory
+  has been discovered.
 - **Artifacts**: structured outputs produced by the run, browsable by type and task.
 - **Timeline**: a chronological record of important events and failures.
 
@@ -144,6 +146,49 @@ The Overview controls panel offers the same actions you would otherwise issue fr
 - **Concurrency (parallel agents)**: sets how many agents the engine runs in parallel. Enter a positive integer (e.g. `3`) and click **Set**; enter `0` to return to the engine default. The setting is saved to `docs/engine-config.json` and takes effect on the next Run or Resume.
 - **Reset changed tasks for review**: after feature reconciliation, resets completed or skipped tasks whose contracts changed back to pending. Review the changed task IDs before using this action.
 - **Launch \<harness\> CLI**: opens the project's harness CLI (opencode/copilot/claude) in a new terminal from the project folder, so you can watch the live run and take over manually. Also available on the Tasks header.
+
+### Assign models to agents
+
+Run the `forge-assign-models` skill after the team has been generated. It builds
+`docs/research/model-inventory.json` from the models available to the local
+environment:
+
+- `opencode models` for OpenCode models,
+- `copilot -p "/model list"` for Copilot models,
+- the local Ollama API when Ollama is running, and
+- the configured BYOK provider when `COPILOT_PROVIDER_BASE_URL` is set.
+
+The skill normalizes command output before using it. Headings, bullets,
+numbering, provider labels, table borders, and annotations such as
+`(recommended)` are removed. Only canonical model IDs are assigned; raw CLI
+output is retained only for diagnostics. BenchLM capability and evidence data
+may be attached to discovered models, but BenchLM does not make a model
+available by itself.
+
+Open **Plan & Team → Agents** to choose a primary and fallback model for an
+agent. The selectors only accept models present in the discovered inventory.
+Saving an override writes `docs/model-overrides.json`; it does not rewrite the
+agent file. The override applies to every task owned by that agent and takes
+precedence over the recommendation. Apply mode in `forge-assign-models` can
+explicitly copy the values into agent frontmatter when that is desired.
+
+The effective selection order is:
+
+```text
+manual agent override → generated recommendation → harness/default model
+```
+
+The **Model planning terminal** control in the Agents section opens a new
+interactive terminal in the repository. Choose OpenCode or Copilot, enter a
+message, and launch it using one of these commands:
+
+```bash
+opencode --prompt "<message>"
+copilot -i "<message>"
+```
+
+The assistant is not applied automatically. Review its changes and update the
+model plan or agent overrides explicitly.
 
 For a targeted run before the first build starts, enable the **Manual build**
 checkbox in the Overview pipeline card and click **Create manifest**. The

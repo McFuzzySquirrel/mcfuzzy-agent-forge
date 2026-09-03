@@ -46,6 +46,8 @@ export interface ManifestTask {
   title: string;
   description: string;
   ownerAgent?: string;
+  /** Optional per-task override; normally model selection is agent-level. */
+  model?: string;
   dependencies: string[];
   expectedOutputs: string[];
   validationCommands: string[];

@@ -22,6 +22,7 @@ import type {
   Summary,
   TaskRow,
   TeamIndex,
+  ModelInventory,
   TimeoutUpdateResult,
   UploadResult,
   WorkflowState,
@@ -88,6 +89,15 @@ export const api = {
   },
   team(): Promise<TeamIndex> {
     return request<TeamIndex>("/api/team");
+  },
+  modelInventory(): Promise<ModelInventory> {
+    return request<ModelInventory>("/api/model-inventory");
+  },
+  setModelOverride(agent: string, primary?: string, fallback?: string): Promise<{ ok: boolean; message: string }> {
+    return post("/api/model-plan/override", { agent, primary, fallback });
+  },
+  launchModelTerminal(provider: "opencode" | "copilot", message: string): Promise<LaunchCliResult> {
+    return post<LaunchCliResult>("/api/model-plan/terminal", { provider, message });
   },
   teamContent(relPath: string): Promise<FileContent> {
     return request<FileContent>(`/api/team/content?path=${encodeURIComponent(relPath)}`);

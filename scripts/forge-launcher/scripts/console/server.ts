@@ -349,6 +349,8 @@ export async function startConsoleServer(options: ConsoleServerOptions = {}): Pr
             return p ? sendJson(res, 200, repo.docsIndex(p)) : sendJson(res, 200, { entries: [] });
           case "/api/team":
             return p ? sendJson(res, 200, repo.team(p)) : sendJson(res, 200, { harnessRoot: null, agents: [], skills: [] });
+          case "/api/model-inventory":
+            return p ? sendJson(res, 200, repo.modelInventory(p)) : sendJson(res, 200, { models: [] });
           case "/api/actions":
             return p ? sendJson(res, 200, repo.actions(p)) : sendJson(res, 200, { canRun: false, canResume: false, canPause: false, canStop: false, failedTasks: [] });
           case "/api/projects": {
@@ -518,6 +520,26 @@ export async function startConsoleServer(options: ConsoleServerOptions = {}): Pr
               ? `${cli} launched in a new terminal (cwd: ${currentRepo}).`
               : `No supported terminal emulator found - run it manually: ${command}`,
           });
+        }
+        if (urlPath === "/api/model-plan/override") {
+          if (!currentRepo) return sendJson(res, 400, { ok: false, message: "no repo selected" });
+          const agent = typeof body.agent === "string" ? body.agent : "";
+          const primary = typeof body.primary === "string" && body.primary.trim() ? body.primary.trim() : undefined;
+          const fallback = typeof body.fallback === "string" && body.fallback.trim() ? body.fallback.trim() : undefined;
+          const result = repo.setModelOverride(currentPaths()!, agent, primary, fallback);
+          if (result.ok) broadcast("snapshot", snapshotEvent());
+          return sendJson(res, result.ok ? 200 : 400, result);
+        }
+        if (urlPath === "/api/model-plan/terminal") {
+          if (!options.allowExternalOpen) return sendJson(res, 200, { ok: false, message: "terminal launch not enabled" });
+          if (!currentRepo) return sendJson(res, 400, { ok: false, message: "no repo selected" });
+          const provider = body.provider === "copilot" ? "copilot" : body.provider === "opencode" ? "opencode" : "";
+          const message = typeof body.message === "string" ? body.message.trim() : "";
+          if (!provider || !message || message.length > 10000) return sendJson(res, 400, { ok: false, message: "provider and a message up to 10000 characters are required" });
+          const args = provider === "copilot" ? ["-i", message] : ["--prompt", message];
+          const launched = await launchCli(provider, currentRepo, args);
+          const command = `${provider} ${args.map((arg) => JSON.stringify(arg)).join(" ")}`;
+          return sendJson(res, 200, { ok: true, launched, cli: provider, command, message: launched ? `${provider} launched in a new terminal.` : `Run manually: cd "${currentRepo}" && ${command}` });
         }
         if (urlPath === "/api/projects/create") {
           const req = body as unknown as CreateProjectRequest;

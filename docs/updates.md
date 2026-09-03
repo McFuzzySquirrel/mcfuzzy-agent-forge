@@ -4,6 +4,17 @@ Detailed release and change notes for MyForge.
 
 ---
 
+## September 2026 - v3.46
+
+### Live model inventory and agent-level model overrides
+
+- `forge-assign-models` can discover normalized model IDs from `opencode models` and `copilot -p "/model list"`, retain diagnostics, and enrich capabilities with BenchLM evidence.
+- Plan & Team exposes agent-level primary/fallback model overrides backed by `docs/model-overrides.json`; overrides are inherited by every task owned by that agent.
+- The Console can launch an interactive OpenCode or Copilot model-planning terminal from the Model Plan view.
+- OpenCode agent and skill discovery is explicitly supported, including `.opencode/agents` and `.opencode/skills`.
+
+---
+
 ## September 2026 - v3.45
 
 ### Forge Console: synchronize the user guide and Quick help

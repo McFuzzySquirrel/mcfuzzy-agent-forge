@@ -22,6 +22,7 @@ import type {
   TeamIndex,
   TimeoutUpdateResult,
   WorkflowState,
+  ModelInventory,
 } from "./types.ts";
 import {
   loadEngineConfig,
@@ -415,6 +416,41 @@ export function tasks(p: RepoPaths): TaskRow[] {
   return rows;
 }
 
+export function modelInventory(p: RepoPaths): ModelInventory {
+  const file = path.join(p.repoRoot, "docs", "research", "model-inventory.json");
+  const value = readJson<Record<string, unknown>>(file) ?? {};
+  const models: ModelInventory["models"] = [];
+  for (const [provider, section] of Object.entries(value)) {
+    if (!section || typeof section !== "object" || !Array.isArray((section as { models?: unknown }).models)) continue;
+    for (const item of (section as { models: unknown[] }).models) {
+      if (typeof item !== "object" || item === null) continue;
+      const raw = item as { id?: unknown; name?: unknown; capabilities?: Record<string, unknown> };
+      const id = typeof raw.id === "string" ? raw.id : typeof raw.name === "string" ? raw.name : "";
+      if (id && !models.some((model) => model.id.toLowerCase() === id.toLowerCase())) models.push({ id, provider, capabilities: raw.capabilities });
+    }
+  }
+  return { models, last_verified: typeof value.last_verified === "string" ? value.last_verified : undefined };
+}
+
+export function modelOverrides(p: RepoPaths): Record<string, { primary?: string; fallback?: string }> {
+  return readJson<Record<string, { primary?: string; fallback?: string }>>(p.modelOverridesPath) ?? {};
+}
+
+export function setModelOverride(p: RepoPaths, agent: string, primary?: string, fallback?: string): { ok: boolean; message: string } {
+  const name = agent.trim();
+  if (!name) return { ok: false, message: "agent is required" };
+  const inventory = modelInventory(p).models.map((model) => model.id.toLowerCase());
+  for (const model of [primary, fallback]) {
+    if (model && !inventory.includes(model.toLowerCase())) return { ok: false, message: `Model is not in the discovered inventory: ${model}` };
+  }
+  const overrides = modelOverrides(p);
+  if (primary || fallback) overrides[name] = { ...(primary ? { primary } : {}), ...(fallback ? { fallback } : {}) };
+  else delete overrides[name];
+  fs.mkdirSync(path.dirname(p.modelOverridesPath), { recursive: true });
+  fs.writeFileSync(p.modelOverridesPath, `${JSON.stringify(overrides, null, 2)}\n`, "utf8");
+  return { ok: true, message: primary || fallback ? `Saved model override for ${name}.` : `Cleared model override for ${name}.` };
+}
+
 // ─── Logs ────────────────────────────────────────────────────────────────────
 
 export function logs(p: RepoPaths, lines = 400): LogsResponse {
@@ -610,6 +646,7 @@ function listAgents(repoRoot: string, harnessRoot: string): AgentInfo[] {
     const raw = readText(file) ?? "";
     const fm = parseFrontmatter(raw);
     const content = raw.replace(/^---\r?\n[\s\S]*?\r?\n---\r?\n?/, "");
+    const overrides = modelOverrides(repoPaths(repoRoot))[fm.name ?? path.basename(file, ".md")];
     return {
       name: fm.name ?? path.basename(file, ".md"),
       description: (fm.description ?? "").replace(/\s+/g, " ").trim(),
@@ -620,6 +657,8 @@ function listAgents(repoRoot: string, harnessRoot: string): AgentInfo[] {
       expertise: sectionBullets(content, "Expertise"),
       collaboration: sectionBullets(content, "Collaboration"),
       constraints: sectionBullets(content, "Constraints"),
+      modelOverride: overrides?.primary,
+      modelFallbackOverride: overrides?.fallback,
     };
   });
 }
@@ -640,6 +679,11 @@ function listSkills(repoRoot: string, harnessRoot: string): SkillInfo[] {
   });
 }
 
+function harnessRoots(repoRoot: string, preferred: string): string[] {
+  const roots = [preferred, ".opencode", ".agents", ".github", ".claude"];
+  return [...new Set(roots)].filter((root) => fs.existsSync(path.join(repoRoot, root)));
+}
+
 let cachedForgeSkills: Set<string> | null = null;
 
 /** Directory names of the forge template skills (the set `bootstrap()` copies). */
@@ -657,10 +701,11 @@ function forgeSkillNames(): Set<string> {
 export function team(p: RepoPaths): TeamIndex {
   const harnessRoot = detectHarnessRoot(p.repoRoot);
   if (!harnessRoot) return { harnessRoot: null, agents: [], skills: [] };
+  const roots = harnessRoots(p.repoRoot, harnessRoot);
   return {
     harnessRoot,
-    agents: listAgents(p.repoRoot, harnessRoot),
-    skills: listSkills(p.repoRoot, harnessRoot),
+    agents: roots.flatMap((root) => listAgents(p.repoRoot, root)),
+    skills: roots.flatMap((root) => listSkills(p.repoRoot, root)),
   };
 }
 

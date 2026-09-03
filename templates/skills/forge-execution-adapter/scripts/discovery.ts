@@ -75,13 +75,21 @@ function parseAgent(path: string, repoRoot: string): AgentDescriptor {
     );
   }
   const data = parsed.data as Record<string, unknown>;
+  let override: { primary?: string; fallback?: string } | undefined;
+  try {
+    const overrides = JSON.parse(readFileSync(join(repoRoot, "docs", "model-overrides.json"), "utf8")) as Record<string, { primary?: string; fallback?: string }>;
+    const key = typeof data.name === "string" ? data.name : relative(repoRoot, path);
+    override = overrides[key];
+  } catch {
+    // Overrides are optional; frontmatter remains the source of defaults.
+  }
 
   return {
     name: typeof data.name === "string" ? data.name : relative(repoRoot, path),
     description: typeof data.description === "string" ? data.description.replace(/\s+/g, " ").trim() : "",
     path,
-    model: typeof data.model === "string" ? data.model : undefined,
-    modelFallback: typeof data.modelFallback === "string" ? data.modelFallback : undefined,
+    model: override?.primary ?? (typeof data.model === "string" ? data.model : undefined),
+    modelFallback: override?.fallback ?? (typeof data.modelFallback === "string" ? data.modelFallback : undefined),
     expertise: sectionBullets(parsed.content, "Expertise"),
     collaboration: sectionBullets(parsed.content, "Collaboration"),
     constraints: sectionBullets(parsed.content, "Constraints"),

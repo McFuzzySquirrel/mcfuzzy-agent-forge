@@ -6,7 +6,7 @@ The canonical shape for `docs/research/model-inventory.json`:
 
 ```json
 {
-  "schema_version": 1,
+  "schema_version": 2,
   "last_verified": "YYYY-MM-DDTHH:MM:SSZ",
   "ollama": {
     "available": true,
@@ -24,18 +24,38 @@ The canonical shape for `docs/research/model-inventory.json`:
       }
     ]
   },
+  "opencode_cli": {
+    "available": true,
+    "command": "opencode models",
+    "models": [
+      {
+        "id": "anthropic/claude-sonnet-4",
+        "normalized": true,
+        "capabilities": {
+          "overall_score": 82.1,
+          "agentic_score": 79,
+          "coding_score": 84,
+          "reasoning_score": 81,
+          "context_length": 1000000,
+          "evidence_status": "Supported",
+          "source_url": "https://benchlm.ai/models/example",
+          "retrieved_at": "YYYY-MM-DDTHH:MM:SSZ"
+        }
+      }
+    ],
+    "diagnostics": { "raw_output": "", "error": null }
+  },
+  "copilot_cli": {
+    "available": true,
+    "command": "copilot -p /model list",
+    "models": [],
+    "diagnostics": { "raw_output": "", "error": null }
+  },
   "byok_provider": {
     "endpoint": "http://localhost:11434",
     "models": []
   },
-  "copilot_subscription": {
-    "plan": "user-confirmed",
-    "models": [
-      { "id": "claude-sonnet-4.x", "tier_hint": "balanced" },
-      { "id": "claude-haiku-4.x", "tier_hint": "fast" },
-      { "id": "gpt-5", "tier_hint": "reasoning" }
-    ]
-  }
+  "copilot_subscription": { "plan": "discovered-by-copilot-cli", "models": [] }
 }
 ```
 

@@ -1,11 +1,11 @@
 ---
 name: forge-assign-models
-description: "Discover which LLM models are available to the user (cloud subscription + local Ollama), classify each generated agent's workload, and recommend (and optionally apply) a per-agent model assignment so that lightweight agents do not default to the most expensive model. Use this skill after `forge-build-agent-team` has produced an agent team, or any time the team changes."
+description: "Discover the user's available OpenCode, Copilot, BYOK, and local Ollama models, enrich their capabilities with BenchLM evidence, classify generated agents, and recommend or apply per-agent model assignments. Use after `forge-build-agent-team` or whenever the team changes."
 ---
 
 # Skill: Assign Models to a Generated Agent Team
 
-You are assigning a per-agent LLM model to each agent in `HARNESS_AGENTS_DIR`. Load `forge-build-agent-team/references/detect-harness.md` to determine `HARNESS_AGENTS_DIR` for this repository before proceeding. The goal is to match each agent's actual workload (reasoning depth, context size, tool-use, latency sensitivity, safety) to a model from the **inventory the user actually has access to** — including local Ollama models - instead of defaulting every agent to the strongest (and most expensive) cloud model.
+You are assigning a per-agent LLM model to each agent in `HARNESS_AGENTS_DIR`. Load `forge-build-agent-team/references/detect-harness.md` to determine `HARNESS_AGENTS_DIR` for this repository before proceeding. Explicitly inspect `.opencode/agents/**/*.md` and `.opencode/skills/**/SKILL.md` when the repository uses OpenCode. Match each agent's actual workload to a model from the **inventory the user actually has access to**, rather than defaulting every agent to the strongest cloud model.
 
 This skill is **opt-in and post-hoc**. The `model:` field is optional; absence means "use
 the user's current default model".
@@ -56,15 +56,29 @@ Default to `http://localhost:11434` (honor `OLLAMA_HOST` if set).
 
 If Ollama is unreachable, record `{ "ollama": { "available": false, "reason": "..." } }` and continue.
 
-#### 1b. BYOK Provider
+#### 1b. OpenCode CLI
+
+Run `opencode models` when the command is available. Capture raw output for diagnostics, then normalize each candidate before persistence. Never assign display text returned by the CLI.
+
+#### 1c. Copilot CLI
+
+Run `copilot -p "/model list"` when the command is available. Capture raw output for diagnostics, then normalize each candidate before persistence. This replaces the old static subscription catalog.
+
+#### 1d. Normalize CLI model output
+
+Parse output line-by-line and strip headings, bullets, numbering, table borders, quotes, backticks, provider labels, and trailing annotations such as `(recommended)` or `[available]`. Preserve provider-qualified IDs when they are part of the actual identifier, such as `openai/gpt-5`. Reject empty or clearly non-model lines, deduplicate case-insensitively, and retain the canonical spelling from the source. Store raw output only under diagnostics; use normalized IDs everywhere else. If a line is ambiguous, mark it unverified rather than guessing.
+
+Examples: `OpenAI: gpt-5` becomes `gpt-5`; `Anthropic - claude-sonnet-4 (recommended)` becomes `claude-sonnet-4`; `openai/gpt-5` remains `openai/gpt-5`.
+
+#### 1e. BYOK Provider
 
 If `COPILOT_PROVIDER_BASE_URL` is set: `GET {base_url}/v1/models`. Capture `id` and `context_length`. On 401/403/404, record the reason and skip.
 
-#### 1c. Copilot Subscription
+#### 1f. BenchLM capability enrichment
 
-Copilot subscription models are **not enumerable from a skill**. Present the tier catalog from `references/model-inventory-schema.md` and ask the user to confirm which models their plan shows. Treat as a hint, not truth - the user must verify against their current model picker.
+For each normalized model, query BenchLM's public model/leaderboard data when available and attach the model URL, overall score, agentic/tool-use score, coding score, reasoning score, context length, evidence status, and retrieval timestamp. BenchLM is capability evidence only: a model is assignable only if OpenCode, Copilot, BYOK, or Ollama discovered it. Unmatched models remain usable with `capabilities: "unverified"`; an unavailable BenchLM response must not discard a discovered model.
 
-#### 1d. Persist the Inventory
+#### 1g. Persist the Inventory
 
 Write `docs/research/model-inventory.json`. Load `references/model-inventory-schema.md` for the canonical JSON shape. Adapt to what was actually discovered; omit empty sections.
 
@@ -74,9 +88,9 @@ If in **Discover** mode, stop here and present a human-readable summary.
 
 ### Step 2: Read and Classify Each Agent's Workload
 
-For each file matching `HARNESS_AGENTS_DIR/*.md`:
+For each file matching `HARNESS_AGENTS_DIR/**/*.md` (including `.opencode/agents`):
 1. Parse YAML frontmatter (`name`, `description`, `model`, `modelFallback`).
-2. Read skills referenced in `## Collaboration` / `## Skills` sections - they often reveal the real workload.
+2. Read skills referenced in `## Collaboration` / `## Skills` sections and discover `.opencode/skills/**/SKILL.md`; they often reveal the real workload.
 
 Score each agent on this rubric (1 = low, 2 = medium, 3 = high):
 
@@ -140,6 +154,10 @@ Write with this structure:
 | Agent | Tier | Primary model | Fallback model | Rationale |
 |-------|------|---------------|----------------|-----------|
 
+## Manual Agent Overrides
+
+Manual overrides are stored in `docs/model-overrides.json` and shown here for review. They apply to every task owned by the agent and take precedence over generated recommendations. The console may edit these overrides without changing agent files; Apply mode can explicitly copy them into agent frontmatter.
+
 ## Per-Agent Scores
 
 | Agent | Reasoning | Code-gen | Context | Tool use | Latency | Safety | Tier |
@@ -178,7 +196,8 @@ For each `HARNESS_AGENTS_DIR/*.md`:
 ## Gotchas
 
 - **`ollama show` failures.** Some models (especially quantized or custom) don't return metadata reliably. If `ollama show` fails, check capability via `ollama run <model> "list your tools"` as a fallback, and mark `tool_calling: "unverified"` in the inventory.
-- **Copilot model names change frequently.** The tier catalog in `references/model-inventory-schema.md` is a snapshot. Always ask the user to confirm against their current model picker.
+- **Copilot model names change frequently.** Treat the current `copilot -p "/model list"` result as authoritative for availability; BenchLM data is only capability evidence and may lag or omit a model.
+- **CLI output is presentation text.** Never write a whole `opencode models` or Copilot response into `model:`; only write normalized IDs from the inventory.
 - **Empty inventory is a hard stop.** If no models are discoverable (Ollama unreachable, no subscription confirmation), stop and tell the user. Never fabricate.
 - **Don't touch the forge meta-agents.** `project-orchestrator` and `forge-team-builder` are tooling, not domain agents. Skip them unless explicitly asked.
 - **Re-tune mirrors the team builder's minimal-change philosophy.** Only modify what changed.
