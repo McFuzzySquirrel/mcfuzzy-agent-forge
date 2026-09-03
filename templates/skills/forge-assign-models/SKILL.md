@@ -45,8 +45,39 @@ Default to **Recommend** if no mode is specified.
 ### Step 1: Discover the Available Model Inventory
 
 Build a single inventory of models the user can invoke. Never invent models.
+The OpenCode and Copilot CLI probes below are mandatory discovery actions, not
+optional suggestions. Execute both commands before inspecting Ollama or
+producing a recommendation. If a command is unavailable or exits non-zero,
+record that result and continue with the other sources.
 
-#### 1a. Local Ollama
+#### 1a. OpenCode CLI
+
+Run this command exactly when the `opencode` executable is available:
+
+```bash
+opencode models
+```
+
+Capture its exit status, stdout, and stderr under `opencode_cli.diagnostics`.
+Parse stdout and stderr only after the command has completed. The resulting
+`opencode_cli.models` list must contain normalized model IDs, never the whole
+command response.
+
+#### 1b. Copilot CLI
+
+Run this command exactly when the `copilot` executable is available:
+
+```bash
+copilot -p "/model list"
+```
+
+Capture its exit status, stdout, and stderr under `copilot_cli.diagnostics`.
+Parse the command output into normalized IDs and store them under
+`copilot_cli.models`. Do not replace this step with the static catalog in the
+schema reference and do not ask the user to manually transcribe the model
+picker unless the command is unavailable or fails.
+
+#### 1c. Local Ollama
 
 Default to `http://localhost:11434` (honor `OLLAMA_HOST` if set).
 1. `GET /api/tags` - capture `name`, `size`, `modified_at`.
@@ -55,14 +86,6 @@ Default to `http://localhost:11434` (honor `OLLAMA_HOST` if set).
 4. Cross-reference `docs/research/model-evals/` if present; attach `eval_score` and `eval_notes`. Do not re-benchmark.
 
 If Ollama is unreachable, record `{ "ollama": { "available": false, "reason": "..." } }` and continue.
-
-#### 1b. OpenCode CLI
-
-Run `opencode models` when the command is available. Capture raw output for diagnostics, then normalize each candidate before persistence. Never assign display text returned by the CLI.
-
-#### 1c. Copilot CLI
-
-Run `copilot -p "/model list"` when the command is available. Capture raw output for diagnostics, then normalize each candidate before persistence. This replaces the old static subscription catalog.
 
 #### 1d. Normalize CLI model output
 

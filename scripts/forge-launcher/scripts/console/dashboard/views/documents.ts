@@ -129,7 +129,8 @@ function renderAgents(host: HTMLElement, team: TeamIndex): void {
 
 function modelTerminalPanel(): HTMLElement {
   const provider = el("select", null, [el("option", { value: "opencode" }, "OpenCode"), el("option", { value: "copilot" }, "Copilot")]);
-  const message = el("textarea", { rows: "2", placeholder: "Ask the model assistant to review or improve MODEL-PLAN.md" });
+  const message = el("textarea", { rows: "3", placeholder: "Ask the model assistant to review or improve MODEL-PLAN.md" });
+  (message as HTMLTextAreaElement).value = "/forge-assign-models Discover the available models from OpenCode, Copilot, Ollama, and BYOK, normalize the model IDs, enrich capabilities with BenchLM, and update the model inventory and plan.";
   const button = el("button", { className: "btn btn-sm btn-primary" }, "Launch model terminal");
   button.addEventListener("click", () => {
     const text = (message as HTMLTextAreaElement).value.trim();
