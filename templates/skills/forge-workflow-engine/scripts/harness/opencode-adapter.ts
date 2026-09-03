@@ -64,7 +64,7 @@ export class OpenCodeAdapter implements HarnessAdapter {
   ): Promise<TaskResult> {
     const start = Date.now();
 
-    const modelFlag = (task.model ?? agent.model) ? ["--model", task.model ?? agent.model!] : [];
+    const modelFlag = (task.model ?? agent.model) ? ["--model", stripProviderPrefix(task.model ?? agent.model!)] : [];
     const agentFlag = this.canSelectAgent(agent, repoRoot) ? ["--agent", agent.name] : [];
 
     const prompt = this.buildPrompt(agent, task, contextBlock, agentFlag.length === 0, timeoutMs, maxRetries);
@@ -192,6 +192,10 @@ export class OpenCodeAdapter implements HarnessAdapter {
       executeDirective,
     ].filter(Boolean).join("\n").trim();
   }
+}
+
+function stripProviderPrefix(model: string): string {
+  return model.includes("/") ? model.slice(model.lastIndexOf("/") + 1) : model;
 }
 
 export function resolveAgentForTask(

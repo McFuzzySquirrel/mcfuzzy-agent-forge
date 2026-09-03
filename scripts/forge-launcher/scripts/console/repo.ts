@@ -380,6 +380,10 @@ export function tasks(p: RepoPaths): TaskRow[] {
   const manifest = loadManifest(p);
   const state = loadState(p);
   if (!manifest) return [];
+  const agentModels = new Map(team(p).agents.map((agent) => [agent.name, {
+    primary: agent.modelOverride ?? agent.model,
+    fallback: agent.modelFallbackOverride ?? agent.modelFallback,
+  }]));
 
   const rows: TaskRow[] = [];
   for (const phase of manifest.phases) {
@@ -388,13 +392,17 @@ export function tasks(p: RepoPaths): TaskRow[] {
       const durationMs = rec?.startedAt && rec?.completedAt
         ? Date.parse(rec.completedAt) - Date.parse(rec.startedAt)
         : null;
+      const ownerAgent = task.ownerAgent ?? rec?.ownerAgent ?? null;
+      const models = ownerAgent ? agentModels.get(ownerAgent) : undefined;
       rows.push({
         id: task.id,
         title: task.title ?? "",
         description: task.description ?? "",
         phaseId: phase.id,
         phaseTitle: phase.title ?? "",
-        ownerAgent: task.ownerAgent ?? rec?.ownerAgent ?? null,
+        ownerAgent,
+        effectiveModel: models?.primary ?? null,
+        effectiveFallbackModel: models?.fallback ?? null,
         status: rec?.status ?? "pending",
         attempt: rec?.attempt ?? 0,
         startedAt: rec?.startedAt ?? null,
@@ -425,11 +433,16 @@ export function modelInventory(p: RepoPaths): ModelInventory {
     for (const item of (section as { models: unknown[] }).models) {
       if (typeof item !== "object" || item === null) continue;
       const raw = item as { id?: unknown; name?: unknown; capabilities?: Record<string, unknown> };
-      const id = typeof raw.id === "string" ? raw.id : typeof raw.name === "string" ? raw.name : "";
+      const id = canonicalModelId(typeof raw.id === "string" ? raw.id : typeof raw.name === "string" ? raw.name : "");
       if (id && !models.some((model) => model.id.toLowerCase() === id.toLowerCase())) models.push({ id, provider, capabilities: raw.capabilities });
     }
   }
   return { models, last_verified: typeof value.last_verified === "string" ? value.last_verified : undefined };
+}
+
+export function canonicalModelId(model: string): string {
+  const value = model.trim().replace(/^[-*\d.)\s]+/, "").replace(/^['`\"]|['`\"]$/g, "");
+  return value.includes("/") ? value.slice(value.lastIndexOf("/") + 1).trim() : value;
 }
 
 export function modelOverrides(p: RepoPaths): Record<string, { primary?: string; fallback?: string }> {
@@ -439,16 +452,48 @@ export function modelOverrides(p: RepoPaths): Record<string, { primary?: string;
 export function setModelOverride(p: RepoPaths, agent: string, primary?: string, fallback?: string): { ok: boolean; message: string } {
   const name = agent.trim();
   if (!name) return { ok: false, message: "agent is required" };
+  const normalizedPrimary = primary ? canonicalModelId(primary) : undefined;
+  const normalizedFallback = fallback ? canonicalModelId(fallback) : undefined;
   const inventory = modelInventory(p).models.map((model) => model.id.toLowerCase());
-  for (const model of [primary, fallback]) {
+  for (const model of [normalizedPrimary, normalizedFallback]) {
     if (model && !inventory.includes(model.toLowerCase())) return { ok: false, message: `Model is not in the discovered inventory: ${model}` };
   }
   const overrides = modelOverrides(p);
-  if (primary || fallback) overrides[name] = { ...(primary ? { primary } : {}), ...(fallback ? { fallback } : {}) };
+  if (normalizedPrimary || normalizedFallback) overrides[name] = { ...(normalizedPrimary ? { primary: normalizedPrimary } : {}), ...(normalizedFallback ? { fallback: normalizedFallback } : {}) };
   else delete overrides[name];
   fs.mkdirSync(path.dirname(p.modelOverridesPath), { recursive: true });
   fs.writeFileSync(p.modelOverridesPath, `${JSON.stringify(overrides, null, 2)}\n`, "utf8");
-  return { ok: true, message: primary || fallback ? `Saved model override for ${name}.` : `Cleared model override for ${name}.` };
+  const agentFile = findAgentFile(p.repoRoot, name);
+  if (agentFile) updateAgentFrontmatter(agentFile, normalizedPrimary, normalizedFallback);
+  return { ok: true, message: normalizedPrimary || normalizedFallback ? `Saved model override for ${name}.` : `Cleared model override for ${name}.` };
+}
+
+function findAgentFile(repoRoot: string, name: string): string | null {
+  for (const root of [".opencode", ".agents", ".github", ".claude"]) {
+    const match = listAgents(repoRoot, root).find((agent) => agent.name === name);
+    if (match) return match.path;
+  }
+  return null;
+}
+
+function updateAgentFrontmatter(file: string, primary?: string, fallback?: string): void {
+  const raw = fs.readFileSync(file, "utf8");
+  const match = raw.match(/^(---\r?\n)([\s\S]*?)(\r?\n---(?:\r?\n|$))([\s\S]*)$/);
+  if (!match) return;
+  const lines = match[2]!.split(/\r?\n/);
+  const set = (key: string, value: string | undefined) => {
+    const index = lines.findIndex((line) => new RegExp(`^\\s*${key}:`).test(line));
+    if (value) {
+      const replacement = `${key}: ${value}`;
+      if (index >= 0) lines[index] = replacement;
+      else lines.push(replacement);
+    } else if (index >= 0) {
+      lines.splice(index, 1);
+    }
+  };
+  set("model", primary);
+  set("modelFallback", fallback);
+  fs.writeFileSync(file, `${match[1]}${lines.join("\n")}${match[3]}${match[4]}`, "utf8");
 }
 
 // ─── Logs ────────────────────────────────────────────────────────────────────

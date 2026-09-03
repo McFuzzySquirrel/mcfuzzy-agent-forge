@@ -265,7 +265,8 @@ function renderTable(): void {
       el("td", { className: "mono small" }, t.id),
       el("td", null, t.title),
       el("td", null, t.phaseTitle),
-      el("td", null, t.ownerAgent ?? "—"),
+       el("td", null, t.ownerAgent ?? "—"),
+       el("td", { className: "mono small" }, t.effectiveModel ?? "default"),
       el("td", null, String(t.attempt)),
       el("td", null, fmtDuration(t.durationMs)),
     ]);
@@ -275,7 +276,7 @@ function renderTable(): void {
     });
     tbody.appendChild(tr);
     if (expandedId === t.id) {
-      tbody.appendChild(el("tr", { className: "detail-row" }, [el("td", { colspan: "8" }, detail(t))]));
+       tbody.appendChild(el("tr", { className: "detail-row" }, [el("td", { colspan: "9" }, detail(t))]));
     }
   }
 
@@ -289,6 +290,7 @@ function renderTable(): void {
           plainTh("Title"),
           th("Phase", "phase"),
           th("Owner", "owner"),
+          plainTh("Model"),
           th("Attempt", "attempt"),
           th("Duration", "duration"),
         ]),
@@ -389,6 +391,7 @@ function detail(t: TaskRow): HTMLElement {
 
   const fields: Array<HTMLElement | null> = [
     el("div", null, [el("div", { className: "k" }, "Description"), el("div", null, t.description || "—")]),
+    el("div", null, [el("div", { className: "k" }, "Effective model"), el("div", { className: "mono" }, t.effectiveModel ?? "Harness/default")]),
     list("Expected outputs", t.expectedOutputs),
     list("Validation commands", t.validationCommands),
     list("Dependencies", t.dependencies),

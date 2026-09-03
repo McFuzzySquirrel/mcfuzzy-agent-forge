@@ -88,13 +88,18 @@ function parseAgent(path: string, repoRoot: string): AgentDescriptor {
     name: typeof data.name === "string" ? data.name : relative(repoRoot, path),
     description: typeof data.description === "string" ? data.description.replace(/\s+/g, " ").trim() : "",
     path,
-    model: override?.primary ?? (typeof data.model === "string" ? data.model : undefined),
-    modelFallback: override?.fallback ?? (typeof data.modelFallback === "string" ? data.modelFallback : undefined),
+    model: override?.primary ?? (canonicalModelId(typeof data.model === "string" ? data.model : "") || undefined),
+    modelFallback: override?.fallback ?? (canonicalModelId(typeof data.modelFallback === "string" ? data.modelFallback : "") || undefined),
     expertise: sectionBullets(parsed.content, "Expertise"),
     collaboration: sectionBullets(parsed.content, "Collaboration"),
     constraints: sectionBullets(parsed.content, "Constraints"),
     rawBody: parsed.content,
   };
+}
+
+function canonicalModelId(model: string): string {
+  const value = model.trim();
+  return value.includes("/") ? value.slice(value.lastIndexOf("/") + 1).trim() : value;
 }
 
 function parseSkill(path: string, repoRoot: string): SkillDescriptor {

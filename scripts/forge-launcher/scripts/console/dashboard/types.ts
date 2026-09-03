@@ -150,6 +150,8 @@ export interface TaskRow {
   phaseId: string;
   phaseTitle: string;
   ownerAgent: string | null;
+  effectiveModel: string | null;
+  effectiveFallbackModel: string | null;
   status: string;
   attempt: number;
   startedAt: string | null;

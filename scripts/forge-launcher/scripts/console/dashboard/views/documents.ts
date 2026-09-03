@@ -187,8 +187,8 @@ function agentCard(agent: AgentInfo, models: Array<{ id: string; provider?: stri
     ]);
   };
 
-  const primary = el("select", { className: "model-select" }, [el("option", { value: "" }, "Use recommendation"), ...models.map((model) => el("option", { value: model.id }, `${model.id}${model.provider ? ` · ${model.provider}` : ""}`))]);
-  const fallback = el("select", { className: "model-select" }, [el("option", { value: "" }, "Use recommendation"), ...models.map((model) => el("option", { value: model.id }, `${model.id}${model.provider ? ` · ${model.provider}` : ""}`))]);
+  const primary = el("select", { className: "model-select" }, [el("option", { value: "" }, "Use recommendation"), ...models.map((model) => el("option", { value: model.id }, model.id))]);
+  const fallback = el("select", { className: "model-select" }, [el("option", { value: "" }, "Use recommendation"), ...models.map((model) => el("option", { value: model.id }, model.id))]);
   if (agent.modelOverride) (primary as HTMLSelectElement).value = agent.modelOverride;
   if (agent.modelFallbackOverride) (fallback as HTMLSelectElement).value = agent.modelFallbackOverride;
   const save = el("button", { className: "btn btn-sm" }, "Save model override");
@@ -196,7 +196,7 @@ function agentCard(agent: AgentInfo, models: Array<{ id: string; provider?: stri
   const card = el("div", { className: "card" }, [
     el("div", { className: "card-title" }, [
       el("strong", null, agent.name),
-      agent.model ? el("span", { className: "badge badge-running" }, agent.model) : null,
+      (agent.modelOverride ?? agent.model) ? el("span", { className: "badge badge-running" }, agent.modelOverride ?? agent.model!) : null,
       el("button", { className: "btn btn-sm" }, "Open"),
     ]),
     el("p", { className: "dim" }, agent.description),
