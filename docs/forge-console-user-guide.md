@@ -90,6 +90,10 @@ application files are preserved, and Forge files are overwritten only when
 After a build completes, use **Add a feature** on Overview. This runs
 `forge-build-feature-prd` against the existing codebase and team, writes an
 additive document under `docs/features/`, and leaves the original PRD intact.
+Choose **Prepare increment** to update affected agents and reconcile the manifest,
+or enable **Run new feature tasks** to execute only tasks emitted by that feature.
+The Overview reconciliation panel lists preserved, new, changed, and removed task
+IDs. Changed completed tasks are preserved but flagged for review.
 
 For a complete increment, use **Run Feature Increment**. The launcher performs
 Feature PRD authoring, an affected-team update, and manifest compilation. It

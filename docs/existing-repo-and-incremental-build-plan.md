@@ -1,6 +1,6 @@
 # Existing Repository and Incremental Build Plan
 
-**Status:** Complete (with live authoring events represented by launcher log/SSE)
+**Status:** Complete
 **Relates to:** Forge Console, forge-launcher, forge-execution-adapter, forge-workflow-engine
 
 ## Objective
@@ -26,6 +26,8 @@ task state.
    same Console SSE/log projection as engine jobs.
 8. `xdg-open` is optional on Linux. Missing desktop open support must never block
    headless or manual workflows.
+9. A changed task contract is preserved as complete but is surfaced as a review
+   warning; it is not silently re-executed.
 
 ## Delivery Phases
 
@@ -76,3 +78,18 @@ task state.
 - New feature tasks can be selected and run independently.
 - PRD and team generation output is visible live in Console Logs.
 - Missing `xdg-open` produces a manual URL/path fallback, not a failure.
+
+## Operational Semantics
+
+- `feature-increment --run` selects only task IDs emitted by the newly authored
+  feature documents. Unrelated pending work remains untouched.
+- If Feature PRD authoring exits successfully without creating a new,
+  non-empty Markdown document, the increment stops before team or manifest work.
+- Reconciliation reports preserved, new, removed, and changed task IDs in the
+  manifest and Console. Changed completed tasks remain complete but require
+  review before a user chooses to replay or reset them.
+- A failed Feature PRD or team update leaves the existing PRD, team, and
+  manifest available for inspection; the next attempt can be started from the
+  failed stage.
+- Manifest dependency validation rejects duplicate global task IDs and reports
+  orphan task or phase dependencies before execution.

@@ -25,6 +25,7 @@ Detailed release and change notes for MyForge.
 - Manifest recompilation preserves task state by stable task ID and adds new feature tasks as pending.
 - Bootstrap and authoring output is written to the repository's `docs/engine-run.log` for live Console streaming.
 - Linux users may install `xdg-utils` for automatic browser/document opening; manual URL and path fallbacks remain available.
+- Feature increment runs are scoped to their newly emitted task IDs, reject missing Feature PRD output, and expose reconciliation details for review.
 - `forge-launcher draft-prd` now authors from an existing repository when `docs/IDEA.md` is absent, using source, docs, tests, manifests, and history as context.
 - Added `forge-launcher feature-increment --prompt ... [--run]` to author a feature, invoke Feature Increment Mode, reconcile the manifest, and optionally run it.
 - Monolithic PRD repositories may add `docs/features/*.md`; those tasks compile additively after existing PRD phases. Reconciliation now reports changed task contracts as well as added and removed IDs.
