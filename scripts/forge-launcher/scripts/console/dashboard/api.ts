@@ -35,7 +35,17 @@ function token(): string {
 async function request<T>(url: string, init?: RequestInit): Promise<T> {
   const res = await fetch(url, init);
   if (!res.ok) {
-    throw new Error(`request failed: ${res.status} ${res.statusText}`);
+    // The console API returns structured errors. Preserve their message so a
+    // failed bootstrap (or any other action) is actionable in the UI instead
+    // of collapsing everything into "400 Bad Request".
+    let detail = "";
+    try {
+      const body = await res.clone().json() as { message?: unknown };
+      if (typeof body.message === "string") detail = `: ${body.message}`;
+    } catch {
+      // Some proxy/server failures are plain text; the status is still useful.
+    }
+    throw new Error(`request failed: ${res.status} ${res.statusText}${detail}`);
   }
   return res.json() as Promise<T>;
 }

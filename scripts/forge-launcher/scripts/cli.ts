@@ -4,7 +4,7 @@ import { bootstrapCli } from "./bootstrap.ts";
 import { consoleCli } from "./console/cli.ts";
 import { engineRunCli } from "./engine-run.ts";
 import { fail } from "./format.ts";
-import { runCompileManifest, runDraftPrd, runDraftTeam, runFeaturePrd, runLauncher, runResume } from "./launcher.ts";
+import { runCompileManifest, runDraftExistingPrd, runDraftPrd, runDraftTeam, runFeaturePrd, runLauncher, runResume } from "./launcher.ts";
 import { detectRepoRoot } from "./paths.ts";
 import { PromptCancelled, prompts } from "./prompts.ts";
 import { checkForUpdate, printUpdateNotice } from "./update-check.ts";
@@ -23,6 +23,7 @@ Usage:
                             [--stop] [--pause]
   forge-launcher resume [--repo <path>] [--non-interactive] [--dry-run]
   forge-launcher draft-prd [--repo <path>]      # headless: idea → PRD (Forge Console pipeline)
+  forge-launcher draft-existing-prd [--repo <path>] # headless: existing repo → project PRD
   forge-launcher draft-team [--repo <path>]     # headless: PRD → agent team
   forge-launcher feature-prd [--repo <path>] [--prompt <text>] # author in docs/features/
   forge-launcher feature-increment [--repo <path>] [--prompt <text>] [--run] # author, update team, compile, optionally run
@@ -65,7 +66,7 @@ async function main(): Promise<number> {
   if (args[0] === "bootstrap") return bootstrapCli(args.slice(1));
   if (args[0] === "console") return consoleCli(args.slice(1));
   if (args[0] === "engine-run") return engineRunCli(args.slice(1));
-  if (args[0] === "draft-prd" || args[0] === "draft-team" || args[0] === "compile-manifest" || args[0] === "feature-prd" || args[0] === "feature-increment") {
+  if (args[0] === "draft-prd" || args[0] === "draft-existing-prd" || args[0] === "draft-team" || args[0] === "compile-manifest" || args[0] === "feature-prd" || args[0] === "feature-increment") {
     let repo: string | undefined;
     let featurePrompt: string | undefined;
     let runIncrement = false;
@@ -84,6 +85,7 @@ async function main(): Promise<number> {
     }
     const repoDir = repo ? path.resolve(repo) : detectRepoRoot();
     if (args[0] === "draft-prd") return runDraftPrd(repoDir);
+    if (args[0] === "draft-existing-prd") return runDraftExistingPrd(repoDir);
     if (args[0] === "draft-team") return runDraftTeam(repoDir);
     if (args[0] === "feature-prd") return runFeaturePrd(repoDir, featurePrompt);
     if (args[0] === "feature-increment") return (await import("./launcher.ts")).runFeatureIncrement(repoDir, featurePrompt, runIncrement);

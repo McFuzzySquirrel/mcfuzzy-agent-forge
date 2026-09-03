@@ -226,6 +226,9 @@ export function buildTeamPrompt(prdSource: string, harness: HarnessName): string
 const PRD_HEADLESS_MSG =
   "Use docs/IDEA.md as the project idea. Headless mode: auto-proceed with default assumptions and approve the PRD. After drafting, run a PRD gap check: every major component must have clear acceptance criteria, a defined tech stack, non-functional requirements (performance, security, privacy), and implementation phases; fill any gaps before approving.";
 
+const EXISTING_PROJECT_PRD_MSG =
+  "Author the project's PRD using forge-build-prd authoring semantics, not an auto-build or implementation workflow. This is an existing repository: inspect source code, documentation, tests, package manifests, configuration, and git history as context; infer the product purpose and current capabilities. Produce docs/PRD.md as a project PRD. Headless mode: ask no questions and use explicit assumptions. Include functional requirements with acceptance criteria, technology stack, non-functional requirements (performance, security, privacy), constraints, and implementation phases. Do not implement code, generate agents, compile a manifest, or run the workflow.";
+
 /**
  * In-harness command to queue when the launcher opens the CLI (or prints
  * next steps). Conditional on the team so the harness entry honours the
@@ -372,6 +375,14 @@ async function runStubSkill(msg: string, opts: LauncherOptions): Promise<boolean
       "",
     ].join("\n"));
     fs.appendFileSync(logFile, `[stub] wrote ${agentFile}\n`);
+    return true;
+  }
+
+  if (skillName.includes("forge-build-feature-prd")) {
+    const feature = path.join(state.repoDir, "docs", "features", "stub-feature.md");
+    fs.mkdirSync(path.dirname(feature), { recursive: true });
+    fs.writeFileSync(feature, "# Stub Feature\n\n## Functional Requirements\n- FR-1: implement the stub feature.\n");
+    fs.appendFileSync(logFile, `[stub] wrote ${feature}\n`);
     return true;
   }
 
@@ -1605,9 +1616,31 @@ export async function runDraftPrd(repoDir: string): Promise<number> {
   return 1;
 }
 
+/** Authors a project PRD from an existing repository without an IDEA.md. */
+export async function runDraftExistingPrd(repoDir: string): Promise<number> {
+  setupStateForRepo(repoDir);
+  if (hasPrd()) { out("PRD already exists."); return 0; }
+  out("Authoring a project PRD from the existing repository (headless) …");
+  const skill = "forge-build-prd";
+  const ran = await runSkillHeadless(`/${skill} ${EXISTING_PROJECT_PRD_MSG}`, { nonInteractive: true });
+  if (!ran) return 1;
+  await draftCommit("docs: add project PRD");
+  if (hasPrd()) {
+    ok("Project PRD generated.");
+    out(`    - ${link(path.join(repoDir, "docs", "PRD.md"))}`);
+    return 0;
+  }
+  await diagnoseAutoDraftFail(skill);
+  return 1;
+}
+
 /** Authors a Feature PRD through the authoring skill; workflow execution is intentionally separate. */
 export async function runFeaturePrd(repoDir: string, featurePrompt?: string): Promise<number> {
   setupStateForRepo(repoDir);
+  const featuresDir = path.join(repoDir, "docs", "features");
+  const before = new Set(fs.existsSync(featuresDir)
+    ? fs.readdirSync(featuresDir).filter((name) => name.endsWith(".md"))
+    : []);
   if (!featurePrompt?.trim()) {
     if (prompts.nonInteractive) throw new Error("feature-prd requires --prompt in non-interactive mode");
     featurePrompt = await prompt("What feature should be added?", "");
@@ -1616,12 +1649,28 @@ export async function runFeaturePrd(repoDir: string, featurePrompt?: string): Pr
   const message = `/forge-build-feature-prd I want to add ${featurePrompt.trim()} to this project. Analyze the existing codebase and agent team, then produce a self-contained Feature PRD and save it under docs/features/. Do not modify the original PRD or start the workflow engine.`;
   const ran = await runSkillHeadless(message, { nonInteractive: true });
   if (!ran) return 1;
+  const added = fs.existsSync(featuresDir)
+    ? fs.readdirSync(featuresDir)
+      .filter((name) => name.endsWith(".md") && !before.has(name))
+      .filter((name) => fs.statSync(path.join(featuresDir, name)).isFile())
+      .filter((name) => fs.readFileSync(path.join(featuresDir, name), "utf8").trim().length > 0)
+    : [];
+  if (added.length === 0) {
+    fail("Feature PRD authoring exited without creating a new non-empty docs/features/*.md file.");
+    await diagnoseAutoDraftFail("forge-build-feature-prd");
+    return 1;
+  }
   await draftCommit("docs: add feature PRD");
+  ok(`Feature PRD generated: ${added.join(", ")}`);
   return 0;
 }
 
 /** Author a feature, update only affected team members, compile, and optionally run it. */
 export async function runFeatureIncrement(repoDir: string, featurePrompt: string | undefined, run = false): Promise<number> {
+  const featuresDir = path.join(repoDir, "docs", "features");
+  const beforeFeatures = new Set(fs.existsSync(featuresDir)
+    ? fs.readdirSync(featuresDir).filter((name) => name.endsWith(".md"))
+    : []);
   const featureCode = await runFeaturePrd(repoDir, featurePrompt);
   if (featureCode !== 0) return featureCode;
   const teamCode = await runDraftTeam(repoDir, true);
@@ -1632,11 +1681,49 @@ export async function runFeatureIncrement(repoDir: string, featurePrompt: string
     out("Feature increment prepared. Review the manifest, then run: forge-launcher engine-run --repo \"" + path.resolve(repoDir) + "\" --yes");
     return 0;
   }
-  return engineRunCliForIncrement(repoDir);
+  const newFeatures = fs.existsSync(featuresDir)
+    ? fs.readdirSync(featuresDir).filter((name) => name.endsWith(".md") && !beforeFeatures.has(name))
+    : [];
+  return engineRunCliForIncrement(repoDir, newFeatures.map((name) => path.basename(name, ".md")));
 }
 
-async function engineRunCliForIncrement(repoDir: string): Promise<number> {
-  return engineRunCli(["--repo", path.resolve(repoDir), "--yes"]);
+async function engineRunCliForIncrement(repoDir: string, featureNames: string[]): Promise<number> {
+  const manifestPath = path.join(repoDir, "docs", "EXECUTION-MANIFEST.json");
+  try {
+    const manifest = JSON.parse(fs.readFileSync(manifestPath, "utf8")) as {
+      phases?: Array<{ id?: string; feature?: string; tasks?: Array<{ id: string }> }>;
+    };
+    const selected = featureTaskIds(manifest, featureNames);
+    if (selected.length === 0) {
+      fail("Cannot run feature increment: no task IDs were emitted for the feature PRD.");
+      return 1;
+    }
+    const cfg = state.engineConfig;
+    const args = ["--repo", path.resolve(repoDir), "--harness", cfg.harness || "opencode", "--execution-mode", "manual", "--selected-tasks", selected.join(","), "--yes"];
+    if (cfg.granularity) args.push("--granularity", cfg.granularity);
+    if (cfg.concurrency) args.push("--concurrency", cfg.concurrency);
+    if (cfg.taskTimeoutMs) args.push("--task-timeout-ms", cfg.taskTimeoutMs);
+    if (cfg.maxRetries) args.push("--max-retries", cfg.maxRetries);
+    if (cfg.viz) args.push("--viz", ...(cfg.vizPort ? ["--viz-port", cfg.vizPort] : []));
+    if (cfg.keepAlive) args.push("--keep-alive");
+    if (cfg.attach) args.push("--attach", cfg.attach);
+    if (cfg.autoCommit === false) args.push("--no-auto-commit");
+    return engineRunCli(args);
+  } catch {
+    fail("Cannot run feature increment: execution manifest is missing or invalid.");
+    return 1;
+  }
+}
+
+/** Returns only task IDs belonging to the newly authored feature documents. */
+export function featureTaskIds(
+  manifest: { phases?: Array<{ id?: string; feature?: string; tasks?: Array<{ id: string }> }> },
+  featureNames: string[],
+): string[] {
+  const featureCodes = new Set(featureNames.map((name) => name.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "").toUpperCase()));
+  return (manifest.phases ?? [])
+    .filter((phase) => phase.feature && (featureNames.includes(phase.feature) || featureCodes.has((phase.id ?? "").split("-")[0] ?? "")))
+    .flatMap((phase) => (phase.tasks ?? []).map((task) => task.id));
 }
 
 /**

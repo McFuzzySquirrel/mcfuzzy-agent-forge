@@ -6,8 +6,11 @@ import type { ProjectInfo, ProjectsIndex } from "../types.js";
 
 let select: HTMLSelectElement | null = null;
 let meta: HTMLElement | null = null;
+let bootstrapPoll: number | undefined;
 
 export function unmountProjects(): void {
+  if (bootstrapPoll !== undefined) window.clearInterval(bootstrapPoll);
+  bootstrapPoll = undefined;
   select = null;
   meta = null;
 }
@@ -36,21 +39,63 @@ export function renderProjects(container: HTMLElement): void {
   container.appendChild(buildAddFolder());
   container.appendChild(buildBootstrap());
 
+  // Home links here with a query flag so the intended action is immediately
+  // visible (rather than leaving the user to find it below the project list).
+  if (new URLSearchParams(location.hash.split("?")[1] ?? "").get("bootstrap") === "1") {
+    const form = container.querySelector<HTMLElement>("[data-bootstrap-form]");
+    if (form) {
+      form.scrollIntoView({ block: "center" });
+      window.setTimeout(() => form.querySelector<HTMLInputElement>("input[type=text]")?.focus(), 0);
+    }
+  }
+
   void refreshProjects();
 }
 
 function buildBootstrap(): HTMLElement {
   const input = el("input", { type: "text", placeholder: "/path/to/existing repository" });
+  const harness = el("select", null, [
+    el("option", { value: "agents" }, "agents (.agents)"),
+    el("option", { value: "github" }, "github (.github)"),
+    el("option", { value: "claude" }, "claude (.claude)"),
+    el("option", { value: "opencode" }, "opencode (.opencode)"),
+  ]) as HTMLSelectElement;
   const init = el("input", { type: "checkbox" });
   const force = el("input", { type: "checkbox" });
   const button = el("button", { className: "btn btn-primary" }, "Bootstrap repository");
-  button.addEventListener("click", () => void api.bootstrap({ path: (input as HTMLInputElement).value.trim(), initGit: (init as HTMLInputElement).checked, force: (force as HTMLInputElement).checked }).then((r) => toast(r.message)));
-  return el("div", { className: "panel" }, [
+  const status = el("div", { className: "dim small", role: "status" });
+  button.addEventListener("click", () => {
+    const target = (input as HTMLInputElement).value.trim();
+    if (!target) { status.textContent = "Repository path is required."; return; }
+    button.setAttribute("disabled", "true");
+    status.textContent = "Starting bootstrap…";
+    void api.bootstrap({ path: target, harness: harness.value, initGit: (init as HTMLInputElement).checked, force: (force as HTMLInputElement).checked })
+      .then((r) => {
+        status.textContent = r.ok ? `${r.message} Monitor the project stage for completion.` : `Bootstrap failed: ${r.message}`;
+        toast(r.message);
+        if (r.ok) {
+          void refreshProjects();
+          bootstrapPoll = window.setInterval(() => void refreshProjects(), 1500);
+          window.setTimeout(() => {
+            if (bootstrapPoll !== undefined) window.clearInterval(bootstrapPoll);
+            bootstrapPoll = undefined;
+          }, 30000);
+        }
+      })
+      .catch((err) => {
+        const message = err instanceof Error ? err.message : "request failed";
+        status.textContent = `Bootstrap failed: ${message}`;
+        toast(message);
+      })
+      .finally(() => button.removeAttribute("disabled"));
+  });
+  return el("div", { className: "panel", "data-bootstrap-form": "true" }, [
     el("h4", null, "Bootstrap an existing repository"),
     el("p", { className: "dim small" }, "Copy the Forge harness and skills into a repository. This runs as a tracked background job."),
-    el("div", { className: "dropdown-row" }, [input, button]),
+    el("div", { className: "dropdown-row" }, [input, harness, button]),
     el("label", { className: "checkbox-row" }, [init, el("span", null, "Initialize git if needed")]),
     el("label", { className: "checkbox-row" }, [force, el("span", null, "Overwrite existing Forge files")]),
+    status,
   ]);
 }
 

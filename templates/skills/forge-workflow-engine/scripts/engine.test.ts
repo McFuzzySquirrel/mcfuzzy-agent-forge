@@ -5,7 +5,7 @@ import { mkdtempSync, mkdirSync, writeFileSync, readFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
-import { allDepsComplete, isComplete, isTaskDone, mapLimit, nextReadyTasks, ownerUniqueReady, replayTask, runEngine } from "./engine.ts";
+import { allDepsComplete, isComplete, isTaskDone, mapLimit, nextReadyTasks, ownerUniqueReady, replayTask, runEngine, validateManifestDependencies } from "./engine.ts";
 import { runCommand } from "./harness/run.ts";
 import { readControl, writeControl } from "./control.ts";
 import { reconcileState } from "./state.ts";
@@ -37,6 +37,19 @@ function makePhase(id: string, tasks: ManifestTask[], dependencies: string[] = [
     tasks,
   };
 }
+
+test("validateManifestDependencies reports orphan task and phase dependencies", () => {
+  const manifest = makeManifest([makePhase("one", [makeTask("one.1", ["missing"]),], ["missing-phase"])]);
+  assert.deepEqual(validateManifestDependencies(manifest), [
+    "Phase 'one' depends on orphan phase 'missing-phase'.",
+    "Task 'one.1' depends on orphan task 'missing'.",
+  ]);
+});
+
+test("validateManifestDependencies rejects duplicate global task ids", () => {
+  const manifest = makeManifest([makePhase("one", [makeTask("same")]), makePhase("two", [makeTask("same")])]);
+  assert.throws(() => validateManifestDependencies(manifest), /Duplicate global task id/);
+});
 
 function makeManifest(phases: ManifestPhase[]): ExecutionManifest {
   return {

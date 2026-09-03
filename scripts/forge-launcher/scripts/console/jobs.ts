@@ -10,6 +10,7 @@ export type BackgroundJobType =
   | "feature-prd"
   | "feature-increment"
   | "draft-prd"
+  | "draft-existing-prd"
   | "draft-team"
   | "compile-manifest"
   | "engine-run"

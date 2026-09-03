@@ -4,7 +4,7 @@ import { mkdtempSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
-import { compileExecutionManifest, compileExecutionManifestDetailed, validateTeam } from "./compiler.ts";
+import { compileExecutionManifest, compileExecutionManifestDetailed, validateManifestSafety, validateTeam } from "./compiler.ts";
 import { discoverForgeRepo } from "./discovery.ts";
 import { appendAuditEvent, checkpointTask, parseProgress, writeProgress } from "./progress.ts";
 
@@ -113,6 +113,34 @@ test("compileExecutionManifest builds phases, tasks, and owners", () => {
   assert.equal(manifest.phases[0]?.tasks[0]?.ownerAgent, "api-engineer");
   assert.equal(manifest.phases[0]?.tasks[1]?.ownerAgent, "frontend-engineer");
   assert.deepEqual(manifest.phases[1]?.dependencies, ["1"]);
+});
+
+test("compileExecutionManifest keeps monolithic additive features independent", () => {
+  const root = createFixture();
+  mkdirSync(join(root, "docs", "features"), { recursive: true });
+  writeFileSync(join(root, "docs", "features", "notifications.md"), `# Feature: Notifications
+
+## 3. Functional Requirements
+- Send notifications from \`src/notifications.ts\`
+`, "utf8");
+
+  const manifest = compileExecutionManifest(discoverForgeRepo(root));
+  const featurePhase = manifest.phases.find((phase) => phase.feature === "notifications");
+  assert.ok(featurePhase);
+  assert.deepEqual(featurePhase!.dependencies, []);
+  assert.deepEqual(manifest.phases.slice(0, 2).map((phase) => phase.dependencies), [[], ["1"]]);
+});
+
+test("manifest safety rejects duplicate global task ids and warns on orphan dependencies", () => {
+  const root = createFixture();
+  const manifest = compileExecutionManifest(discoverForgeRepo(root));
+  manifest.phases[1]!.tasks[0]!.id = "1.1";
+  assert.throws(() => validateManifestSafety(manifest), /Duplicate global task id/);
+
+  const clean = compileExecutionManifest(discoverForgeRepo(root));
+  clean.phases[0]!.tasks[0]!.dependencies = ["missing-task"];
+  validateManifestSafety(clean);
+  assert.match(clean.warnings.join("\n"), /orphan task 'missing-task'/);
 });
 
 test("compileExecutionManifest auto-declares artifact produces/inputs", () => {

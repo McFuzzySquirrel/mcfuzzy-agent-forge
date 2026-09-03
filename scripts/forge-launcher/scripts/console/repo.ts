@@ -772,6 +772,10 @@ function resolveJobOutcome(job: BackgroundJob): { status: BackgroundJob["status"
       return hasProjectPrd(p)
         ? { status: "complete", message: "PRD draft completed." }
         : { status: "failed", message: "PRD draft exited without producing a PRD." };
+    case "draft-existing-prd":
+      return hasProjectPrd(p)
+        ? { status: "complete", message: "Existing-project PRD authoring completed." }
+        : { status: "failed", message: "Existing-project PRD authoring exited without producing a PRD." };
     case "draft-team":
       return hasProjectTeam(job.repoPath)
         ? { status: "complete", message: "Agent team generation completed." }

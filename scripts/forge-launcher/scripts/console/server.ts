@@ -85,6 +85,9 @@ function openBrowser(url: string): void {
   }
   try {
     const child = spawn(command, args, { stdio: "ignore", detached: true });
+    // spawn reports missing launchers asynchronously; keep browser opening
+    // best-effort rather than allowing an unhandled ChildProcess error.
+    child.on("error", () => {});
     child.unref?.();
   } catch {
     // best-effort
@@ -525,8 +528,16 @@ export async function startConsoleServer(options: ConsoleServerOptions = {}): Pr
           if (!requestedPath) return sendJson(res, 400, { ok: false, message: "repository path is required" });
           const target = path.resolve(requestedPath);
           if (!fs.existsSync(target) || !fs.statSync(target).isDirectory()) return sendJson(res, 400, { ok: false, message: "directory not found" });
-          const result = controller.bootstrap({ path: target, harness: typeof body.harness === "string" ? body.harness : undefined, force: body.force === true, initGit: body.initGit === true });
-          return sendJson(res, 200, result);
+          const harness = typeof body.harness === "string" ? body.harness : undefined;
+          if (harness !== undefined && !["agents", "github", "claude", "opencode"].includes(harness)) {
+            return sendJson(res, 400, { ok: false, message: "harness must be agents, github, claude, or opencode" });
+          }
+          try {
+            const result = controller.bootstrap({ path: target, harness, force: body.force === true, initGit: body.initGit === true });
+            return sendJson(res, result.ok ? 200 : 400, result);
+          } catch (err) {
+            return sendJson(res, 500, { ok: false, message: err instanceof Error ? err.message : "failed to start bootstrap" });
+          }
         }
         if (urlPath === "/api/open") {
           if (!options.allowExternalOpen) return sendJson(res, 200, { ok: false, message: "open not enabled" });
@@ -578,7 +589,9 @@ export async function startConsoleServer(options: ConsoleServerOptions = {}): Pr
 
       sendText(res, 404, "not found");
     } catch (err) {
-      sendText(res, 500, err instanceof Error ? err.message : "internal error");
+      const message = err instanceof Error ? err.message : "internal error";
+      if (urlPath.startsWith("/api/")) sendJson(res, 500, { ok: false, message });
+      else sendText(res, 500, message);
     }
   });
 

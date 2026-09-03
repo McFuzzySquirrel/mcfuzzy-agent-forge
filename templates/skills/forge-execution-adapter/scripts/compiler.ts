@@ -519,6 +519,7 @@ function pushPhase(
   feature: string | undefined,
   description: string,
   tasks: ManifestTask[],
+  dependencies?: string[],
 ): void {
   const ownerAgents = [...new Set(tasks.map((task) => task.ownerAgent).filter((value): value is string => Boolean(value)))];
   phases.push({
@@ -527,10 +528,35 @@ function pushPhase(
     feature,
     description,
     ownerAgents,
-    dependencies: phases.length > 0 ? [phases[phases.length - 1]!.id] : [],
+    dependencies: dependencies ?? (phases.length > 0 ? [phases[phases.length - 1]!.id] : []),
     approvalRequired: phases.length > 0,
     tasks,
   });
+}
+
+/** Check the manifest invariants which otherwise become opaque engine deadlocks. */
+export function validateManifestSafety(manifest: ExecutionManifest, warnings: string[] = manifest.warnings): void {
+  const taskOwners = new Map<string, string>();
+  const taskIds = new Set<string>();
+  for (const phase of manifest.phases) {
+    for (const task of phase.tasks) {
+      const previous = taskOwners.get(task.id);
+      if (previous) {
+        throw new Error(`Duplicate global task id '${task.id}' in phases '${previous}' and '${phase.id}'.`);
+      }
+      taskOwners.set(task.id, phase.id);
+      taskIds.add(task.id);
+    }
+  }
+  for (const phase of manifest.phases) {
+    for (const task of phase.tasks) {
+      for (const dependency of task.dependencies ?? []) {
+        if (!taskIds.has(dependency)) {
+          warnings.push(`Task '${task.id}' depends on orphan task '${dependency}'.`);
+        }
+      }
+    }
+  }
 }
 
 /** Synthesize a single phase from a feature doc's Functional Requirements bullets. */
@@ -564,6 +590,7 @@ function compileFeatureManifest(repo: ForgeRepo, options: CompileOptions = {}): 
   const ordered = orderFeatures(nodes, warnings);
 
   const phases: ManifestPhase[] = [];
+  const phaseIdsByFeature = new Map<string, string[]>();
   for (const feature of ordered) {
     const doc = readFileSync(feature.file, "utf8");
     for (const command of extractCommands(doc)) {
@@ -581,22 +608,43 @@ function compileFeatureManifest(repo: ForgeRepo, options: CompileOptions = {}): 
         warnings.push(`Feature '${feature.name}' has no phase or functional-requirement tasks; no tasks emitted.`);
         continue;
       }
-      pushPhase(phases, phaseId, `Phase 1: ${feature.name}`, feature.name, feature.name, tasks);
+      pushPhase(phases, phaseId, `Phase 1: ${feature.name}`, feature.name, feature.name, tasks, []);
+      phaseIdsByFeature.set(feature.name, [phaseId]);
       continue;
     }
 
     for (const block of phaseBlocks) {
       const phaseId = `${code}-${phaseIdFromTitle(block.title, 0)}`;
       const tasks = extractTasks(block.title, block.body, phaseId, repo.agents, validationCommands, warnings, granularity);
-      pushPhase(phases, phaseId, block.title, feature.name, block.body.split(/\r?\n/).slice(0, 3).join(" ").trim(), tasks);
+      const featurePhases = phaseIdsByFeature.get(feature.name) ?? [];
+      pushPhase(phases, phaseId, block.title, feature.name, block.body.split(/\r?\n/).slice(0, 3).join(" ").trim(), tasks, featurePhases.length > 0 ? [featurePhases[featurePhases.length - 1]!] : []);
+      featurePhases.push(phaseId);
+      phaseIdsByFeature.set(feature.name, featurePhases);
     }
+  }
+
+  // Replace the old global phase chain with the declared feature graph. A
+  // feature may depend on another feature, but unrelated features remain
+  // runnable independently; phases within one feature still remain ordered.
+  for (const feature of ordered) {
+    const own = phaseIdsByFeature.get(feature.name) ?? [];
+    const dependencies = feature.dependencies.flatMap((name) => {
+      const depPhases = phaseIdsByFeature.get(name);
+      if (!depPhases) {
+        warnings.push(`Feature '${feature.name}' depends on '${name}', but no phases were emitted for it.`);
+        return [];
+      }
+      return depPhases.length > 0 ? [depPhases[depPhases.length - 1]!] : [];
+    });
+    const first = phases.find((phase) => phase.id === own[0]);
+    if (first) first.dependencies = [...new Set(dependencies)];
   }
 
   if (phases.length === 0) {
     throw new Error(`No compilable phases found across ${repo.featurePaths.length} feature docs under docs/features/.`);
   }
 
-  return {
+  const manifest: ExecutionManifest = {
     version: "1.0",
     generatedAt: new Date().toISOString(),
     granularity,
@@ -616,6 +664,8 @@ function compileFeatureManifest(repo: ForgeRepo, options: CompileOptions = {}): 
     phases,
     warnings,
   };
+  validateManifestSafety(manifest);
+  return manifest;
 }
 
 /** Compile a runnable execution manifest from the repo's PRD representation. */
@@ -632,13 +682,17 @@ export function compileExecutionManifest(repo: ForgeRepo, options: CompileOption
       const doc = readFileSync(file, "utf8");
       const phaseId = `${featureCode(name)}-1`;
       const tasks = synthesizeTasksFromFr(name, doc, phaseId, repo.agents, manifest.validationCommands, warnings, options.granularity ?? "fine");
-      if (tasks.length > 0) pushPhase(manifest.phases, phaseId, `Feature: ${name}`, name, `Additive feature ${name}`, tasks);
+      // Additive documents have no feature graph in monolithic mode. Keep
+      // them independent rather than making every new feature wait for the
+      // final phase of the original PRD (or for the previous feature).
+      if (tasks.length > 0) pushPhase(manifest.phases, phaseId, `Feature: ${name}`, name, `Additive feature ${name}`, tasks, []);
       else warnings.push(`Feature '${name}' had no compilable requirements; no tasks emitted.`);
     }
     if (manifest.phases.some((phase) => phase.feature)) {
       manifest.warnings.push("Additive feature documents compiled after the monolithic PRD phases.");
     }
   }
+  validateManifestSafety(manifest);
   return manifest;
 }
 

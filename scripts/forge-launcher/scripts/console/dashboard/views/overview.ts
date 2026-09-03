@@ -219,13 +219,13 @@ interface PipelineStep {
 /** Determines the next pipeline step, or null when there's nothing to advance. */
 function nextStep(summary: Summary, actions: Actions): PipelineStep | null {
   if (!summary.hasPrd) {
-    return summary.hasIdea
-      ? {
-          label: "Draft PRD",
-          action: "draft-prd",
-          hint: "Turns docs/IDEA.md into a reviewed PRD (headless). Review it in Plan & Team, then come back to continue.",
-        }
-      : null;
+    return {
+      label: summary.hasIdea ? "Draft PRD" : "Author project PRD",
+      action: summary.hasIdea ? "draft-prd" : "draft-existing-prd",
+      hint: summary.hasIdea
+        ? "Turns docs/IDEA.md into a reviewed PRD (headless). Review it in Plan & Team, then come back to continue."
+        : "Inspects this existing repository and authors docs/PRD.md using forge-build-prd semantics.",
+    };
   }
   if (!summary.hasTeam) {
     return {
@@ -286,7 +286,7 @@ function renderGuidance(container: HTMLElement, summary: Summary, actions: Actio
   let text: string;
   let hint: string;
   if (!summary.hasPrd) {
-    text = summary.hasIdea ? "Draft a PRD to get started." : "No project idea yet.";
+    text = summary.hasIdea ? "Draft a PRD to get started." : "Author a project PRD from this existing repository.";
   } else if (!summary.hasTeam) {
     text = "Generate the agent team.";
   } else if (!summary.hasManifest && summary.executionMode === "manual") {

@@ -436,13 +436,17 @@ test("timeout update rejects invalid values and missing token", async () => {
   });
 });
 
-test("draft-prd, draft-team, and compile-manifest actions dispatch and return ok", async () => {
+test("PRD, team, and manifest actions dispatch and return ok", async () => {
   await withServer(async (server, repo, spawned) => {
     const token = server.token;
 
     const prd = await postJson(`${server.url}/api/control`, { action: "draft-prd" }, { "X-Forge-Token": token });
     assert.equal((prd.body as { ok: boolean }).ok, true);
     assert.ok((prd.body as { message: string }).message.includes("PRD"), "message should mention PRD");
+
+    const existingPrd = await postJson(`${server.url}/api/control`, { action: "draft-existing-prd" }, { "X-Forge-Token": token });
+    assert.equal((existingPrd.body as { ok: boolean }).ok, true);
+    assert.ok(spawned.calls.at(-1)?.args.includes("draft-existing-prd"), "existing-project PRD action should spawn its dedicated subcommand");
 
     const team = await postJson(`${server.url}/api/control`, { action: "draft-team" }, { "X-Forge-Token": token });
     assert.equal((team.body as { ok: boolean }).ok, true);

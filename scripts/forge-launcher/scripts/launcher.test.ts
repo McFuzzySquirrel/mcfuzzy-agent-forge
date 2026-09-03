@@ -5,7 +5,7 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import { buildTeamPrompt, defaultEngineHarness, engineDetachedCommand, headlessSkillMsg } from "./launcher.ts";
+import { buildTeamPrompt, defaultEngineHarness, engineDetachedCommand, featureTaskIds, headlessSkillMsg } from "./launcher.ts";
 import { spawnDetached } from "./format.ts";
 
 const CLI = fileURLToPath(new URL("./cli.ts", import.meta.url));
@@ -204,6 +204,43 @@ test("detached engine command resolves a runnable CLI entry", () => {
   if (import.meta.url.endsWith(".ts")) {
     assert.equal(args[0], "--import");
   }
+});
+
+test("feature-prd fails when the skill exits without a new feature document", async () => {
+  const repo = tmpDir();
+  execFileSync("git", ["init", "-q", repo]);
+  fs.mkdirSync(path.join(repo, ".agents", "skills", "forge-build-feature-prd"), { recursive: true });
+  fs.writeFileSync(path.join(repo, ".agents", "skills", "forge-build-feature-prd", "SKILL.md"), "# feature skill\n");
+
+  const result = await runCli(["feature-prd", "--repo", repo, "--prompt", "safe feature"], {
+    FORGE_RUN_WITH: "stub",
+    FORGE_STUB_NOOP: "1",
+  });
+
+  assert.equal(result.code, 1, result.out);
+  assert.match(result.out, /without creating a new non-empty/);
+});
+
+test("feature-prd accepts a newly created non-empty feature document", async () => {
+  const repo = tmpDir();
+  execFileSync("git", ["init", "-q", repo]);
+  fs.mkdirSync(path.join(repo, ".agents", "skills", "forge-build-feature-prd"), { recursive: true });
+  fs.writeFileSync(path.join(repo, ".agents", "skills", "forge-build-feature-prd", "SKILL.md"), "# feature skill\n");
+
+  const result = await runCli(["feature-prd", "--repo", repo, "--prompt", "safe feature"], {
+    FORGE_RUN_WITH: "stub",
+  });
+
+  assert.equal(result.code, 0, result.out);
+  assert.ok(fs.readFileSync(path.join(repo, "docs", "features", "stub-feature.md"), "utf8").trim());
+});
+
+test("feature increment selection excludes unrelated manifest tasks", () => {
+  const selected = featureTaskIds({ phases: [
+    { id: "OLD-1", feature: "Old Feature", tasks: [{ id: "OLD-1.1" }] },
+    { id: "NEW-FEATURE-1", feature: "new-feature", tasks: [{ id: "NEW-FEATURE-1.1" }, { id: "NEW-FEATURE-1.2" }] },
+  ] }, ["new-feature"]);
+  assert.deepEqual(selected, ["NEW-FEATURE-1.1", "NEW-FEATURE-1.2"]);
 });
 
 test("headless skill command pins the repo dir with --dir", async () => {

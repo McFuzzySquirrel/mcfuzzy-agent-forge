@@ -152,7 +152,7 @@ export class RunController {
   }
 
   /** Spawns a headless launcher pipeline step (draft-prd / draft-team). */
-  private draft(action: "draft-prd" | "draft-team", label: string): ControlResult {
+  private draft(action: "draft-prd" | "draft-existing-prd" | "draft-team", label: string): ControlResult {
     const { cmd, args } = engineDetachedCommand([action, "--repo", this.repoRoot]);
     const { pid } = this.spawner(cmd, args, { cwd: this.repoRoot, logFile: this.p.logPath });
     const job = startJob({
@@ -167,6 +167,10 @@ export class RunController {
 
   draftPrd(): ControlResult {
     return this.draft("draft-prd", "PRD draft");
+  }
+
+  draftExistingPrd(): ControlResult {
+    return this.draft("draft-existing-prd", "Existing-project PRD authoring");
   }
 
   draftTeam(): ControlResult {
@@ -325,6 +329,7 @@ export class RunController {
       case "resume": return this.run("engine-resume");
       case "replay": return taskId ? this.replay(taskId) : { ok: false, message: "replay requires a taskId." };
       case "draft-prd": return this.draftPrd();
+      case "draft-existing-prd": return this.draftExistingPrd();
       case "draft-team": return this.draftTeam();
       case "feature-prd": return this.featurePrd("");
       case "feature-increment": return { ok: false, message: "feature-increment requires a prompt." };
