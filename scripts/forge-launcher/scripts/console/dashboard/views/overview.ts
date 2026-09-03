@@ -8,6 +8,7 @@ import type { Actions, BackgroundJob, ControlAction, ExecutionMode, RunSummary, 
 let gen = 0;
 let unsub: Array<() => void> = [];
 let pollTimer: number | undefined;
+let rerenderTimer: number | undefined;
 
 function stopPoll(): void {
   if (pollTimer !== undefined) {
@@ -16,10 +17,32 @@ function stopPoll(): void {
   }
 }
 
+function stopScheduledRender(): void {
+  if (rerenderTimer !== undefined) {
+    window.clearTimeout(rerenderTimer);
+    rerenderTimer = undefined;
+  }
+}
+
+function scheduleRender(container: HTMLElement): void {
+  if (rerenderTimer !== undefined) return;
+  rerenderTimer = window.setTimeout(() => {
+    rerenderTimer = undefined;
+    void renderOverview(container);
+  }, 500);
+}
+
+function replaceContentPreserveScroll(container: HTMLElement, nodes: HTMLElement[]): void {
+  const { scrollX, scrollY } = window;
+  container.replaceChildren(...nodes);
+  window.scrollTo(scrollX, scrollY);
+}
+
 export function unmountOverview(): void {
   for (const u of unsub) u();
   unsub = [];
   stopPoll();
+  stopScheduledRender();
 }
 
 export async function renderOverview(container: HTMLElement): Promise<void> {
@@ -27,9 +50,8 @@ export async function renderOverview(container: HTMLElement): Promise<void> {
   // unmount — pending pipeline state + polling must survive re-renders).
   for (const u of unsub) u();
   unsub = [];
-  container.textContent = "";
   const myGen = ++gen;
-  unsub.push(store.onAudit(() => void renderOverview(container)));
+  unsub.push(store.onAudit(() => scheduleRender(container)));
 
   // Re-fetch on every render (navigation, snapshot, or audit event) so counts
   // and actions stay current during a live run.
@@ -44,24 +66,24 @@ export async function renderOverview(container: HTMLElement): Promise<void> {
   }
   if (myGen !== gen) return;
 
-  container.textContent = "";
-
   if (!summary) {
-    container.appendChild(
+    replaceContentPreserveScroll(container, [
       el("div", { className: "panel" }, [
         el("h2", null, "No project selected"),
         el("p", { className: "dim" }, "Pick a project from the list to open its console."),
         el("a", { href: "#/home", className: "btn btn-primary" }, "Choose project"),
       ]),
-    );
+    ]);
     return;
   }
 
-  container.appendChild(renderHeader(summary));
-  container.appendChild(renderRun(summary.run));
-  container.appendChild(renderManifest(summary));
-  container.appendChild(renderGuidance(container, summary, actions));
-  container.appendChild(renderActions(container, summary, actions, tasks));
+  replaceContentPreserveScroll(container, [
+    renderHeader(summary),
+    renderRun(summary.run),
+    renderManifest(summary),
+    renderGuidance(container, summary, actions),
+    renderActions(container, summary, actions, tasks),
+  ]);
 }
 
 function renderHeader(summary: Summary): HTMLElement {
