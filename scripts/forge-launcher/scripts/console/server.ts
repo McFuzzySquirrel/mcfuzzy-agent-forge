@@ -389,6 +389,11 @@ export async function startConsoleServer(options: ConsoleServerOptions = {}): Pr
             if (!prompt) return sendJson(res, 400, { ok: false, message: "prompt is required" });
             return sendJson(res, 200, controller.featurePrd(prompt));
           }
+          if (action === "feature-increment") {
+            const prompt = typeof body.prompt === "string" ? body.prompt.trim() : "";
+            if (!prompt) return sendJson(res, 400, { ok: false, message: "prompt is required" });
+            return sendJson(res, 200, controller.featureIncrement(prompt, body.run === true));
+          }
           return sendJson(res, 200, controller.dispatch(action, taskId));
         }
         if (urlPath === "/api/tasks/timeout") {

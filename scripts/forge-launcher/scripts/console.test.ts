@@ -459,6 +459,29 @@ test("draft-prd, draft-team, and compile-manifest actions dispatch and return ok
   });
 });
 
+test("feature-increment accepts a prompt and optional run flag", async () => {
+  await withServer(async (server, repo, spawned) => {
+    const token = server.token;
+    const missing = await postJson(`${server.url}/api/control`, { action: "feature-increment" }, { "X-Forge-Token": token });
+    assert.equal(missing.status, 400);
+
+    const result = await postJson(`${server.url}/api/control`, {
+      action: "feature-increment",
+      prompt: "Add a search screen",
+      run: true,
+    }, { "X-Forge-Token": token });
+    assert.equal((result.body as { ok: boolean }).ok, true);
+    const call = spawned.calls.at(-1);
+    assert.ok(call?.args.includes("feature-increment"));
+    assert.ok(call?.args.includes("--prompt"));
+    assert.ok(call?.args.includes("Add a search screen"));
+    assert.ok(call?.args.includes("--run"));
+    assert.equal((result.body as { job: { type: string; run: boolean } }).job.type, "feature-increment");
+    assert.equal((result.body as { job: { type: string; run: boolean } }).job.run, true);
+    assert.equal(call?.opts.cwd, repo);
+  });
+});
+
 test("project list, add, and select round-trip through the registry", async () => {
   await withServer(async (server, repo) => {
     const token = server.token;

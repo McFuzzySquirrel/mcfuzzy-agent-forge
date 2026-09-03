@@ -181,6 +181,17 @@ export class RunController {
     return { ok: true, message: "Feature PRD authoring started in the background.", pid, job };
   }
 
+  featureIncrement(prompt: string, run = false): ControlResult {
+    const logFile = this.p.logPath;
+    const args = ["feature-increment", "--repo", this.repoRoot, "--prompt", prompt];
+    if (run) args.push("--run");
+    const { cmd, args: fullArgs } = engineDetachedCommand(args);
+    const { pid } = this.spawner(cmd, fullArgs, { cwd: this.repoRoot, logFile });
+    const message = run ? "Feature increment started in the background and will run the workflow." : "Feature increment preparation started in the background.";
+    const job = startJob({ type: "feature-increment", repoPath: this.repoRoot, pid, logPath: logFile, run, message });
+    return { ok: true, message, pid, job };
+  }
+
   bootstrap(req: { path: string; harness?: string; force?: boolean; initGit?: boolean }): ControlResult {
     const target = path.resolve(req.path);
     const logFile = repositoryLogFile(target);
@@ -316,6 +327,7 @@ export class RunController {
       case "draft-prd": return this.draftPrd();
       case "draft-team": return this.draftTeam();
       case "feature-prd": return this.featurePrd("");
+      case "feature-increment": return { ok: false, message: "feature-increment requires a prompt." };
       case "compile-manifest": return this.compileManifest();
       default: return { ok: false, message: `Unknown action: ${action}` };
     }

@@ -8,6 +8,7 @@ export type BackgroundJobType =
   | "create-project"
   | "bootstrap"
   | "feature-prd"
+  | "feature-increment"
   | "draft-prd"
   | "draft-team"
   | "compile-manifest"
@@ -29,6 +30,7 @@ export interface BackgroundJob {
   finishedAt?: string;
   status: BackgroundJobStatus;
   message: string;
+  run?: boolean;
 }
 
 export function jobsPath(): string {
@@ -61,6 +63,7 @@ export function startJob(input: {
   taskId?: string;
   logPath?: string;
   message: string;
+  run?: boolean;
 }): BackgroundJob {
   const jobs = loadJobs();
   const now = new Date().toISOString();
@@ -82,6 +85,7 @@ export function startJob(input: {
     updatedAt: now,
     status: "running",
     message: input.message,
+    run: input.run,
   };
   jobs.push(job);
   saveJobs(jobs);

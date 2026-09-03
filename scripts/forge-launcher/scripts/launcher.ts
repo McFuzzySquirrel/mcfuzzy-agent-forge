@@ -9,6 +9,7 @@ import { detectRepoRoot, expandPath, resolveInputFile } from "./paths.ts";
 import { prompt, promptMultiline, promptPath, promptPathLoop, promptSelect, promptYesNo, prompts } from "./prompts.ts";
 import { launchCliInTerminal } from "./terminal.ts";
 import { loadEngineConfig, saveEngineConfig } from "./engine-config.ts";
+import { engineRunCli } from "./engine-run.ts";
 
 const nodeRequire = createRequire(import.meta.url);
 
@@ -1587,12 +1588,12 @@ export async function runDraftPrd(repoDir: string): Promise<number> {
     out("PRD already exists.");
     return 0;
   }
-  if (!fs.existsSync(path.join(repoDir, "docs", "IDEA.md"))) {
-    fail("No docs/IDEA.md found; add a project idea first.");
-    return 1;
-  }
-  out("Auto-drafting the PRD from docs/IDEA.md (headless) …");
-  const ran = await runSkillHeadless(`/forge-auto-build-prd ${PRD_HEADLESS_MSG}`, { nonInteractive: true });
+  const ideaPath = path.join(repoDir, "docs", "IDEA.md");
+  const context = fs.existsSync(ideaPath)
+    ? "Use docs/IDEA.md as the project idea."
+    : "This is an existing repository with no IDEA.md. Inspect the existing source code, docs, tests, package manifests, and git history as the project context; infer the product purpose and ask no questions.";
+  out(fs.existsSync(ideaPath) ? "Auto-drafting the PRD from docs/IDEA.md (headless) …" : "Auto-drafting a context-aware PRD from the existing repository (headless) …");
+  const ran = await runSkillHeadless(`/forge-auto-build-prd ${context} ${PRD_HEADLESS_MSG}`, { nonInteractive: true });
   if (!ran) return 1;
   await draftCommit("docs: add auto-drafted PRD");
   if (hasPrd()) {
@@ -1619,13 +1620,32 @@ export async function runFeaturePrd(repoDir: string, featurePrompt?: string): Pr
   return 0;
 }
 
+/** Author a feature, update only affected team members, compile, and optionally run it. */
+export async function runFeatureIncrement(repoDir: string, featurePrompt: string | undefined, run = false): Promise<number> {
+  const featureCode = await runFeaturePrd(repoDir, featurePrompt);
+  if (featureCode !== 0) return featureCode;
+  const teamCode = await runDraftTeam(repoDir, true);
+  if (teamCode !== 0) return teamCode;
+  const manifestCode = await runCompileManifest(repoDir);
+  if (manifestCode !== 0) return manifestCode;
+  if (!run) {
+    out("Feature increment prepared. Review the manifest, then run: forge-launcher engine-run --repo \"" + path.resolve(repoDir) + "\" --yes");
+    return 0;
+  }
+  return engineRunCliForIncrement(repoDir);
+}
+
+async function engineRunCliForIncrement(repoDir: string): Promise<number> {
+  return engineRunCli(["--repo", path.resolve(repoDir), "--yes"]);
+}
+
 /**
  * Headless pipeline advancement for the Forge Console: generate the agent team
  * from the PRD (when absent).
  */
-export async function runDraftTeam(repoDir: string): Promise<number> {
+export async function runDraftTeam(repoDir: string, featureIncrement = false): Promise<number> {
   setupStateForRepo(repoDir);
-  if (hasGeneratedTeam()) {
+  if (hasGeneratedTeam() && !featureIncrement) {
     out("Agent team already exists.");
     return 0;
   }
@@ -1636,7 +1656,9 @@ export async function runDraftTeam(repoDir: string): Promise<number> {
   out("Generating the agent team from the PRD (headless) …");
   const prdSource = prdSourceForTeam();
   const ran = await runSkillHeadless(
-    `${buildTeamPrompt(prdSource, state.harness)} Auto-proceed with default assumptions and no questions.`,
+    `${buildTeamPrompt(prdSource, state.harness)} ${featureIncrement
+      ? "This is Feature Increment Mode. Preserve every untouched existing agent and skill; update or add only agents affected by the new feature. Review the existing codebase and team before making changes."
+      : "Auto-proceed with default assumptions and no questions."}`,
     { nonInteractive: true },
   );
   if (!ran) return 1;
@@ -1653,11 +1675,7 @@ export async function runDraftTeam(repoDir: string): Promise<number> {
 export async function runCompileManifest(repoDir: string): Promise<number> {
   setupStateForRepo(repoDir);
   const manifestPath = path.join(repoDir, "docs", "EXECUTION-MANIFEST.json");
-  if (fs.existsSync(manifestPath)) {
-    out("Execution manifest already exists.");
-    out(`    - ${link(manifestPath)}`);
-    return 0;
-  }
+  if (fs.existsSync(manifestPath)) out("Recompiling the execution manifest (existing task state will be reconciled) …");
   if (!hasGeneratedTeam()) {
     fail("No generated agent team yet; generate the team first.");
     return 1;

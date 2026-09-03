@@ -620,9 +620,26 @@ function compileFeatureManifest(repo: ForgeRepo, options: CompileOptions = {}): 
 
 /** Compile a runnable execution manifest from the repo's PRD representation. */
 export function compileExecutionManifest(repo: ForgeRepo, options: CompileOptions = {}): ExecutionManifest {
-  return repo.sourceLayout === "features"
-    ? compileFeatureManifest(repo, options)
-    : compileMonolithicManifest(repo, options);
+  if (repo.sourceLayout === "features") return compileFeatureManifest(repo, options);
+  const manifest = compileMonolithicManifest(repo, options);
+  // A monolithic PRD may gain additive feature documents before a full
+  // decomposition. Keep the original phases and append feature work rather
+  // than silently ignoring docs/features or replacing the source PRD.
+  if (repo.featurePaths.length > 0) {
+    const warnings = manifest.warnings;
+    for (const file of repo.featurePaths) {
+      const name = basename(file, ".md");
+      const doc = readFileSync(file, "utf8");
+      const phaseId = `${featureCode(name)}-1`;
+      const tasks = synthesizeTasksFromFr(name, doc, phaseId, repo.agents, manifest.validationCommands, warnings, options.granularity ?? "fine");
+      if (tasks.length > 0) pushPhase(manifest.phases, phaseId, `Feature: ${name}`, name, `Additive feature ${name}`, tasks);
+      else warnings.push(`Feature '${name}' had no compilable requirements; no tasks emitted.`);
+    }
+    if (manifest.phases.some((phase) => phase.feature)) {
+      manifest.warnings.push("Additive feature documents compiled after the monolithic PRD phases.");
+    }
+  }
+  return manifest;
 }
 
 export interface TeamValidation {
@@ -748,9 +765,17 @@ export function compileExecutionManifestDetailed(
       const preservedTaskIds = newIds.filter((id) => oldSet.has(id));
       const newTaskIds = newIds.filter((id) => !oldSet.has(id));
       const removedTaskIds = oldIds.filter((id) => !newSet.has(id));
-      manifest.reconciliation = { previousGeneratedAt: previous.generatedAt, preservedTaskIds, newTaskIds, removedTaskIds };
+      const oldTasks = new Map(previous.phases.flatMap((phase) => phase.tasks.map((task) => [task.id, task] as const)));
+      const newTasks = new Map(manifest.phases.flatMap((phase) => phase.tasks.map((task) => [task.id, task] as const)));
+      const changedTaskIds = preservedTaskIds.filter((id) => {
+        const before = oldTasks.get(id);
+        const after = newTasks.get(id);
+        return before && after && JSON.stringify({ ...before, ownerAgent: before.ownerAgent ?? null }) !== JSON.stringify({ ...after, ownerAgent: after.ownerAgent ?? null });
+      });
+      manifest.reconciliation = { previousGeneratedAt: previous.generatedAt, preservedTaskIds, newTaskIds, removedTaskIds, changedTaskIds };
       if (newTaskIds.length > 0) manifest.warnings.push(`Manifest reconciliation: ${newTaskIds.length} new task(s) start pending.`);
       if (removedTaskIds.length > 0) manifest.warnings.push(`Manifest reconciliation: ${removedTaskIds.length} removed task(s) will be dropped from workflow state.`);
+      if (changedTaskIds.length > 0) manifest.warnings.push(`Manifest reconciliation: ${changedTaskIds.length} existing task(s) changed; review their preserved state before running.`);
     } catch {
       manifest.warnings.push("Manifest reconciliation: existing manifest could not be read; compiled without preservation metadata.");
     }

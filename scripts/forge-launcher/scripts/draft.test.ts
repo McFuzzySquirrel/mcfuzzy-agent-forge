@@ -91,11 +91,12 @@ test("draft-prd writes docs/PRD.md via the stub runner", async () => {
   assert.ok(out.includes("PRD generated"), out);
 });
 
-test("draft-prd with no idea fails with guidance", async () => {
+test("draft-prd with no idea uses existing repository context", async () => {
   const repo = makeRepo();
   const { code, out } = await runCli(["draft-prd", "--repo", repo], { FORGE_RUN_WITH: "stub" });
-  assert.equal(code, 1, out);
-  assert.ok(out.includes("IDEA.md"), out);
+  assert.equal(code, 0, out);
+  assert.ok(out.includes("existing repository"), out);
+  assert.ok(fs.existsSync(path.join(repo, "docs", "PRD.md")), "PRD.md should be written");
 });
 
 test("draft-team writes an agent file via the stub runner", async () => {

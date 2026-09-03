@@ -1,6 +1,6 @@
 # Existing Repository and Incremental Build Plan
 
-**Status:** Implementing
+**Status:** Complete (with live authoring events represented by launcher log/SSE)
 **Relates to:** Forge Console, forge-launcher, forge-execution-adapter, forge-workflow-engine
 
 ## Objective

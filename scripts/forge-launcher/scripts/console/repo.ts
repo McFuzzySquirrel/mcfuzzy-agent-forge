@@ -745,6 +745,23 @@ function resolveJobOutcome(job: BackgroundJob): { status: BackgroundJob["status"
       : { status: "failed", message: "Feature PRD exited without producing docs/features/*.md." };
   }
 
+  if (job.type === "feature-increment") {
+    const p = repoPaths(job.repoPath);
+    if (!fs.existsSync(p.featuresDir) || listMarkdown(p.featuresDir).length === 0) {
+      return { status: "failed", message: "Feature increment exited without producing docs/features/*.md." };
+    }
+    if (!fs.existsSync(p.manifestPath)) {
+      return { status: "failed", message: "Feature increment exited without producing an execution manifest." };
+    }
+    if (job.run) {
+      const state = loadState(p);
+      if (state?.status === "complete") return { status: "complete", message: "Feature increment and build completed." };
+      if (state?.status === "paused") return { status: "paused", message: "Feature increment prepared and build paused." };
+      return { status: "failed", message: "Feature increment build exited before reaching a terminal state." };
+    }
+    return { status: "complete", message: "Feature increment prepared; manifest compiled." };
+  }
+
   if (!looksLikeForgeRepo(job.repoPath)) {
     return { status: "failed", message: "The project folder is not a forge repo." };
   }

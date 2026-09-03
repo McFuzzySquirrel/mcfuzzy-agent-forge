@@ -115,6 +115,8 @@ export interface ManifestReconciliation {
   preservedTaskIds: string[];
   newTaskIds: string[];
   removedTaskIds: string[];
+  /** Stable IDs whose task contract changed since the previous compile. */
+  changedTaskIds: string[];
 }
 
 export type ProgressStatus = "In Progress" | "Paused" | "Complete";

@@ -251,7 +251,7 @@ export interface FileContent {
   content: string;
 }
 
-export type ControlAction = "run" | "resume" | "pause" | "stop" | "replay" | "draft-prd" | "draft-team" | "compile-manifest" | "feature-prd";
+export type ControlAction = "run" | "resume" | "pause" | "stop" | "replay" | "draft-prd" | "draft-team" | "compile-manifest" | "feature-prd" | "feature-increment";
 
 export type ExecutionMode = "auto" | "manual";
 export type SelectionScope = "single" | "range" | "list";
@@ -260,6 +260,7 @@ export type BackgroundJobType =
   | "create-project"
   | "bootstrap"
   | "feature-prd"
+  | "feature-increment"
   | "draft-prd"
   | "draft-team"
   | "compile-manifest"
@@ -281,6 +282,7 @@ export interface BackgroundJob {
   finishedAt?: string;
   status: BackgroundJobStatus;
   message: string;
+  run?: boolean;
 }
 
 export interface ControlResult {

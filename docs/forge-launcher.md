@@ -877,3 +877,17 @@ rationale (now **superseded** for the implementation layer by
 package with a clack TUI rather than dual shell scripts). The flow-level
 decisions still stand - harness selection is step 2, `IDEA.md` is the hand-off
 artifact, and bootstrap is delegated rather than reimplemented.
+### Existing-repository and feature increment authoring
+
+`forge-launcher draft-prd --repo <path>` can author a PRD directly from an
+existing repository; `docs/IDEA.md` is optional. It inspects the repository
+context through the selected harness. For additive work use:
+
+```bash
+forge-launcher feature-increment --repo <path> --prompt "Add ..."
+forge-launcher feature-increment --repo <path> --prompt "Add ..." --run
+```
+
+This authors `docs/features/*.md`, updates affected agents in Feature Increment
+Mode, recompiles the manifest, and reports preserved/new/removed/changed task
+IDs. The optional `--run` starts the engine after review.
