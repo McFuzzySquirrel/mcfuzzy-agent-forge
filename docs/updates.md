@@ -4,6 +4,16 @@ Detailed release and change notes for MyForge.
 
 ---
 
+## September 2026 - v3.45
+
+### Forge Console: synchronize the user guide and Quick help
+
+- Refreshed the in-console user guide to match the current Console workflow, including manual manifest preparation, targeted task selection, dependency expansion, incremental feature work, reconciliation review, task timeouts, concurrency, auto-commit, and background job behavior.
+- Corrected the New Project document guidance so existing PRDs are limited to the formats accepted by the PRD picker, while research/seed documents retain their broader format support.
+- Expanded the Help dialog's Quick help with the current build controls, incremental-work flow, and updated view descriptions. The User guide tab continues to render the canonical `docs/forge-console-user-guide.md` source.
+
+---
+
 ## September 2026 - v3.44
 
 ### Reviewable authoring and incremental execution controls
