@@ -891,5 +891,8 @@ forge-launcher feature-increment --repo <path> --prompt "Add ..." --run
 ```
 
 This authors `docs/features/*.md`, updates affected agents in Feature Increment
-Mode, recompiles the manifest, and reports preserved/new/removed/changed task
-IDs. The optional `--run` starts the engine after review.
+Mode, refreshes `docs/EXECUTION-MANIFEST.json` and
+`docs/agent-responsibility-matrix.md`, and reports
+preserved/new/removed/changed task IDs. Existing task definitions must stay
+additive-only; the launcher rejects manifest rewrites that alter or remove
+pre-existing tasks. The optional `--run` starts the engine after review.
