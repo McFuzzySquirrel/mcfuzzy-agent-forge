@@ -86,7 +86,7 @@ development:
 
 ```bash
 cd scripts/forge-launcher
-npm install                               # build deps
+npm install                               # install package deps from the fresh clone
 npm pack                                  # build + stage templates → forge-launcher-1.0.0-beta.4.tgz
 npm install -g ./forge-launcher-1.0.0-beta.4.tgz   # global `forge-launcher`
 
