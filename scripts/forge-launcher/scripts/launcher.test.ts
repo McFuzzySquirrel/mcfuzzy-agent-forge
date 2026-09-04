@@ -46,24 +46,37 @@ function runCli(args: string[], env: Record<string, string>): Promise<{ code: nu
   });
 }
 
-test("feature-increment filesystem guard allows added/modified agents and excludes Forge-owned files", () => {
+test("feature-increment filesystem guard allows additive manifest refreshes alongside agent updates", () => {
   const repo = tmpDir();
   fs.mkdirSync(path.join(repo, ".agents", "agents"), { recursive: true });
   fs.mkdirSync(path.join(repo, ".agents", "skills", "forge-build-agent-team"), { recursive: true });
+  fs.mkdirSync(path.join(repo, "docs"), { recursive: true });
   fs.writeFileSync(path.join(repo, ".agents", "agents", "existing.md"), "before\n");
   fs.writeFileSync(path.join(repo, ".agents", "agents", "project-orchestrator.md"), "template\n");
   fs.writeFileSync(path.join(repo, ".agents", "skills", "forge-build-agent-team", "SKILL.md"), "before\n");
+  fs.writeFileSync(path.join(repo, "docs", "EXECUTION-MANIFEST.json"), JSON.stringify({
+    phases: [{ id: "1", tasks: [{ id: "1.1", title: "Task 1.1", description: "Existing task", dependencies: [], expectedOutputs: [], validationCommands: [], approvalRequired: false }] }],
+  }), "utf8");
+  fs.writeFileSync(path.join(repo, "docs", "agent-responsibility-matrix.md"), "before\n");
 
   const before = snapshotFeatureIncrementFiles(repo);
   fs.writeFileSync(path.join(repo, ".agents", "agents", "existing.md"), "after\n");
   fs.writeFileSync(path.join(repo, ".agents", "agents", "new-agent.md"), "new\n");
   fs.writeFileSync(path.join(repo, ".agents", "agents", "project-orchestrator.md"), "updated template\n");
   fs.writeFileSync(path.join(repo, ".agents", "skills", "forge-build-agent-team", "SKILL.md"), "after\n");
+  fs.writeFileSync(path.join(repo, "docs", "EXECUTION-MANIFEST.json"), JSON.stringify({
+    phases: [
+      { id: "1", tasks: [{ id: "1.1", title: "Task 1.1", description: "Existing task", dependencies: [], expectedOutputs: [], validationCommands: [], approvalRequired: false }] },
+      { id: "FEATURE-1", feature: "feature", tasks: [{ id: "FEATURE-1.1", title: "Task 1.1", description: "New task", dependencies: [], expectedOutputs: [], validationCommands: [], approvalRequired: false }] },
+    ],
+  }), "utf8");
+  fs.writeFileSync(path.join(repo, "docs", "agent-responsibility-matrix.md"), "after\n");
 
   assert.deepEqual(compareFeatureIncrementFiles(before, repo), {
     addedAgents: [".agents/agents/new-agent.md"],
     modifiedAgents: [".agents/agents/existing.md"],
     deletedAgents: [],
+    updatedOutputs: ["docs/EXECUTION-MANIFEST.json", "docs/agent-responsibility-matrix.md"],
     unrelatedFiles: [],
   });
 });
@@ -80,6 +93,25 @@ test("feature-increment filesystem guard reports deletions and unrelated changes
   const changes = compareFeatureIncrementFiles(before, repo);
   assert.deepEqual(changes.deletedAgents, [".agents/agents/existing.md"]);
   assert.deepEqual(changes.unrelatedFiles, ["README.md"]);
+});
+
+test("feature-increment filesystem guard rejects manifest rewrites that change existing tasks", () => {
+  const repo = tmpDir();
+  fs.mkdirSync(path.join(repo, ".agents", "agents"), { recursive: true });
+  fs.mkdirSync(path.join(repo, "docs"), { recursive: true });
+  fs.writeFileSync(path.join(repo, ".agents", "agents", "existing.md"), "agent\n");
+  fs.writeFileSync(path.join(repo, "docs", "EXECUTION-MANIFEST.json"), JSON.stringify({
+    phases: [{ id: "1", tasks: [{ id: "1.1", title: "Task 1.1", description: "Existing task", dependencies: [], expectedOutputs: [], validationCommands: [], approvalRequired: false }] }],
+  }), "utf8");
+
+  const before = snapshotFeatureIncrementFiles(repo);
+  fs.writeFileSync(path.join(repo, "docs", "EXECUTION-MANIFEST.json"), JSON.stringify({
+    phases: [{ id: "1", tasks: [{ id: "1.1", title: "Task 1.1", description: "Changed task", dependencies: [], expectedOutputs: [], validationCommands: [], approvalRequired: false }] }],
+  }), "utf8");
+
+  const changes = compareFeatureIncrementFiles(before, repo);
+  assert.deepEqual(changes.updatedOutputs, []);
+  assert.deepEqual(changes.unrelatedFiles, ["docs/EXECUTION-MANIFEST.json"]);
 });
 
 test("non-interactive run with no PRD bootstraps and queues forge-auto-build-prd", async () => {

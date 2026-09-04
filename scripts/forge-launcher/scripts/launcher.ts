@@ -207,6 +207,10 @@ function hasGeneratedTeam(): boolean {
 }
 
 const FORGE_TEMPLATE_AGENTS = new Set(["forge-team-builder.md", "project-orchestrator.md", "workflow-orchestrator.md"]);
+const FEATURE_INCREMENT_ALLOWED_OUTPUTS = new Set([
+  "docs/EXECUTION-MANIFEST.json",
+  "docs/agent-responsibility-matrix.md",
+]);
 
 /**
  * Filesystem snapshot used by feature-increment team generation.  This is
@@ -251,7 +255,33 @@ export interface FeatureIncrementFileChanges {
   addedAgents: string[];
   modifiedAgents: string[];
   deletedAgents: string[];
+  updatedOutputs: string[];
   unrelatedFiles: string[];
+}
+
+type FeatureIncrementManifest = {
+  phases?: Array<{
+    tasks?: Array<Record<string, unknown> & { id?: string }>;
+  }>;
+};
+
+function additiveManifestUpdateOnly(beforeText: string, afterText: string): boolean {
+  try {
+    const before = JSON.parse(beforeText) as FeatureIncrementManifest;
+    const after = JSON.parse(afterText) as FeatureIncrementManifest;
+    const beforeTasks = new Map(
+      (before.phases ?? []).flatMap((phase) => (phase.tasks ?? []).flatMap((task) => task.id ? [[task.id, JSON.stringify(task)] as const] : [])),
+    );
+    const afterTasks = new Map(
+      (after.phases ?? []).flatMap((phase) => (phase.tasks ?? []).flatMap((task) => task.id ? [[task.id, JSON.stringify(task)] as const] : [])),
+    );
+    for (const [id, task] of beforeTasks) {
+      if (afterTasks.get(id) !== task) return false;
+    }
+    return true;
+  } catch {
+    return false;
+  }
 }
 
 /** Compare a feature-increment snapshot, allowing only project-agent changes. */
@@ -261,22 +291,38 @@ export function compareFeatureIncrementFiles(
 ): FeatureIncrementFileChanges {
   const after = snapshotFeatureIncrementFiles(repoDir);
   const changed = new Set([...before.keys(), ...after.keys()]);
-  const result: FeatureIncrementFileChanges = { addedAgents: [], modifiedAgents: [], deletedAgents: [], unrelatedFiles: [] };
+  const result: FeatureIncrementFileChanges = { addedAgents: [], modifiedAgents: [], deletedAgents: [], updatedOutputs: [], unrelatedFiles: [] };
   for (const file of [...changed].sort()) {
     const oldValue = before.get(file);
     const newValue = after.get(file);
     if (oldValue === newValue) continue;
     const isAgent = file.startsWith(`${harnessRootDir()}/agents/`) && file.endsWith(".md");
-    if (!isAgent) {
-      result.unrelatedFiles.push(file);
-    } else if (oldValue === undefined) {
+    if (isAgent && oldValue === undefined) {
       result.addedAgents.push(file);
-    } else if (newValue === undefined) {
+      continue;
+    }
+    if (isAgent && newValue === undefined) {
       // Feature increments must preserve untouched agents; deletion is never
       // an intended update, even though the file is project-owned.
       result.deletedAgents.push(file);
-    } else {
+      continue;
+    }
+    if (isAgent) {
       result.modifiedAgents.push(file);
+      continue;
+    }
+    if (!FEATURE_INCREMENT_ALLOWED_OUTPUTS.has(file)) {
+      result.unrelatedFiles.push(file);
+      continue;
+    }
+    if (newValue === undefined) {
+      result.unrelatedFiles.push(file);
+      continue;
+    }
+    if (file === "docs/EXECUTION-MANIFEST.json" && oldValue !== undefined && !additiveManifestUpdateOnly(oldValue, newValue)) {
+      result.unrelatedFiles.push(file);
+    } else {
+      result.updatedOutputs.push(file);
     }
   }
   return result;
@@ -286,8 +332,8 @@ function validateFeatureIncrementFiles(before: FeatureIncrementSnapshot): boolea
   const changes = compareFeatureIncrementFiles(before, state.repoDir);
   const unexpected = [...changes.deletedAgents, ...changes.unrelatedFiles];
   if (unexpected.length === 0) {
-    if (changes.addedAgents.length || changes.modifiedAgents.length) {
-      info(`Feature increment preserved project agents; changed ${changes.addedAgents.length + changes.modifiedAgents.length} agent file(s).`);
+    if (changes.addedAgents.length || changes.modifiedAgents.length || changes.updatedOutputs.length) {
+      info(`Feature increment preserved project agents; changed ${changes.addedAgents.length + changes.modifiedAgents.length} agent file(s) and refreshed ${changes.updatedOutputs.length} generated output(s).`);
     }
     return true;
   }

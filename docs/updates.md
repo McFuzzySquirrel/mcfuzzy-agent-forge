@@ -4,6 +4,15 @@ Detailed release and change notes for MyForge.
 
 ---
 
+## September 2026 - v3.50
+
+### Feature increment manifest refresh stays additive
+
+- Feature Increment Mode now allows the generated `docs/EXECUTION-MANIFEST.json` and `docs/agent-responsibility-matrix.md` artifacts to refresh alongside agent updates.
+- The launcher rejects feature-increment manifest rewrites that alter or remove pre-existing task definitions, so existing work stays preserved and only additive task growth is accepted.
+
+---
+
 ## September 2026 - v3.49
 
 ### Fresh-clone launcher installs no longer require a prebuilt tarball
