@@ -114,6 +114,25 @@ test("feature-increment filesystem guard rejects manifest rewrites that change e
   assert.deepEqual(changes.unrelatedFiles, ["docs/EXECUTION-MANIFEST.json"]);
 });
 
+test("feature-increment filesystem guard ignores manifest key order when tasks are unchanged", () => {
+  const repo = tmpDir();
+  fs.mkdirSync(path.join(repo, ".agents", "agents"), { recursive: true });
+  fs.mkdirSync(path.join(repo, "docs"), { recursive: true });
+  fs.writeFileSync(path.join(repo, ".agents", "agents", "existing.md"), "agent\n");
+  fs.writeFileSync(path.join(repo, "docs", "EXECUTION-MANIFEST.json"), JSON.stringify({
+    phases: [{ id: "1", tasks: [{ id: "1.1", title: "Task 1.1", description: "Existing task", dependencies: [], expectedOutputs: [], validationCommands: [], approvalRequired: false }] }],
+  }), "utf8");
+
+  const before = snapshotFeatureIncrementFiles(repo);
+  fs.writeFileSync(path.join(repo, "docs", "EXECUTION-MANIFEST.json"), JSON.stringify({
+    phases: [{ id: "1", tasks: [{ approvalRequired: false, validationCommands: [], expectedOutputs: [], dependencies: [], description: "Existing task", title: "Task 1.1", id: "1.1" }] }],
+  }), "utf8");
+
+  const changes = compareFeatureIncrementFiles(before, repo);
+  assert.deepEqual(changes.updatedOutputs, ["docs/EXECUTION-MANIFEST.json"]);
+  assert.deepEqual(changes.unrelatedFiles, []);
+});
+
 test("non-interactive run with no PRD bootstraps and queues forge-auto-build-prd", async () => {
   const parent = tmpDir();
   const { code, out } = await runCli(["--non-interactive"], {

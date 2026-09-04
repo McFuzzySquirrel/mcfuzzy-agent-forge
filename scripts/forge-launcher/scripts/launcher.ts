@@ -265,15 +265,26 @@ type FeatureIncrementManifest = {
   }>;
 };
 
+function stableSerialize(value: unknown): string {
+  if (Array.isArray(value)) return `[${value.map((item) => stableSerialize(item)).join(",")}]`;
+  if (value && typeof value === "object") {
+    return `{${Object.entries(value as Record<string, unknown>)
+      .sort(([a], [b]) => a.localeCompare(b))
+      .map(([key, entry]) => `${JSON.stringify(key)}:${stableSerialize(entry)}`)
+      .join(",")}}`;
+  }
+  return JSON.stringify(value);
+}
+
 function additiveManifestUpdateOnly(beforeText: string, afterText: string): boolean {
   try {
     const before = JSON.parse(beforeText) as FeatureIncrementManifest;
     const after = JSON.parse(afterText) as FeatureIncrementManifest;
     const beforeTasks = new Map(
-      (before.phases ?? []).flatMap((phase) => (phase.tasks ?? []).flatMap((task) => task.id ? [[task.id, JSON.stringify(task)] as const] : [])),
+      (before.phases ?? []).flatMap((phase) => (phase.tasks ?? []).flatMap((task) => task.id ? [[task.id, stableSerialize(task)] as const] : [])),
     );
     const afterTasks = new Map(
-      (after.phases ?? []).flatMap((phase) => (phase.tasks ?? []).flatMap((task) => task.id ? [[task.id, JSON.stringify(task)] as const] : [])),
+      (after.phases ?? []).flatMap((phase) => (phase.tasks ?? []).flatMap((task) => task.id ? [[task.id, stableSerialize(task)] as const] : [])),
     );
     for (const [id, task] of beforeTasks) {
       if (!afterTasks.has(id)) return false;
