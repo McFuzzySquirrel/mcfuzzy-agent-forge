@@ -864,7 +864,7 @@ test("model planning endpoint launches the selected interactive CLI", async () =
     try {
       const result = await postJson(`${replacement.url}/api/model-plan/terminal`, { provider: "copilot", message: "Review MODEL-PLAN.md" }, { "X-Forge-Token": replacement.token });
       assert.equal((result.body as { ok: boolean }).ok, true);
-      assert.deepEqual(calls[0], { cli: "copilot", dir: repo, args: ["-i", "Review MODEL-PLAN.md"] });
+      assert.deepEqual(calls[0], { cli: "copilot", dir: repo, args: ["-i", "Review MODEL-PLAN.md", "--yolo"] });
     } finally {
       await replacement.stop();
     }

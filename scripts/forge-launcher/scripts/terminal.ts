@@ -66,7 +66,8 @@ async function launchWindows(cliName: string, repoDir: string, args: string[]): 
   const cliExe = commandExists(cliName) ?? cliName;
   const escapedExe = cliExe.replace(/'/g, "''");
   const argStr = args.map((a) => `'${a.replace(/'/g, "''")}'`).join(" ");
-  const launchScript = `Set-Location '${escapedDir}'; & '${escapedExe}' ${argStr}`;
+  const invokeScript = `& '${escapedExe}' ${argStr}`;
+  const launchScript = `Set-Location '${escapedDir}'; ${invokeScript}`;
 
   const wt = commandExists("wt");
   const pwsh = commandExists("pwsh");
@@ -74,7 +75,7 @@ async function launchWindows(cliName: string, repoDir: string, args: string[]): 
 
   if (wt) {
     const powershell = pwsh ?? ps5;
-    if (powershell && await spawnDetached(wt, ["new-tab", "--", powershell, "-NoProfile", "-NoExit", "-Command", launchScript])) {
+    if (powershell && await spawnDetached(wt, windowsTerminalArgs(powershell, repoDir, invokeScript))) {
       return true;
     }
   }
@@ -87,9 +88,13 @@ async function launchWindows(cliName: string, repoDir: string, args: string[]): 
   return Promise.resolve(false);
 }
 
+export function windowsTerminalArgs(powershell: string, repoDir: string, invokeScript: string): string[] {
+  return ["new-tab", "-d", repoDir, "--", powershell, "-NoProfile", "-NoExit", "-Command", invokeScript];
+}
+
 function commandExists(cmd: string): string | undefined {
   const isWin = process.platform === "win32";
-  const exts = isWin ? ["", ".exe", ".cmd", ".bat"] : [""];
+  const exts = isWin ? [".com", ".exe", ".bat", ".cmd", ""] : [""];
   const dirs = (process.env.PATH ?? "").split(path.delimiter);
   if (isWin) {
     const systemRoot = process.env.SystemRoot ?? process.env.WINDIR;

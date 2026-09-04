@@ -4,6 +4,16 @@ Detailed release and change notes for MyForge.
 
 ---
 
+## September 2026 - v3.50
+
+### Fix Copilot model terminal launches on Windows
+
+- Windows Terminal now receives the repository working directory through its `-d` option instead of parsing a semicolon-delimited PowerShell script as multiple terminal commands.
+- Windows CLI resolution now prefers executable `.com`, `.exe`, `.bat`, and `.cmd` shims over extensionless npm shell shims, allowing global Copilot installs to launch through `copilot.cmd`.
+- Copilot model-planning terminals now launch with `--yolo`, matching the launcher's existing unattended Copilot execution mode.
+
+---
+
 ## September 2026 - v3.49
 
 ### Fresh-clone launcher installs no longer require a prebuilt tarball
