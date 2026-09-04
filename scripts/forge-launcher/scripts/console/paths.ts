@@ -91,6 +91,7 @@ export interface RepoPaths {
   visionPath: string;
   featuresDir: string;
   modelPlanPath: string;
+  modelOverridesPath: string;
 }
 
 export function repoPaths(repoRoot: string): RepoPaths {
@@ -113,6 +114,7 @@ export function repoPaths(repoRoot: string): RepoPaths {
     visionPath: path.join(docs, "product-vision.md"),
     featuresDir: path.join(docs, "features"),
     modelPlanPath: path.join(docs, "MODEL-PLAN.md"),
+    modelOverridesPath: path.join(docs, "model-overrides.json"),
   };
 }
 

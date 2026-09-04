@@ -64,7 +64,9 @@ export class OpenCodeAdapter implements HarnessAdapter {
   ): Promise<TaskResult> {
     const start = Date.now();
 
-    const modelFlag = agent.model ? ["--model", agent.model] : [];
+    // OpenCode model IDs are provider-qualified (for example,
+    // `github-copilot/gpt-5.6-luna`); unlike Copilot, do not strip the prefix.
+    const modelFlag = (task.model ?? agent.model) ? ["--model", task.model ?? agent.model!] : [];
     const agentFlag = this.canSelectAgent(agent, repoRoot) ? ["--agent", agent.name] : [];
 
     const prompt = this.buildPrompt(agent, task, contextBlock, agentFlag.length === 0, timeoutMs, maxRetries);

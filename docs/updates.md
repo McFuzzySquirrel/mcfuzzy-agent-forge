@@ -4,6 +4,65 @@ Detailed release and change notes for MyForge.
 
 ---
 
+## September 2026 - v3.51
+
+### Fix Copilot model terminal launches on Windows
+
+- Windows Terminal now receives the repository working directory through its `-d` option instead of parsing a semicolon-delimited PowerShell script as multiple terminal commands.
+- Windows CLI resolution now prefers executable `.com`, `.exe`, `.bat`, and `.cmd` shims over extensionless npm shell shims, allowing global Copilot installs to launch through `copilot.cmd`.
+- Copilot model-planning terminals now launch with `--yolo`, matching the launcher's existing unattended Copilot execution mode.
+- Model inventory and agent discovery now retain provider-qualified IDs so OpenCode receives identifiers such as `github-copilot/gpt-5.6-luna` unchanged; Copilot strips its provider prefix only at its own CLI boundary.
+
+---
+
+## September 2026 - v3.50
+
+### Feature increment manifest refresh stays additive
+
+- Feature Increment Mode now allows the generated `docs/EXECUTION-MANIFEST.json` and `docs/agent-responsibility-matrix.md` artifacts to refresh alongside agent updates.
+- The launcher rejects feature-increment manifest rewrites that alter or remove pre-existing task definitions, so existing work stays preserved and only additive task growth is accepted.
+
+---
+
+## September 2026 - v3.49
+
+### Fresh-clone launcher installs no longer require a prebuilt tarball
+
+- Removed the `scripts/forge-launcher` self-dependency on `file:forge-launcher-1.0.0-beta.4.tgz`, so `npm install` now works immediately after cloning the repository, including on Windows where the missing tarball could surface as `EPERM`/`ENOENT` install failures.
+
+---
+
+## September 2026 - v3.48
+
+### Documentation refresh: deep dives, execution reality, and Story Part 3
+
+- Refreshed the workflow-engine, artifact-store, and workforce-compiler deep dives so they match the current code paths: manual task selection, output-verification and attribution, auto-commit, model override inputs, and the current serialized execution behavior while repo-wide worktree attribution remains authoritative.
+- Updated related operator docs (`README.md`, `docs/workflow-engine.md`, `docs/forge-launcher.md`, and `docs/forge-console-user-guide.md`) so concurrency settings are described as persisted configuration rather than active parallel dispatch in the current engine implementation.
+- Added [`docs/THE-STORY-PART-3.md`](THE-STORY-PART-3.md), continuing the MyForge narrative from the end of Part 2 through the Console, incremental existing-repo workflows, model planning, observability, and the lessons those changes taught.
+
+---
+
+## September 2026 - v3.47
+
+### Preserve provider-qualified OpenCode model IDs
+
+- The OpenCode workflow adapter now passes provider-qualified model IDs (for example, `github-copilot/gpt-5.6-luna`) unchanged to `opencode run`.
+- Added regression coverage for model IDs containing a provider prefix.
+
+---
+
+## September 2026 - v3.46
+
+### Live model inventory and agent-level model overrides
+
+- `forge-assign-models` can discover normalized model IDs from `opencode models` and `copilot -p "/model list"`, retain diagnostics, and enrich capabilities with BenchLM evidence.
+- Plan & Team exposes agent-level primary/fallback model overrides backed by `docs/model-overrides.json`; overrides are inherited by every task owned by that agent.
+- The Console can launch an interactive OpenCode or Copilot model-planning terminal from the Model Plan view.
+- OpenCode agent and skill discovery is explicitly supported, including `.opencode/agents` and `.opencode/skills`.
+- Windows terminal launch now detects installed Windows Terminal and PowerShell executables, preserves interactive `-NoExit` sessions, resolves npm CLI shims, and reports spawn failures instead of claiming success.
+
+---
+
 ## September 2026 - v3.45
 
 ### Forge Console: synchronize the user guide and Quick help

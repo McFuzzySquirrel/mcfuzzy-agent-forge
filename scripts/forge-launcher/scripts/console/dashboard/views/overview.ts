@@ -97,7 +97,7 @@ function renderFeatureIncrement(container: HTMLElement): HTMLElement {
     button.setAttribute("disabled", "true");
     void api.featureIncrement(prompt, run.checked).then((r) => toast(r.message)).catch((e) => toast(e instanceof Error ? e.message : "feature increment failed"));
   });
-  return el("div", { className: "panel" }, [el("h4", null, "Increment the project"), el("p", { className: "dim small" }, "Authors the feature, updates affected agents, recompiles the manifest, and optionally runs it."), input, el("label", { className: "checkbox" }, [run, " Run the workflow after preparing"]), el("div", { className: "actions" }, [button])]);
+  return el("div", { className: "panel" }, [el("h4", null, "Increment the project"), el("p", { className: "dim small" }, "Authors the feature, updates affected agents, recompiles the manifest, and optionally runs it."), input, el("label", { className: "checkbox-row" }, [run, el("span", null, "Run the workflow after preparing")]), el("div", { className: "actions" }, [button])]);
 }
 
 function renderFeaturePrd(container: HTMLElement): HTMLElement {

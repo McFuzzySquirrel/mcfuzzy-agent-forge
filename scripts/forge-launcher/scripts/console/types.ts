@@ -162,6 +162,8 @@ export interface TaskRow {
   phaseId: string;
   phaseTitle: string;
   ownerAgent: string | null;
+  effectiveModel: string | null;
+  effectiveFallbackModel: string | null;
   status: string;
   attempt: number;
   startedAt: string | null;
@@ -220,6 +222,13 @@ export interface AgentInfo {
   expertise: string[];
   collaboration: string[];
   constraints: string[];
+  modelOverride?: string;
+  modelFallbackOverride?: string;
+}
+
+export interface ModelInventory {
+  models: Array<{ id: string; provider?: string; capabilities?: Record<string, unknown> }>;
+  last_verified?: string;
 }
 
 export interface SkillInfo {

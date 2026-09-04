@@ -52,7 +52,8 @@ export class CopilotAdapter implements HarnessAdapter {
 
     const native = this.canSelectAgent(agent, repoRoot);
     const prompt = this.buildPrompt(agent, task, contextBlock, !native, timeoutMs, maxRetries);
-    const args = ["-p", prompt, ...this.extraFlags];
+    const modelFlag = (task.model ?? agent.model) ? ["--model", stripProviderPrefix(task.model ?? agent.model!)] : [];
+    const args = ["-p", prompt, ...modelFlag, ...this.extraFlags];
 
     const result = await runCommand(this.bin, args, {
       cwd: repoRoot,
@@ -164,4 +165,8 @@ export class CopilotAdapter implements HarnessAdapter {
       executeDirective,
     ].filter(Boolean).join("\n").trim();
   }
+}
+
+function stripProviderPrefix(model: string): string {
+  return model.includes("/") ? model.slice(model.lastIndexOf("/") + 1) : model;
 }

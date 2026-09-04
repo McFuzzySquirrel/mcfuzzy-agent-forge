@@ -79,6 +79,19 @@ test("passes --agent for .opencode-rooted agents and omits the inline persona", 
   assert.ok(!recorded.some((arg) => arg.includes("You are a Discovery Engineer")));
 });
 
+test("preserves the provider prefix for OpenCode model IDs", async () => {
+  const root = mkdtempSync(join(tmpdir(), "forge-opencode-model-repo-"));
+  const agent = { ...makeAgent(join(root, ".opencode", "agents", "discovery-engineer.md")), model: "github-copilot/gpt-5.6-luna" };
+  const shim = makeShim();
+
+  await invokeWith(shim, agent, root);
+
+  const recorded = JSON.parse(readFileSync(shim.argsFile, "utf8")) as string[];
+  const modelIndex = recorded.indexOf("--model");
+  assert.ok(modelIndex >= 0);
+  assert.equal(recorded[modelIndex + 1], "github-copilot/gpt-5.6-luna");
+});
+
 test("falls back to inlining the persona for non-.opencode harness roots", async () => {
   const root = mkdtempSync(join(tmpdir(), "forge-agents-repo-"));
   const agent = makeAgent(join(root, ".agents", "agents", "discovery-engineer.md"));

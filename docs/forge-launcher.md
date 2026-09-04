@@ -86,7 +86,7 @@ development:
 
 ```bash
 cd scripts/forge-launcher
-npm install                               # build deps
+npm install                               # install package deps from the fresh clone
 npm pack                                  # build + stage templates → forge-launcher-1.0.0-beta.4.tgz
 npm install -g ./forge-launcher-1.0.0-beta.4.tgz   # global `forge-launcher`
 
@@ -340,9 +340,10 @@ step - a set of defaults you can press Enter through:
 - **Task granularity** - `fine` (default: sub-bullets + oversized-bullet
   splits) or `coarse` (one task per PRD bullet). Choosing a granularity
   recompiles `docs/EXECUTION-MANIFEST.json` at that granularity.
-- **Max agents to run in parallel** - `1` (sequential, default) or higher for
-  bounded waves (harness-gated via `supportsConcurrency`, see
-  [ADR-021](adr/021-parallel-task-dispatch.md)).
+- **Concurrency preference** - `1` (default) or higher to persist the operator
+  preference shown in engine summaries and reused by resume/console flows. The
+  current engine still executes one repo task at a time while output attribution
+  relies on repository-wide worktree snapshots.
 - **Per-task timeout (ms)** - default `600000`.
 - **Max retries per task** - default `2`.
 - **Execution mode** - persisted in `docs/engine-config.json` so browser-driven
@@ -395,10 +396,11 @@ session). To reuse a server you already keep running, pass `--attach <url>` (or
 `FORGE_ENGINE_ATTACH_URL`). See the workflow-engine
 [keep-alive attach mode](workflow-engine.md#keep-alive-attach-mode-opencode-harness).
 
-The engine run honours parallel dispatch too: set `FORGE_ENGINE_CONCURRENCY=<n>`
-(or pass `--concurrency <n>` to `forge-launcher engine-run`) to run ready tasks in
-bounded waves (harness-gated via `supportsConcurrency`, default `1` = sequential;
-see [ADR-021](adr/021-parallel-task-dispatch.md)).
+The launcher still accepts `FORGE_ENGINE_CONCURRENCY=<n>` (or `--concurrency <n>`
+to `forge-launcher engine-run`) and persists it to `docs/engine-config.json`, but
+the current engine executes one repo task at a time while output attribution is
+repository-wide. Treat it as stored run configuration for now rather than an
+active parallelism toggle. See [ADR-021](adr/021-parallel-task-dispatch.md).
 
 **Auto-commit is on by default.** Each completed task is committed to git (one
 commit per task, including the engine-owned `docs/*` files). Disable with
@@ -758,7 +760,7 @@ reflect the running build (monitor + resume) rather than the manual
 | `FORGE_RUN_WITH` | 8 | Headless runner: `opencode`, `copilot`, or `stub` (default: `copilot` for the GitHub harness, `opencode` otherwise). `stub` runs the auto-draft stages offline against canned artifacts - combine with `FORGE_STUB_NOOP=1` to test the failure path |
 | `FORGE_STUB_NOOP` | 8 | `1` makes the stub skill runner (`FORGE_RUN_WITH=stub`) write nothing, exercising the auto-draft failure diagnostics |
 | `FORGE_LAUNCHER_DEBUG` | 8 | `1` (or the `--debug` flag) prints the skill-run log tail after every headless skill run; also passes `--print-logs` to `opencode` |
- | `FORGE_ENGINE_CONCURRENCY` | 8 | Max ready tasks the workflow engine runs in parallel (default `1` = sequential; harness-gated, see ADR-021) |
+ | `FORGE_ENGINE_CONCURRENCY` | 8 | Persisted engine concurrency preference (default `1`); shown in summaries and config even though current repo-task execution remains serialized |
  | `FORGE_ENGINE_TASK_TIMEOUT_MS` | 8 | Per-task timeout for the workflow engine in ms (default `600000` / 10 min; a task's manifest `timeoutMs` overrides it, see ADR-022) |
  | `FORGE_ENGINE_GRANULARITY` | 8 | Task granularity for the adapter compile: `fine` (default) or `coarse`. Setting it recompiles the manifest at that granularity |
  | `FORGE_ENGINE_MAX_RETRIES` | 8 | Max retries per engine task (default `2`) |
@@ -889,5 +891,8 @@ forge-launcher feature-increment --repo <path> --prompt "Add ..." --run
 ```
 
 This authors `docs/features/*.md`, updates affected agents in Feature Increment
-Mode, recompiles the manifest, and reports preserved/new/removed/changed task
-IDs. The optional `--run` starts the engine after review.
+Mode, refreshes `docs/EXECUTION-MANIFEST.json` and
+`docs/agent-responsibility-matrix.md`, and reports
+preserved/new/removed/changed task IDs. Existing task definitions must stay
+additive-only; the launcher rejects manifest rewrites that alter or remove
+pre-existing tasks. The optional `--run` starts the engine after review.

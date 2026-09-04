@@ -78,14 +78,27 @@ function walk(dir: string, predicate: (entry: string) => boolean): string[] {
 function parseAgent(path: string): AgentDescriptor {
   const raw = readFileSync(path, "utf8");
   const frontmatter = parseFrontmatter(raw);
+  let override: { primary?: string; fallback?: string } | undefined;
+  try {
+    const repoRoot = resolve(dirname(path), "..", "..");
+    const overrides = JSON.parse(readFileSync(join(repoRoot, "docs", "model-overrides.json"), "utf8")) as Record<string, { primary?: string; fallback?: string }>;
+    override = overrides[frontmatter["name"] ?? ""];
+  } catch {
+    // Overrides are optional; frontmatter remains the source of defaults.
+  }
   return {
     name: frontmatter["name"] ?? "",
     description: frontmatter["description"] ?? "",
     path,
-    model: frontmatter["model"],
-    modelFallback: frontmatter["modelFallback"],
+    model: override?.primary ?? canonicalModelId(frontmatter["model"]),
+    modelFallback: override?.fallback ?? canonicalModelId(frontmatter["modelFallback"]),
     rawBody: raw,
   };
+}
+
+function canonicalModelId(model: string | undefined): string | undefined {
+  if (!model) return undefined;
+  return model.trim();
 }
 
 function parseSkill(path: string): SkillDescriptor {

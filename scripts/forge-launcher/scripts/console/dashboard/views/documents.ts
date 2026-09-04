@@ -116,8 +116,32 @@ function renderAgents(host: HTMLElement, team: TeamIndex): void {
     return;
   }
   const grid = el("div", { className: "cards" });
-  for (const agent of team.agents) grid.appendChild(agentCard(agent));
-  host.appendChild(grid);
+  void api.modelInventory().then((inventory) => {
+    const terminal = modelTerminalPanel();
+    host.appendChild(terminal);
+    for (const agent of team.agents) grid.appendChild(agentCard(agent, inventory.models));
+    host.appendChild(grid);
+  }).catch(() => {
+    for (const agent of team.agents) grid.appendChild(agentCard(agent, []));
+    host.appendChild(grid);
+  });
+}
+
+function modelTerminalPanel(): HTMLElement {
+  const provider = el("select", null, [el("option", { value: "opencode" }, "OpenCode"), el("option", { value: "copilot" }, "Copilot")]);
+  const message = el("textarea", { rows: "3", placeholder: "Ask the model assistant to review or improve MODEL-PLAN.md" });
+  (message as HTMLTextAreaElement).value = "/forge-assign-models Discover the available models from OpenCode, Copilot, Ollama, and BYOK, normalize the model IDs, enrich capabilities with BenchLM, and update the model inventory and plan.";
+  const button = el("button", { className: "btn btn-sm btn-primary" }, "Launch model terminal");
+  button.addEventListener("click", () => {
+    const text = (message as HTMLTextAreaElement).value.trim();
+    if (!text) { toast("Enter a message first."); return; }
+    button.setAttribute("disabled", "true");
+    void api.launchModelTerminal((provider as HTMLSelectElement).value as "opencode" | "copilot", text)
+      .then((result) => toast(result.message ?? "terminal launch requested"))
+      .catch((err) => toast(err instanceof Error ? err.message : "terminal launch failed"))
+      .finally(() => button.removeAttribute("disabled"));
+  });
+  return el("div", { className: "panel" }, [el("h4", null, "Model planning terminal"), el("p", { className: "dim small" }, "Launch an interactive assistant in this repository. Changes are not applied automatically."), el("div", { className: "row gap wrap" }, [provider, message, button])]);
 }
 
 function renderSkills(host: HTMLElement, team: TeamIndex): void {
@@ -154,7 +178,7 @@ function skillCard(skill: SkillInfo): HTMLElement {
   return card;
 }
 
-function agentCard(agent: AgentInfo): HTMLElement {
+function agentCard(agent: AgentInfo, models: Array<{ id: string; provider?: string }>): HTMLElement {
   const collapse = (title: string, items: string[]): HTMLElement | null => {
     if (items.length === 0) return null;
     return el("details", { className: "collapsible" }, [
@@ -163,13 +187,20 @@ function agentCard(agent: AgentInfo): HTMLElement {
     ]);
   };
 
+  const primary = el("select", { className: "model-select" }, [el("option", { value: "" }, "Use recommendation"), ...models.map((model) => el("option", { value: model.id }, model.id))]);
+  const fallback = el("select", { className: "model-select" }, [el("option", { value: "" }, "Use recommendation"), ...models.map((model) => el("option", { value: model.id }, model.id))]);
+  if (agent.modelOverride) (primary as HTMLSelectElement).value = agent.modelOverride;
+  if (agent.modelFallbackOverride) (fallback as HTMLSelectElement).value = agent.modelFallbackOverride;
+  const save = el("button", { className: "btn btn-sm" }, "Save model override");
+  save.addEventListener("click", () => void api.setModelOverride(agent.name, (primary as HTMLSelectElement).value || undefined, (fallback as HTMLSelectElement).value || undefined).then((result) => toast(result.message)).catch((err) => toast(err instanceof Error ? err.message : "override failed")));
   const card = el("div", { className: "card" }, [
     el("div", { className: "card-title" }, [
       el("strong", null, agent.name),
-      agent.model ? el("span", { className: "badge badge-running" }, agent.model) : null,
+      (agent.modelOverride ?? agent.model) ? el("span", { className: "badge badge-running" }, agent.modelOverride ?? agent.model!) : null,
       el("button", { className: "btn btn-sm" }, "Open"),
     ]),
     el("p", { className: "dim" }, agent.description),
+    el("div", { className: "row gap wrap" }, [el("label", { className: "small" }, ["Primary ", primary]), el("label", { className: "small" }, ["Fallback ", fallback]), save]),
     collapse("Expertise", agent.expertise),
     collapse("Collaboration", agent.collaboration),
     collapse("Constraints", agent.constraints),
