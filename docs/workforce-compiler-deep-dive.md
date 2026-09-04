@@ -31,7 +31,7 @@ The CLI supports `inspect`, `compile`, and `validate`.
 - `compile` performs packaging and then runs validation automatically.
 - `validate` re-checks an already-emitted package.
 
-Discovery is repository-aware: it resolves the Forge repo root, finds the active harness root, and reads generated artifacts from there. This keeps the compiler portable across `.agents`, `.github`, `.claude`, and `.opencode` layouts.
+Discovery is repository-aware: it resolves the Forge repo root, finds the active harness root, and reads generated artifacts from there. This keeps the compiler portable across `.agents`, `.github`, `.claude`, and `.opencode` layouts. The frontmatter reader also folds YAML block-scalar descriptions (`>` / `|`) into plain text, so older generated agents and third-party files still package cleanly.
 
 ---
 
@@ -48,6 +48,8 @@ Compiler behavior to know:
 
 - Agent IDs are normalized to lowercase-hyphen format for schema compatibility.
 - Model tier is inferred heuristically (`small` / `medium` / `large`) from model names.
+- Optional agent overrides from `docs/model-overrides.json` are read before packaging, so the compiled workforce reflects the operator's current primary/fallback model choices rather than only the generated frontmatter defaults.
+- Provider-qualified model IDs are canonicalized for package metadata (for example `github-copilot/gpt-5.6-luna` → `gpt-5.6-luna`) before tier inference.
 - If manifest tasks lack explicit owners, workflow synthesis can use a fallback agent.
 
 ### 2) Skills
@@ -88,7 +90,7 @@ It includes:
 - `taskNodeMap` entries linking Forge task IDs to workflow node IDs
 - compile-time warnings
 
-That map is the key traceability link when correlating runtime behavior back to original Forge tasks.
+That map is the key traceability link when correlating runtime behavior back to original Forge tasks. The bridge also carries the compiler's warnings, so runtime handoff can surface packaging caveats without having to rediscover them.
 
 ---
 

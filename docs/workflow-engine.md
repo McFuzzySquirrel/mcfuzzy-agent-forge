@@ -222,7 +222,7 @@ npm run workflow-engine -- viz     [--repo <path>] [--port <n>] [--no-open]
 | `--max-retries <n>` | `2` | Attempts per task before it is marked `failed` |
 | `--retry-delay-ms <ms>` | `5000` | Delay between retries |
 | `--heartbeat-ms <ms>` | `60000` | Heartbeat interval while a task runs; `0` disables |
-| `--concurrency <n>` | `1` | Max ready tasks to run in parallel (see *Parallel dispatch* below) |
+| `--concurrency <n>` | `1` | Persisted concurrency preference for future multi-task dispatch; the current engine still executes one repo task at a time while output attribution is repo-wide (see *Execution waves and concurrency* below) |
 | `--task-timeout-ms <ms>` | `600000` (10 min) | Per-task timeout before the harness call is killed; a task's own `timeoutMs` in the manifest overrides this |
 | `--yes` | *(off)* | Skip the interactive pre-run gate |
 | `--keep-alive` | adaptive | OpenCode harness only: boot one `opencode serve` for the run and attach every task to it, avoiding per-task cold boots (see *Keep-alive attach mode* below). **Default is adaptive** - on when more than one task remains, off for a single-task run |
@@ -243,7 +243,7 @@ npm run workflow-engine -- viz     [--repo <path>] [--port <n>] [--no-open]
 ### Pre-run gate
 
 Before dispatching, the engine prints a pre-run summary (harness, phases, tasks,
-per-task timeout, max retries, retry delay, concurrency, keep-alive mode) and,
+per-task timeout, max retries, retry delay, configured concurrency, keep-alive mode) and,
 when run interactively, pauses for confirmation. The gate is interactive-only:
 `--yes` (or `FORGE_ENGINE_YES=1`) skips it explicitly, and it auto-skips when
 stdin is not a TTY (CI / headless).
@@ -354,29 +354,31 @@ without affecting the rest. Adapters that shell out (`opencode`, `copilot`,
 `flowforge-kernel`) enforce it on the child process; `openai` enforces it on the
 API call via `AbortController`. See [ADR-022](adr/022-task-granularity-and-configurable-timeout.md).
 
-### Parallel dispatch (opt-in)
+### Execution waves and concurrency
 By default the engine runs tasks **sequentially** (concurrency `1`). With
-`--concurrency <n>` it drains each wave of ready tasks (all tasks whose
-dependencies are satisfied) through a bounded worker pool of at most `n` in
-flight, merging results in manifest order and saving state once per wave:
+`--concurrency <n>` it still records the operator's intended concurrency in
+config, summaries, and launcher/console flows, but the current runtime executes
+**one repo task at a time**.
 
-```
-npm run workflow-engine -- run --harness stub --concurrency 3 --yes
-```
+Why the conservative behavior? Output verification and artifact synthesis now use
+repository-wide worktree snapshots to prove what changed during a task. Running
+multiple repo-editing tasks at once would let one task mis-attribute another
+task's file-diff evidence, corrupting `outputFiles`, `filesChanged`, and the
+no-op gate. Until attribution becomes task-isolated, the engine forces
+serialized execution even when a higher concurrency value is configured.
 
-Parallelism only applies when the selected harness declares
-`supportsConcurrency` (all current adapters do). **Same-owner tasks are always
-serialized**: within a wave the engine keeps at most one task per owning agent,
-so tasks sharing a subsystem (project dir, build outputs, ports) never run
-concurrently even when the dependency graph considers them independent.
-Different-owner tasks still parallelize up to `n`. Repo-editing harnesses rely on
-the manifest dependency graph plus the same-owner guard for file isolation - so
-declare dependencies correctly before raising `n`, and be aware that cross-owner
-tasks on shared paths (e.g. one task scaffolding a directory while another
-builds inside it) are still the operator's responsibility. `FORGE_ENGINE_CONCURRENCY`
-sets the default, and `forge-launcher engine-run` (or the legacy
-`scripts/forge-engine-run.sh` / `.ps1`) accepts `--concurrency <n>` /
-`-Concurrency <n>` to pass it through. See [ADR-021](adr/021-parallel-task-dispatch.md).
+What still matters today:
+
+- the configured concurrency value is persisted in `docs/engine-config.json`,
+  shown in the pre-run summary, and carried through launcher/console flows;
+- ready-task selection still passes through `ownerUniqueReady`, so the dispatch
+  boundary already preserves one-task-per-owner behavior; and
+- the wave-shaped design remains the re-entry point for future safe parallelism.
+
+So treat `--concurrency` as a stored operator preference today, not an active
+throughput dial. See [ADR-021](adr/021-parallel-task-dispatch.md) for the
+original parallel-dispatch design and why the current docs call out the stricter
+runtime behavior explicitly.
 
 ---
 
@@ -386,9 +388,9 @@ sets the default, and `forge-launcher engine-run` (or the legacy
 2. Project input artifacts into a compact context block (see *Artifact pattern* below).
 3. Mark the task `running`, then invoke the harness - retrying up to `--max-retries` on failure.
 4. On success, record the task `complete` (and synthesize a work artifact if `produces` is declared).
-5. Save `WORKFLOW-STATE.json` and sync `PROGRESS.md` after every task.
+5. Persist the running snapshot before the harness call, then save the merged `WORKFLOW-STATE.json` and sync `PROGRESS.md` after each task wave and at terminal run states.
 
-Tasks within a phase run sequentially (MVP); a failed task blocks downstream tasks in that phase, and the run stops with `status: "failed"`. A **skipped** task is treated as done for dependency purposes, so it never blocks the next phase.
+Tasks are currently executed one at a time even though the engine still reasons in ready-frontier waves. A failed task blocks downstream tasks in that phase, and the run stops with `status: "failed"`. A **skipped** task is treated as done for dependency purposes, so it never blocks the next phase.
 
 > **Owner assignment.** `forge-execution-adapter compile` guarantees every task has an owner: if no agent confidently matches a task, it falls back to an `*orchestrator`-named agent (else the first agent) and records a warning. Unassigned tasks are therefore rare and only arise from a hand-edited manifest - in which case the engine skips them safely rather than deadlocking.
 
@@ -496,7 +498,7 @@ To start fresh (e.g. after recompiling the manifest), delete `docs/WORKFLOW-STAT
 |---|---|---|
 | `FORGE_ENGINE_YES` | *(unset)* | `1` skips the pre-run gate (same as `--yes`) |
 | `FORGE_ENGINE_HEARTBEAT_MS` | `60000` | Heartbeat interval in ms |
-| `FORGE_ENGINE_CONCURRENCY` | `1` | Max ready tasks to run in parallel (same as `--concurrency`; only for harnesses that declare `supportsConcurrency`) |
+| `FORGE_ENGINE_CONCURRENCY` | `1` | Persisted concurrency preference mirrored from `--concurrency`; retained in config and summaries even though repo-task execution is currently serialized |
 | `FORGE_ENGINE_TASK_TIMEOUT_MS` | `600000` | Per-task timeout in ms (same as `--task-timeout-ms`; per-task manifest `timeoutMs` overrides) |
 | `FORGE_ENGINE_HARNESS` | `opencode` | Default harness for the standalone runner |
 | `FORGE_ENGINE_VIZ` | *(unset)* | `1` enables `--viz` on the standalone runner |
