@@ -276,6 +276,7 @@ function additiveManifestUpdateOnly(beforeText: string, afterText: string): bool
       (after.phases ?? []).flatMap((phase) => (phase.tasks ?? []).flatMap((task) => task.id ? [[task.id, JSON.stringify(task)] as const] : [])),
     );
     for (const [id, task] of beforeTasks) {
+      if (!afterTasks.has(id)) return false;
       if (afterTasks.get(id) !== task) return false;
     }
     return true;
