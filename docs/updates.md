@@ -4,6 +4,14 @@ Detailed release and change notes for MyForge.
 
 ---
 
+## September 2026 - v3.49
+
+### Fresh-clone launcher installs no longer require a prebuilt tarball
+
+- Removed the `scripts/forge-launcher` self-dependency on `file:forge-launcher-1.0.0-beta.4.tgz`, so `npm install` now works immediately after cloning the repository, including on Windows where the missing tarball could surface as `EPERM`/`ENOENT` install failures.
+
+---
+
 ## September 2026 - v3.48
 
 ### Documentation refresh: deep dives, execution reality, and Story Part 3

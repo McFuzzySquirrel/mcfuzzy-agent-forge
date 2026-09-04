@@ -23,7 +23,6 @@
   "dependencies": {
     "@clack/prompts": "^1.7.0",
     "cross-spawn": "^7.0.6",
-    "forge-launcher": "file:forge-launcher-1.0.0-beta.4.tgz",
     "semver": "^7.8.5"
   },
   "devDependencies": {

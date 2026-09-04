@@ -42,7 +42,7 @@ Use this flow when you want to verify the whole experience end to end.
 ```bash
 git clone https://github.com/McFuzzySquirrel/mcfuzzy-agent-forge.git
 cd mcfuzzy-agent-forge/scripts/forge-launcher
-npm install
+npm install                               # install package deps from the fresh clone
 npm pack
 npm install -g ./forge-launcher-1.0.0-beta.4.tgz
 ```
