@@ -296,6 +296,15 @@ function additiveManifestUpdateOnly(beforeText: string, afterText: string): bool
   }
 }
 
+function isManifestJson(text: string): boolean {
+  try {
+    JSON.parse(text);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
 /** Compare a feature-increment snapshot, allowing only project-agent changes. */
 export function compareFeatureIncrementFiles(
   before: FeatureIncrementSnapshot,
@@ -331,14 +340,15 @@ export function compareFeatureIncrementFiles(
       result.unrelatedFiles.push(file);
       continue;
     }
-    if (
-      file === "docs/EXECUTION-MANIFEST.json" &&
-      !additiveManifestUpdateOnly(oldValue ?? JSON.stringify({ phases: [] }), newValue)
-    ) {
-      result.unrelatedFiles.push(file);
-    } else {
-      result.updatedOutputs.push(file);
+    if (file === "docs/EXECUTION-MANIFEST.json") {
+      if (oldValue === undefined ? isManifestJson(newValue) : additiveManifestUpdateOnly(oldValue, newValue)) {
+        result.updatedOutputs.push(file);
+      } else {
+        result.unrelatedFiles.push(file);
+      }
+      continue;
     }
+    result.updatedOutputs.push(file);
   }
   return result;
 }
