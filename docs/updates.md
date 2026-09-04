@@ -4,6 +4,16 @@ Detailed release and change notes for MyForge.
 
 ---
 
+## September 2026 - v3.48
+
+### Documentation refresh: deep dives, execution reality, and Story Part 3
+
+- Refreshed the workflow-engine, artifact-store, and workforce-compiler deep dives so they match the current code paths: manual task selection, output-verification and attribution, auto-commit, model override inputs, and the current serialized execution behavior while repo-wide worktree attribution remains authoritative.
+- Updated related operator docs (`README.md`, `docs/workflow-engine.md`, `docs/forge-launcher.md`, and `docs/forge-console-user-guide.md`) so concurrency settings are described as persisted configuration rather than active parallel dispatch in the current engine implementation.
+- Added [`docs/THE-STORY-PART-3.md`](THE-STORY-PART-3.md), continuing the MyForge narrative from the end of Part 2 through the Console, incremental existing-repo workflows, model planning, observability, and the lessons those changes taught.
+
+---
+
 ## September 2026 - v3.47
 
 ### Preserve provider-qualified OpenCode model IDs

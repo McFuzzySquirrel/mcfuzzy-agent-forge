@@ -47,9 +47,9 @@ If you are creating a repo from the browser, the wizard collects:
   `.txt`, `.pdf`, or `.docx`. They are copied to `docs/PRD.md` /
   `docs/research/` and inform the PRD build,
 - and whether setup should run automatically after creation (draft the PRD and generate the agent team).
-- **Concurrency (parallel agents)** (optional): the number of agents to run in
-  parallel. Leave blank to use the engine default or adjust it later from the
-  Overview Controls panel.
+- **Concurrency preference** (optional): a stored engine setting carried into
+  `docs/engine-config.json` and later runs. Leave blank to use the engine
+  default or adjust it later from the Overview Controls panel.
 
 Once it finishes, the console opens that project's Overview view. If creation
 continues in the background, the wizard now shows a live status card so you can
@@ -143,7 +143,7 @@ The Overview controls panel offers the same actions you would otherwise issue fr
   workflow, or **manual** to run only the saved task selection from the Tasks
   view. Manual mode requires at least one selected task.
 - **Auto-commit after each task**: toggles one-commit-per-task git history (on by default).
-- **Concurrency (parallel agents)**: sets how many agents the engine runs in parallel. Enter a positive integer (e.g. `3`) and click **Set**; enter `0` to return to the engine default. The setting is saved to `docs/engine-config.json` and takes effect on the next Run or Resume.
+- **Concurrency preference**: stores the engine concurrency value in `docs/engine-config.json`. Enter a positive integer (e.g. `3`) and click **Set**; enter `0` to return to the engine default. The value is shown in later Run/Resume summaries, but current repo-task execution remains serialized while output attribution is repo-wide.
 - **Reset changed tasks for review**: after feature reconciliation, resets completed or skipped tasks whose contracts changed back to pending. Review the changed task IDs before using this action.
 - **Launch \<harness\> CLI**: opens the project's harness CLI (opencode/copilot/claude) in a new terminal from the project folder, so you can watch the live run and take over manually. Also available on the Tasks header.
 

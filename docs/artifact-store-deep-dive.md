@@ -83,7 +83,7 @@ Every artifact is a JSON file stored in `docs/artifacts/<subdir>/<id>.json`.
 
 ### Key design choices
 
-**`summary` is the primary field.** Most downstream agents receive only `summary` and `confidence` - not `payload`. The payload is retrieved only when a task explicitly lists its fields in the manifest.
+**`summary` is the primary field.** Most downstream agents receive only `summary`, `confidence`, `filesChanged`, and `agentOutputExcerpt` - not the full payload. For synthesised completion artifacts, the summary is derived from the task title + description rather than the first stdout line, so downstream context describes the intended work instead of an agent's self-talk.
 
 **`inputs` traces the knowledge graph.** Every artifact records which other artifact IDs it was built from. This allows the audit log to reconstruct the complete knowledge-flow chain:
 
@@ -97,7 +97,7 @@ implementation-001
 review-001
 ```
 
-**Storage is files, not a database.** Artifacts live in `docs/artifacts/` as plain JSON files. They can be inspected, diffed, versioned in Git, and replayed without any additional infrastructure. A future `SqliteArtifactStore` or `BlobArtifactStore` can implement the same interface without changing the engine.
+**Storage is files, not a database.** Artifacts live in `docs/artifacts/` as plain JSON files. They can be inspected, diffed, versioned in Git, and replayed without any additional infrastructure. The store also reserves sequential IDs in memory after seeding from disk, so concurrent write attempts cannot accidentally reuse an existing `<type>-NNN` identifier. A future `SqliteArtifactStore` or `BlobArtifactStore` can implement the same interface without changing the engine.
 
 ---
 
@@ -160,7 +160,7 @@ Add `inputs` and `produces` fields to tasks in `docs/EXECUTION-MANIFEST.json`:
 ```
 
 - **`inputs`** - list of artifact *types* (not IDs) the engine loads before running this task. The engine resolves the most recently completed artifact of each listed type.
-- **`produces`** - the artifact *type* this task must create. If the agent does not produce one explicitly, the engine auto-synthesises a minimal `work` artifact from the task's output files and stdout excerpt.
+- **`produces`** - the artifact *type* this task must create. If the agent does not produce one explicitly, the engine auto-synthesises a minimal `work` artifact from the task's output files, a task-derived summary, a default `confidence: 0.9`, and an agent-output excerpt for diagnostics.
 
 Tasks without `inputs` or `produces` behave exactly as before - the artifact layer is strictly additive.
 
@@ -194,9 +194,10 @@ Tasks without `inputs` or `produces` behave exactly as before - the artifact lay
 ```
 1. If task.produces is set:
      synthesise an artifact from outputFiles + stdout
-2. Write docs/artifacts/<subdir>/<id>.json
-3. Update WORKFLOW-STATE.json: tasks[id].artifactId = "..."
-4. Emit audit event: artifact.created
+2. Enrich `outputFiles` with repo worktree diffs so in-place edits are attributed too
+3. Write docs/artifacts/<subdir>/<id>.json
+4. Update WORKFLOW-STATE.json: tasks[id].artifactId = "..." and `inputArtifactIds`
+5. Emit audit event: artifact.created
 ```
 
 ---
@@ -245,7 +246,7 @@ The store is exposed as a TypeScript class in `scripts/artifacts.ts`. You can us
 ```typescript
 import { ArtifactStore } from ".agents/skills/forge-workflow-engine/scripts/artifacts.ts";
 
-const store = new ArtifactStore({ repoRoot: "/path/to/repo" });
+const store = new ArtifactStore({ artifactsPath: "/path/to/repo/docs/artifacts" });
 
 // Write an artifact
 const artifact = store.write({
@@ -335,7 +336,7 @@ The projection system already supports this via the `fields` parameter: only fie
 | Component | What changed |
 |---|---|
 | `forge-execution-adapter/scripts/types.ts` | `ManifestTask` gains `inputs?: string[]` and `produces?: string`; new `Artifact`, `ArtifactCategory`, and `ArtifactProjection` types added |
-| `forge-workflow-engine/scripts/types.ts` | `TaskRecord` gains `artifactId?` and `inputArtifactIds?`; `AuditEvent.action` union extended with `artifact.created` and `context.projected`; `EngineOptions` gains `artifactsPath` |
+| `forge-workflow-engine/scripts/types.ts` | `TaskRecord` gains `artifactId?` and `inputArtifactIds?`; `AuditEvent.action` union extended with `artifact.created`, `context.projected`, and follow-on run bookkeeping; `EngineOptions` gains `artifactsPath` |
 | `forge-workflow-engine/scripts/artifacts.ts` | New file - `ArtifactStore` class with `write`, `read`, `readByType`, `readByTask`, `project`, `renderProjection`, `synthesise` |
 | `forge-workflow-engine/scripts/engine.ts` | `executeTask` now resolves input artifacts, builds projection, prepends context block to harness call, synthesises output artifact, emits new audit events |
 | `forge-workflow-engine/scripts/state.ts` | `markTaskComplete` accepts optional `artifactId` and `inputArtifactIds` parameters |

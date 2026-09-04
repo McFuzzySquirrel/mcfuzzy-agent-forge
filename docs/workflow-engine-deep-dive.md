@@ -80,12 +80,13 @@ Now the engine has a live snapshot of the entire planned build. Every subsequent
 The engine's main loop is a `while` that runs until either the workflow is complete, a pause is requested, or a failure stops execution:
 
 ```
-while (!isComplete && !pauseRequested) {
-    ready = nextReadyTasks(manifest, state)
-    for each ready task:
+while (!isComplete && !stopRequested) {
+    ready = ownerUniqueReady(nextReadyTasks(manifest, state))
+    for each ready task in the current wave:
         executeTask(task)
-        saveState()
-        syncProgressMd()
+    merge task results back into authoritative state
+    saveState()
+    syncProgressMd()
 }
 ```
 
@@ -117,16 +118,15 @@ function nextReadyTasks(manifest, state): FlatTask[] {
 }
 ```
 
-Two levels of dependency checking happen here:
+Three filters determine readiness:
 
-- **Phase-level**: Phase 2 can't start until every task in Phase 1 (which Phase 2 declares as a dependency) is `complete`.
-- **Task-level**: Within a phase, task `1.2` won't become ready until `1.1` (its dependency) is `complete`.
+- **Manual scope**: when the run is in manual mode, unselected tasks are ignored entirely.
+- **Phase-level**: Phase 2 can't start until every task in Phase 1 (which Phase 2 declares as a dependency) is done (`complete` or `skipped`).
+- **Task-level**: Within a phase, task `1.2` won't become ready until `1.1` (its dependency) is done.
 
 This is a simplified but correct DAG walk. Because tasks always move from `pending → running → complete/failed/skipped` and never backwards (except on explicit `replay`), `nextReadyTasks` can be called repeatedly as the loop iterates and will always produce the correct frontier.
 
-> **Why sequential in the MVP?** The ready list could theoretically contain multiple tasks that could run in parallel. The engine runs them one at a time for now. True parallelism would require each harness backend to guarantee isolation between concurrent invocations - something that can't be assumed of all backends (e.g. a CLI tool writing to shared files). It's a conscious tradeoff: correctness over speed.
->
-> **As of ADR-021 this is no longer strictly sequential.** The engine now drains the ready frontier in bounded *waves* (`--concurrency <n>`, default `1`). Harness adapters declare a `supportsConcurrency` capability; only opt-in adapters are parallelized, and repo-editing harnesses still rely on the dependency graph for file isolation.
+> **Why one task at a time right now?** The engine still has a wave-shaped dispatcher, a `--concurrency` setting, and a per-owner guard, but it currently executes one repo task at a time. The reason is no longer harness async support; it is **output attribution**. The engine snapshots the repository worktree before and after a task to enforce the no-op gate and to enrich `outputFiles` for in-place edits. If multiple repo-editing tasks ran together, those repository-wide snapshots could mis-attribute file changes across tasks. Correct attribution is more important than nominal parallelism, so the runtime currently forces serialized execution until task-isolated attribution exists again.
 
 ---
 
@@ -173,21 +173,24 @@ Every harness call also runs under a per-task timeout (default **10 minutes**, c
 
 ### State is always saved before the next loop iteration
 
-After every `executeTask` call, the engine calls both `saveState` and `syncProgressMd`. This means:
+The engine persists state at three important boundaries:
 
-- If the process crashes mid-run (power failure, SIGKILL, etc.), the next `run` invocation picks up from exactly the last saved state.
-- `PROGRESS.md` is always current so a human checking in on the build gets an accurate picture.
+- **Before a harness call** it saves the task as `running`, so dashboards and reconnects see live in-flight work.
+- **After each task wave** it saves the merged authoritative state and regenerates `PROGRESS.md`.
+- **At the end of the run** it writes the terminal `paused`, `failed`, or `complete` state and syncs progress again.
+
+This means a crash or restart will reset any leftover `running` task back to `pending` and safely pick it up again, while the operator-facing views stay aligned with the last durable checkpoint.
 
 ### Auto-commit after each task
 
 Immediately after `saveState` + `syncProgressMd`, the engine runs `git add -A`
-and commits the working tree **once per task that completed in that wave** (see
-ADR-035). Commits are sequenced after the wave merge — never inside
-`executeTask` — so concurrent tasks cannot race git. Each commit includes the
-task's work **and** the engine-owned files (`docs/WORKFLOW-STATE.json`,
-`docs/EXECUTION-AUDIT.jsonl`, `docs/PROGRESS.md`), and records a
-`task.committed` audit event with the SHA. Default message:
-`feat(forge-engine): complete task {taskId} - {taskTitle}`.
+and commits the working tree **once per completed task** (see ADR-035). The
+commit step stays outside `executeTask`, so the task execution path only proves
+work and updates state; git history is written afterwards from the authoritative
+merged snapshot. Each commit includes the task's work **and** the engine-owned
+files (`docs/WORKFLOW-STATE.json`, `docs/EXECUTION-AUDIT.jsonl`,
+`docs/PROGRESS.md`), and records a `task.committed` audit event with the SHA.
+Default message: `feat(forge-engine): complete task {taskId} - {taskTitle}`.
 
 Auto-commit is **on by default**; `--no-auto-commit` / `FORGE_ENGINE_AUTO_COMMIT=0`
 disables it. A missing `.git`, an empty diff, or a failed commit is skipped or
@@ -202,7 +205,16 @@ The `HarnessAdapter` interface is the plugin point of the whole system:
 ```typescript
 interface HarnessAdapter {
   name: string;
-  invoke(agent: AgentDescriptor, task: ManifestTask, context: WorkflowState, repoRoot: string): Promise<TaskResult>;
+  supportsConcurrency: boolean;
+  invoke(
+    agent: AgentDescriptor,
+    task: ManifestTask,
+    context: WorkflowState,
+    repoRoot: string,
+    contextBlock?: string,
+    timeoutMs?: number,
+    maxRetries?: number,
+  ): Promise<TaskResult>;
 }
 ```
 
@@ -221,9 +233,10 @@ directory, the adapter passes `--agent <name>` so opencode loads the persona
 itself - the session runs under the forge agent rather than the default build
 agent - and the persona is not inlined. `opencode run` has no `--system-prompt`
 flag, so for other harness roots (`.agents`, `.claude`, `.github`) it falls back
-to inlining the agent body into the prompt. The task's title and description
-complete the user prompt. Outputs are verified by checking whether the
-`expectedOutputs` files exist on disk after the call.
+to inlining the agent body into the prompt. Provider-qualified model IDs are
+passed through unchanged on this path. The task's title and description complete
+the user prompt. Outputs are verified and then enriched with worktree-diff
+attribution so in-place edits are preserved in task state and artifacts.
 
 ### `CopilotAdapter`
 
@@ -233,9 +246,13 @@ Shells out to the GitHub Copilot CLI per task:
 copilot -p "<agent context + task prompt>" --yolo
 ```
 
-`copilot -p` has no `--system-prompt` flag, so the agent file contents are inlined
-into the prompt. `--yolo` auto-approves tool permissions, mirroring the opencode
-adapter's `--auto`. Select it with `--harness copilot` (or `FORGE_ENGINE_HARNESS=copilot`).
+When the owning agent's file lives under `.github/agents/`, the adapter can use
+the inline `/agent <name>` directive so Copilot loads the persona natively;
+otherwise it falls back to inlining the agent file contents into the prompt.
+`--yolo` auto-approves tool permissions, mirroring the opencode adapter's
+`--auto`, and provider prefixes are stripped from model IDs before they are
+passed to the Copilot CLI. Select it with `--harness copilot` (or
+`FORGE_ENGINE_HARNESS=copilot`).
 
 ### `OpenAIAdapter`
 
@@ -260,7 +277,7 @@ The beauty of this pattern: **the engine code never changes when you swap backen
 
 ## Keeping Everything in Sync: State + Progress + Audit
 
-The engine maintains three output files and keeps them in sync after every state mutation:
+The engine maintains three output files and keeps them in sync across running, wave-complete, and terminal-state checkpoints:
 
 ### `docs/WORKFLOW-STATE.json` - the machine's source of truth
 
@@ -268,20 +285,22 @@ Every task has a full record: status, attempt count, start/end timestamps, outpu
 
 ### `docs/PROGRESS.md` - the human's source of truth
 
-Regenerated by `syncProgressMd` after every task. It mirrors what a human operator would want to see: what's done, what's running, what's remaining, any blockers. It also happens to be the same format used by `forge-orchestrate-build`, so both execution modes produce compatible progress files.
+Regenerated at durable checkpoints during the run. It mirrors what a human operator would want to see: what's done, what's running, what's remaining, any blockers. It also happens to be the same format used by `forge-orchestrate-build`, so both execution modes produce compatible progress files.
 
 ### `docs/EXECUTION-AUDIT.jsonl` - the append-only record
 
-Every state transition is appended as a newline-delimited JSON event. This file is never overwritten - only appended to. It's the full history: `run.started`, `phase.started`, `task.started`, `task.retrying`, `task.complete`, `task.failed`, `task.skipped`, `run.paused`, `run.complete`. You can replay the entire history of a build from this file.
+Every state transition is appended as a newline-delimited JSON event. This file is never overwritten - only appended to. It's the full history: `run.started`, `phase.started`, `task.started`, `task.retrying`, `task.complete`, `task.failed`, `task.skipped`, `task.committed`, `context.projected`, `artifact.created`, `run.paused`, `run.failed`, `run.complete`, and reconciliation notes when a new manifest version is adopted. You can replay the entire history of a build from this file.
 
 The sync pattern is:
 
 ```
-execute task
-  → markTask*(state, ...) returns new immutable state object
-  → saveState(statePath, newState)     writes WORKFLOW-STATE.json
-  → writeAuditEvent(auditPath, event)  appends to EXECUTION-AUDIT.jsonl
-  → syncProgressMd(progressPath, ...)  regenerates PROGRESS.md
+resolve selection / ready frontier
+  → markTaskStarted(...) + saveState(...)     persists "running"
+  → execute harness call
+  → markTaskComplete/Failed/Skipped(...)
+  → writeAuditEvent(...)                      appends to EXECUTION-AUDIT.jsonl
+  → merge task result into authoritative state
+  → saveState(...) + syncProgressMd(...)      durable wave checkpoint
 ```
 
 Note that state is **immutable**: every `markTask*` function in `state.ts` returns a *new* state object using spread (`{ ...state, tasks: { ...state.tasks, [id]: updated } }`) rather than mutating in place. This means the engine always has a clean snapshot and bugs from accidental mutation are impossible.
@@ -299,7 +318,10 @@ let state = loadState(opts.statePath)    // loads existing state
 
 `nextReadyTasks` will skip over tasks already marked `complete` or `skipped` because they don't have `status === "pending"`. The engine picks up exactly where it left off.
 
-If the status was `paused`, the engine sets it back to `running` and continues. If it was `failed`, the engine logs a warning and continues - re-attempting any tasks that are still `pending`.
+Two extra behaviors matter in the current engine:
+
+- any task left in `running` from a crash or kill is normalized back to `pending` before the loop starts, so the run cannot deadlock on stale in-flight state; and
+- manual mode rehydrates the saved task selection from state/config, expands the selection to include transitive dependencies, and treats only that scoped slice as the workflow for completeness and failure checks.
 
 ### `replay` for targeted recovery
 
@@ -338,35 +360,33 @@ docs/EXECUTION-MANIFEST.json
         ▼
 workflow-engine run --harness opencode
         │
-        ├─ loadState() → null
-        ├─ initState() → all tasks pending
-        ├─ set status:"running"
-        │
-        └─ MAIN LOOP ────────────────────────────────────────┐
-               │                                             │
-               ├─ nextReadyTasks()                           │
-               │     check phase deps (all prior phases done)│
-               │     check task deps (declared deps done)    │
-               │                                             │
-               ├─ for each ready task:                       │
-               │     markTaskStarted() → save state          │
-                │     harness.invoke(agent, task)             │
-                │       ↳ opencode run [--agent <name>]       │
-                │            "<persona? + task>"              │
-               │     on success:                             │
-               │       markTaskComplete() → save → syncMd    │
-               │     on failure (retries exhausted):         │
-               │       markTaskFailed() → save → syncMd      │
-               │       → hasFailed=true → break loop         │
-               │                                             │
-               └─────────────────────────────────────────────┘
-                          │
-              ┌───────────┴────────────┐
-         isComplete?               hasFailed?
-              │                        │
-        set "complete"           set "failed"
-        write audit              write audit
-        sync PROGRESS.md         sync PROGRESS.md
+        ├─ loadState() / initState()
+        ├─ normalize stale running → pending
+        ├─ resolve manual selection (optional)
+        └─ MAIN LOOP ────────────────────────────────────────────────┐
+              │                                                     │
+              ├─ ownerUniqueReady(nextReadyTasks())                 │
+              │     check phase deps, task deps, manual scope       │
+              │                                                     │
+              ├─ for each ready task in the wave                    │
+              │     markTaskStarted() → save running snapshot       │
+              │     capture worktree baseline                       │
+              │     harness.invoke(agent, task, contextBlock, ...)  │
+              │       ↳ opencode run / copilot -p / API / kernel    │
+              │     verify outputs + enrich changed files           │
+              │     markTaskComplete/Failed/Skipped                 │
+              │                                                     │
+              ├─ merge task result(s) back into state               │
+              ├─ saveState() + syncProgressMd()                     │
+              ├─ auto-commit completed task work                    │
+              │                                                     │
+              └─────────────────────────────────────────────────────┘
+                         │
+             ┌───────────┴─────────────────┐
+        stop requested?                complete / failed?
+             │                                 │
+        set "paused"                     write terminal audit
+        clear control                    save final state + progress
 ```
 
 ---
@@ -401,15 +421,15 @@ Every state transition returns a new object. This makes the flow of state throug
 
 ### For this system specifically
 
-- **True parallel dispatch**: The ready-task list already contains all concurrently runnable tasks. Adding a `Promise.all` wrapper around the ready set (with a configurable concurrency limit) would significantly reduce wall-clock time on large projects. The main constraint is ensuring each harness adapter handles concurrent invocations safely. *(Implemented in ADR-021: bounded wave dispatch with a per-harness `supportsConcurrency` flag.)*
+- **Task-isolated attribution before parallelism returns**: the engine already has wave-shaped dispatch plumbing, but safe multi-task repo execution now depends on proving which task changed which files. A future task sandbox or per-task diff isolation would let higher configured concurrency become real throughput again.
 
 - **Approval gates between phases**: The manifest already has `approvalGates.betweenPhases`. The engine could pause after each phase, surface a diff of what was produced, and wait for a human `continue` signal before proceeding to the next phase.
 
-- **Output validation as a first-class step**: Right now, `expectedOutputs` are checked by looking for file existence. A richer post-task validator could run `validationCommands` (which are already in the manifest) and treat non-zero exit codes as task failures, giving the retry loop a chance to fix correctness issues.
+- **Richer validation loops**: `validationCommands` already exist and can be enforced. The next step would be feeding the failing command output back into a localized repair loop instead of just marking the task failed.
 
-- **Streaming harness adapters**: The OpenCode adapter uses `execSync` (blocking). A streaming version using `spawn` could pipe agent output in real-time to the terminal and to a log file, giving operators live feedback on long-running tasks.
+- **Deeper reconciliation-aware execution**: stable task IDs and manifest reconciliation already preserve work across feature increments. The next layer would let the engine reason explicitly about changed-task contracts and recommend reset/replay actions automatically.
 
-- **Web dashboard**: Because `WORKFLOW-STATE.json` is a stable structured file, a simple file-watching web server could serve a live build progress view without any changes to the engine.
+- **Console-initiated review workflows**: because the Console, launcher, and engine all now share the same state files, review and recovery actions can become first-class UI workflows without changing the engine contract.
 
 ### As a pattern for other things
 
