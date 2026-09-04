@@ -331,7 +331,10 @@ export function compareFeatureIncrementFiles(
       result.unrelatedFiles.push(file);
       continue;
     }
-    if (file === "docs/EXECUTION-MANIFEST.json" && oldValue !== undefined && !additiveManifestUpdateOnly(oldValue, newValue)) {
+    if (
+      file === "docs/EXECUTION-MANIFEST.json" &&
+      !additiveManifestUpdateOnly(oldValue ?? JSON.stringify({ phases: [] }), newValue)
+    ) {
       result.unrelatedFiles.push(file);
     } else {
       result.updatedOutputs.push(file);
