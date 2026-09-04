@@ -98,8 +98,7 @@ function parseAgent(path: string): AgentDescriptor {
 
 function canonicalModelId(model: string | undefined): string | undefined {
   if (!model) return undefined;
-  const value = model.trim();
-  return value.includes("/") ? value.slice(value.lastIndexOf("/") + 1).trim() : value;
+  return model.trim();
 }
 
 function parseSkill(path: string): SkillDescriptor {

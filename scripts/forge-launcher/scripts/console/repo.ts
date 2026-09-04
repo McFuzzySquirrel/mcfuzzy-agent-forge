@@ -442,7 +442,7 @@ export function modelInventory(p: RepoPaths): ModelInventory {
 
 export function canonicalModelId(model: string): string {
   const value = model.trim().replace(/^[-*\d.)\s]+/, "").replace(/^['`\"]|['`\"]$/g, "");
-  return value.includes("/") ? value.slice(value.lastIndexOf("/") + 1).trim() : value;
+  return value;
 }
 
 export function modelOverrides(p: RepoPaths): Record<string, { primary?: string; fallback?: string }> {

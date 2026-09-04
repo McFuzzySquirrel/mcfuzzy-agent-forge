@@ -870,3 +870,17 @@ test("model planning endpoint launches the selected interactive CLI", async () =
     }
   });
 });
+
+test("model inventory and overrides preserve provider-qualified IDs", async () => {
+  const root = makeRepo();
+  const docsResearch = join(root, "docs", "research");
+  mkdirSync(docsResearch, { recursive: true });
+  writeFileSync(join(docsResearch, "model-inventory.json"), JSON.stringify({
+    opencode_cli: { models: [{ id: "github-copilot/gpt-5.6-luna" }] },
+  }), "utf8");
+  const paths = (await import("./console/paths.ts")).repoPaths(root);
+  const repo = await import("./console/repo.ts");
+
+  assert.deepEqual(repo.modelInventory(paths).models[0]?.id, "github-copilot/gpt-5.6-luna");
+  assert.equal(repo.setModelOverride(paths, "agent", "github-copilot/gpt-5.6-luna").ok, true);
+});

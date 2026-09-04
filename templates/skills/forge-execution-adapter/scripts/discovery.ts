@@ -98,8 +98,7 @@ function parseAgent(path: string, repoRoot: string): AgentDescriptor {
 }
 
 function canonicalModelId(model: string): string {
-  const value = model.trim();
-  return value.includes("/") ? value.slice(value.lastIndexOf("/") + 1).trim() : value;
+  return model.trim();
 }
 
 function parseSkill(path: string, repoRoot: string): SkillDescriptor {

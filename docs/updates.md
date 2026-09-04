@@ -11,6 +11,7 @@ Detailed release and change notes for MyForge.
 - Windows Terminal now receives the repository working directory through its `-d` option instead of parsing a semicolon-delimited PowerShell script as multiple terminal commands.
 - Windows CLI resolution now prefers executable `.com`, `.exe`, `.bat`, and `.cmd` shims over extensionless npm shell shims, allowing global Copilot installs to launch through `copilot.cmd`.
 - Copilot model-planning terminals now launch with `--yolo`, matching the launcher's existing unattended Copilot execution mode.
+- Model inventory and agent discovery now retain provider-qualified IDs so OpenCode receives identifiers such as `github-copilot/gpt-5.6-luna` unchanged; Copilot strips its provider prefix only at its own CLI boundary.
 
 ---
 
