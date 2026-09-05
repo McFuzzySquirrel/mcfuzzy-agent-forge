@@ -21,6 +21,7 @@ jobs:
           - templates/skills/forge-workflow-engine
           - templates/skills/skill-review
     runs-on: ${{ matrix.os }}
+    timeout-minutes: 15
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4

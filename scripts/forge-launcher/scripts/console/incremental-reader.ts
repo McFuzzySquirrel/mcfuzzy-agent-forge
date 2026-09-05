@@ -69,6 +69,11 @@ export class IncrementalLineReader {
     ) {
       identityChanged = !this.sameSample(this.sample, this.readBoundarySample(file, this.offset));
     }
+    // Windows can preserve a file's timestamp and identity across a rapid
+    // same-size replacement, so compare the consumed boundary in that case.
+    if (!identityChanged && this.identity !== null && stat.size === this.offset) {
+      identityChanged = !this.sameSample(this.sample, this.readBoundarySample(file, this.offset));
+    }
     const truncated = stat.size < this.offset;
     const wasReset = identityChanged || truncated;
     if (wasReset) this.reset();
