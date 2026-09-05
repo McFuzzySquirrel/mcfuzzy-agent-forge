@@ -29,6 +29,7 @@ export interface StartAttachServerOptions {
   pollIntervalMs?: number;
   /** Per-attempt timeout for a single health request. */
   attemptTimeoutMs?: number;
+  signal?: AbortSignal;
 }
 
 function sleep(ms: number): Promise<void> {
@@ -62,6 +63,7 @@ function serverEnv(): NodeJS.ProcessEnv {
 }
 
 export async function startAttachServer(opts: StartAttachServerOptions): Promise<AttachServer> {
+  opts.signal?.throwIfAborted();
   const port = opts.port ?? (await freePort());
   const url = `http://127.0.0.1:${port}`;
   const timeoutMs = opts.timeoutMs ?? 60_000;
@@ -87,44 +89,48 @@ export async function startAttachServer(opts: StartAttachServerOptions): Promise
   // MCP servers), so a health request in that window can connect but hang. Give
   // each attempt its own abort timeout so the deadline loop always advances.
   const deadline = Date.now() + timeoutMs;
-  while (Date.now() < deadline) {
-    if (spawnError !== undefined) break;
-    if (child.exitCode !== null) {
-      throw new Error(`opencode serve exited early (code ${child.exitCode}) before becoming healthy. ${stderr.trim()}`);
-    }
-    try {
-      const res = await fetch(`${url}/global/health`, {
-        signal: AbortSignal.timeout(attemptTimeoutMs),
-      });
-      if (res.ok) {
-        const body = (await res.json()) as { healthy?: boolean };
-        if (body.healthy === false) continue;
-        return {
-          url,
-          port,
-          stop: () => stopServer(child),
-        };
+  try {
+    while (Date.now() < deadline) {
+      opts.signal?.throwIfAborted();
+      if (spawnError !== undefined) break;
+      if (child.exitCode !== null || child.signalCode !== null) {
+        throw new Error(`opencode serve exited early (code ${child.exitCode}) before becoming healthy. ${stderr.trim()}`);
       }
-    } catch {
-      // Not up yet, or a connect-ok-but-no-response window - keep polling.
+      try {
+        const timeout = AbortSignal.timeout(Math.min(attemptTimeoutMs, Math.max(1, deadline - Date.now())));
+        const res = await fetch(`${url}/global/health`, {
+          signal: opts.signal ? AbortSignal.any([opts.signal, timeout]) : timeout,
+        });
+        if (res.ok) {
+          const body = (await res.json()) as { healthy?: boolean };
+          if (body.healthy !== false) {
+            opts.signal?.throwIfAborted();
+            return { url, port, stop: () => stopServer(child) };
+          }
+        }
+      } catch (error) {
+        if (opts.signal?.aborted) throw error;
+        // Connection/health failures are expected during startup; the deadline
+        // below reports the failure if the server never becomes healthy.
+      }
+      await sleep(pollIntervalMs);
     }
-    await sleep(pollIntervalMs);
+    const reason = spawnError !== undefined ? spawnError : `did not become healthy within ${timeoutMs}ms`;
+    throw new Error(`opencode serve failed to start on ${url}: ${reason}. ${stderr.trim()}`);
+  } catch (error) {
+    await stopServer(child);
+    throw error;
   }
-
-  child.kill("SIGKILL");
-  const reason = spawnError !== undefined ? spawnError : `did not become healthy within ${timeoutMs}ms`;
-  throw new Error(`opencode serve failed to start on ${url}: ${reason}. ${stderr.trim()}`);
 }
 
 async function stopServer(child: ReturnType<typeof spawn>): Promise<void> {
-  if (child.exitCode !== null) return;
-  child.kill("SIGTERM");
+  if (child.exitCode !== null || child.signalCode !== null || !child.pid) return;
   await new Promise<void>((resolve) => {
-    const timer = setTimeout(resolve, 1000);
+    const timer = setTimeout(() => child.kill("SIGKILL"), 1000);
     child.once("close", () => {
       clearTimeout(timer);
       resolve();
     });
+    child.kill("SIGTERM");
   });
-  if (child.exitCode === null) child.kill("SIGKILL");
 }

@@ -1,6 +1,7 @@
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
+import { HARNESS_ROOTS, selectProjectHarnessRoot, type HarnessRoot } from "../repo-metadata.ts";
 
 // ─── Project registry ─────────────────────────────────────────────────────────
 //
@@ -118,16 +119,11 @@ export function repoPaths(repoRoot: string): RepoPaths {
   };
 }
 
-const HARNESS_ROOTS = [".agents", ".opencode", ".claude", ".github"] as const;
+export type { HarnessRoot };
 
-export type HarnessRoot = (typeof HARNESS_ROOTS)[number];
-
-/** Detects the harness root used by a forge repo (first match wins). */
+/** Uses the same agent-root preference as compilation and authoring. */
 export function detectHarnessRoot(repoRoot: string): HarnessRoot | null {
-  for (const root of HARNESS_ROOTS) {
-    if (fs.existsSync(path.join(repoRoot, root))) return root;
-  }
-  return null;
+  return selectProjectHarnessRoot(repoRoot).root;
 }
 
 /** Engine harness to use when a repo has no persisted engine-config.json. */
@@ -137,7 +133,9 @@ export function inferEngineHarness(repoRoot: string): string {
 
 /** Locates the bootstrapped forge-workflow-engine skill dir (any harness root). */
 export function findEngineDir(repoRoot: string): string | null {
-  for (const root of HARNESS_ROOTS) {
+  const selected = detectHarnessRoot(repoRoot);
+  for (const root of [...new Set([selected, ...HARNESS_ROOTS])]) {
+    if (!root) continue;
     const candidate = path.join(repoRoot, root, "skills", "forge-workflow-engine");
     if (fs.existsSync(candidate)) return candidate;
   }
@@ -146,7 +144,9 @@ export function findEngineDir(repoRoot: string): string | null {
 
 /** Locates the bootstrapped forge-execution-adapter skill dir (any harness root). */
 export function findAdapterDir(repoRoot: string): string | null {
-  for (const root of HARNESS_ROOTS) {
+  const selected = detectHarnessRoot(repoRoot);
+  for (const root of [...new Set([selected, ...HARNESS_ROOTS])]) {
+    if (!root) continue;
     const candidate = path.join(repoRoot, root, "skills", "forge-execution-adapter");
     if (fs.existsSync(candidate)) return candidate;
   }

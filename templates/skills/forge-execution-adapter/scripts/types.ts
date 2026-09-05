@@ -41,6 +41,8 @@ export interface ForgeRepo {
   warnings: string[];
 }
 
+export type TaskCapability = "text" | "repository-tools";
+
 export interface ManifestTask {
   id: string;
   title: string;
@@ -48,6 +50,8 @@ export interface ManifestTask {
   ownerAgent?: string;
   /** Optional per-task override; normally model selection is agent-level. */
   model?: string;
+  /** Omitted/empty legacy requirements conservatively require repository tools. */
+  requiredCapabilities?: TaskCapability[];
   dependencies: string[];
   expectedOutputs: string[];
   validationCommands: string[];

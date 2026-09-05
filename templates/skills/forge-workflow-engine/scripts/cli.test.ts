@@ -3,8 +3,29 @@ import test from "node:test";
 import { mkdtempSync, mkdirSync, writeFileSync, existsSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { fileURLToPath } from "node:url";
+import { spawnSync } from "node:child_process";
 
 import { shouldKeepAlive, remainingTaskCount } from "./keepalive.ts";
+
+test("retired explicit, environment, and persisted harness selections fail with migration guidance", () => {
+  const root = mkdtempSync(join(tmpdir(), "forge-retired-harness-"));
+  mkdirSync(join(root, "docs"), { recursive: true });
+  writeFileSync(join(root, "docs", "EXECUTION-MANIFEST.json"), JSON.stringify({ phases: [] }));
+  for (const selection of ["explicit", "environment", "persisted"]) {
+    writeFileSync(join(root, "docs", "engine-config.json"), JSON.stringify({ harness: selection === "persisted" ? "flowforge-kernel" : "opencode" }));
+    const env = { ...process.env };
+    delete env.FORGE_ENGINE_HARNESS;
+    if (selection === "environment") env.FORGE_ENGINE_HARNESS = "flowforge-kernel";
+    const result = spawnSync(process.execPath, ["--import", "tsx", fileURLToPath(new URL("./cli.ts", import.meta.url)),
+      "run", "--repo", root, "--yes", ...(selection === "explicit" ? ["--harness", "flowforge-kernel"] : [])],
+    { encoding: "utf8", env });
+    assert.notEqual(result.status, 0);
+    assert.match(result.stderr + result.stdout, /flowforge-kernel harness is retired/);
+    assert.match(result.stderr + result.stdout, /engine-config\.json/);
+    assert.match(result.stderr + result.stdout, /artifacts are preserved/);
+  }
+});
 
 test("shouldKeepAlive: --attach URL reuses the existing server (never starts one)", () => {
   const d = shouldKeepAlive({ attachUrl: "http://127.0.0.1:4096", keepAlive: false, noKeepAlive: false, harness: "opencode", remaining: 10 });

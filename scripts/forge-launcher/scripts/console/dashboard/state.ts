@@ -14,7 +14,24 @@ type AuditListener = (event: AuditEvent) => void;
 type LogListener = (line: string) => void;
 type AuthoringListener = (event: Record<string, unknown>) => void;
 
-class AppStore {
+export interface ProjectDrafts {
+  [key: string]: string;
+}
+
+export class Epoch {
+  private current = 0;
+
+  next(): number {
+    this.current += 1;
+    return this.current;
+  }
+
+  isCurrent(value: number): boolean {
+    return value === this.current;
+  }
+}
+
+export class AppStore {
   summary: Summary | null = null;
   manifest: ExecutionManifest | null = null;
   state: WorkflowState | null = null;
@@ -23,6 +40,32 @@ class AppStore {
   private auditListeners = new Set<AuditListener>();
   private logListeners = new Set<LogListener>();
   private authoringListeners = new Set<AuthoringListener>();
+  private drafts = new Map<string, ProjectDrafts>();
+
+  projectKey(): string {
+    return this.summary?.repoRoot ?? "none";
+  }
+
+  getDraft<T extends string>(project: string, key: string, fallback: T): T {
+    return (this.drafts.get(project)?.[key] as T | undefined) ?? fallback;
+  }
+
+  setDraft(project: string, key: string, value: string): void {
+    const current = this.drafts.get(project) ?? {};
+    current[key] = value;
+    this.drafts.set(project, current);
+  }
+
+  clearDraft(project: string, key?: string): void {
+    if (!key) {
+      this.drafts.delete(project);
+      return;
+    }
+    const current = this.drafts.get(project);
+    if (!current) return;
+    delete current[key];
+    if (Object.keys(current).length === 0) this.drafts.delete(project);
+  }
 
   applySnapshot(snapshot: Snapshot): void {
     this.summary = snapshot.summary;

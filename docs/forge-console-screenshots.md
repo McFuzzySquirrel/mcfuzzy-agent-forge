@@ -1,8 +1,10 @@
 # Forge Console - Visual Tour
 
-A screenshot walkthrough of the Forge Console running against a demo project
-(**TaskFlow**, harness `opencode`, a 6-task build with a running task). Start it
-with `forge-launcher console`, then follow the views below.
+A screenshot walkthrough of the Forge Console. The Overview, Tasks table,
+Plan & Team overview, New Project, and Help images show the v3.52 Console with a local fixture project;
+no external authoring or paid model execution was used to create them. The other
+images retain the earlier **TaskFlow** demo and illustrate the corresponding
+views rather than the latest styling. Start with `forge-launcher console`.
 
 > See [forge-console.md](forge-console.md) for the full reference.
 
@@ -18,10 +20,10 @@ dropdown for one-click return to a prior project.
 
 ## 2. Overview
 
-The main dashboard: repo header with a live/idle indicator and harness badge,
-run status + progress (`3/6 done`), phase, and counts. The **Pipeline** panel
-holds the single **Continue** button (here **Resume build**, because the run is
-paused-midway), and the **Controls** panel offers Pause / Stop / Resume / Replay.
+The dashboard puts project identity, the next pipeline action, and blockers
+first. PRD, team, and project-skill authoring have separate status and model
+summaries. Authoring retries are distinct from native execution controls;
+legacy projects do not need to regenerate a team just to resume a build.
 
 ![Overview - run status + pipeline + controls](images/forge-console/02-overview.png)
 
@@ -34,8 +36,10 @@ through **To Do · In Progress · Done · Failed**, grouped by phase.
 
 ## 4. Tasks
 
-Every task in a sortable, filterable table (status, id, title, phase, owner,
-attempt, duration), with status-filter chips and a search box.
+Every task appears in a sortable, filterable table with status chips, search,
+and explicit manual selection. Selections and focused controls survive live
+updates. On narrow screens, the labelled table region scrolls horizontally
+instead of widening the whole page.
 
 ![Tasks - table](images/forge-console/04-tasks.png)
 
@@ -48,7 +52,9 @@ commands, dependencies, inputs, output files, and error/artifact metadata.
 
 ## 6. Logs (engine)
 
-The `docs/engine-run.log` tail, live-appended over SSE.
+The `docs/engine-run.log` tail, live-appended over SSE. Follow mode keeps new
+output in view; disabling it preserves the reading position and shows unread
+output.
 
 ![Logs - engine log](images/forge-console/06-logs.png)
 
@@ -60,10 +66,13 @@ The audit event stream (run/phase/task lifecycle), also live.
 
 ## 8. Plan & Team
 
-The project's documents and team in three collapsible sections - **Documents**,
-**Agents**, **Skills** (collapsed by default).
+Independent PRD, team, and project-skill **Authoring models** are available
+before a team exists. Save a model or leave a stage on **Inherit runner default**.
+Inventory refresh and unavailable saved selections remain explicit. The
+**Documents**, **Agents**, and **Skills** sections keep execution-model
+overrides separate from authoring settings.
 
-![Plan & Team - collapsed sections](images/forge-console/08-plan-team.png)
+![Plan & Team - authoring settings and project sections](images/forge-console/08-plan-team.png)
 
 ## 9. Plan & Team - a document
 
@@ -92,15 +101,17 @@ Chronological audit events, with failures highlighted.
 
 ## 13. New project
 
-The **New Project** wizard (`#/new`): name, harness, visibility, parent
-directory, idea, and an auto-draft toggle - spawns `forge-launcher --non-interactive`
-in the background.
+The **New Project** wizard (`#/new`) collects project details, supported text
+documents, three optional authoring model choices, and the auto-draft setting.
+Auto-draft runs PRD, team, and project-skill generation as separate stages.
+Selecting an existing PRD skips drafting it. Failed uploads or saves keep
+the draft available rather than silently starting with missing inputs.
 
 ![New project - wizard](images/forge-console/13-new-project.png)
 
 ## 14. Help
 
-The **Help** overlay (top-right button) explains the app, the pipeline, each
-view, and key terms.
+The **Help** dialog explains the pipeline, views, and key terms. Opening it moves
+keyboard focus into the dialog; Escape closes it and returns focus to Help.
 
 ![Help - modal](images/forge-console/14-help.png)

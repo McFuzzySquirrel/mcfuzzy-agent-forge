@@ -73,13 +73,14 @@ When the user invokes this skill, perform the following before touching any file
    - Does `docs/product-vision.md` with `docs/features/*.md` exist? If yes, note that Stage 1 will run in **Vision + Features Mode**.
    - Note whether the PRD is monolithic or decomposed so the team builder and orchestrator select the right mode.
 5. **Present the planned stages** as a numbered list:
-   - Stage 1: `forge-build-agent-team` → produce agent and skill files
+   - Stage 1: `forge-build-agent-team` → produce agents and immutable `docs/SKILL-CANDIDATES.json`
+   - Stage 1b: `forge-build-project-skills` → create/reuse/extend planned project skills independently
    - Stage 2 (optional): `forge-assign-models` → recommend or apply per-agent models *(opt-in -include if user passed `--assign-models`)*
    - Stage 3: Build execution *(choose one path)*:
      - Default: `forge-orchestrate-build` - execute all phases continuously, committing after each phase
      - With `--workflow-engine`: compile `docs/EXECUTION-MANIFEST.json` and execute the build through `forge-workflow-engine`
 6. **State the commit strategy** explicitly:
-   - After Stage 1: `chore: bootstrap MyForge agent and skill templates`
+   - After Stage 1: `chore: bootstrap MyForge agent templates and skill candidates`
    - After each build phase N: `feat: complete Phase N -<phase name>`
    - After all phases: `chore: auto-build complete -all phases delivered`
 7. **Present the pre-flight checklist** (see below).
@@ -204,7 +205,7 @@ Run this path only if the user included `--workflow-engine` in their `GO` comman
 
 This path uses the workflow engine as the build executor instead of `forge-orchestrate-build`. The manifest is the execution plan; the engine performs the actual autonomous run through the selected harness. The engine is a **detached, standalone process** - it is never run as a blocking child of this session. You author in the chat; the engine executes on its own (dark orchestration), survives this session ending, and can be resumed with `run`.
 
-Select the per-task harness with the `FORGE_ENGINE_HARNESS` environment variable (`opencode` default, `copilot`, `openai`, `stub`, or `flowforge-kernel`).
+Select the per-task harness with the `FORGE_ENGINE_HARNESS` environment variable (`opencode` default, `copilot`, `openai`, or `stub`).
 
 **Step 3a: Compile the execution manifest**
 

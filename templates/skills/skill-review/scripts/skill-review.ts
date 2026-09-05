@@ -43,6 +43,9 @@ interface CliOptions {
   files: string[];
   minScore: string;
   failBelow: boolean;
+  minAxis: string;
+  failAxisBelow: boolean;
+  failStructural: boolean;
   root: string;
   skillsDir: string;
 }
@@ -72,6 +75,21 @@ program
     false,
   )
   .option(
+    "--min-axis <score>",
+    "Minimum score required for every quality axis (1.0-3.0)",
+    "1.0",
+  )
+  .option(
+    "--fail-axis-below",
+    "Exit with non-zero code if any quality axis scores below --min-axis",
+    false,
+  )
+  .option(
+    "--fail-structural",
+    "Exit with non-zero code when any structural issue is found",
+    false,
+  )
+  .option(
     "-r, --root <path>",
     "Project root directory",
     detectDefaultRoot(),
@@ -89,6 +107,8 @@ async function main() {
   const provider = PROVIDERS[opts.provider];
   const minScoreText = opts.minScore.trim();
   const minScore = Number(minScoreText);
+  const minAxisText = opts.minAxis.trim();
+  const minAxis = Number(minAxisText);
 
   if (!provider) {
     console.error(`Unknown provider: ${opts.provider}. Valid: ${Object.keys(PROVIDERS).join(", ")}`);
@@ -97,6 +117,10 @@ async function main() {
 
   if (!/^\d+(?:\.\d+)?$/.test(minScoreText) || !Number.isFinite(minScore) || minScore < 1 || minScore > 3) {
     console.error(`Invalid min-score: ${opts.minScore}. Must be between 1.0 and 3.0`);
+    process.exit(1);
+  }
+  if (!/^\d+(?:\.\d+)?$/.test(minAxisText) || !Number.isFinite(minAxis) || minAxis < 1 || minAxis > 3) {
+    console.error(`Invalid min-axis: ${opts.minAxis}. Must be between 1.0 and 3.0`);
     process.exit(1);
   }
 
@@ -207,6 +231,18 @@ async function main() {
       console.error(`\nFailing: ${belowThreshold.length} skill(s) below minimum score of ${minScore}`);
       process.exit(1);
     }
+
+  }
+
+  const axisFailures = audits.flatMap((audit) =>
+    audit.scores
+      .filter((score) => score.score < minAxis)
+      .map((score) => `${audit.name}: ${score.axis}=${score.score}`),
+  );
+  if (axisFailures.length > 0) {
+    console.error(`\nQuality axes below minimum (${minAxis}):`);
+    for (const failure of axisFailures) console.error(`  - ${failure}`);
+    if (opts.failAxisBelow) process.exit(1);
   }
 
   // Also report structural issues on stderr
@@ -216,6 +252,7 @@ async function main() {
   );
   if (structuralCount > 0) {
     console.error(`\n${structuralCount} structural issue(s) found across ${audits.length} skill(s)`);
+    if (opts.failStructural) process.exit(1);
   }
 
   if (readErrors.length > 0) {

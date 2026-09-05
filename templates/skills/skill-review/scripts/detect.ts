@@ -1,28 +1,18 @@
 import { execSync } from "node:child_process";
 import { existsSync, readdirSync, statSync } from "node:fs";
 import { resolve, join, basename } from "node:path";
-
-/**
- * Auto-detected skill directory search order.
- */
-const SKILL_DIRS = [
-  ".agents/skills",
-  "skills",
-  ".opencode/skills",
-  ".claude/skills",
-  "templates/skills",
-];
+import { selectHarnessRoot } from "../../forge-execution-adapter/scripts/repo-metadata.mjs";
 
 /**
  * Returns the first skill directory that exists and contains at least one SKILL.md file.
  */
 export function detectSkillDir(root: string): string | null {
-  for (const dir of SKILL_DIRS) {
-    const full = join(root, dir);
-    if (!existsSync(full) || !statSync(full).isDirectory()) continue;
-    if (findSkillFiles(full).length > 0) return full;
-  }
-  return null;
+  const selected = selectHarnessRoot(root);
+  if (!selected.root) return null;
+  const full = join(root, selected.root, "skills");
+  return existsSync(full) && statSync(full).isDirectory() && findSkillFiles(full).length > 0
+    ? full
+    : null;
 }
 
 /**

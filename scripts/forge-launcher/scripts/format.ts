@@ -228,32 +228,90 @@ export function printLogTail(logFile: string, n = 12): void {
 export function spawnDetached(
   cmd: string,
   args: string[],
-  opts: { cwd?: string; outFile?: string; errFile?: string; logFile?: string },
+  opts: {
+    cwd?: string;
+    env?: NodeJS.ProcessEnv;
+    outFile?: string;
+    errFile?: string;
+    logFile?: string;
+    onStartupError?: (error: Error) => void;
+  },
 ): { pid: number | undefined } {
   // Capture stdout+stderr into a log when one is supplied. `logFile` alone is
   // sufficient (it opens the same file for both streams); `outFile`/`errFile`
   // allow splitting them. Without any file, both streams go to /dev/null.
   const outTarget = opts.logFile ?? opts.outFile;
+  const errTarget = opts.logFile ?? opts.errFile;
   const stdio: Array<"ignore" | number> = ["ignore"];
-  if (outTarget) {
-    const outStream = fs.openSync(outTarget, "a");
-    const errStream = opts.logFile ? fs.openSync(opts.logFile, "a")
-      : (opts.errFile ? fs.openSync(opts.errFile, "a") : outStream);
-    stdio.push(outStream, errStream);
-  } else {
-    stdio.push("ignore", "ignore");
-  }
-  const child = spawn(cmd, args, { cwd: opts.cwd, detached: true, stdio: stdio as never });
-  child.on("error", (err) => {
-    try {
-      const logFile = opts.logFile ?? opts.outFile;
-      const msg = `[forge-launcher] failed to start detached process: ${describeSpawnError(cmd, err).message}`;
-      if (logFile) fs.appendFileSync(logFile, msg + "\n");
-      else console.error(msg);
-    } catch {
-      /* never throw from an error handler */
+  const parentFds = new Set<number>();
+  let spawning = false;
+  let failure: unknown;
+  try {
+    if (outTarget || errTarget) {
+      if (outTarget) fs.mkdirSync(path.dirname(outTarget), { recursive: true });
+      if (errTarget && errTarget !== outTarget) fs.mkdirSync(path.dirname(errTarget), { recursive: true });
+      const outStream = outTarget ? fs.openSync(outTarget, "a") : undefined;
+      if (outStream !== undefined) parentFds.add(outStream);
+      const errStream = errTarget === outTarget ? outStream
+        : errTarget ? fs.openSync(errTarget, "a") : undefined;
+      if (errStream !== undefined) parentFds.add(errStream);
+      stdio.push(outStream ?? "ignore", errStream ?? "ignore");
+    } else {
+      stdio.push("ignore", "ignore");
     }
-  });
-  child.unref();
-  return { pid: child.pid };
+    spawning = true;
+    const child = spawn(cmd, args, {
+      cwd: opts.cwd,
+      env: opts.env ?? process.env,
+      detached: true,
+      stdio,
+    });
+    child.on("error", (err) => {
+      const wrapped = describeSpawnError(cmd, err);
+      const logFile = opts.logFile ?? opts.outFile;
+      const msg = `[forge-launcher] failed to start detached process: ${wrapped.message}`;
+      try {
+        if (logFile) fs.appendFileSync(logFile, msg + "\n");
+      } catch (loggingError) {
+        console.error(`[forge-launcher] could not write startup failure to ${logFile ?? "stderr"}: ${loggingError instanceof Error ? loggingError.message : String(loggingError)}`);
+      }
+      if (opts.onStartupError) {
+        try {
+          opts.onStartupError(wrapped);
+        } catch (callbackError) {
+          console.error(`[forge-launcher] startup failure callback threw: ${callbackError instanceof Error ? callbackError.message : String(callbackError)}`);
+          console.error(msg);
+        }
+      } else {
+        console.error(msg);
+      }
+    });
+    child.unref();
+    return { pid: child.pid };
+  } catch (err) {
+    failure = err;
+    if (!spawning) {
+      throw err;
+    }
+    const wrapped = describeSpawnError(cmd, err instanceof Error ? err : new Error(String(err)));
+    if (opts.onStartupError) {
+      try {
+        opts.onStartupError(wrapped);
+      } catch (callbackError) {
+        console.error(`[forge-launcher] startup failure callback threw: ${callbackError instanceof Error ? callbackError.message : String(callbackError)}`);
+        console.error(wrapped.message);
+      }
+    } else console.error(wrapped.message);
+    return { pid: undefined };
+  } finally {
+    let closeFailure: unknown;
+    for (const fd of parentFds) {
+      try {
+        fs.closeSync(fd);
+      } catch (error) {
+        closeFailure ??= error;
+      }
+    }
+    if (failure === undefined && closeFailure !== undefined) throw closeFailure;
+  }
 }

@@ -6,10 +6,16 @@ import { bootstrap, repositoryLogFile } from "./bootstrap.ts";
 import { upsertProject } from "./console/paths.ts";
 import { command, fail, header, info, link, ok, out, printLogTail, runCommand, runLogged, runWithHeartbeat, spawnDetached, step, warn } from "./format.ts";
 import { detectRepoRoot, expandPath, resolveInputFile } from "./paths.ts";
-import { prompt, promptMultiline, promptPath, promptPathLoop, promptSelect, promptYesNo, prompts } from "./prompts.ts";
+import { prompt as defaultPrompt, promptMultiline as defaultPromptMultiline, promptPath as defaultPromptPath, promptPathLoop as defaultPromptPathLoop, promptSelect as defaultPromptSelect, promptYesNo as defaultPromptYesNo, prompts, withPromptSession } from "./prompts.ts";
 import { launchCliInTerminal } from "./terminal.ts";
-import { loadEngineConfig, saveEngineConfig } from "./engine-config.ts";
+import { assertEngineHarnessAvailable, loadEngineConfig, saveEngineConfig } from "./engine-config.ts";
 import { engineRunCli } from "./engine-run.ts";
+import { createSessionScope } from "./launcher-session.ts";
+import { type AuthoringOptions, type AuthoringStage, loadAuthoringConfig, saveAuthoringConfig, selectAuthoringModel } from "./authoring-config.ts";
+import { authoringArgv, inventoryForRunner, readAuthoringInventory, refreshAuthoringInventory, resolveAuthoringModel, type AuthoringInvocation, type AuthoringRunner, type InventoryProbe } from "./authoring-inventory.ts";
+import { authoringReadiness, authoringStageIsCurrent, fingerprintFiles, readAuthoringState, readSkillCandidates, saveAuthoringStage, stageInputFingerprint, type AuthoringStageState } from "./authoring-state.ts";
+import { selectHarnessRoot, selectProjectHarnessRoot, type HarnessRoot } from "./repo-metadata.ts";
+import { resolveResources } from "./resources.ts";
 
 const nodeRequire = createRequire(import.meta.url);
 
@@ -28,14 +34,30 @@ function cliNodePrefix(): string[] {
 
 /** Builds the detached `forge-launcher engine-run` invocation for the given engine args. */
 export function engineDetachedCommand(engineArgs: string[]): { cmd: string; args: string[] } {
+  for (let index = 0; index < engineArgs.length; index++) {
+    if (engineArgs[index] === "--harness") assertEngineHarnessAvailable(engineArgs[index + 1] ?? "");
+    else if (engineArgs[index]?.startsWith("--harness=")) assertEngineHarnessAvailable(engineArgs[index]!.slice("--harness=".length));
+  }
   return { cmd: process.execPath, args: [...cliNodePrefix(), CLI_ENTRY, ...engineArgs] };
 }
 
-export interface LauncherOptions {
+export interface LauncherOptions extends AuthoringOptions {
+  env?: NodeJS.ProcessEnv;
   nonInteractive?: boolean;
   headless?: boolean;
   draft?: boolean;
   dryRun?: boolean;
+  dependencies?: {
+    runLogged?: typeof runLogged;
+    spawnDetached?: typeof spawnDetached;
+    inventoryProbe?: InventoryProbe;
+    prompt?: typeof defaultPrompt;
+    promptSelect?: typeof defaultPromptSelect;
+    promptYesNo?: typeof defaultPromptYesNo;
+    promptMultiline?: typeof defaultPromptMultiline;
+    promptPath?: typeof defaultPromptPath;
+    promptPathLoop?: typeof defaultPromptPathLoop;
+  };
 }
 
 type HarnessName = "github" | "opencode" | "claude" | "agents";
@@ -45,6 +67,10 @@ export function defaultEngineHarness(harness: HarnessName): string {
 }
 
 interface LauncherState {
+  env: NodeJS.ProcessEnv;
+  options: LauncherOptions;
+  stopped: boolean;
+  harnessResolved: boolean;
   harness: HarnessName;
   harnessLabel: string;
   repoDir: string;
@@ -73,34 +99,57 @@ interface LauncherState {
   };
 }
 
-const state: LauncherState = {
-  harness: "agents",
-  harnessLabel: "Generic .agents",
-  repoDir: "",
-  remoteCreated: false,
-  ghAvailable: false,
-  copilotAvailable: false,
-  opencodeAvailable: false,
-  claudeAvailable: false,
-  prdAdded: false,
-  researchAdded: false,
-  engineStarted: false,
-  engineConfig: {
-    harness: process.env.FORGE_ENGINE_HARNESS ?? "opencode",
-    granularity: process.env.FORGE_ENGINE_GRANULARITY ?? "",
-    concurrency: process.env.FORGE_ENGINE_CONCURRENCY ?? "",
-    taskTimeoutMs: process.env.FORGE_ENGINE_TASK_TIMEOUT_MS ?? "",
-    maxRetries: process.env.FORGE_ENGINE_MAX_RETRIES ?? "",
-    viz: envFlag("FORGE_ENGINE_VIZ"),
-    vizPort: process.env.FORGE_ENGINE_VIZ_PORT ?? "",
-    keepAlive: envFlag("FORGE_ENGINE_ATTACH"),
-    attach: process.env.FORGE_ENGINE_ATTACH_URL ?? "",
-    autoCommit: process.env.FORGE_ENGINE_AUTO_COMMIT !== "0",
-    executionMode: "auto",
-    selectionScope: undefined,
-    selectedTaskIds: [],
-  },
-};
+function createLauncherState(options: LauncherOptions = {}): LauncherState {
+  const env = { ...process.env, ...options.env };
+  return {
+    env,
+    options: {},
+    stopped: false,
+    harnessResolved: false,
+    harness: "agents",
+    harnessLabel: "Generic .agents",
+    repoDir: "",
+    remoteCreated: false,
+    ghAvailable: false,
+    copilotAvailable: false,
+    opencodeAvailable: false,
+    claudeAvailable: false,
+    prdAdded: false,
+    researchAdded: false,
+    engineStarted: false,
+    engineConfig: {
+      harness: env.FORGE_ENGINE_HARNESS ?? "opencode",
+      granularity: env.FORGE_ENGINE_GRANULARITY ?? "",
+      concurrency: env.FORGE_ENGINE_CONCURRENCY ?? "",
+      taskTimeoutMs: env.FORGE_ENGINE_TASK_TIMEOUT_MS ?? "",
+      maxRetries: env.FORGE_ENGINE_MAX_RETRIES ?? "",
+      viz: env.FORGE_ENGINE_VIZ === "1",
+      vizPort: env.FORGE_ENGINE_VIZ_PORT ?? "",
+      keepAlive: env.FORGE_ENGINE_ATTACH === "1",
+      attach: env.FORGE_ENGINE_ATTACH_URL ?? "",
+      autoCommit: env.FORGE_ENGINE_AUTO_COMMIT !== "0",
+      executionMode: "auto",
+      selectionScope: undefined,
+      selectedTaskIds: [],
+    },
+  };
+}
+
+const sessions = createSessionScope(createLauncherState);
+const state = sessions.state;
+const prompt: typeof defaultPrompt = (...args) => (state.options.dependencies?.prompt ?? defaultPrompt)(...args);
+const promptSelect: typeof defaultPromptSelect = (...args) => (state.options.dependencies?.promptSelect ?? defaultPromptSelect)(...args);
+const promptYesNo: typeof defaultPromptYesNo = (...args) => (state.options.dependencies?.promptYesNo ?? defaultPromptYesNo)(...args);
+const promptMultiline: typeof defaultPromptMultiline = (...args) => (state.options.dependencies?.promptMultiline ?? defaultPromptMultiline)(...args);
+const promptPath: typeof defaultPromptPath = (...args) => (state.options.dependencies?.promptPath ?? defaultPromptPath)(...args);
+const promptPathLoop: typeof defaultPromptPathLoop = (...args) => (state.options.dependencies?.promptPathLoop ?? defaultPromptPathLoop)(...args);
+
+function withLauncherSession<T>(options: LauncherOptions, operation: () => Promise<T>): Promise<T> {
+  return sessions.run(() => {
+    state.options = { ...options, models: options.models ? { ...options.models } : undefined };
+    return withPromptSession(Boolean(options.nonInteractive), operation);
+  }, createLauncherState(options));
+}
 
 /** Single tee-log for all long-running step output during this launcher run. */
 function runLogFile(repoDir = state.repoDir): string {
@@ -130,7 +179,7 @@ function runLoggedStep(
   return runWithHeartbeat(
     label,
     async () => {
-      const res = await runLogged(cmd, args, { cwd: opts.cwd, logFile, env: opts.env });
+      const res = await (state.options.dependencies?.runLogged ?? runLogged)(cmd, args, { cwd: opts.cwd, logFile, env: { ...state.env, ...opts.env } });
       if (res.code !== 0) printLogTail(logFile);
       return res.code;
     },
@@ -139,12 +188,12 @@ function runLoggedStep(
 }
 
 function envFlag(name: string): boolean {
-  return process.env[name] === "1";
+  return state.env[name] === "1";
 }
 
 /** Returns the env flag when the variable is set, else undefined (unset). */
 function envFlagOrUndefined(name: string): boolean | undefined {
-  return process.env[name] !== undefined ? process.env[name] === "1" : undefined;
+  return state.env[name] !== undefined ? state.env[name] === "1" : undefined;
 }
 
 function hasPrd(): boolean {
@@ -163,7 +212,7 @@ function harnessSkillsDir(): string {
   return path.join(state.repoDir, harnessRootDir(), "skills");
 }
 
-function harnessRootDir(): string {
+function harnessRootDir(): HarnessRoot {
   switch (state.harness) {
     case "github": return ".github";
     case "claude": return ".claude";
@@ -178,7 +227,7 @@ function skillPathFor(skillName: string): string {
 
 /** Locates the bootstrapped forge-workflow-engine package dir (any harness root). */
 function findEngineDir(repoDir: string): string | null {
-  for (const root of [".agents", ".opencode", ".claude", ".github"]) {
+  for (const root of new Set([harnessRootDir(), ".agents", ".opencode", ".claude", ".github"])) {
     const candidate = path.join(repoDir, root, "skills", "forge-workflow-engine");
     if (fs.existsSync(candidate)) return candidate;
   }
@@ -186,7 +235,7 @@ function findEngineDir(repoDir: string): string | null {
 }
 
 function findAdapterDir(repoDir: string): string | null {
-  for (const root of [".agents", ".opencode", ".claude", ".github"]) {
+  for (const root of new Set([harnessRootDir(), ".agents", ".opencode", ".claude", ".github"])) {
     const candidate = path.join(repoDir, root, "skills", "forge-execution-adapter");
     if (fs.existsSync(candidate)) return candidate;
   }
@@ -194,7 +243,7 @@ function findAdapterDir(repoDir: string): string | null {
 }
 
 function debugMode(): boolean {
-  return process.env.FORGE_LAUNCHER_DEBUG === "1";
+  return state.env.FORGE_LAUNCHER_DEBUG === "1";
 }
 
 function hasGeneratedTeam(): boolean {
@@ -210,19 +259,20 @@ const FORGE_TEMPLATE_AGENTS = new Set(["forge-team-builder.md", "project-orchest
 const FEATURE_INCREMENT_ALLOWED_OUTPUTS = new Set([
   "docs/EXECUTION-MANIFEST.json",
   "docs/agent-responsibility-matrix.md",
+  "docs/SKILL-CANDIDATES.json",
+  "docs/authoring-state.json",
 ]);
 
 /**
  * Filesystem snapshot used by feature-increment team generation.  This is
  * deliberately a snapshot of the repository rather than git state: a caller
  * may have uncommitted work, and the guard must not mistake that work for the
- * result of the skill. Forge skills are excluded because team generation is
- * allowed to refresh them, while template agents are excluded because they
- * are bootstrap-owned rather than project-owned agents.
+ * result of the skill. Skill mutations are checked separately by the authoring
+ * stage gate, while template agents are bootstrap-owned.
  */
 export type FeatureIncrementSnapshot = Map<string, string>;
 
-function walkSnapshotFiles(dir: string, root: string, out: FeatureIncrementSnapshot): void {
+function walkSnapshotFiles(dir: string, root: string, out: FeatureIncrementSnapshot, harnessRoot: string): void {
   if (!fs.existsSync(dir) || !fs.statSync(dir).isDirectory()) return;
   for (const entry of fs.readdirSync(dir)) {
     const full = path.join(dir, entry);
@@ -231,23 +281,24 @@ function walkSnapshotFiles(dir: string, root: string, out: FeatureIncrementSnaps
     const relativePosix = relative.split(path.sep).join("/");
     // The launcher appends its own diagnostic stream while the skill runs; it
     // is not a project change and must not make a valid team update fail.
-    if (relativePosix === "docs/engine-run.log") continue;
-    const forgeSkillsPrefix = `${harnessRootDir()}/skills/`;
-    const projectAgentsPrefix = `${harnessRootDir()}/agents/`;
+    if (relativePosix === "docs/engine-run.log" || relativePosix === "docs/AUTHORING-EVENTS.jsonl" ||
+        relativePosix.startsWith("docs/.forge-logs/")) continue;
+    const forgeSkillsPrefix = `${harnessRoot}/skills/`;
+    const projectAgentsPrefix = `${harnessRoot}/agents/`;
     // Only the selected harness's Forge skills are excluded. A project's own
     // src/skills (or another harness root) remains visible to the guard.
     if (relativePosix.startsWith(forgeSkillsPrefix)) continue;
     if (relativePosix.startsWith(projectAgentsPrefix) && FORGE_TEMPLATE_AGENTS.has(entry)) continue;
     const stat = fs.statSync(full);
-    if (stat.isDirectory()) walkSnapshotFiles(full, root, out);
+    if (stat.isDirectory()) walkSnapshotFiles(full, root, out, harnessRoot);
     else if (stat.isFile()) out.set(relativePosix, fs.readFileSync(full, "utf8"));
   }
 }
 
 /** Snapshot all non-Forge-owned files before a feature team update. */
-export function snapshotFeatureIncrementFiles(repoDir: string): FeatureIncrementSnapshot {
+export function snapshotFeatureIncrementFiles(repoDir: string, harnessRoot = selectHarnessRoot(repoDir).root ?? ".agents"): FeatureIncrementSnapshot {
   const snapshot: FeatureIncrementSnapshot = new Map();
-  walkSnapshotFiles(repoDir, repoDir, snapshot);
+  walkSnapshotFiles(repoDir, repoDir, snapshot, harnessRoot);
   return snapshot;
 }
 
@@ -309,15 +360,16 @@ function isManifestJson(text: string): boolean {
 export function compareFeatureIncrementFiles(
   before: FeatureIncrementSnapshot,
   repoDir: string,
+  harnessRoot = selectHarnessRoot(repoDir).root ?? ".agents",
 ): FeatureIncrementFileChanges {
-  const after = snapshotFeatureIncrementFiles(repoDir);
+  const after = snapshotFeatureIncrementFiles(repoDir, harnessRoot);
   const changed = new Set([...before.keys(), ...after.keys()]);
   const result: FeatureIncrementFileChanges = { addedAgents: [], modifiedAgents: [], deletedAgents: [], updatedOutputs: [], unrelatedFiles: [] };
   for (const file of [...changed].sort()) {
     const oldValue = before.get(file);
     const newValue = after.get(file);
     if (oldValue === newValue) continue;
-    const isAgent = file.startsWith(`${harnessRootDir()}/agents/`) && file.endsWith(".md");
+    const isAgent = file.startsWith(`${harnessRoot}/agents/`) && file.endsWith(".md");
     if (isAgent && oldValue === undefined) {
       result.addedAgents.push(file);
       continue;
@@ -354,7 +406,7 @@ export function compareFeatureIncrementFiles(
 }
 
 function validateFeatureIncrementFiles(before: FeatureIncrementSnapshot): boolean {
-  const changes = compareFeatureIncrementFiles(before, state.repoDir);
+  const changes = compareFeatureIncrementFiles(before, state.repoDir, harnessRootDir());
   const unexpected = [...changes.deletedAgents, ...changes.unrelatedFiles];
   if (unexpected.length === 0) {
     if (changes.addedAgents.length || changes.modifiedAgents.length || changes.updatedOutputs.length) {
@@ -390,7 +442,11 @@ export function buildTeamPrompt(prdSource: string, harness: HarnessName): string
         ? ".opencode"
         : ".agents";
   return `/forge-build-agent-team Use ${prdSource} to build the agent team. ` +
-    `Write agent files under ${harnessRoot}/agents/ and skill files under ${harnessRoot}/skills/.`;
+    `Write agent files under ${harnessRoot}/agents/. Write docs/SKILL-CANDIDATES.json as ` +
+    `{version:1,candidates:[]}, with each candidate containing name, description, consumers (agent-name strings), action (reuse, extend, create, or omit), and reason. ` +
+    `Keep candidates empty when no project skills are required. ` +
+    `Plan references under ${harnessRoot}/skills/ but do not create or modify skill packages; forge-build-project-skills owns them. ` +
+    `Do not write a manifest, compiled responsibility matrix, engine state, or progress file, and do not start the build.`;
 }
 
 // --- auto-build command selection ------------------------------------------
@@ -399,7 +455,7 @@ export function buildTeamPrompt(prdSource: string, harness: HarnessName): string
  * same PRD gap check the manual flow does (acceptance criteria, tech stack,
  * non-functional requirements, phases) and fill any gaps before approving. */
 const PRD_HEADLESS_MSG =
-  "Use docs/IDEA.md as the project idea. Headless mode: auto-proceed with default assumptions and approve the PRD. After drafting, run a PRD gap check: every major component must have clear acceptance criteria, a defined tech stack, non-functional requirements (performance, security, privacy), and implementation phases; fill any gaps before approving.";
+  "Use docs/IDEA.md as the project idea. Headless mode: auto-proceed with default assumptions and approve the PRD. After drafting, run a PRD gap check: every major component must have clear acceptance criteria, a defined tech stack, non-functional requirements (performance, security, privacy), and implementation phases; fill any gaps before approving. Run only PRD authoring and review. Do not generate agents or skills, compile a manifest, or start execution; the launcher invokes those stages separately.";
 
 const EXISTING_PROJECT_PRD_MSG =
   "Author the project's PRD using forge-build-prd authoring semantics, not an auto-build or implementation workflow. This is an existing repository: inspect source code, documentation, tests, package manifests, configuration, and git history as context; infer the product purpose and current capabilities. Produce docs/PRD.md as a project PRD. Headless mode: ask no questions and use explicit assumptions. Include functional requirements with acceptance criteria, technology stack, non-functional requirements (performance, security, privacy), constraints, and implementation phases. Do not implement code, generate agents, compile a manifest, or run the workflow.";
@@ -409,19 +465,35 @@ const EXISTING_PROJECT_PRD_MSG =
  * next steps). Conditional on the team so the harness entry honours the
  * "in the harness = project-orchestrator" rule when possible:
  *   - team exists    → /forge-orchestrate-build (project-orchestrator)
- *   - PRD, no team   → /forge-auto-build (generates the team in-chat first)
+ *   - PRD, no team   → /forge-build-agent-team (team and candidate handoff only)
  *   - no PRD         → /forge-auto-build-prd (idea → PRD)
  */
 function autobuildCommand(): string {
-  if (!hasPrd()) return "/forge-auto-build-prd Use docs/IDEA.md as the project idea";
-  if (hasGeneratedTeam()) return "/forge-orchestrate-build Use docs/PRD.md as the project PRD";
-  return "/forge-auto-build Use docs/PRD.md as the project PRD";
+  if (!hasPrd()) return "/forge-auto-build-prd Use docs/IDEA.md as the project idea. Author the PRD only; continue separate team and skills stages with forge-launcher resume.";
+  if (hasGeneratedTeam()) {
+    const readiness = authoringReadiness(state.repoDir, harnessRootDir());
+    if (readiness.nextStage === "skills") return buildSkillsPrompt();
+    if (readiness.nextStage === "team") return buildTeamPrompt(prdSourceForTeam(), state.harness);
+    if (readiness.nextStage === "prd") return "/forge-auto-build-prd Retry PRD authoring only; do not continue into team or skills.";
+    return "/forge-orchestrate-build Use docs/PRD.md as the project PRD";
+  }
+  return buildTeamPrompt(prdSourceForTeam(), state.harness);
+}
+
+function buildSkillsPrompt(): string {
+  return `/forge-build-project-skills Consume docs/SKILL-CANDIDATES.json. Use ${harnessRootDir()}/skills/ and ${harnessRootDir()}/agents/. ` +
+    "Create or extend only planned skills, reuse unchanged packages, honor omit decisions, and run structural and per-axis review gates. " +
+    "Do not regenerate the team, modify its ownership or handoff, compile a manifest, or start the build. Headless: proceed with authorized defaults.";
 }
 
 /** Headless (terminal-driven) skill invocation - no chat session, so it keeps
  *  using forge-auto-build as the launcher-driven fast-path rather than the
  *  in-harness orchestrators. */
 export function headlessSkillMsg(): string {
+  return sessions.run(headlessSkillMsgForSession);
+}
+
+function headlessSkillMsgForSession(): string {
   if (hasPrd()) {
     if (envFlag("FORGE_WORKFLOW_ENGINE")) {
       return "/forge-auto-build Use docs/PRD.md as the project PRD. GO --workflow-engine";
@@ -431,23 +503,72 @@ export function headlessSkillMsg(): string {
   return `/forge-auto-build-prd ${PRD_HEADLESS_MSG}`;
 }
 
-function headlessRunner(): string {
-  const runner = process.env.FORGE_RUN_WITH;
-  if (runner) return runner;
+function headlessRunner(): AuthoringRunner {
+  const runner = state.env.FORGE_RUN_WITH;
+  if (runner) {
+    if (runner !== "copilot" && runner !== "opencode" && runner !== "stub") throw new Error(`Unsupported authoring runner: ${runner}. Use copilot or opencode.`);
+    return runner;
+  }
   return state.harness === "github" ? "copilot" : "opencode";
 }
 
-function headlessCmdFor(msg: string): string {
+async function headlessCmdFor(msg: string): Promise<string> {
   const runner = headlessRunner();
-  if (runner === "copilot") return `copilot -p "${msg}" --yolo`;
-  if (runner === "stub") return `stub (writes canned artifacts)`;
-  return `opencode run --auto --dir "${state.repoDir}" "${msg}"`;
+  const stage = authoringStageForSkill(skillNameFromMsg(msg));
+  const invocation = stage ? await resolveAuthoringModel(state.repoDir, stage, runner, state.options.models, state.env, state.options.dependencies?.inventoryProbe)
+    : { runner, source: "inherit" as const };
+  return `${runner} ${authoringArgv(invocation, state.repoDir, msg).map((arg) => /^[a-zA-Z0-9_-]+$/.test(arg) ? arg : JSON.stringify(arg)).join(" ")}`;
 }
 
 /** Extracts the skill name from a skill invocation message ("/name rest…"). */
 function skillNameFromMsg(msg: string): string {
   const first = msg.trim().split(/\s+/)[0] ?? "";
   return first.replace(/^\/+/, "");
+}
+
+function authoringStageForSkill(skill: string): AuthoringStage | undefined {
+  if (["forge-auto-build-prd", "forge-build-prd", "forge-build-feature-prd"].includes(skill)) return "prd";
+  if (skill === "forge-build-agent-team") return "team";
+  if (skill === "forge-build-project-skills") return "skills";
+  return undefined;
+}
+
+async function validateAuthoringOutputs(stage: AuthoringStage, skill: string, beforeFeatures: Set<string>): Promise<string[]> {
+  if (stage === "prd") {
+    if (skill === "forge-build-feature-prd") {
+      const dir = path.join(state.repoDir, "docs", "features");
+      const added = fs.existsSync(dir) ? fs.readdirSync(dir).filter((file) => file.endsWith(".md") && !beforeFeatures.has(file)) : [];
+      if (!added.length || added.some((file) => !fs.readFileSync(path.join(dir, file), "utf8").trim())) {
+        throw new Error("Feature PRD authoring exited without creating a new non-empty docs/features/*.md file.");
+      }
+      return added.map((file) => `docs/features/${file}`);
+    }
+    const outputs = ["docs/PRD.md", "docs/product-vision.md"].filter((file) =>
+      fs.existsSync(path.join(state.repoDir, file)) && fs.readFileSync(path.join(state.repoDir, file), "utf8").trim());
+    if (!outputs.length) throw new Error("PRD authoring exited without a non-empty PRD.");
+    return outputs;
+  }
+  if (stage === "team") {
+    if (!hasGeneratedTeam()) throw new Error("Team authoring exited without generated agents.");
+    if (!readSkillCandidates(state.repoDir)) throw new Error("Team authoring must write docs/SKILL-CANDIDATES.json, including an empty candidates list when no skills are required.");
+    return [path.join(harnessRootDir(), "agents"), "docs/SKILL-CANDIDATES.json"];
+  }
+  const candidates = readSkillCandidates(state.repoDir);
+  if (!candidates) throw new Error("Missing docs/SKILL-CANDIDATES.json; run draft-team first.");
+  const planned = candidates.candidates.filter((candidate) => candidate.action !== "omit");
+  const outputs = planned.map((candidate) => path.join(harnessRootDir(), "skills", candidate.name, "SKILL.md"));
+  for (const output of outputs) {
+    if (!fs.existsSync(path.join(state.repoDir, output)) || !fs.readFileSync(path.join(state.repoDir, output), "utf8").trim()) {
+      throw new Error(`Planned project skill is missing or empty: ${output}`);
+    }
+  }
+  if (outputs.length) {
+    const checker = path.join(resolveResources().templatesDir, "skills", "forge-build-agent-team", "scripts", "validate-frontmatter.mjs");
+    const code = await runLoggedStep("Checking generated skill structure", process.execPath,
+      [checker, "--repo", state.repoDir, "--harness-root", path.join(state.repoDir, harnessRootDir())], { cwd: state.repoDir });
+    if (code !== 0) throw new Error("Project skill structural validation failed.");
+  }
+  return outputs;
 }
 
 /**
@@ -457,39 +578,108 @@ function skillNameFromMsg(msg: string): string {
  * deterministically. Honors FORGE_RUN_WITH=stub for offline testing.
  */
 async function runSkillHeadless(msg: string, opts: LauncherOptions): Promise<boolean> {
-  const cmdStr = headlessCmdFor(msg);
+  opts = { ...state.options, ...opts };
+  const skillName = skillNameFromMsg(msg);
+  const stage = authoringStageForSkill(skillName);
+  const runner = headlessRunner();
+  if (stage && !state.options.nonInteractive && !opts.dryRun && runner !== "stub") {
+    const existing = selectAuthoringModel(state.repoDir, stage, state.options.models, state.env);
+    let inventory = readAuthoringInventory(state.repoDir);
+    if (!inventoryForRunner(inventory, runner).length) inventory = await refreshAuthoringInventory(state.repoDir, runner, state.options.dependencies?.inventoryProbe);
+    const selection = await promptSelect(`${stage.toUpperCase()} authoring model (this invocation only)`, [
+      { value: "inherit", label: `Inherit ${runner} runner default` },
+      ...inventoryForRunner(inventory, runner).map((model) => ({ value: model.id, label: model.id })),
+      ...(existing.requestedModel && !inventoryForRunner(inventory, runner).some((model) => model.id === existing.requestedModel)
+        ? [{ value: existing.requestedModel, label: `${existing.requestedModel} (saved; unavailable until refreshed)` }] : []),
+    ], { initial: existing.requestedModel ?? "inherit" });
+    state.options.models = { ...state.options.models, [stage]: selection };
+  }
+  let invocation: AuthoringInvocation;
+  try {
+    invocation = stage
+      ? await resolveAuthoringModel(state.repoDir, stage, runner, state.options.models, state.env, state.options.dependencies?.inventoryProbe)
+      : { runner, source: "inherit" as const };
+  } catch (error) {
+    if (stage && !opts.dryRun) saveAuthoringStage(state.repoDir, stage, {
+      status: "failed", inputFingerprint: stageInputFingerprint(state.repoDir, stage, harnessRootDir()),
+      outputs: [], completedAt: new Date().toISOString(), error: error instanceof Error ? error.message : String(error),
+    });
+    throw error;
+  }
+  const args = authoringArgv(invocation, state.repoDir, msg, debugMode() && runner === "opencode" ? ["--print-logs"] : []);
+  invocation = { ...invocation, argv: args, skill: skillName };
+  const cmdStr = `${runner} ${args.map((arg) => /^[a-zA-Z0-9_-]+$/.test(arg) ? arg : JSON.stringify(arg)).join(" ")}`;
   command(cmdStr);
   if (opts.dryRun) {
     warn("Dry-run: command printed, not executed.");
     return true;
   }
 
-  const skillName = skillNameFromMsg(msg);
   if (skillName && !fs.existsSync(skillPathFor(skillName))) {
     warn(`Skill not found: ${skillPathFor(skillName)}`);
     warn("The repo may not have been bootstrapped for this harness, or the skill was renamed.");
     out(`    Run it manually instead: ${cmdStr}`);
+    if (stage) saveAuthoringStage(state.repoDir, stage, {
+      status: "failed", inputFingerprint: stageInputFingerprint(state.repoDir, stage, harnessRootDir()),
+      outputs: [], invocation, error: `Skill not found: ${skillPathFor(skillName)}`,
+    });
     return false;
   }
 
-  const runner = headlessRunner();
-  if (runner === "stub") {
-    return runStubSkill(msg, opts);
+  const features = path.join(state.repoDir, "docs", "features");
+  const beforeFeatures = new Set(fs.existsSync(features) ? fs.readdirSync(features) : []);
+  const beforeSkills = stage === "team" ? fingerprintFiles(state.repoDir, [path.join(harnessRootDir(), "skills")]) : undefined;
+  const compilerOutputs = ["docs/EXECUTION-MANIFEST.json", "docs/agent-responsibility-matrix.md", "docs/ENGINE-STATE.json", "docs/PROGRESS.md"];
+  const beforeCompilerOutputs = stage ? fingerprintFiles(state.repoDir, compilerOutputs) : undefined;
+  const outcome: AuthoringStageState | undefined = stage ? {
+    status: "running", inputFingerprint: stageInputFingerprint(state.repoDir, stage, harnessRootDir()),
+    outputs: [], startedAt: new Date().toISOString(), invocation,
+  } : undefined;
+  if (stage && outcome) saveAuthoringStage(state.repoDir, stage, outcome);
+  authoringEvent("authoring.invocation", { stage, skill: skillName, ...invocation, argv: args });
+  try {
+    if (runner === "stub") await runStubSkill(msg, opts);
+    else {
+      const code = await runLoggedStep("Running the skill (may take a while)", runner, args, {
+        cwd: state.repoDir, dryRun: opts.dryRun,
+        env: { FORGE_HEADLESS: "1", FORGE_HARNESS: state.harness },
+      });
+      if (code !== 0) throw new Error(`Skill runner exited with code ${code}`);
+    }
+    if (stage && outcome) {
+      if (beforeCompilerOutputs !== fingerprintFiles(state.repoDir, compilerOutputs)) {
+        throw new Error("Authoring modified compiler- or engine-owned artifacts; use compile-manifest and the native engine after authoring.");
+      }
+      if (beforeSkills && beforeSkills !== fingerprintFiles(state.repoDir, [path.join(harnessRootDir(), "skills")])) {
+        throw new Error("Team authoring modified skill packages; only the separate draft-skills stage may generate skills.");
+      }
+      outcome.outputs = await validateAuthoringOutputs(stage, skillName, beforeFeatures);
+      if (stage !== "prd" && outcome.inputFingerprint !== stageInputFingerprint(state.repoDir, stage, harnessRootDir())) {
+        throw new Error(`${stage} authoring changed its protected inputs; restore the handoff or request a targeted team revision.`);
+      }
+      outcome.outputFingerprint = fingerprintFiles(state.repoDir, outcome.outputs);
+      outcome.status = "complete";
+      outcome.completedAt = new Date().toISOString();
+      if (stage === "skills") outcome.noSkillsRequired = outcome.outputs.length === 0;
+      saveAuthoringStage(state.repoDir, stage, outcome);
+      if (stage === "team") saveAuthoringStage(state.repoDir, "skills", {
+        status: "pending", inputFingerprint: stageInputFingerprint(state.repoDir, "skills", harnessRootDir()), outputs: [],
+      });
+    }
+    if (debugMode()) printLogTail(runLogFile(), 40);
+    return true;
+  } catch (error) {
+    if (stage && outcome) saveAuthoringStage(state.repoDir, stage, {
+      ...outcome, status: "failed", completedAt: new Date().toISOString(), error: error instanceof Error ? error.message : String(error),
+    });
+    printLogTail(runLogFile());
+    if (stage) {
+      const subcommand = skillName === "forge-build-feature-prd" ? "feature-prd" : `draft-${stage}`;
+      info(`Retry this stage without regenerating completed prerequisites:`);
+      command(`forge-launcher ${subcommand} --repo ${JSON.stringify(state.repoDir)}`);
+    }
+    throw error;
   }
-
-  const args = runner === "copilot"
-    ? ["-p", msg, "--yolo"]
-    : debugMode()
-      ? ["run", "--auto", "--dir", state.repoDir, "--print-logs", msg]
-      : ["run", "--auto", "--dir", state.repoDir, msg];
-  const code = await runLoggedStep("Running the skill (may take a while)", runner, args, {
-    cwd: state.repoDir,
-    dryRun: opts.dryRun,
-    env: { FORGE_HEADLESS: "1" },
-  });
-  if (code !== 0) throw new Error(`Skill runner exited with code ${code}`);
-  if (debugMode()) printLogTail(runLogFile(), 40);
-  return true;
 }
 
 /**
@@ -504,7 +694,7 @@ async function runStubSkill(msg: string, opts: LauncherOptions): Promise<boolean
   }
   const logFile = runLogFile();
   fs.mkdirSync(path.dirname(logFile), { recursive: true });
-  const noop = process.env.FORGE_STUB_NOOP === "1";
+  const noop = state.env.FORGE_STUB_NOOP === "1";
   const skillName = skillNameFromMsg(msg);
 
   fs.appendFileSync(logFile, `[stub] invoking ${skillName}${noop ? " (noop)" : ""}\n`);
@@ -525,8 +715,8 @@ async function runStubSkill(msg: string, opts: LauncherOptions): Promise<boolean
       "## Functional Requirements",
       "- FR-1: stub requirement",
       "",
-      "## Implementation Phases",
-      "- Phase 1: stub",
+      "## Phase 1: Stub",
+      "- Implement the stub requirement.",
       "",
       "## Acceptance Criteria",
       "- AC-1: stub",
@@ -542,7 +732,7 @@ async function runStubSkill(msg: string, opts: LauncherOptions): Promise<boolean
     fs.writeFileSync(agentFile, [
       "---",
       "name: stub-project-agent",
-      "description: Stub project agent generated by the forge-launcher stub skill runner.",
+      'description: "Stub project agent generated by the forge-launcher stub skill runner."',
       "---",
       "# Stub Project Agent",
       "",
@@ -550,9 +740,21 @@ async function runStubSkill(msg: string, opts: LauncherOptions): Promise<boolean
       "",
     ].join("\n"));
     fs.appendFileSync(logFile, `[stub] wrote ${agentFile}\n`);
+    fs.writeFileSync(path.join(state.repoDir, "docs", "SKILL-CANDIDATES.json"), JSON.stringify({ version: 1, candidates: [] }, null, 2));
     return true;
   }
 
+  if (skillName === "forge-build-project-skills") {
+    const candidates = readSkillCandidates(state.repoDir);
+    if (!candidates) throw new Error("Stub skills stage requires SKILL-CANDIDATES.json.");
+    for (const candidate of candidates.candidates) {
+      if (candidate.action === "omit" || candidate.action === "reuse") continue;
+      const file = path.join(harnessSkillsDir(), candidate.name, "SKILL.md");
+      fs.mkdirSync(path.dirname(file), { recursive: true });
+      fs.writeFileSync(file, `---\nname: ${candidate.name}\ndescription: ${JSON.stringify(candidate.description)}\n---\n# ${candidate.name}\n\n${candidate.reason}\n`);
+    }
+    return true;
+  }
   if (skillName.includes("forge-build-feature-prd")) {
     const feature = path.join(state.repoDir, "docs", "features", "stub-feature.md");
     fs.mkdirSync(path.dirname(feature), { recursive: true });
@@ -596,9 +798,6 @@ async function draftCommit(message: string): Promise<void> {
 
 // --- stop-here-and-resume-later checkpoints ---------------------------------
 
-/** Set when the user chooses "stop here and resume later" at a checkpoint. */
-let stopped = false;
-
 /**
  * Interactive "stop here and resume later" checkpoint. When the user chooses to
  * stop, prints the resume command so the run can be picked up later with
@@ -608,99 +807,11 @@ async function pauseForResume(opts: LauncherOptions, stage: string): Promise<voi
   if (opts.nonInteractive || opts.dryRun) return;
   const answer = await promptYesNo(`Stop here and resume later (after ${stage})?`, "n");
   if (answer !== "y") return;
-  stopped = true;
+  state.stopped = true;
   out("");
   info("Stopped. Resume later from anywhere with:");
   command(`forge-launcher resume --repo "${state.repoDir}"`);
   out("");
-}
-
-// --- post-team plan & validate step (playbook 5a) ----------------------------
-
-/** True when the repo uses the decomposed vision + features layout. */
-function hasDecomposedLayout(): boolean {
-  return (
-    fs.existsSync(path.join(state.repoDir, "docs", "product-vision.md")) &&
-    fs.existsSync(path.join(state.repoDir, "docs", "features")) &&
-    fs.readdirSync(path.join(state.repoDir, "docs", "features")).some((f) => f.endsWith(".md"))
-  );
-}
-
-const PLAN_MONOLITHIC_MSG =
-  "Analyze docs/PRD.md and produce an execution plan only. Do not implement anything yet. " +
-  "List each phase, the agents involved, their tasks, and the dependencies between phases. " +
-  "Save the plan to docs/PROGRESS.md. Headless mode: auto-proceed and stop after saving the plan.";
-
-const PLAN_FEATURES_MSG =
-  "Analyze docs/product-vision.md and all feature documents in docs/features/. " +
-  "Build a feature dependency graph and produce an execution plan showing which features will be " +
-  "built in which order and why. Save the plan to docs/PROGRESS.md. Do not implement anything yet. " +
-  "Headless mode: auto-proceed and stop after saving the plan.";
-
-/** Offers to open the harness CLI to run project-orchestrator's plan step manually. */
-async function offerPlanManualRun(opts: LauncherOptions): Promise<void> {
-  const manual = "Run it manually in the harness: @project-orchestrator Analyze docs/PRD.md and produce an execution plan only. Save the plan to docs/PROGRESS.md.";
-  if (opts.nonInteractive) {
-    out(`    ${manual}`);
-    return;
-  }
-  const answer = await promptYesNo("Open the harness CLI to run project-orchestrator manually?", "n");
-  if (answer === "n") {
-    info("To run it manually:");
-    out(`    cd "${state.repoDir}"`);
-    out(`    ${manual}`);
-    return;
-  }
-  const cli = state.harness === "github" ? "copilot" : state.harness === "claude" ? "claude" : "opencode";
-  const launched = await launchCliInTerminal(cli, state.repoDir, state.harness === "github" ? [] : ["."]);
-  if (launched) ok(`${cli} launched. Run @project-orchestrator in the session.`);
-  else {
-    warn(`${cli} did not open automatically. Run:`);
-    out(`    cd "${state.repoDir}" && ${cli} .`);
-  }
-}
-
-/**
- * Post-team "plan & validate" step (prompt-playbook 5a). Runs project-orchestrator
- * through the forge-orchestrate-build skill headlessly to produce the execution
- * plan in docs/PROGRESS.md, commits it, and stops for review before the build.
- * Falls back to the manual @project-orchestrator command when the headless run
- * fails or produces no plan document.
- */
-async function planAndValidateStep(opts: LauncherOptions): Promise<void> {
-  const skill = "forge-orchestrate-build";
-  const planMsg = hasDecomposedLayout() ? PLAN_FEATURES_MSG : PLAN_MONOLITHIC_MSG;
-
-  if (opts.nonInteractive) {
-    if (!envFlag("FORGE_AUTO_DRAFT")) return;
-  } else {
-    const def = opts.draft ? "y" : "n";
-    const answer = await promptYesNo(
-      "Generate the execution plan now (project-orchestrator, headless; saved to docs/PROGRESS.md)?",
-      def,
-    );
-    if (answer === "n") return;
-  }
-
-  out("");
-  info("Generating the execution plan via project-orchestrator (headless) …");
-  const ran = await runSkillHeadless(`/${skill} ${planMsg}`, opts);
-  if (!ran) {
-    await offerPlanManualRun(opts);
-    return;
-  }
-  await draftCommit("docs: add execution plan");
-
-  if (fs.existsSync(path.join(state.repoDir, "docs", "PROGRESS.md"))) {
-    ok("Execution plan saved to docs/PROGRESS.md.");
-    out("");
-    out("  Review the plan before building:");
-    out(`    - ${link(path.join(state.repoDir, "docs", "PROGRESS.md"))}`);
-    await pauseForResume(opts, "execution plan drafted");
-  } else {
-    warn("No execution plan document detected after the run.");
-    await offerPlanManualRun(opts);
-  }
 }
 
 /** Prints diagnostics when an auto-draft stage finishes without its artifact. */
@@ -738,19 +849,13 @@ async function offerManualRun(skillName: string, opts: LauncherOptions): Promise
     out(`    Then run: /${skillName} Use docs/IDEA.md as the project idea`);
     return;
   }
-  const cli = state.harness === "github" ? "copilot" : state.harness === "claude" ? "claude" : "opencode";
-  const launched = await launchCliInTerminal(cli, state.repoDir, state.harness === "github" ? [] : ["."]);
-  if (launched) ok(`${cli} launched. Run /${skillName} in the session.`);
-  else {
-    warn(`${cli} did not open automatically. Run:`);
-    out(`    cd "${state.repoDir}" && ${cli} .`);
-  }
+  await openCliFor(`/${skillName} Use docs/IDEA.md as the project idea. Run only this authoring stage.`);
 }
 
 async function autoDraftPrd(opts: LauncherOptions): Promise<void> {
   if (hasPrd()) return;
   if (opts.nonInteractive) {
-    if (!envFlag("FORGE_AUTO_DRAFT")) return;
+    if (!envFlag("FORGE_AUTO_DRAFT") && !opts.draft) return;
   } else {
     const def = opts.draft ? "y" : "n";
     const answer = await promptYesNo(
@@ -791,6 +896,9 @@ async function autoDraftPrd(opts: LauncherOptions): Promise<void> {
 function engineRunArgs(): string[] {
   const args = ["engine-run", "--repo", state.repoDir];
   const cfg = state.engineConfig;
+  assertEngineHarnessAvailable(cfg.harness);
+  const readiness = authoringReadiness(state.repoDir, harnessRootDir());
+  if (!readiness.ready) throw new Error(readiness.reason);
   if (cfg.harness) args.push("--harness", cfg.harness);
   if (cfg.granularity) args.push("--granularity", cfg.granularity);
   if (cfg.concurrency) args.push("--concurrency", cfg.concurrency);
@@ -843,7 +951,6 @@ async function configureEngineOptions(opts: LauncherOptions): Promise<void> {
         { value: "copilot", label: "copilot" },
         { value: "openai", label: "openai" },
         { value: "stub", label: "stub (offline testing)" },
-        { value: "flowforge-kernel", label: "flowforge-kernel" },
       ],
       { initial: cfg.harness || "opencode" },
     );
@@ -929,11 +1036,17 @@ async function runEngineDetached(opts: LauncherOptions): Promise<void> {
   fs.mkdirSync(logDir, { recursive: true });
   const logFile = path.join(logDir, "engine-run.log");
   const { cmd, args } = engineDetachedCommand(engineRunArgs());
-  spawnDetached(cmd, args, {
+  let startupError: Error | undefined;
+  const child = (state.options.dependencies?.spawnDetached ?? spawnDetached)(cmd, args, {
     cwd: state.repoDir,
+    env: state.env,
     logFile,
     outFile: logFile,
+    onStartupError: (error) => { startupError = error; },
   });
+  await new Promise<void>((resolve) => setImmediate(resolve));
+  if (startupError) throw startupError;
+  if (!child.pid) throw new Error("Engine process did not start; inspect docs/engine-run.log.");
   state.engineStarted = true;
   ok(`Engine started detached. Log: ${logFile}`);
   out("");
@@ -954,7 +1067,7 @@ async function engineDecision(opts: LauncherOptions): Promise<void> {
   out("  workflow engine, run it later, or build manually.");
   out("");
   if (opts.nonInteractive) {
-    if (!envFlag("FORGE_AUTO_DRAFT")) return;
+    if (!envFlag("FORGE_AUTO_DRAFT") && !opts.draft) return;
     printEngineCommand();
     return;
   }
@@ -980,7 +1093,7 @@ async function engineDecision(opts: LauncherOptions): Promise<void> {
 async function autoDraftTeam(opts: LauncherOptions): Promise<void> {
   if (!hasPrd()) return;
   if (opts.nonInteractive) {
-    if (!envFlag("FORGE_AUTO_DRAFT")) return;
+    if (!envFlag("FORGE_AUTO_DRAFT") && !opts.draft) return;
   } else {
     const def = opts.draft ? "y" : "n";
     const answer = await promptYesNo(
@@ -988,6 +1101,14 @@ async function autoDraftTeam(opts: LauncherOptions): Promise<void> {
       def,
     );
     if (answer === "n") return;
+  }
+
+  if (hasGeneratedTeam() && (!readAuthoringState(state.repoDir).stages.team ||
+      authoringStageIsCurrent(state.repoDir, "team", harnessRootDir()))) {
+    if (await runDraftSkillsInternal(state.repoDir) !== 0) return;
+    if (await runCompileManifestInternal(state.repoDir) !== 0) throw new Error("Manifest compilation failed.");
+    await engineDecision(opts);
+    return;
   }
 
   out("");
@@ -1008,9 +1129,10 @@ async function autoDraftTeam(opts: LauncherOptions): Promise<void> {
     out(`    - Agents : ${link(harnessAgentsDir() + "/")}`);
     out(`    - Skills : ${link(harnessSkillsDir() + "/")}`);
     await pauseForResume(opts, "team generated");
-    if (stopped) return;
-    await planAndValidateStep(opts);
-    if (stopped) return;
+    if (state.stopped) return;
+    if (await runDraftSkillsInternal(state.repoDir) !== 0) return;
+    if (await runCompileManifestInternal(state.repoDir) !== 0) throw new Error("Manifest compilation failed.");
+    if (state.stopped) return;
   } else {
     await diagnoseAutoDraftFail(skill);
   }
@@ -1018,9 +1140,9 @@ async function autoDraftTeam(opts: LauncherOptions): Promise<void> {
 }
 
 async function autoDraftMenu(opts: LauncherOptions): Promise<void> {
-  if (!fs.existsSync(path.join(state.repoDir, "docs", "IDEA.md"))) return;
+  if (!hasPrd() && !fs.existsSync(path.join(state.repoDir, "docs", "IDEA.md"))) return;
   await autoDraftPrd(opts);
-  if (stopped) return;
+  if (state.stopped) return;
   await autoDraftTeam(opts);
 }
 
@@ -1076,7 +1198,7 @@ async function preflightCheck(): Promise<void> {
 }
 
 function commandExists(cmd: string): boolean {
-  const pathVar = process.env.PATH ?? "";
+  const pathVar = state.env.PATH ?? "";
   const isWin = process.platform === "win32";
   const exts = isWin ? ["", ".exe", ".cmd", ".bat"] : [""];
   for (const dir of pathVar.split(path.delimiter)) {
@@ -1096,6 +1218,7 @@ function commandExists(cmd: string): boolean {
 // --- Step 2: Select harness ------------------------------------------------
 
 async function selectHarness(opts: LauncherOptions): Promise<void> {
+  state.harnessResolved = true;
   step("Step 2 of 9: Select agent harness");
   out("");
 
@@ -1108,7 +1231,7 @@ async function selectHarness(opts: LauncherOptions): Promise<void> {
 
   const choice = await promptSelect("Which agent harness will this project use?", options, {
     initial: "4",
-    nonInteractiveValue: process.env.FORGE_HARNESS_CHOICE ?? "4",
+    nonInteractiveValue: state.env.FORGE_HARNESS_CHOICE ?? "4",
   });
 
   switch (choice) {
@@ -1120,7 +1243,7 @@ async function selectHarness(opts: LauncherOptions): Promise<void> {
       warn(`Unrecognised choice '${choice}', defaulting to generic .agents`);
       state.harness = "agents"; state.harnessLabel = "Generic .agents";
   }
-  if (!process.env.FORGE_ENGINE_HARNESS) {
+  if (!state.env.FORGE_ENGINE_HARNESS) {
     state.engineConfig.harness = defaultEngineHarness(state.harness);
   }
   ok(`Harness: ${state.harnessLabel} (--harness ${state.harness})`);
@@ -1137,14 +1260,14 @@ async function createRepo(opts: LauncherOptions): Promise<void> {
   let parentDir: string;
 
   if (opts.nonInteractive) {
-    repoName = process.env.FORGE_REPO_NAME ?? "";
+    repoName = state.env.FORGE_REPO_NAME ?? "";
     if (!repoName) {
       fail("Non-interactive mode: $FORGE_REPO_NAME is not set.");
       throw new Error("FORGE_REPO_NAME not set");
     }
-    repoDescription = process.env.FORGE_REPO_DESCRIPTION ?? "";
-    repoVisibility = process.env.FORGE_REPO_VISIBILITY ?? "private";
-    parentDir = process.env.FORGE_REPO_PARENT_DIR ?? process.cwd();
+    repoDescription = state.env.FORGE_REPO_DESCRIPTION ?? "";
+    repoVisibility = state.env.FORGE_REPO_VISIBILITY ?? "private";
+    parentDir = state.env.FORGE_REPO_PARENT_DIR ?? process.cwd();
   } else {
     repoName = await prompt("Repository name (no spaces)", "");
     if (!repoName) {
@@ -1245,7 +1368,7 @@ async function captureIdea(opts: LauncherOptions): Promise<void> {
 
   let ideaText: string;
   if (opts.nonInteractive) {
-    ideaText = process.env.FORGE_IDEA ?? "";
+    ideaText = state.env.FORGE_IDEA ?? "";
     if (!ideaText) {
       fail("Non-interactive mode: $FORGE_IDEA is not set.");
       throw new Error("FORGE_IDEA not set");
@@ -1298,7 +1421,7 @@ async function addPrdAndResearch(opts: LauncherOptions): Promise<void> {
 
   // --- PRD ---
   if (opts.nonInteractive) {
-    const prdFile = process.env.FORGE_PRD_FILE;
+    const prdFile = state.env.FORGE_PRD_FILE;
     if (prdFile) {
       const resolved = resolveInputFile(prdFile);
       if (resolved.ok) {
@@ -1352,7 +1475,7 @@ async function addPrdAndResearch(opts: LauncherOptions): Promise<void> {
 
   // --- Research / seed documents ---
   if (opts.nonInteractive) {
-    const researchFiles = process.env.FORGE_RESEARCH_FILES;
+    const researchFiles = state.env.FORGE_RESEARCH_FILES;
     if (researchFiles) {
       fs.mkdirSync(researchDir, { recursive: true });
       for (const raw of researchFiles.split(",")) {
@@ -1445,12 +1568,16 @@ async function launchAutobuild(opts: LauncherOptions): Promise<void> {
     info("Headless mode: driving the queued skill directly from the terminal");
     out("  (no interactive CLI session will be opened).");
     out("");
-    await runSkillHeadless(headlessSkillMsg(), opts);
+    if (!hasPrd() && await runDraftPrdInternal(state.repoDir) !== 0) throw new Error("PRD authoring failed.");
+    if (await runDraftTeamInternal(state.repoDir) !== 0) throw new Error("Team authoring failed.");
+    if (await runDraftSkillsInternal(state.repoDir) !== 0) throw new Error("Skill authoring failed.");
+    if (await runCompileManifestInternal(state.repoDir) !== 0) throw new Error("Manifest compilation failed.");
+    await runEngineDetached(opts);
     return;
   }
 
   await autoDraftMenu(opts);
-  if (stopped) return;
+  if (state.stopped) return;
 
   if (state.engineStarted) {
     out("");
@@ -1463,8 +1590,15 @@ async function launchAutobuild(opts: LauncherOptions): Promise<void> {
     const answer = await promptYesNo(`Launch ${cli} in the new repository now?`, "n");
     if (answer === "n") {
       info("To launch manually:");
-      out(`    cd "${state.repoDir}" && ${cli} ${extra.join(" ")}`);
-      out(`    Then: ${autobuildCommand()}`);
+      if (authoringStageForSkill(skillNameFromMsg(autobuildCommand()))) command(await headlessCmdFor(autobuildCommand()));
+      else {
+        out(`    cd "${state.repoDir}" && ${cli} ${extra.join(" ")}`);
+        out(`    Then: ${autobuildCommand()}`);
+      }
+      return;
+    }
+    if (authoringStageForSkill(skillNameFromMsg(autobuildCommand()))) {
+      await openCliFor(autobuildCommand());
       return;
     }
     info(`Launching ${cli} in: ${state.repoDir}`);
@@ -1503,7 +1637,8 @@ async function launchAutobuild(opts: LauncherOptions): Promise<void> {
     case "agents":
       info("Open the repository in your agent harness and run:");
       out("");
-      out(`    ${autobuildCommand()}`);
+      if (authoringStageForSkill(skillNameFromMsg(autobuildCommand()))) command(await headlessCmdFor(autobuildCommand()));
+      else out(`    ${autobuildCommand()}`);
       out("");
       info("Agent templates are in:");
       out(`    ${path.join(state.repoDir, ".agents", "agents")}/`);
@@ -1522,7 +1657,7 @@ async function launchAutobuild(opts: LauncherOptions): Promise<void> {
 
 // --- Resume: re-enter an existing project at the current stage --------------
 
-export interface ResumeOptions {
+export interface ResumeOptions extends LauncherOptions {
   repo?: string;
   nonInteractive?: boolean;
   dryRun?: boolean;
@@ -1545,9 +1680,9 @@ function detectHarnessForRepo(repoDir: string): { harness: HarnessName; label: s
     ["claude", ".claude"],
     ["agents", ".agents"],
   ];
-  const bootstrapped = roots.find(([, root]) =>
-    fs.existsSync(path.join(repoDir, root, "agents")) ||
-    fs.existsSync(path.join(repoDir, root, "skills")));
+  const selected = selectProjectHarnessRoot(repoDir);
+  for (const warning of selected.warnings) warn(warning);
+  const bootstrapped = roots.find(([, root]) => root === selected.root);
   const [harness] = bootstrapped ?? (["agents", ".agents"] as [HarnessName, string]);
   const labels: Record<HarnessName, string> = {
     github: "GitHub Copilot",
@@ -1558,9 +1693,12 @@ function detectHarnessForRepo(repoDir: string): { harness: HarnessName; label: s
   return { harness, label: labels[harness] };
 }
 
-/** Re-populates the module state from an existing repo (resume entry point). */
+/** Populates the current invocation's state from an existing repository. */
 function setupStateForRepo(repoDir: string): void {
-  const { harness, label } = detectHarnessForRepo(repoDir);
+  const { harness, label } = state.harnessResolved && state.repoDir === repoDir
+    ? { harness: state.harness, label: state.harnessLabel }
+    : detectHarnessForRepo(repoDir);
+  state.harnessResolved = true;
   state.repoDir = repoDir;
   state.harness = harness;
   state.harnessLabel = label;
@@ -1575,15 +1713,16 @@ function setupStateForRepo(repoDir: string): void {
   // Start from any persisted engine config (docs/engine-config.json), then let
   // explicit environment variables win over it.
   const persisted = loadEngineConfig(repoDir);
-  state.engineConfig.harness = process.env.FORGE_ENGINE_HARNESS ?? persisted?.harness ?? "opencode";
-  state.engineConfig.granularity = process.env.FORGE_ENGINE_GRANULARITY ?? persisted?.granularity ?? "";
-  state.engineConfig.concurrency = process.env.FORGE_ENGINE_CONCURRENCY ?? persisted?.concurrency ?? "";
-  state.engineConfig.taskTimeoutMs = process.env.FORGE_ENGINE_TASK_TIMEOUT_MS ?? persisted?.taskTimeoutMs ?? "";
-  state.engineConfig.maxRetries = process.env.FORGE_ENGINE_MAX_RETRIES ?? persisted?.maxRetries ?? "";
+  state.engineConfig.harness = state.env.FORGE_ENGINE_HARNESS ?? persisted?.harness ?? "opencode";
+  assertEngineHarnessAvailable(state.engineConfig.harness);
+  state.engineConfig.granularity = state.env.FORGE_ENGINE_GRANULARITY ?? persisted?.granularity ?? "";
+  state.engineConfig.concurrency = state.env.FORGE_ENGINE_CONCURRENCY ?? persisted?.concurrency ?? "";
+  state.engineConfig.taskTimeoutMs = state.env.FORGE_ENGINE_TASK_TIMEOUT_MS ?? persisted?.taskTimeoutMs ?? "";
+  state.engineConfig.maxRetries = state.env.FORGE_ENGINE_MAX_RETRIES ?? persisted?.maxRetries ?? "";
   state.engineConfig.viz = envFlagOrUndefined("FORGE_ENGINE_VIZ") ?? persisted?.viz ?? false;
-  state.engineConfig.vizPort = process.env.FORGE_ENGINE_VIZ_PORT ?? persisted?.vizPort ?? "";
+  state.engineConfig.vizPort = state.env.FORGE_ENGINE_VIZ_PORT ?? persisted?.vizPort ?? "";
   state.engineConfig.keepAlive = envFlagOrUndefined("FORGE_ENGINE_ATTACH") ?? persisted?.keepAlive ?? false;
-  state.engineConfig.attach = process.env.FORGE_ENGINE_ATTACH_URL ?? persisted?.attach ?? "";
+  state.engineConfig.attach = state.env.FORGE_ENGINE_ATTACH_URL ?? persisted?.attach ?? "";
   state.engineConfig.autoCommit = envFlagOrUndefined("FORGE_ENGINE_AUTO_COMMIT") ?? persisted?.autoCommit ?? true;
   state.engineConfig.executionMode = persisted?.executionMode === "manual" ? "manual" : "auto";
   state.engineConfig.selectionScope = persisted?.selectionScope === "single" || persisted?.selectionScope === "range" || persisted?.selectionScope === "list"
@@ -1627,6 +1766,12 @@ function printResumeWhere(): void {
   out(`    - Project idea       : ${idea ? `yes  ${link(ideaPath)}` : "no"}`);
   out(`    - PRD                : ${prd ? `yes  ${link(path.join(state.repoDir, "docs", prdDocName()))}` : "no"}`);
   out(`    - Agent team         : ${team ? `yes  ${link(harnessAgentsDir() + "/")}` : "no"}`);
+  const stages = readAuthoringState(state.repoDir).stages;
+  out(`    - Project skills     : ${stages.skills?.status ?? (team ? "legacy (no marker)" : "pending")}`);
+  for (const stage of ["prd", "team", "skills"] as const) {
+    const selection = selectAuthoringModel(state.repoDir, stage, state.options.models, state.env);
+    out(`    - ${stage} model : ${selection.requestedModel ?? "inherit runner default"} (${selection.source})`);
+  }
   out(`    - Execution manifest : ${manifest ? "yes" : "no"}`);
   if (engine) out(`    - Engine run         : ${engine.status ?? "unknown"}${engine.runId ? ` (run ${engine.runId})` : ""}`);
   out("");
@@ -1682,11 +1827,12 @@ async function resumeIdeaStep(opts: ResumeOptions): Promise<boolean> {
 
 /** Stage: turn the idea into a reviewed PRD. */
 async function resumePrdStep(opts: ResumeOptions): Promise<boolean> {
-  if (hasPrd()) return true;
+  const prior = readAuthoringState(state.repoDir).stages.prd;
+  if (hasPrd() && (!prior || prior.status === "complete")) return true;
   if (!fs.existsSync(path.join(state.repoDir, "docs", "IDEA.md"))) return true;
   if (opts.nonInteractive) {
     out("  No PRD yet. Next: draft the PRD from docs/IDEA.md:");
-    command(headlessCmdFor(`/forge-auto-build-prd ${PRD_HEADLESS_MSG}`));
+    command(await headlessCmdFor(`/forge-auto-build-prd ${PRD_HEADLESS_MSG}`));
     return false;
   }
   out("  No PRD yet. docs/IDEA.md is ready to become a reviewed PRD.");
@@ -1724,11 +1870,12 @@ async function resumePrdStep(opts: ResumeOptions): Promise<boolean> {
 
 /** Stage: generate the agent team from the PRD. */
 async function resumeTeamStep(opts: ResumeOptions): Promise<boolean> {
-  if (hasGeneratedTeam()) return true;
+  if (hasGeneratedTeam() && (!readAuthoringState(state.repoDir).stages.team ||
+      authoringStageIsCurrent(state.repoDir, "team", harnessRootDir()))) return true;
   if (!hasPrd()) return true;
   if (opts.nonInteractive) {
     out("  No agent team yet. Next: generate the team from the PRD:");
-    command(headlessCmdFor(`${buildTeamPrompt(prdSourceForTeam(), state.harness)} Auto-proceed with default assumptions and no questions.`));
+    command(await headlessCmdFor(`${buildTeamPrompt(prdSourceForTeam(), state.harness)} Auto-proceed with default assumptions and no questions.`));
     return false;
   }
   out("  No agent team yet. docs/PRD.md is ready for team generation.");
@@ -1768,9 +1915,10 @@ async function resumeTeamStep(opts: ResumeOptions): Promise<boolean> {
  * docs/IDEA.md (when absent). Non-interactive by design — the console triggers
  * it, the user reviews the result (and comes back) in the UI.
  */
-export async function runDraftPrd(repoDir: string): Promise<number> {
+async function runDraftPrdInternal(repoDir: string): Promise<number> {
   setupStateForRepo(repoDir);
-  if (hasPrd()) {
+  const prior = readAuthoringState(repoDir).stages.prd;
+  if (hasPrd() && (!prior || prior.status === "complete")) {
     out("PRD already exists.");
     return 0;
   }
@@ -1781,6 +1929,7 @@ export async function runDraftPrd(repoDir: string): Promise<number> {
   out(fs.existsSync(ideaPath) ? "Auto-drafting the PRD from docs/IDEA.md (headless) …" : "Auto-drafting a context-aware PRD from the existing repository (headless) …");
   const ran = await runSkillHeadless(`/forge-auto-build-prd ${context} ${PRD_HEADLESS_MSG}`, { nonInteractive: true });
   if (!ran) return 1;
+  if (state.options.dryRun) return 0;
   await draftCommit("docs: add auto-drafted PRD");
   if (hasPrd()) {
     ok("PRD generated.");
@@ -1792,13 +1941,15 @@ export async function runDraftPrd(repoDir: string): Promise<number> {
 }
 
 /** Authors a project PRD from an existing repository without an IDEA.md. */
-export async function runDraftExistingPrd(repoDir: string): Promise<number> {
+async function runDraftExistingPrdInternal(repoDir: string): Promise<number> {
   setupStateForRepo(repoDir);
-  if (hasPrd()) { out("PRD already exists."); return 0; }
+  const prior = readAuthoringState(repoDir).stages.prd;
+  if (hasPrd() && (!prior || prior.status === "complete")) { out("PRD already exists."); return 0; }
   out("Authoring a project PRD from the existing repository (headless) …");
   const skill = "forge-build-prd";
   const ran = await runSkillHeadless(`/${skill} ${EXISTING_PROJECT_PRD_MSG}`, { nonInteractive: true });
   if (!ran) return 1;
+  if (state.options.dryRun) return 0;
   await draftCommit("docs: add project PRD");
   if (hasPrd()) {
     ok("Project PRD generated.");
@@ -1810,7 +1961,7 @@ export async function runDraftExistingPrd(repoDir: string): Promise<number> {
 }
 
 /** Authors a Feature PRD through the authoring skill; workflow execution is intentionally separate. */
-export async function runFeaturePrd(repoDir: string, featurePrompt?: string): Promise<number> {
+async function runFeaturePrdInternal(repoDir: string, featurePrompt?: string): Promise<number> {
   setupStateForRepo(repoDir);
   authoringEvent("authoring.started", { operation: "feature-prd" });
   const featuresDir = path.join(repoDir, "docs", "features");
@@ -1822,8 +1973,9 @@ export async function runFeaturePrd(repoDir: string, featurePrompt?: string): Pr
     featurePrompt = await prompt("What feature should be added?", "");
   }
   if (!featurePrompt.trim()) return 1;
-  const message = `/forge-build-feature-prd I want to add ${featurePrompt.trim()} to this project. Analyze the existing codebase and agent team, then produce a self-contained Feature PRD and save it under docs/features/. Do not modify the original PRD or start the workflow engine.`;
+  const message = `/forge-build-feature-prd I want to add ${featurePrompt.trim()} to this project. Analyze the existing codebase and agent team, then produce a self-contained Feature PRD and save it under docs/features/. Do not modify the original PRD, generate agents or skills, compile a manifest, or start the workflow engine.`;
   const ran = await runSkillHeadless(message, { nonInteractive: true });
+  if (state.options.dryRun) return 0;
   if (!ran) {
     authoringEvent("authoring.failed", { operation: "feature-prd", stage: "authoring" });
     return 1;
@@ -1847,20 +1999,23 @@ export async function runFeaturePrd(repoDir: string, featurePrompt?: string): Pr
 }
 
 /** Author a feature, update only affected team members, compile, and optionally run it. */
-export async function runFeatureIncrement(repoDir: string, featurePrompt: string | undefined, run = false): Promise<number> {
+async function runFeatureIncrementInternal(repoDir: string, featurePrompt: string | undefined, run = false): Promise<number> {
   setupStateForRepo(repoDir);
   authoringEvent("authoring.started", { operation: "feature-increment", run });
   const featuresDir = path.join(repoDir, "docs", "features");
   const beforeFeatures = new Set(fs.existsSync(featuresDir)
     ? fs.readdirSync(featuresDir).filter((name) => name.endsWith(".md"))
     : []);
-  const featureCode = await runFeaturePrd(repoDir, featurePrompt);
+  const featureCode = await runFeaturePrdInternal(repoDir, featurePrompt);
   if (featureCode !== 0) { authoringEvent("authoring.failed", { operation: "feature-increment", stage: "feature-prd", code: featureCode }); return featureCode; }
   authoringEvent("authoring.stage.completed", { operation: "feature-increment", stage: "feature-prd" });
-  const teamCode = await runDraftTeam(repoDir, true);
+  const teamCode = await runDraftTeamInternal(repoDir, true);
   if (teamCode !== 0) { authoringEvent("authoring.failed", { operation: "feature-increment", stage: "team", code: teamCode }); return teamCode; }
   authoringEvent("authoring.stage.completed", { operation: "feature-increment", stage: "team" });
-  const manifestCode = await runCompileManifest(repoDir);
+  const skillsCode = await runDraftSkillsInternal(repoDir);
+  if (skillsCode !== 0) { authoringEvent("authoring.failed", { operation: "feature-increment", stage: "skills", code: skillsCode }); return skillsCode; }
+  authoringEvent("authoring.stage.completed", { operation: "feature-increment", stage: "skills" });
+  const manifestCode = await runCompileManifestInternal(repoDir);
   if (manifestCode !== 0) { authoringEvent("authoring.failed", { operation: "feature-increment", stage: "manifest", code: manifestCode }); return manifestCode; }
   authoringEvent("authoring.stage.completed", { operation: "feature-increment", stage: "manifest" });
   if (!run) {
@@ -1919,9 +2074,10 @@ export function featureTaskIds(
  * Headless pipeline advancement for the Forge Console: generate the agent team
  * from the PRD (when absent).
  */
-export async function runDraftTeam(repoDir: string, featureIncrement = false): Promise<number> {
+async function runDraftTeamInternal(repoDir: string, featureIncrement = false): Promise<number> {
   setupStateForRepo(repoDir);
-  if (hasGeneratedTeam() && !featureIncrement) {
+  const legacyTeam = hasGeneratedTeam() && !readAuthoringState(repoDir).stages.team;
+  if (hasGeneratedTeam() && !featureIncrement && authoringStageIsCurrent(repoDir, "team", harnessRootDir())) {
     out("Agent team already exists.");
     return 0;
   }
@@ -1933,16 +2089,23 @@ export async function runDraftTeam(repoDir: string, featureIncrement = false): P
   // Capture this immediately before invoking the team skill. In feature mode
   // the preceding feature-PRD stage is expected to change docs, so those
   // changes must not be attributed to team generation.
-  const featureSnapshot = featureIncrement ? snapshotFeatureIncrementFiles(repoDir) : undefined;
+  const featureSnapshot = featureIncrement || legacyTeam ? snapshotFeatureIncrementFiles(repoDir, harnessRootDir()) : undefined;
   const prdSource = prdSourceForTeam();
   const ran = await runSkillHeadless(
     `${buildTeamPrompt(prdSource, state.harness)} ${featureIncrement
       ? "This is Feature Increment Mode. Preserve every untouched existing agent and skill; update or add only agents affected by the new feature. Review the existing codebase and team before making changes."
-      : "Auto-proceed with default assumptions and no questions."}`,
+      : legacyTeam
+        ? "Adopt this existing team: validate and preserve existing agents, names, ownership and skills. Do not regenerate valid agents. Produce the missing skill-candidate handoff and request only targeted repairs. Ask no questions."
+        : "Auto-proceed with default assumptions and no questions."}`,
     { nonInteractive: true },
   );
   if (!ran) return 1;
-  if (featureSnapshot && !validateFeatureIncrementFiles(featureSnapshot)) return 1;
+  if (state.options.dryRun) return 0;
+  if (featureSnapshot && !validateFeatureIncrementFiles(featureSnapshot)) {
+    const stage = readAuthoringState(repoDir).stages.team!;
+    saveAuthoringStage(repoDir, "team", { ...stage, status: "failed", error: "Feature increment changed protected files." });
+    return 1;
+  }
   await draftCommit("feat: generate auto-drafted agent team");
   if (hasGeneratedTeam()) {
     ok("Agent team generated.");
@@ -1953,8 +2116,54 @@ export async function runDraftTeam(repoDir: string, featureIncrement = false): P
   return 1;
 }
 
-export async function runCompileManifest(repoDir: string): Promise<number> {
+async function runDraftSkillsInternal(repoDir: string): Promise<number> {
   setupStateForRepo(repoDir);
+  if (!hasGeneratedTeam()) { fail("No generated agent team yet; run draft-team first."); return 1; }
+  const team = readAuthoringState(repoDir).stages.team;
+  if (team && !authoringStageIsCurrent(repoDir, "team", harnessRootDir())) {
+    fail("Team authoring is incomplete or its inputs changed; run draft-team before draft-skills.");
+    return 1;
+  }
+  const candidates = readSkillCandidates(repoDir);
+  if (!candidates) {
+    if (!team) { info("Legacy team has no skill handoff; existing build readiness is preserved."); return 0; }
+    fail("Missing docs/SKILL-CANDIDATES.json; run draft-team first.");
+    return 1;
+  }
+  if (authoringStageIsCurrent(repoDir, "skills", harnessRootDir())) { out("Project skills already complete."); return 0; }
+  if (!candidates.candidates.some((candidate) => candidate.action !== "omit")) {
+    let invocation: AuthoringInvocation;
+    try {
+      invocation = await resolveAuthoringModel(repoDir, "skills", headlessRunner(), state.options.models, state.env, state.options.dependencies?.inventoryProbe);
+    } catch (error) {
+      if (!state.options.dryRun) saveAuthoringStage(repoDir, "skills", {
+        status: "failed", inputFingerprint: stageInputFingerprint(repoDir, "skills", harnessRootDir()), outputs: [],
+        error: error instanceof Error ? error.message : String(error), completedAt: new Date().toISOString(),
+      });
+      throw error;
+    }
+    if (!state.options.dryRun) saveAuthoringStage(repoDir, "skills", {
+      status: "complete", inputFingerprint: stageInputFingerprint(repoDir, "skills", harnessRootDir()),
+      outputs: [], outputFingerprint: fingerprintFiles(repoDir, []), noSkillsRequired: true, completedAt: new Date().toISOString(), invocation,
+    });
+    ok("Project skills complete: no skills required.");
+    return 0;
+  }
+  const ran = await runSkillHeadless(
+    buildSkillsPrompt(),
+    { ...state.options, nonInteractive: true },
+  );
+  if (!ran) return 1;
+  if (state.options.dryRun) return 0;
+  await draftCommit("feat: generate project skills");
+  ok("Project skills generated.");
+  return 0;
+}
+
+async function runCompileManifestInternal(repoDir: string): Promise<number> {
+  setupStateForRepo(repoDir);
+  const readiness = authoringReadiness(repoDir, harnessRootDir());
+  if (!readiness.ready) { fail(readiness.reason!); return 1; }
   const manifestPath = path.join(repoDir, "docs", "EXECUTION-MANIFEST.json");
   if (fs.existsSync(manifestPath)) out("Recompiling the execution manifest (existing task state will be reconciled) …");
   if (!hasGeneratedTeam()) {
@@ -1965,6 +2174,10 @@ export async function runCompileManifest(repoDir: string): Promise<number> {
   if (!adapterDir) {
     fail("forge-execution-adapter is not installed under this repo.");
     return 1;
+  }
+  if (state.options.dryRun) {
+    command(`npm --prefix ${JSON.stringify(adapterDir)} run forge-execution-adapter -- compile --repo ${JSON.stringify(repoDir)}`);
+    return 0;
   }
   out("Preparing the build by compiling the execution manifest …");
   let code = await runLoggedStep("Installing execution adapter dependencies", "npm", ["install"], { cwd: adapterDir });
@@ -2015,6 +2228,20 @@ function printMonitorCommands(): void {
 }
 
 async function openCliFor(cmd: string): Promise<void> {
+  const stage = authoringStageForSkill(skillNameFromMsg(cmd));
+  if (stage) {
+    const runner = headlessRunner();
+    if (runner === "stub") { command(await headlessCmdFor(cmd)); return; }
+    const invocation = await resolveAuthoringModel(state.repoDir, stage, runner, state.options.models, state.env, state.options.dependencies?.inventoryProbe);
+    const args = invocation.effectiveModel ? ["--model", invocation.effectiveModel] : [];
+    if (runner === "opencode") args.unshift(state.repoDir);
+    const launched = await launchCliInTerminal(runner, state.repoDir, args);
+    if (!launched) warn(`Could not open the authoring terminal. Run: ${await headlessCmdFor(cmd)}`);
+    authoringEvent("authoring.handoff", { stage, ...invocation, argv: args });
+    out(`    Then run only this stage: ${cmd}`);
+    out("    Continue with forge-launcher resume to select the next stage's model independently.");
+    return;
+  }
   const cli = state.harness === "github" ? "copilot" : state.harness === "claude" ? "claude" : "opencode";
   const launched = await launchCliInTerminal(cli, state.repoDir, state.harness === "github" ? [] : ["."]);
   if (launched) ok(`${cli} launched in a separate terminal.`);
@@ -2125,8 +2352,7 @@ function resumeSummary(): void {
  * build) so a run paused for review can be picked up later. Full interactive
  * wizard in a TTY; prints state + exact next commands with --non-interactive.
  */
-export async function runResume(opts: ResumeOptions = {}): Promise<number> {
-  prompts.nonInteractive = Boolean(opts.nonInteractive);
+async function runResumeInternal(opts: ResumeOptions = {}): Promise<number> {
   const repoDir = opts.repo ? path.resolve(opts.repo) : detectRepoRoot();
   if (!fs.existsSync(path.join(repoDir, ".git"))) {
     fail(`Not a git repository: ${repoDir}`);
@@ -2144,6 +2370,16 @@ export async function runResume(opts: ResumeOptions = {}): Promise<number> {
   if (!go) { resumeSummary(); return 0; }
   go = await resumeTeamStep(opts);
   if (!go) { resumeSummary(); return 0; }
+  const readiness = authoringReadiness(repoDir, harnessRootDir());
+  if (!readiness.ready) {
+    if (opts.nonInteractive) {
+      out(`  ${readiness.reason}`);
+      command(`forge-launcher draft-${readiness.nextStage ?? "skills"} --repo ${JSON.stringify(repoDir)}`);
+      return 0;
+    }
+    if (await promptYesNo("Generate or retry the project skills now?", "y") === "n") return 0;
+    if (await runDraftSkillsInternal(repoDir) !== 0) return 1;
+  }
   await resumeEngineStep(opts);
   resumeSummary();
   return 0;
@@ -2168,7 +2404,7 @@ function completionSummary(): void {
   out("  Next steps:");
   out("");
   if (state.engineStarted) {
-    const engineHarness = process.env.FORGE_ENGINE_HARNESS ?? "opencode";
+    const engineHarness = state.env.FORGE_ENGINE_HARNESS ?? "opencode";
     out("  1. The workflow engine is building the project in the background");
     out("     (it keeps running after this launcher exits).");
     out("  2. Monitor progress from another terminal:");
@@ -2213,25 +2449,32 @@ function completionSummary(): void {
 
 // --- Entry -----------------------------------------------------------------
 
-export async function runLauncher(opts: LauncherOptions = {}): Promise<number> {
-  prompts.nonInteractive = Boolean(opts.nonInteractive);
-  stopped = false;
+async function runLauncherInternal(opts: LauncherOptions = {}): Promise<number> {
+  assertEngineHarnessAvailable(state.engineConfig.harness);
 
   header();
   try {
     await preflightCheck();
     await selectHarness(opts);
     await createRepo(opts);
+    assertEngineHarnessAvailable(state.env.FORGE_ENGINE_HARNESS ?? loadEngineConfig(state.repoDir)?.harness ?? state.engineConfig.harness);
+    if (!opts.dryRun && Object.keys(state.options.models ?? {}).length > 0) {
+      const config = loadAuthoringConfig(state.repoDir);
+      saveAuthoringConfig(state.repoDir, {
+        version: 1,
+        models: { ...config.models, ...state.options.models },
+      });
+    }
     await bootstrapForge(opts);
     await captureIdea(opts);
     await pauseForResume(opts, "idea captured");
-    if (stopped) { resumeSummary(); return 0; }
+    if (state.stopped) { resumeSummary(); return 0; }
     await addPrdAndResearch(opts);
     await pauseForResume(opts, "PRD added or skipped");
-    if (stopped) { resumeSummary(); return 0; }
+    if (state.stopped) { resumeSummary(); return 0; }
     await commitBootstrap();
     await launchAutobuild(opts);
-    if (stopped) { resumeSummary(); return 0; }
+    if (state.stopped) { resumeSummary(); return 0; }
     completionSummary();
     return 0;
   } catch (err) {
@@ -2240,6 +2483,35 @@ export async function runLauncher(opts: LauncherOptions = {}): Promise<number> {
       warn(`Dry-run: stopped before executing: ${(err as Error).message}`);
       return 0;
     }
+
     throw err;
   }
+}
+
+export function runDraftPrd(repoDir: string, options: LauncherOptions = {}): Promise<number> {
+  return withLauncherSession({ ...options, nonInteractive: true }, () => runDraftPrdInternal(repoDir));
+}
+export function runDraftExistingPrd(repoDir: string, options: LauncherOptions = {}): Promise<number> {
+  return withLauncherSession({ ...options, nonInteractive: true }, () => runDraftExistingPrdInternal(repoDir));
+}
+export function runFeaturePrd(repoDir: string, featurePrompt?: string, options: LauncherOptions = {}): Promise<number> {
+  return withLauncherSession({ ...options, nonInteractive: true }, () => runFeaturePrdInternal(repoDir, featurePrompt));
+}
+export function runFeatureIncrement(repoDir: string, featurePrompt: string | undefined, run = false, options: LauncherOptions = {}): Promise<number> {
+  return withLauncherSession({ ...options, nonInteractive: true }, () => runFeatureIncrementInternal(repoDir, featurePrompt, run));
+}
+export function runDraftTeam(repoDir: string, featureIncrement = false, options: LauncherOptions = {}): Promise<number> {
+  return withLauncherSession({ ...options, nonInteractive: true }, () => runDraftTeamInternal(repoDir, featureIncrement));
+}
+export function runDraftSkills(repoDir: string, options: LauncherOptions = {}): Promise<number> {
+  return withLauncherSession({ ...options, nonInteractive: true }, () => runDraftSkillsInternal(repoDir));
+}
+export function runCompileManifest(repoDir: string, options: LauncherOptions = {}): Promise<number> {
+  return withLauncherSession({ ...options, nonInteractive: true }, () => runCompileManifestInternal(repoDir));
+}
+export function runResume(options: ResumeOptions = {}): Promise<number> {
+  return withLauncherSession(options, () => runResumeInternal(options));
+}
+export function runLauncher(options: LauncherOptions = {}): Promise<number> {
+  return withLauncherSession(options, () => runLauncherInternal(options));
 }

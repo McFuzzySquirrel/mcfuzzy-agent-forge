@@ -40,6 +40,12 @@ npm run build
 
 - Keep documentation in sync with behavior changes.
 - Update the relevant docs when you change the launcher, engine, or console flow.
+- Keep compile-time manifest generation distinct from runtime execution: the
+  execution adapter compiles `docs/EXECUTION-MANIFEST.json`; the workflow engine
+  owns dispatch, retries, verification, and durable state.
+- Do not add new FlowForge/workforce integration. Historical ADRs and research
+  may retain accurate references, but active guides must use the native engine
+  and adapter paths.
 - Prefer small, focused changes with clear intent.
 - Preserve the project’s PRD-first and review-boundary philosophy.
 

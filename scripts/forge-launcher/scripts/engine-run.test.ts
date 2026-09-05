@@ -104,3 +104,27 @@ test("engine-run forwards manual execution flags", async () => {
   assert.ok(out.includes("--selection-scope range"), out);
   assert.ok(out.includes("--selected-tasks 1.1,1.2"), out);
 });
+
+test("granularity recompilation keeps the manifest-selected team", async (t) => {
+  const repo = tmpRepo();
+  t.after(() => fs.rmSync(repo, { recursive: true, force: true }));
+  for (const harness of [".agents", ".github"]) {
+    const agents = path.join(repo, harness, "agents");
+    fs.mkdirSync(agents, { recursive: true });
+    fs.writeFileSync(path.join(agents, "worker.md"), "---\nname: worker\n---\n");
+  }
+  for (const skill of ["forge-workflow-engine", "forge-execution-adapter"]) {
+    const dir = path.join(repo, ".github", "skills", skill);
+    fs.mkdirSync(dir, { recursive: true });
+    fs.writeFileSync(path.join(dir, "package.json"), "{}");
+  }
+  fs.mkdirSync(path.join(repo, "docs"));
+  fs.writeFileSync(path.join(repo, "docs", "EXECUTION-MANIFEST.json"), JSON.stringify({ harnessRoot: ".github" }));
+  const result = await runCli(["engine-run", "--repo", repo, "--granularity", "fine", "--yes", "--dry-run"]);
+  assert.equal(result.code, 0, result.out);
+  const compile = result.out.split("\n").find((line) => line.includes("forge-execution-adapter -- compile"));
+  assert.ok(compile, result.out);
+  assert.ok(compile.includes("--harness-root .github"), compile);
+  assert.ok(compile.includes(`--repo ${repo}`), compile);
+  assert.ok(result.out.includes(path.join(repo, ".github", "skills", "forge-execution-adapter")), result.out);
+});

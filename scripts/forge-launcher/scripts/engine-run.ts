@@ -3,6 +3,9 @@ import path from "node:path";
 import { out, info, runTee } from "./format.ts";
 import { runCommand } from "./format.ts";
 import { detectRepoRoot } from "./paths.ts";
+import { assertEngineHarnessAvailable, loadEngineConfig } from "./engine-config.ts";
+import { HARNESS_ROOTS, selectProjectHarnessRoot } from "./repo-metadata.ts";
+import { authoringReadiness } from "./authoring-state.ts";
 
 export interface EngineRunOptions {
   repo?: string;
@@ -34,8 +37,6 @@ export interface EngineRunOptions {
   pause?: boolean;
 }
 
-const HARNESS_ROOTS = [".agents", ".opencode", ".claude", ".github"];
-
 function run(cmd: string, args: string[], dryRun: boolean, cwd: string): Promise<number> {
   if (dryRun) {
     out(`  [dry-run] ${cmd} ${args.join(" ")}`);
@@ -45,7 +46,6 @@ function run(cmd: string, args: string[], dryRun: boolean, cwd: string): Promise
 }
 
 export async function engineRun(opts: EngineRunOptions = {}): Promise<number> {
-  const harness = opts.harness ?? process.env.FORGE_ENGINE_HARNESS ?? "opencode";
   const concurrency = opts.concurrency ?? process.env.FORGE_ENGINE_CONCURRENCY ?? "";
   const taskTimeoutMs = opts.taskTimeoutMs ?? process.env.FORGE_ENGINE_TASK_TIMEOUT_MS ?? "";
   const granularity = opts.granularity ?? process.env.FORGE_ENGINE_GRANULARITY ?? "";
@@ -81,17 +81,25 @@ export async function engineRun(opts: EngineRunOptions = {}): Promise<number> {
   const repo = opts.repo
     ? path.resolve(opts.repo)
     : detectRepoRoot();
+  const harness = opts.harness ?? process.env.FORGE_ENGINE_HARNESS ?? loadEngineConfig(repo)?.harness ?? "opencode";
+  if (!stop && !pause) assertEngineHarnessAvailable(harness);
   if (!fs.existsSync(path.join(repo, ".git"))) {
     throw new Error(`Error: not a git repository: ${repo}`);
   }
 
   let engineDir = "";
   let adapterDir = "";
-  for (const root of HARNESS_ROOTS) {
-    if (fs.existsSync(path.join(repo, root, "skills", "forge-workflow-engine"))) {
+  const preferred = stop || pause ? null : selectProjectHarnessRoot(repo).root;
+  if (!stop && !pause) {
+    const readiness = authoringReadiness(repo, preferred ?? ".agents");
+    if (!readiness.ready) throw new Error(readiness.reason ?? "Authoring must finish before execution.");
+  }
+  const roots = preferred ? [preferred, ...HARNESS_ROOTS.filter((root) => root !== preferred)] : HARNESS_ROOTS;
+  for (const root of roots) {
+    if (!engineDir && fs.existsSync(path.join(repo, root, "skills", "forge-workflow-engine"))) {
       engineDir = path.join(repo, root, "skills", "forge-workflow-engine");
     }
-    if (fs.existsSync(path.join(repo, root, "skills", "forge-execution-adapter"))) {
+    if (!adapterDir && fs.existsSync(path.join(repo, root, "skills", "forge-execution-adapter"))) {
       adapterDir = path.join(repo, root, "skills", "forge-execution-adapter");
     }
     if (engineDir && adapterDir) break;
@@ -137,7 +145,8 @@ export async function engineRun(opts: EngineRunOptions = {}): Promise<number> {
   if (adapterDir) {
     await run("npm", ["install"], dryRun, adapterDir);
     if (!fs.existsSync(manifest) || recompile) {
-      const compileArgs = ["run", "forge-execution-adapter", "--", "compile"];
+      const compileArgs = ["run", "forge-execution-adapter", "--", "compile", "--repo", repo];
+      if (preferred) compileArgs.push("--harness-root", preferred);
       if (granularity) compileArgs.push("--granularity", granularity);
       const code = await run("npm", compileArgs, dryRun, adapterDir);
       if (code !== 0) {

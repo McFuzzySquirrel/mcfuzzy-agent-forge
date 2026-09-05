@@ -1,18 +1,23 @@
 import fs from "node:fs";
 import path from "node:path";
-import spawn from "cross-spawn";
+import { randomUUID } from "node:crypto";
 
 import {
   loadEngineConfig,
+  assertEngineHarnessAvailable,
   normaliseExecutionMode,
   normaliseSelectedTaskIds,
   normaliseSelectionScope,
 } from "../engine-config.ts";
 import { repositoryLogFile } from "../bootstrap.ts";
+import { spawnDetached } from "../format.ts";
+import { jobResultPath } from "./jobs.ts";
+import { jobRunnerCommand } from "../job-runner.ts";
+import { AUTHORING_STAGES, validateAuthoringConfig } from "../authoring-config.ts";
 import { engineDetachedCommand } from "../launcher.ts";
-import { startJob } from "./jobs.ts";
+import { currentJobForRepo, startJob, updateJob } from "./jobs.ts";
 import { findEngineDir, inferEngineHarness, repoPaths, upsertProject } from "./paths.ts";
-import { resetChangedCompletedTasks } from "./repo.ts";
+import { authoringBlocker, isPidAlive, refreshJobs, resetChangedCompletedTasks } from "./repo.ts";
 import type {
   ControlAction,
   ControlResult,
@@ -27,6 +32,7 @@ export interface SpawnOptions {
   cwd?: string;
   env?: NodeJS.ProcessEnv;
   logFile?: string;
+  onStartupError?: (error: Error) => void;
 }
 
 export interface SpawnResult {
@@ -41,23 +47,7 @@ export interface ControlDeps {
 }
 
 function defaultSpawner(cmd: string, args: string[], opts: SpawnOptions): SpawnResult {
-  let stdio: Array<"ignore" | number> = ["ignore"];
-  if (opts.logFile) {
-    fs.mkdirSync(path.dirname(opts.logFile), { recursive: true });
-    const fd = fs.openSync(opts.logFile, "a");
-    stdio = ["ignore", fd, fd];
-  } else {
-    stdio = ["ignore", "ignore", "ignore"];
-  }
-  const child = spawn(cmd, args, {
-    cwd: opts.cwd,
-    env: opts.env ?? process.env,
-    detached: true,
-    stdio: stdio as never,
-  });
-  child.on("error", () => {});
-  child.unref();
-  return { pid: child.pid };
+  return spawnDetached(cmd, args, opts);
 }
 
 function defaultKill(pid: number, signal: NodeJS.Signals): void {
@@ -71,7 +61,9 @@ function defaultKill(pid: number, signal: NodeJS.Signals): void {
 /** Builds the engine-run invocation args (console is the live view, so no --viz). */
 function engineRunArgs(repoRoot: string): string[] {
   const cfg = loadEngineConfig(repoRoot);
-  const args = ["engine-run", "--repo", repoRoot, "--harness", cfg?.harness ?? inferEngineHarness(repoRoot)];
+  const harness = process.env.FORGE_ENGINE_HARNESS ?? cfg?.harness ?? inferEngineHarness(repoRoot);
+  assertEngineHarnessAvailable(harness);
+  const args = ["engine-run", "--repo", repoRoot, "--harness", harness];
   if (cfg?.granularity) args.push("--granularity", cfg.granularity);
   if (cfg?.concurrency) args.push("--concurrency", cfg.concurrency);
   if (cfg?.taskTimeoutMs) args.push("--task-timeout-ms", cfg.taskTimeoutMs);
@@ -145,25 +137,72 @@ export class RunController {
   }
 
   run(jobType: "engine-run" | "engine-resume" = "engine-run"): ControlResult {
+    refreshJobs();
+    const blocker = authoringBlocker(this.p);
+    if (blocker) return { ok: false, message: blocker };
     const logFile = this.p.logPath;
     const { cmd, args } = engineDetachedCommand(engineRunArgs(this.repoRoot));
-    const { pid } = this.spawner(cmd, args, { cwd: this.repoRoot, logFile });
-    const job = startJob({ type: jobType, repoPath: this.repoRoot, pid, logPath: logFile, message: "Engine started in the background." });
-    return { ok: true, message: "Engine started in the background.", pid, job };
+    const job = this.launchJob(jobType, "Engine started in the background.", cmd, args, logFile);
+    const { pid } = job;
+    return { ok: job.status !== "failed", message: job.message, pid, job };
+  }
+
+  private launchJob(
+    type: Parameters<typeof startJob>[0]["type"],
+    message: string,
+    cmd: string,
+    args: string[],
+    logFile: string,
+    extra: { taskId?: string; run?: boolean; autoDraft?: boolean } = {},
+    options: { cwd?: string; repoPath?: string; env?: NodeJS.ProcessEnv } = {},
+  ) {
+    const target = options.repoPath ?? this.repoRoot;
+    const active = currentJobForRepo(target);
+    if (active?.status === "running" && isPidAlive(active.pid ?? null)) {
+      throw new Error(`A ${active.type} job is already running in this repository.`);
+    }
+    const id = randomUUID();
+    const resultPath = jobResultPath(id);
+    const wrapped = jobRunnerCommand(cmd, args, resultPath, id);
+    let startupError: Error | undefined;
+    let jobId: string | undefined;
+    const result = this.spawner(wrapped.cmd, wrapped.args, {
+      cwd: options.cwd ?? this.repoRoot,
+      env: options.env,
+      logFile,
+      onStartupError: (error) => {
+        startupError = error;
+        if (jobId) updateJob(jobId, { status: "failed", message: `Failed to start background job: ${error.message}`, finishedAt: new Date().toISOString() });
+      },
+    });
+    if (!result.pid && !startupError) startupError = new Error("The background process did not provide a PID.");
+    const job = startJob({
+      id,
+      type,
+      repoPath: options.repoPath ?? this.repoRoot,
+      pid: result.pid,
+      logPath: logFile,
+      resultPath,
+      message,
+      ...extra,
+    });
+    jobId = job.id;
+    if (startupError) {
+      return updateJob(job.id, {
+        status: "failed",
+        message: `Failed to start background job: ${startupError.message}`,
+        finishedAt: new Date().toISOString(),
+      }) ?? job;
+    }
+    return job;
   }
 
   /** Spawns a headless launcher pipeline step (draft-prd / draft-team). */
-  private draft(action: "draft-prd" | "draft-existing-prd" | "draft-team", label: string): ControlResult {
+  private draft(action: "draft-prd" | "draft-existing-prd" | "draft-team" | "draft-skills", label: string): ControlResult {
     const { cmd, args } = engineDetachedCommand([action, "--repo", this.repoRoot]);
-    const { pid } = this.spawner(cmd, args, { cwd: this.repoRoot, logFile: this.p.logPath });
-    const job = startJob({
-      type: action,
-      repoPath: this.repoRoot,
-      pid,
-      logPath: this.p.logPath,
-      message: `${label} started in the background.`,
-    });
-    return { ok: true, message: `${label} started in the background.`, pid, job };
+    const job = this.launchJob(action, `${label} started in the background.`, cmd, args, this.p.logPath);
+    const { pid } = job;
+    return { ok: job.status !== "failed", message: job.message, pid, job };
   }
 
   draftPrd(): ControlResult {
@@ -178,12 +217,16 @@ export class RunController {
     return this.draft("draft-team", "Agent team generation");
   }
 
+  draftSkills(): ControlResult {
+    return this.draft("draft-skills", "Project-skill generation");
+  }
+
   featurePrd(prompt: string): ControlResult {
     const logFile = this.p.logPath;
     const { cmd, args } = engineDetachedCommand(["feature-prd", "--repo", this.repoRoot, "--prompt", prompt]);
-    const { pid } = this.spawner(cmd, args, { cwd: this.repoRoot, logFile });
-    const job = startJob({ type: "feature-prd", repoPath: this.repoRoot, pid, logPath: logFile, message: "Feature PRD authoring started in the background." });
-    return { ok: true, message: "Feature PRD authoring started in the background.", pid, job };
+    const job = this.launchJob("feature-prd", "Feature PRD authoring started in the background.", cmd, args, logFile);
+    const { pid } = job;
+    return { ok: job.status !== "failed", message: job.message, pid, job };
   }
 
   featureIncrement(prompt: string, run = false): ControlResult {
@@ -191,10 +234,10 @@ export class RunController {
     const args = ["feature-increment", "--repo", this.repoRoot, "--prompt", prompt];
     if (run) args.push("--run");
     const { cmd, args: fullArgs } = engineDetachedCommand(args);
-    const { pid } = this.spawner(cmd, fullArgs, { cwd: this.repoRoot, logFile });
     const message = run ? "Feature increment started in the background and will run the workflow." : "Feature increment preparation started in the background.";
-    const job = startJob({ type: "feature-increment", repoPath: this.repoRoot, pid, logPath: logFile, run, message });
-    return { ok: true, message, pid, job };
+    const job = this.launchJob("feature-increment", message, cmd, fullArgs, logFile, { run });
+    const { pid } = job;
+    return { ok: job.status !== "failed", message: job.message, pid, job };
   }
 
   bootstrap(req: { path: string; harness?: string; force?: boolean; initGit?: boolean }): ControlResult {
@@ -205,44 +248,58 @@ export class RunController {
     if (req.force) args.push("--force");
     if (req.initGit) args.push("--init-git");
     const { cmd, args: fullArgs } = engineDetachedCommand(args);
-    const { pid } = this.spawner(cmd, fullArgs, { cwd: target, logFile });
-    const job = startJob({ type: "bootstrap", repoPath: target, pid, logPath: logFile, message: "Repository bootstrap started in the background." });
+    const job = this.launchJob(
+      "bootstrap",
+      "Repository bootstrap started in the background.",
+      cmd,
+      fullArgs,
+      logFile,
+      {},
+      { cwd: target, repoPath: target },
+    );
+    const { pid } = job;
     upsertProject({ path: target });
-    return { ok: true, message: "Repository bootstrap started in the background.", pid, job };
+    return { ok: job.status !== "failed", message: job.message, pid, job };
   }
 
   compileManifest(): ControlResult {
+    refreshJobs();
+    const blocker = authoringBlocker(this.p);
+    if (blocker) return { ok: false, message: blocker };
     const { cmd, args } = engineDetachedCommand(["compile-manifest", "--repo", this.repoRoot]);
-    const { pid } = this.spawner(cmd, args, { cwd: this.repoRoot, logFile: this.p.logPath });
-    const job = startJob({
-      type: "compile-manifest",
-      repoPath: this.repoRoot,
-      pid,
-      logPath: this.p.logPath,
-      message: "Manifest compile started in the background.",
-    });
-    return { ok: true, message: "Manifest compile started in the background.", pid, job };
+    const job = this.launchJob(
+      "compile-manifest",
+      "Manifest compile started in the background.",
+      cmd,
+      args,
+      this.p.logPath,
+    );
+    const { pid } = job;
+    return { ok: job.status !== "failed", message: job.message, pid, job };
   }
 
   replay(taskId: string): ControlResult {
+    refreshJobs();
+    const blocker = authoringBlocker(this.p);
+    if (blocker) return { ok: false, message: blocker };
+    const harness = process.env.FORGE_ENGINE_HARNESS ?? loadEngineConfig(this.repoRoot)?.harness ?? inferEngineHarness(this.repoRoot);
+    assertEngineHarnessAvailable(harness);
     const engineDir = findEngineDir(this.repoRoot);
     if (!engineDir) {
       return { ok: false, message: "forge-workflow-engine not found under this repo; cannot replay." };
     }
-    const { pid } = this.spawner(
+    const replayArgs = ["run", "workflow-engine", "--", "replay", taskId, "--repo", this.repoRoot, "--harness", harness];
+    const job = this.launchJob(
+      "engine-replay",
+      `Replay of ${taskId} started in the background.`,
       "npm",
-      ["run", "workflow-engine", "--", "replay", taskId, "--repo", this.repoRoot],
-      { cwd: engineDir, logFile: this.p.logPath },
+      replayArgs,
+      this.p.logPath,
+      { taskId },
+      { cwd: engineDir },
     );
-    const job = startJob({
-      type: "engine-replay",
-      repoPath: this.repoRoot,
-      pid,
-      taskId,
-      logPath: this.p.logPath,
-      message: `Replay of ${taskId} started in the background.`,
-    });
-    return { ok: true, message: `Replay of ${taskId} started in the background.`, pid, job };
+    const { pid } = job;
+    return { ok: job.status !== "failed", message: job.message, pid, job };
   }
 
   createProject(req: CreateProjectRequest): CreateProjectResult {
@@ -268,23 +325,30 @@ export class RunController {
     if (req.concurrency && req.concurrency > 0) env.FORGE_ENGINE_CONCURRENCY = String(req.concurrency);
 
     const logFile = path.join(parentDir, `${req.name}.forge-create.log`);
-    const { cmd, args } = engineDetachedCommand(["--non-interactive"]);
-    const { pid } = this.spawner(cmd, args, { cwd: parentDir, env, logFile });
+    const launcherArgs = ["--non-interactive"];
+    if (req.authoringConfig) {
+      const config = validateAuthoringConfig(req.authoringConfig);
+      for (const stage of AUTHORING_STAGES) launcherArgs.push(`--${stage}-model`, config.models[stage] ?? "inherit");
+    }
+    const { cmd, args } = engineDetachedCommand(launcherArgs);
     const repoDir = path.join(parentDir, req.name);
+    const job = this.launchJob(
+      "create-project",
+      req.autoDraft
+        ? "Project creation started in the background (PRD, team, and project-skills authoring enabled)."
+        : "Project creation started in the background.",
+      cmd,
+      args,
+      logFile,
+      { autoDraft: req.autoDraft },
+      { cwd: parentDir, repoPath: repoDir, env },
+    );
+    const { pid } = job;
     upsertProject({ path: repoDir, name: req.name, harness: req.harness });
-    const message = req.autoDraft
-      ? "Project creation started in the background (auto-draft PRD + team enabled)."
-      : "Project creation started in the background.";
-    const job = startJob({
-      type: "create-project",
-      repoPath: repoDir,
-      pid,
-      logPath: logFile,
-      message,
-    });
+    const message = job.message;
 
     return {
-      ok: true,
+      ok: job.status !== "failed",
       message,
       repoDir,
       logFile,
@@ -336,6 +400,7 @@ export class RunController {
       case "draft-prd": return this.draftPrd();
       case "draft-existing-prd": return this.draftExistingPrd();
       case "draft-team": return this.draftTeam();
+      case "draft-skills": return this.draftSkills();
       case "feature-prd": return this.featurePrd("");
       case "feature-increment": return { ok: false, message: "feature-increment requires a prompt." };
       case "compile-manifest": return this.compileManifest();

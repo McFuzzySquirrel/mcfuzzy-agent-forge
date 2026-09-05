@@ -35,6 +35,9 @@ npm run forge-execution-adapter -- compile
 
 ## Install & Run
 
+Load [`references/engine-entry.md`](references/engine-entry.md) when you need
+the complete command matrix or headless entry-point guidance.
+
 > **Runtime requirement:** this skill is a Node package and requires `node >= 18`
 > and `npm` at *build time*. `npm install` (the "node module bootstrap") is not
 > run by `bootstrap.sh` - it is deferred to engine prep time (when you run the
@@ -54,7 +57,6 @@ npm run workflow-engine -- run
 npm run workflow-engine -- run --harness opencode
 npm run workflow-engine -- run --harness openai
 npm run workflow-engine -- run --harness stub          # dry-run, no real calls
-npm run workflow-engine -- run --harness flowforge-kernel
 npm run workflow-engine -- run --max-retries 3 --retry-delay-ms 10000
 npm run workflow-engine -- run --harness opencode --yes   # skip the pre-run gate
 npm run workflow-engine -- run --heartbeat-ms 5000        # heartbeat every 5s while a task runs
@@ -163,7 +165,7 @@ heavy task a longer budget:
 ```
 
 The pre-run summary prints the effective timeout. Adapters that shell out
-(`opencode`, `copilot`, `flowforge-kernel`) enforce it on the child process; the
+(`opencode`, `copilot`, `openai`, `stub`) enforce it on the child process; the
 `openai` adapter enforces it on the API call via `AbortController`.
 
 ### Output verification gate (strict by default)
@@ -233,6 +235,19 @@ the workflow is complete).
 detects a live run, and its resume/monitor commands reuse the last configured
 engine options (see `docs/engine-config.json`).
 
+### Immediate cancellation
+
+Programmatic callers may pass an `AbortSignal` through `EngineOptions.signal`.
+This is distinct from the graceful CLI pause/stop controls: cancellation aborts
+the active attempt, leaves the task persisted as pending, and leaves the run
+paused so a later `run` can resume it. Audit records identify cancellation with
+`task.cancelled`.
+
+Task failures may be classified as `retryable`, `configuration`, `exception`,
+`timeout`, or `cancelled`. Treat configuration and cancelled outcomes as
+explicit operational states; do not convert them into successful skips or
+silent transport fallback.
+
 ---
 
 ## Harness Adapters
@@ -245,7 +260,6 @@ The engine is harness-agnostic. Select the backend with `--harness`:
 | **GitHub Copilot CLI** | `--harness copilot` | `copilot -p "/agent <name> <task prompt>" --yolo` (native for `.github/agents/`; inline-persona fallback otherwise) |
 | **OpenAI API** | `--harness openai` | `POST /v1/chat/completions` with agent rawBody as system prompt |
 | **Stub** | `--harness stub` | Returns synthetic success; no real calls (for testing) |
-| **FlowForge Kernel CLI** | `--harness flowforge-kernel` | Hands off task execution to `flowforge run` against a compiled `.workforce` package |
 
 ### OpenCode adapter environment variables
 
@@ -284,6 +298,32 @@ Set **`FORGE_ENGINE_NATIVE_AGENT=0`** on either harness to force the
 inline-persona fallback instead of native agent selection (`--agent` /
 `/agent`).
 
+### Task capability and request contract
+
+The engine prepares one read-only `TaskAttemptRequest` per attempt and passes it
+to the selected adapter. It contains the task, agent, effective model,
+projected context, repository, attempt metadata, and execution budget; mutable
+workflow state is never passed to an adapter.
+
+Manifest tasks may declare:
+
+```json
+{
+  "requiredCapabilities": ["text"]
+}
+```
+
+Use `["text"]` for tasks that do not need repository tools and
+`["repository-tools"]` for tasks that edit or inspect the repository. A missing
+or empty declaration is conservatively treated as `["repository-tools"]` for
+legacy manifests. OpenAI is text-only and rejects repository-tool tasks before
+dispatch; there is no silent execution fallback.
+
+Model precedence is `task.model`, then agent model, then the transport default.
+Adapters expose readonly capabilities and optional run-scoped `prepare` and
+`cleanup` hooks; cleanup runs even when an attempt, replay, or server startup
+fails.
+
 ### OpenAI adapter environment variables
 
 | Variable | Default | Purpose |
@@ -298,18 +338,6 @@ inline-persona fallback instead of native agent selection (`--agent` /
 |---|---|---|
 | `STUB_FAIL_TASK_IDS` | *(empty)* | Comma-separated task IDs to fail synthetically |
 | `STUB_DELAY_MS` | `0` | Simulated latency per task in milliseconds |
-
-### FlowForge kernel adapter environment variables
-
-| Variable | Default | Purpose |
-|---|---|---|
-| `FLOWFORGE_KERNEL_BIN` | `flowforge` | Path to the FlowForge CLI |
-| `FLOWFORGE_WORKFORCE_PATH` | *(auto-detected from `docs/KERNEL-BRIDGE.json`)* | Optional override for the compiled workforce package directory |
-| `FLOWFORGE_WORKFLOW_ID` | `forge-build` | Workflow id inside the workforce package |
-| `FLOWFORGE_KERNEL_MOCK` | `false` | When `true`, append `--mock` to the kernel command |
-| `FLOWFORGE_KERNEL_EXTRA_FLAGS` | *(empty)* | Extra flags appended to the kernel command |
-| `FLOWFORGE_KERNEL_COMMAND_ARGS_JSON` | *(empty)* | Optional JSON array of command args using `{repoRoot}`, `{workforce}`, `{workflow}`, `{taskId}`, `{agent}` placeholders |
-| `FLOWFORGE_VALIDATE_WORKFORCE` | `true` | Run workforce validation gate before first task dispatch |
 
 ---
 
@@ -400,13 +428,6 @@ forge-launcher resume --repo <repo>                                      # re-en
 ```
 
 This gives the same project two mutually exclusive execution modes for a given run: interactive/prompt-driven (via `@project-orchestrator` in a chat harness) or autonomous/harness-driven (via this engine, from the terminal or `@workflow-orchestrator`).
-
-For FlowForge-kernel execution, compile a workforce package first:
-
-```bash
-cd .agents/skills/forge-workforce-compiler && npm install && npm run forge-workforce-compiler -- compile
-cd .agents/skills/forge-workflow-engine   && npm install && npm run workflow-engine -- run --harness flowforge-kernel
-```
 
 ---
 
@@ -521,4 +542,3 @@ Before reporting a run complete:
 - Pattern deep-dive: [docs/artifact-store-deep-dive.md](../../../../docs/artifact-store-deep-dive.md)
 - Implementation: [`scripts/artifacts.ts`](scripts/artifacts.ts)
 - ADR-014: [Dynamic Workflow Orchestration](../../../../docs/adr/014-dynamic-workflow-orchestration.md)
-- ADR-016: [Forge Workforce Compiler and Kernel Handoff](../../../../docs/adr/016-forge-workforce-compiler-and-kernel-handoff.md)

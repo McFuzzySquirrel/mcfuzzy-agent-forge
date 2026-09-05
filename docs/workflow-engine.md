@@ -10,7 +10,7 @@
 
 1. Reads `docs/EXECUTION-MANIFEST.json` (the compiled build contract).
 2. Builds a task DAG and walks it phase-by-phase, task-by-task.
-3. Dispatches each task to a **harness adapter** (`opencode`, `copilot`, `openai`, `stub`, or `flowforge-kernel`).
+3. Dispatches each task to a **native harness adapter** (`opencode`, `copilot`, `openai`, or `stub`).
 4. Persists state after every transition, so a run can be resumed, replayed, or audited at any time.
 
 It can now run in two execution modes:
@@ -28,7 +28,7 @@ It is the execution alternative to the prompt-driven flows: start it from the te
 
 - A compiled manifest at `docs/EXECUTION-MANIFEST.json` (produced by `forge-execution-adapter`).
 - Agent `.md` files under the harness agents directory (`.opencode/agents/`, `.claude/agents/`, `.github/agents/`, or `.agents/agents/`).
-- A configured harness - the `opencode` CLI in `$PATH` (default), `copilot`, an `OPENAI_API_KEY`, or the FlowForge kernel.
+- A configured harness - the `opencode` CLI in `$PATH` (default), `copilot`, an `OPENAI_API_KEY`, or the `stub` adapter for local checks.
 - `node >= 18` and `npm` at *build time* (the engine's `node_modules/` is installed on first run, not committed).
 
 If the manifest does not exist yet, compile it first:
@@ -46,6 +46,18 @@ compiles the features in dependency-graph order into feature-tagged phases
 duplicate file owners, orphan agents) and writes
 `docs/agent-responsibility-matrix.md` - the engine's pre-run summary prints the
 source layout, feature order, and matrix path.
+
+The adapter and engine share one selected harness root. An explicit CLI
+selection wins; otherwise `engine-run` prefers the `harnessRoot` recorded in
+the compiled manifest before falling back to discovery. Automatic discovery
+prefers generated agent files, then Forge tooling agents, then agent
+directories, then skills directories. Frontmatter is parsed structurally, and
+the selected root is propagated instead of mixing duplicate agent identities
+across harnesses.
+
+If the manifest's `harnessRoot` is stale, moved, or no longer contains the
+declared owners, update the harness selection and recompile the manifest
+explicitly. The engine fails rather than silently switching roots.
 
 ---
 
@@ -184,7 +196,6 @@ The engine is harness-agnostic. Select the backend with `--harness`:
 | **GitHub Copilot CLI** | `--harness copilot` | `copilot -p "<agent body + task prompt>" --yolo` |
 | **OpenAI API** | `--harness openai` | `POST /v1/chat/completions` with the agent `rawBody` as the system prompt |
 | **Stub** | `--harness stub` | Returns synthetic success; no real calls (for testing) |
-| **FlowForge Kernel CLI** | `--harness flowforge-kernel` | Hands off to `flowforge run` against a compiled `.workforce` package |
 
 The `copilot` adapter inlines the agent persona into the prompt (there is no
 `--system-prompt` flag on `copilot -p`). The `opencode` adapter selects the forge
@@ -218,7 +229,7 @@ npm run workflow-engine -- viz     [--repo <path>] [--port <n>] [--no-open]
 | Flag | Default | Purpose |
 |---|---|---|
 | `--repo <path>` | detected (walks up for `.git`) | Repository root |
-| `--harness <name>` | `opencode` | Backend: `opencode`, `copilot`, `openai`, `stub`, `flowforge-kernel` |
+| `--harness <name>` | `opencode` | Backend: `opencode`, `copilot`, `openai`, or `stub` |
 | `--max-retries <n>` | `2` | Attempts per task before it is marked `failed` |
 | `--retry-delay-ms <ms>` | `5000` | Delay between retries |
 | `--heartbeat-ms <ms>` | `60000` | Heartbeat interval while a task runs; `0` disables |
@@ -350,9 +361,12 @@ FORGE_ENGINE_TASK_TIMEOUT_MS=1500000 npm run workflow-engine -- run
 
 Precedence: a task's `timeoutMs` field in `docs/EXECUTION-MANIFEST.json`
 overrides the engine-wide value, so one heavy task can get a longer budget
-without affecting the rest. Adapters that shell out (`opencode`, `copilot`,
-`flowforge-kernel`) enforce it on the child process; `openai` enforces it on the
-API call via `AbortController`. See [ADR-022](adr/022-task-granularity-and-configurable-timeout.md).
+without affecting the rest. Adapters that shell out (`opencode`, `copilot`) enforce it on an owned process
+group/tree (POSIX process groups, Windows recursive `taskkill`); `openai`
+enforces it on the API call via `AbortController`. Cleanup and inherited-pipe
+settlement are bounded, and incomplete cleanup is surfaced as an exception
+rather than retried as an ordinary task failure. See
+[ADR-022](adr/022-task-granularity-and-configurable-timeout.md).
 
 ### Execution waves and concurrency
 By default the engine runs tasks **sequentially** (concurrency `1`). With
@@ -384,15 +398,45 @@ runtime behavior explicitly.
 
 ## How a task executes
 
-1. Look up the owning agent by name (unmatched tasks are **skipped**, not failed).
+1. Validate the manifest owner and selected harness discovery before dispatch.
+   Missing owners and discovery errors fail the run; they are not successful skips.
 2. Project input artifacts into a compact context block (see *Artifact pattern* below).
-3. Mark the task `running`, then invoke the harness - retrying up to `--max-retries` on failure.
+3. Mark the task `running` and persist state, then invoke the harness - retrying up to `--max-retries` on failure.
 4. On success, record the task `complete` (and synthesize a work artifact if `produces` is declared).
-5. Persist the running snapshot before the harness call, then save the merged `WORKFLOW-STATE.json` and sync `PROGRESS.md` after each task wave and at terminal run states.
+5. Persist the authoritative state, sync `PROGRESS.md`, and finish task commit bookkeeping before starting the next task.
 
-Tasks are currently executed one at a time even though the engine still reasons in ready-frontier waves. A failed task blocks downstream tasks in that phase, and the run stops with `status: "failed"`. A **skipped** task is treated as done for dependency purposes, so it never blocks the next phase.
+Tasks are currently executed one at a time even though the engine still reasons in ready-frontier waves. A failed task blocks downstream tasks in that phase, and the run stops with `status: "failed"`. Intentional skips remain explicit state transitions and are not used to hide owner or discovery failures.
 
-> **Owner assignment.** `forge-execution-adapter compile` guarantees every task has an owner: if no agent confidently matches a task, it falls back to an `*orchestrator`-named agent (else the first agent) and records a warning. Unassigned tasks are therefore rare and only arise from a hand-edited manifest - in which case the engine skips them safely rather than deadlocking.
+> **Owner assignment.** `forge-execution-adapter compile` should produce owners,
+> but the engine validates the selected `manifest.harnessRoot` and discovered
+> owner files again before dispatch. A hand-edited or stale manifest therefore
+> fails clearly instead of invoking an unrelated agent or releasing dependents.
+
+### Capability requirements and request contract
+
+Each task may declare `requiredCapabilities` as `["text"]` or
+`["repository-tools"]`. Omitted or empty capabilities conservatively mean
+`["repository-tools"]`, preserving safe behavior for legacy manifests. Declare
+`["text"]` only for tasks whose complete result is textual and does not require
+repository access.
+
+Before transport-specific invocation, the engine prepares a common read-only
+`TaskAttemptRequest` containing the agent, task, effective model, projected
+context, repository root, attempt metadata, and execution budget. Model
+precedence is task model, then agent model, then transport default; agent
+fallback metadata is not used as an execution fallback. The adapter checks the
+task capabilities against the selected harness before making a transport call.
+The OpenAI adapter is text-only and cannot dispatch legacy or
+repository-capable tasks.
+
+Task records classify terminal failures as `retryable`, `configuration`,
+`exception`, `timeout`, or `cancelled`. Cancellation is also recorded as a
+`task.cancelled` audit event. Ordinary returned failures, retryable failures,
+timeouts, and verification failures retry up to the configured limit;
+configuration, exception, and cancellation failures are terminal. Immediate
+`AbortSignal` cancellation leaves the task pending and the run paused for
+resume; this is distinct from graceful CLI `pause` and `stop`, which finish the
+in-flight task.
 
 ---
 
@@ -487,6 +531,14 @@ receives - the percentage is just an estimate.
   startup), so a live detached run stops even mid-task - still after the current
   task completes. Ctrl+C / SIGTERM on the engine process triggers the same
   graceful stop via an in-process flag.
+- **Immediate cancellation** through the engine's `AbortSignal` is separate
+  from those graceful controls. It records the cancellation, preserves the
+  current task as pending, pauses the run, and allows a later `run` to resume
+  without treating the interrupted task as complete.
+- During replay, the pending reset is persisted before preparation. If
+  cancellation is already active or arrives during preparation/invocation,
+  replay skips or stops dispatch, finalizes `paused` plus the `run.paused`
+  audit event, and retains the task as pending for later resume.
 
 To start fresh (e.g. after recompiling the manifest), delete `docs/WORKFLOW-STATE.json` first.
 
@@ -518,7 +570,6 @@ To start fresh (e.g. after recompiling the manifest), delete `docs/WORKFLOW-STAT
 | `OPENAI_MODEL` | `gpt-4o` | Default model (overridden by agent `model:` frontmatter) |
 | `STUB_FAIL_TASK_IDS` | *(empty)* | Comma-separated task IDs to fail synthetically |
 | `STUB_DELAY_MS` | `0` | Simulated latency per task for the stub adapter |
-| `FLOWFORGE_KERNEL_BIN` / `FLOWFORGE_WORKFORCE_PATH` / `FLOWFORGE_WORKFLOW_ID` / `FLOWFORGE_KERNEL_MOCK` / `FLOWFORGE_KERNEL_EXTRA_FLAGS` / `FLOWFORGE_KERNEL_COMMAND_ARGS_JSON` / `FLOWFORGE_VALIDATE_WORKFORCE` | - | FlowForge kernel hand-off |
 
 ---
 

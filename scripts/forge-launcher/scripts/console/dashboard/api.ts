@@ -23,6 +23,8 @@ import type {
   TaskRow,
   TeamIndex,
   ModelInventory,
+  AuthoringConfig,
+  AuthoringInventory,
   TimeoutUpdateResult,
   UploadResult,
   WorkflowState,
@@ -92,6 +94,19 @@ export const api = {
   },
   modelInventory(): Promise<ModelInventory> {
     return request<ModelInventory>("/api/model-inventory");
+  },
+  authoringConfig(): Promise<AuthoringConfig> {
+    return request<AuthoringConfig>("/api/authoring-config");
+  },
+  saveAuthoringConfig(config: AuthoringConfig): Promise<{ ok: boolean; config: AuthoringConfig; message: string }> {
+    return post("/api/authoring-config", config);
+  },
+  authoringInventory(runner?: string): Promise<AuthoringInventory> {
+    const query = runner ? `?runner=${encodeURIComponent(runner)}` : "";
+    return request<AuthoringInventory>(`/api/authoring-inventory${query}`);
+  },
+  refreshAuthoringInventory(runner: string): Promise<AuthoringInventory> {
+    return post<AuthoringInventory>("/api/authoring-inventory/refresh", { runner });
   },
   setModelOverride(agent: string, primary?: string, fallback?: string): Promise<{ ok: boolean; message: string }> {
     return post("/api/model-plan/override", { agent, primary, fallback });

@@ -7,7 +7,7 @@
 
 > MyForge turns an idea into a reviewed PRD, a specialist agent team, and an autonomous build.
 
-**Latest: v3.51** — see [docs/updates.md](docs/updates.md) for release notes.
+**Latest: v3.52** — see [docs/updates.md](docs/updates.md) for release notes.
 
 MyForge is a PRD-first workflow for turning product requirements into working software. It combines structured planning, agent-based implementation, and execution orchestration in one path so a project can move from concept to build without losing the review checkpoints that matter.
 
@@ -78,7 +78,8 @@ For the manual prompting flow and the CLI’s expected prompts, see [docs/prompt
 
 - `forge-launcher` - the entry point for onboarding, authoring, and launching builds
 - `forge-workflow-engine` - the execution engine for orchestration, checkpoints, replay, and state
-- `forge-execution-adapter` and `forge-workforce-compiler` - the adapters and packaging layer that compile manifests and hand off work
+- `forge-execution-adapter` - compiles the authored plan into the execution manifest consumed by the workflow engine
+- `forge-workflow-engine` - executes the manifest, owns retries and durable run state, and dispatches through native harness adapters
 - Forge Console - a local web UI for authoring, monitoring, and controlling runs
 
 ## Documentation
@@ -89,7 +90,6 @@ For the manual prompting flow and the CLI’s expected prompts, see [docs/prompt
 - [docs/workflow-engine.md](docs/workflow-engine.md)
 - [docs/workflow-engine-deep-dive.md](docs/workflow-engine-deep-dive.md)
 - [docs/artifact-store-deep-dive.md](docs/artifact-store-deep-dive.md)
-- [docs/workforce-compiler-deep-dive.md](docs/workforce-compiler-deep-dive.md)
 - [docs/THE-STORY.md](docs/THE-STORY.md)
 - [docs/THE-STORY-PART-2.md](docs/THE-STORY-PART-2.md)
 - [docs/THE-STORY-PART-3.md](docs/THE-STORY-PART-3.md)

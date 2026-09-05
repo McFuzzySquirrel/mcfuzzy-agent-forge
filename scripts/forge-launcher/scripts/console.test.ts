@@ -15,6 +15,14 @@ function nextPort(): number {
   return 44123 + (portCounter++ % 50);
 }
 
+function moveFixtureToGithub(repo: string): void {
+  renameSync(join(repo, ".agents"), join(repo, ".github"));
+  const file = join(repo, "docs", "EXECUTION-MANIFEST.json");
+  const manifest = JSON.parse(readFileSync(file, "utf8"));
+  manifest.harnessRoot = ".github";
+  writeFileSync(file, JSON.stringify(manifest));
+}
+
 function makeRepo(): string {
   const root = mkdtempSync(join(tmpdir(), "forge-console-"));
   const docs = join(root, "docs");
@@ -381,7 +389,7 @@ test("run and replay spawn detached processes via the injected spawner", async (
 
 test("run infers the copilot engine harness from a GitHub harness root", async () => {
   await withServer(async (server, repo, spawned) => {
-    renameSync(join(repo, ".agents"), join(repo, ".github"));
+    moveFixtureToGithub(repo);
 
     const run = await postJson(`${server.url}/api/control`, { action: "run" }, { "X-Forge-Token": server.token });
     assert.equal((run.body as { ok: boolean }).ok, true);
@@ -430,7 +438,7 @@ test("set all task timeouts and update the engine default", async () => {
 
 test("setting the engine default timeout persists the copilot harness on a GitHub repo", async () => {
   await withServer(async (server, repo) => {
-    renameSync(join(repo, ".agents"), join(repo, ".github"));
+    moveFixtureToGithub(repo);
 
     const res = await postJson(`${server.url}/api/tasks/timeout`, { timeoutMs: 900000 }, { "X-Forge-Token": server.token });
     assert.equal((res.body as { ok: boolean }).ok, true);
@@ -819,7 +827,7 @@ test("launch-cli chooses copilot for a GitHub harness and reports the manual fal
   const prevHome = process.env.FORGE_HOME;
   process.env.FORGE_HOME = home;
   const repo = makeRepo();
-  renameSync(join(repo, ".agents"), join(repo, ".github"));
+  moveFixtureToGithub(repo);
   const calls: Array<{ cli: string; dir: string; args: string[] }> = [];
   const server = await startConsoleServer({
     repoRoot: repo,

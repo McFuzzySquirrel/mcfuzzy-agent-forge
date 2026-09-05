@@ -15,8 +15,41 @@
 5. **Idea capture** -prompts for your project idea and saves it to `docs/IDEA.md`.
 6. **PRD & research** *(optional, recommended)* -add an existing PRD (`docs/PRD.md`) and/or research / seed documents (`docs/research/`). If skipped, the pipeline queues `forge-auto-build-prd` to build a reviewed PRD from the idea first.
 7. **Commit + push** -commits the bootstrapped forge, idea file, PRD, and any research docs.
-8. **Auto-build launch** -offers the optional **auto-draft** flow: generate the PRD (`forge-auto-build-prd`) and/or the agent team (`forge-build-agent-team`) non-interactively, with review boundaries in between, then run the workflow engine now (detached), print its command to run later, or build manually. It queues `forge-auto-build` when a PRD was captured (it generates the agent team then executes the build), or `forge-auto-build-prd` when it was not (it produces the reviewed PRD first). Opens Copilot CLI, opencode, or Claude Code in a separate terminal when available, with clear fallback commands if not.
+8. **Auto-build launch** - offers the optional **auto-draft** flow: generate the
+   PRD, agent team, and project skills as separate reviewable stages, compile
+   the manifest, then run the workflow engine now (detached), print its command
+   to run later, or build manually. Opens Copilot CLI, opencode, or Claude Code
+   in a separate terminal when available, with clear fallback commands if not.
 9. **Summary** -prints the repo path, harness, and next steps.
+
+---
+
+## Harness-root and metadata discovery
+
+The launcher resolves one harness root for an invocation and passes that
+selection through authoring, team validation, manifest compilation, and Console
+team/report/model-override views. For engine-run and Console operations, a
+`harnessRoot` recorded in the compiled manifest takes precedence over automatic
+detection. An explicit authoring CLI root override remains higher priority.
+Discovery uses the structured frontmatter parser and follows this order when no
+explicit or manifest-selected root applies:
+
+1. An explicitly selected harness root, when supplied.
+2. A root containing generated project agent files.
+3. A root containing Forge tooling agents.
+4. An agents directory.
+5. A skills directory.
+
+The first matching fallback is selected deterministically. The Console does not
+merge duplicate agent identities from different roots: team, report, and model
+override operations target only the selected harness. This keeps a skills-only
+directory from masking a generated team elsewhere and prevents cross-harness
+edits.
+
+If a manifest points at a stale or moved harness root, update the selection and
+recompile the manifest explicitly. The launcher and Console do not silently
+switch to another root, because doing so could edit the wrong team or model
+configuration.
 
 ---
 
@@ -74,7 +107,18 @@ npx forge-launcher@beta engine-run [--repo <path>] [--harness <h>] [--concurrenc
                               [--auto-commit|--no-auto-commit] [--commit-message-template <tmpl>]
 npx forge-launcher@beta resume [--repo <path>] [--non-interactive] [--dry-run]
 npx forge-launcher@beta console [--repo <path>] [--port <n>] [--no-open]
+npx forge-launcher@beta draft-prd --repo <path> [model flags]
+npx forge-launcher@beta draft-existing-prd --repo <path> [model flags]
+npx forge-launcher@beta draft-team --repo <path> [model flags]
 npx forge-launcher@beta feature-prd --repo <path> --prompt "Describe the feature"
+npx forge-launcher@beta feature-increment --repo <path> --prompt "Describe the increment"
+npx forge-launcher@beta compile-manifest --repo <path>
+npx forge-launcher@beta draft-skills [--repo <path>] [--prd-model <id|inherit>]
+                              [--team-model <id|inherit>] [--skills-model <id|inherit>]
+npx forge-launcher@beta authoring-config [--repo <path>] [--prd-model <id|inherit>]
+                              [--team-model <id|inherit>] [--skills-model <id|inherit>]
+npx forge-launcher@beta authoring-models --repo <path>
+                              --runner <copilot|opencode> [--refresh]
 ```
 
 When installed globally (`npm install -g forge-launcher@beta`), drop the `npx`.
@@ -121,14 +165,63 @@ check `latest`. Disable it with `--no-update-check` or
 
 ### Draft (auto-author) mode
 
-The optional **auto-draft** flow generates the PRD and/or the agent team
-non-interactively (best answers, every unknown recorded as an Open Question),
-stopping at review boundaries before any build execution. Use `--draft` to
-pre-answer "yes" to both auto-draft prompts interactively:
+The optional **auto-draft** flow generates the applicable PRD, team, and project
+skills stages non-interactively (best answers, every unknown recorded as an Open
+Question), then compiles the native manifest. Interactive runs stop at review
+boundaries before build execution. `--headless` additionally starts the native
+engine after preparation. A supplied PRD skips PRD drafting. Use `--draft` to
+pre-answer "yes" to the interactive auto-draft prompts:
 
 ```bash
 forge-launcher --draft
 ```
+
+### Independent authoring models
+
+The authoring pipeline has three model-selectable stages: `prd`, `team`, and
+`skills`. Project settings are stored in `docs/authoring-config.json`:
+
+```json
+{
+  "version": 1,
+  "models": {
+    "prd": "provider/model-id",
+    "team": "provider/model-id",
+    "skills": "provider/model-id"
+  }
+}
+```
+
+Each model is optional. Omit a key, or set it to `"inherit"`, to use the
+runner's default without inventing a model ID. Saving validates this schema but
+does not probe live runner availability; unavailable saved choices are
+preserved until a stage is invoked. Environment overrides are
+`FORGE_PRD_MODEL`, `FORGE_TEAM_MODEL`, and `FORGE_SKILLS_MODEL`. The precedence
+is invocation override, stage environment variable, saved project setting, then
+runner inheritance. Explicit unavailable or incompatible selections fail
+clearly; they are not silently substituted.
+
+The separate project-skill stage consumes `docs/SKILL-CANDIDATES.json` and
+records its result in `docs/authoring-state.json`. Each stage records status,
+input fingerprints, outputs, timestamps, errors, and invocation provenance
+(runner, requested/effective model, source, and the invocation argv/skill).
+A valid
+`no-skills-required` outcome is successful; a missing or failed stage is not.
+The team-to-skills candidate handoff is immutable for the receiving stage:
+missing required handoff data fails closed, while an empty or all-`omit`
+candidate set is a valid explicit no-skills result. Authoring cannot write or
+replace compiler- or engine-owned artifacts such as the execution manifest and
+workflow progress.
+Authoring readiness is an active-stage transaction gate: legacy projects with
+no authoring markers remain eligible, but readiness must still be combined with
+the real PRD, team, and manifest prerequisites. Harness-root selection uses the
+manifest pin before the shared fallback selector.
+
+All authoring entry points accept the three stage model overrides:
+`--prd-model`, `--team-model`, and `--skills-model`. Use `inherit` to clear an
+override and resume runner inheritance. `authoring-models` refreshes or reads
+the runner inventory; explicit selections are checked against that inventory
+and fail clearly when unavailable or incompatible.
 
 In non-interactive runs, set `FORGE_AUTO_DRAFT=1` instead:
 
@@ -168,6 +261,9 @@ By default Step 8 opens an interactive CLI (`opencode`, `claude`, `copilot`) in 
 separate terminal and prints the skill command to run there. With `--headless`
 the launcher instead drives the queued skill directly from the terminal via
 `opencode run --auto` or `copilot -p --yolo`, so you never enter a chat session.
+After the authoring stages, headless auto-draft compiles the native manifest and
+advances the detached engine build. Engine startup failures are reported
+through the launcher instead of being mistaken for a successful handoff.
 
 The workflow engine executes **outside** any CLI session: the auto-build
 engine path starts it **detached** (`child_process.spawn`, log:
@@ -211,7 +307,7 @@ default assumption in the PRD). Use `FORGE_RUN_WITH=copilot` to emit
 `FORGE_WORKFLOW_ENGINE=1` to append `GO --workflow-engine` so the build executes
 through the workflow engine. On that path the engine runs **detached** (not as a
 blocking child of the session) and the per-task harness is selected with
-`FORGE_ENGINE_HARNESS=opencode|copilot|openai|stub|flowforge-kernel`.
+`FORGE_ENGINE_HARNESS=opencode|copilot|openai|stub`.
 
 > **Headless + engine:** the engine's own pre-run gate is interactive-only. It
 > auto-skips when stdin is not a TTY, and `--yes` (or `FORGE_ENGINE_YES=1`)
@@ -233,7 +329,7 @@ blocking child of the session) and the per-task harness is selected with
 ### Resume (pick up where you left off)
 
 Reviews take time. `forge-launcher resume` re-enters an existing project at its
-current stage (idea → PRD → team → build) as a full interactive wizard, so you
+current stage (idea → PRD → team → project skills → manifest → build) as a full interactive wizard, so you
 can walk away at any review boundary and come back later:
 
 ```bash
@@ -248,14 +344,16 @@ links to `docs/IDEA.md`, `docs/PRD.md`, the agent/skills dirs, and
 - Nothing captured yet → capture the idea / open the harness for `forge-auto-build-prd`.
 - Idea, no PRD → auto-draft the PRD headlessly, or open the harness to draft it manually.
 - PRD, no team → auto-draft the agent team headlessly, or open the harness for `forge-build-agent-team`.
-- Team, no manifest → start the engine (`engine-run`), print the command, or open the harness for the orchestrator.
+- Team, skills incomplete → run `draft-skills` or open the harness for `forge-build-project-skills`.
+- Skills ready, no manifest → compile the manifest with `forge-execution-adapter`.
+- Manifest ready → start the engine (`engine-run`), print the command, or open the harness for the orchestrator.
 - Manifest + engine state → report the run status (running / paused / complete / failed, task counts, failed tasks, blockers) and offer to **resume the engine run**, tail the logs, or open the harness CLI. A `running` run warns against starting a second one and offers **"Stop the engine after the current task"** (writes `docs/engine-control.json` and SIGTERMs the PID in `docs/engine.pid` - the engine finishes the in-flight task, saves state as `paused`, and exits; resume with `engine-run`). A `complete` run points you at monitoring rather than resuming.
 
-The same "where am I / what's next" checks make the launcher's queued in-harness
-command **conditional**: when a team already exists it queues
-`/forge-orchestrate-build` (project-orchestrator); when no team exists yet it
-keeps queueing `/forge-auto-build` (which generates the team in-chat). Headless
-runs keep using `/forge-auto-build` as the terminal fast-path.
+The same "where am I / what's next" checks make each queued handoff conditional
+on the current authoring stage. A project with a valid PRD, team, skills, and
+compiled manifest is sent to the native engine path; incomplete stages resume
+at their specific authoring command rather than through a monolithic auto-build
+prompt.
 
 ### Forge Console (local web UI)
 
@@ -280,7 +378,7 @@ Full reference (views, the Continue pipeline, the project registry, the
 ### Stop here and resume later
 
 After each launcher checkpoint - idea captured, PRD added/drafted, team
-generated, execution plan drafted, build configured - the interactive flow asks
+generated, project skills generated, manifest compiled, build configured - the interactive flow asks
 **"Stop here and resume later?"** and, when you say yes, prints the resume
 command and stops at the "where to pick up" summary:
 
@@ -292,22 +390,17 @@ command and stops at the "where to pick up" summary:
 The repo keeps everything it has so far (committed per stage), so coming back is
 just re-running that command. Non-interactive runs skip the prompts.
 
-### Post-team plan & validate step
+### Native compile step
 
-After the agent team is generated, the launcher runs project-orchestrator (via
-`forge-orchestrate-build`, headless) with the prompt-playbook 5a prompt to
-produce the **execution plan** in `docs/PROGRESS.md`:
+After the PRD, team, and project-skill stages are complete, the launcher runs
+the native execution adapter to compile and validate
+`docs/EXECUTION-MANIFEST.json`. The workflow engine owns runtime progress,
+verification, retries, and durable `docs/PROGRESS.md` synchronization; an LLM
+does not author the engine progress file as a separate plan-and-validate step.
+Compilation failure blocks the engine decision and reports the adapter
+diagnostics for correction or retry.
 
-- The monolithic or feature-based 5a prompt is selected from the repo layout
-  (`docs/PRD.md` vs. `docs/product-vision.md` + `docs/features/`).
-- The plan is committed (`docs: add execution plan`) and the launcher stops for
-  review - a "Stop here and resume later?" checkpoint - before offering the
-  engine build.
-- If the headless run fails or writes no plan document, the launcher prints the
-  manual `@project-orchestrator` command (and offers to open the harness CLI)
-  instead.
-
-### Auto-draft (optional): idea → PRD → team, with review boundaries
+### Auto-draft (optional): idea → PRD → team → project skills, with review boundaries
 
 The **auto-draft** option lets you run the authoring stages non-interactively
 ("best answers provided", every unknown recorded as an Open Question with a
@@ -322,21 +415,24 @@ default assumption) and still keep human review between stages:
    interviewed/refine interactively, or stop.
 2. **PRD → team.** With a PRD present, Step 8 asks *"Generate the agent team
    from the PRD automatically now?"*. Answering yes runs `forge-build-agent-team`
-   headless, producing the agent + skill files under the harness directory,
-   committed as `feat: generate auto-drafted agent team`. When a decomposed
+   headless,    producing the agent files and ownership metadata, committed as
+   `feat: generate auto-drafted agent team`. When a decomposed
     layout exists (`docs/product-vision.md` + `docs/features/*.md`), the team is
     built **from the feature documents** (Vision + Features mode); otherwise it is
     built from the monolithic `docs/PRD.md`. Review them, then:
-    - run the workflow-engine build **now** (detached via
-      `forge-launcher engine-run`),
-    - **print the engine command** to run later, or
-    - launch the CLI for a manual build.
+3. **Team → project skills.** Generate or review project-specific skills in a
+   separate invocation. A failed or missing skills result is reported as a
+   blocked stage, not silently treated as a successful empty set.
+4. **Skills → manifest → build.** Compile the manifest with
+   `forge-execution-adapter`, review it, then run the workflow engine now
+   (detached), print its command to run later, or launch the CLI for a manual
+   build.
 
 Choosing *run now* or *print the command* opens the **engine configuration**
 step - a set of defaults you can press Enter through:
 
 - **Per-task harness** - `opencode` (default), `copilot`, `openai`, `stub`
-  (offline testing), or `flowforge-kernel`.
+  (offline testing).
 - **Task granularity** - `fine` (default: sub-bullets + oversized-bullet
   splits) or `coarse` (one task per PRD bullet). Choosing a granularity
   recompiles `docs/EXECUTION-MANIFEST.json` at that granularity.
@@ -584,11 +680,12 @@ If you skip this step, the pipeline queues `forge-auto-build-prd`, which builds 
 ### Step 8 -Launch auto-build
 
 Step 8 first offers the optional **auto-draft** stages. When no PRD was captured,
-it asks whether to generate one non-interactively; when a PRD exists, it asks
-whether to generate the agent team non-interactively (from the decomposed
-vision + features when present, otherwise from `docs/PRD.md`). Each stage commits
-its artifacts and stops for review before the next step, then asks how to run
-the workflow engine - now (detached), later (prints the command), or manually:
+it asks whether to generate one non-interactively; after review it generates the
+agent team and then project skills as separate stages (from the decomposed
+vision + features when present, otherwise from `docs/PRD.md`). Each stage
+commits its artifacts and stops for review before the next step. The manifest is
+then compiled and the launcher asks how to run the workflow engine - now
+(detached), later (prints the command), or manually:
 
 ```
 Generate the PRD from docs/IDEA.md automatically now (headless, auto-proceed with best answers)? [y/N]: y
@@ -605,9 +702,12 @@ Generate the agent team from the PRD automatically now (headless)? [y/N]: y
   ✔  Agent team generated.
   Review the generated team before building:
     - Agents : /home/user/projects/my-cool-app/.agents/agents/
-    - Skills : /home/user/projects/my-cool-app/.agents/skills/
-  The agent team is ready. You can run the build now through the
-  workflow engine, run it later, or build manually.
+    - Candidates : /home/user/projects/my-cool-app/docs/SKILL-CANDIDATES.json
+Generate project skills from the reviewed team automatically now (headless)? [y/N]: y
+  ✔  Project skills generated.
+Compile the execution manifest now? [Y/n]: y
+  ✔  Execution manifest compiled.
+  The project is ready to run through the workflow engine, run it later, or build manually.
     1) Run the workflow-engine build now (detached)
     2) Print the engine command to run later
     3) Skip - I will launch the CLI / build manually
@@ -756,8 +856,8 @@ reflect the running build (monitor + resume) rather than the manual
 | `FORGE_PRD_FILE` | 6 | Path to an existing PRD file to copy in as `docs/PRD.md`. Accepts relative, `~`/`~/...`, and `$VAR`/`${VAR}` paths (e.g. `~/docs/prd.md`) |
 | `FORGE_RESEARCH_FILES` | 6 | Comma-separated list of paths to research/seed documents copied to `docs/research/`. Each path accepts relative, `~`/`~/...`, and `$VAR`/`${VAR}` forms |
 | `FORGE_YN_DEFAULT` | 3, 7 | Default answer for yes/no prompts (`y` or `n`) |
-| `FORGE_AUTO_DRAFT` | 8 | `1` to run the applicable auto-draft stages (PRD and/or agent team) non-interactively |
-| `FORGE_RUN_WITH` | 8 | Headless runner: `opencode`, `copilot`, or `stub` (default: `copilot` for the GitHub harness, `opencode` otherwise). `stub` runs the auto-draft stages offline against canned artifacts - combine with `FORGE_STUB_NOOP=1` to test the failure path |
+| `FORGE_AUTO_DRAFT` | 8 | `1` to run PRD → team → project skills → native manifest compilation non-interactively |
+| `FORGE_RUN_WITH` | 8 | Authoring runner: `opencode`, `copilot`, or `stub` (default: `copilot` for the GitHub harness, `opencode` otherwise). `stub` runs offline fixtures - combine with `FORGE_STUB_NOOP=1` to test failure diagnostics |
 | `FORGE_STUB_NOOP` | 8 | `1` makes the stub skill runner (`FORGE_RUN_WITH=stub`) write nothing, exercising the auto-draft failure diagnostics |
 | `FORGE_LAUNCHER_DEBUG` | 8 | `1` (or the `--debug` flag) prints the skill-run log tail after every headless skill run; also passes `--print-logs` to `opencode` |
  | `FORGE_ENGINE_CONCURRENCY` | 8 | Persisted engine concurrency preference (default `1`); shown in summaries and config even though current repo-task execution remains serialized |
@@ -767,7 +867,7 @@ reflect the running build (monitor + resume) rather than the manual
  | `FORGE_ENGINE_RETRY_DELAY_MS` | 8 | Delay between task retries in ms (default `5000`) |
  | `FORGE_ENGINE_HEARTBEAT_MS` | 8 | Engine heartbeat interval in ms while a task runs (default `60000`; `0` disables) |
  | `FORGE_WORKFLOW_ENGINE` | 8 | `1` to append `GO --workflow-engine` to the queued headless command (build executes via the workflow engine) |
-  | `FORGE_ENGINE_HARNESS` | 8 | Per-task harness for the workflow engine: `opencode` (default), `copilot`, `openai`, `stub`, or `flowforge-kernel` |
+  | `FORGE_ENGINE_HARNESS` | 8 | Per-task harness for the workflow engine: `opencode` (default), `copilot`, `openai`, or `stub` |
   | `FORGE_ENGINE_VIZ` | 8 | `1` to launch the live Forge Board dashboard with the engine run |
   | `FORGE_ENGINE_VIZ_PORT` | 8 | Dashboard port when `FORGE_ENGINE_VIZ=1` (default `4299`) |
   | `FORGE_ENGINE_ALLOW_NOOP` | 8 | `1` to relax the engine's output-verification no-op heuristic (`engine-run --allow-noop`) |

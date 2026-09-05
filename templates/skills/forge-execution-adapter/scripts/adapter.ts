@@ -5,17 +5,20 @@ import { dirname, join, resolve } from "node:path";
 import { compileExecutionManifestDetailed } from "./compiler.ts";
 import { detectRepoRoot, discoverForgeRepo } from "./discovery.ts";
 import { appendAuditEvent, checkpointTask, parseProgress, writeProgress } from "./progress.ts";
-import type { ExecutionManifest } from "./types.ts";
+import { HARNESS_ROOTS } from "./repo-metadata.mjs";
+import type { ExecutionManifest, HarnessRoot } from "./types.ts";
 
 function usage(): never {
   console.log(`forge-execution-adapter
 
 Usage:
-  npm run forge-execution-adapter -- inspect [--repo <path>]
-  npm run forge-execution-adapter -- compile [--repo <path>] [--output <path>] [--granularity <coarse|fine>]
-  npm run forge-execution-adapter -- status [--repo <path>] [--manifest <path>]
-  npm run forge-execution-adapter -- checkpoint --complete <task-id> [--repo <path>] [--manifest <path>] [--files <a,b>] [--note <text>]
+  npm run forge-execution-adapter -- inspect [--repo <path>] [--harness-root <root>]
+  npm run forge-execution-adapter -- compile [--repo <path>] [--harness-root <root>] [--output <path>] [--granularity <coarse|fine>]
+  npm run forge-execution-adapter -- status [--repo <path>] [--harness-root <root>] [--manifest <path>]
+  npm run forge-execution-adapter -- checkpoint --complete <task-id> [--repo <path>] [--harness-root <root>] [--manifest <path>] [--files <a,b>] [--note <text>]
 
+--harness-root <root>         Pin agent/skill discovery to .agents, .github, .claude, or .opencode.
+                              Invalid or missing explicit roots fail; no fallback team is selected.
 --granularity <coarse|fine>   Task decomposition granularity (default: fine).
                               fine = expand sub-bullets and split oversized bullets
                               into smaller chained tasks; coarse = one task per bullet.
@@ -37,6 +40,22 @@ function repoRootFrom(args: string[]): string {
   return detectRepoRoot(repo ? resolve(repo) : process.cwd());
 }
 
+function harnessRootFrom(args: string[]): HarnessRoot | undefined {
+  let preferred: HarnessRoot | undefined;
+  for (let index = 0; index < args.length; index += 1) {
+    const arg = args[index]!;
+    if (arg !== "--harness-root" && !arg.startsWith("--harness-root=")) continue;
+    const value = arg === "--harness-root" ? args[++index] : arg.slice("--harness-root=".length);
+    const root = HARNESS_ROOTS.find((candidate) => candidate === value);
+    if (!root) {
+      throw new Error(`Invalid --harness-root '${value ?? ""}'. Expected one of ${HARNESS_ROOTS.join(", ")}.`);
+    }
+    if (preferred && preferred !== root) throw new Error("Conflicting --harness-root values; select exactly one team root.");
+    preferred = root;
+  }
+  return preferred;
+}
+
 function loadManifest(path: string): ExecutionManifest {
   return JSON.parse(readFileSync(path, "utf8")) as ExecutionManifest;
 }
@@ -45,11 +64,12 @@ function main() {
   const [, , command, ...args] = process.argv;
   if (!command) usage();
 
+  const preferredHarness = harnessRootFrom(args);
   const repoRoot = repoRootFrom(args);
 
   switch (command) {
     case "inspect": {
-      const repo = discoverForgeRepo(repoRoot);
+      const repo = discoverForgeRepo(repoRoot, preferredHarness);
       console.log(JSON.stringify({
         repoRoot: repo.repoRoot,
         harnessRoot: repo.harnessRoot,
@@ -64,7 +84,7 @@ function main() {
     }
 
     case "compile": {
-      const repo = discoverForgeRepo(repoRoot);
+      const repo = discoverForgeRepo(repoRoot, preferredHarness);
       const oldManifest = existsSync(repo.manifestPath) ? loadManifest(repo.manifestPath) : undefined;
       const granularityArg = flag(args, "--granularity");
       const granularity = granularityArg === "coarse" ? "coarse" : "fine";
@@ -95,7 +115,7 @@ function main() {
     }
 
     case "status": {
-      const repo = discoverForgeRepo(repoRoot);
+      const repo = discoverForgeRepo(repoRoot, preferredHarness);
       const manifestPath = resolve(flag(args, "--manifest") ?? repo.manifestPath);
       const manifest = loadManifest(manifestPath);
       const progress = parseProgress(repo.progressPath, manifest);
@@ -114,7 +134,7 @@ function main() {
     case "checkpoint": {
       const complete = flag(args, "--complete");
       if (!complete) usage();
-      const repo = discoverForgeRepo(repoRoot);
+      const repo = discoverForgeRepo(repoRoot, preferredHarness);
       const manifestPath = resolve(flag(args, "--manifest") ?? repo.manifestPath);
       const manifest = loadManifest(manifestPath);
       const progress = parseProgress(repo.progressPath, manifest);

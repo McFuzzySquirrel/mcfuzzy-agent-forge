@@ -7,7 +7,7 @@ This document gives a high-level view of how MyForge is structured and how the m
 MyForge is a PRD-first orchestration system for turning an idea into an implemented project. The flow is intentionally split into a few layers:
 
 1. **Authoring and intake** - the launcher collects the idea, creates or updates the repository, and gathers the PRD and supporting context.
-2. **Planning and agent generation** - the system turns the PRD into a team of specialist agents and supporting skills.
+2. **Planning and agent generation** - the system turns the PRD into a team of specialist agents and, in a separate authoring stage, supporting skills.
 3. **Execution orchestration** - the workflow engine runs the tasks, tracks state, and handles replay and resumption.
 4. **Observation and control** - the console exposes runs, logs, artifacts, and task controls through a local web UI.
 
@@ -39,16 +39,20 @@ The main reference is [docs/workflow-engine.md](docs/workflow-engine.md).
 
 ### Execution adapter
 
-The execution adapter translates the workflow manifest into calls that can be executed through a specific harness. It is responsible for:
+The execution adapter compiles the authored project and team definitions into
+`docs/EXECUTION-MANIFEST.json`. It is a compile-time boundary, not the runtime
+retry or task scheduler. It is responsible for:
 
-- mapping tasks to the appropriate agent or harness runtime,
-- producing the execution manifest,
-- validating outputs,
-- handling per-task retries and verification.
+- mapping requirements and ownership into stable task definitions,
+- producing and validating the execution manifest,
+- preserving the source layout and task metadata needed by the engine.
 
-### Workforce compiler
+### Workflow engine
 
-The workforce compiler packages the agent team and skill definitions into a form that the runtime can consume. Its job is to assemble the generated structure from the PRD and the agent plan.
+The workflow engine owns runtime execution after compilation. It schedules
+dependency-ready tasks, invokes native harness adapters, verifies outputs,
+persists task state, and applies retry, timeout, cancellation, and replay
+policy. See [docs/workflow-engine.md](docs/workflow-engine.md).
 
 ### Forge Console
 
@@ -68,8 +72,8 @@ A typical run follows this path:
 
 1. The launcher creates or opens a project and bootstraps the harness files.
 2. The PRD and supporting docs are captured or generated.
-3. The agent team and task manifest are assembled.
-4. The workflow engine executes the tasks through the adapter.
+3. The agent team and independently authored skills are assembled; the execution adapter compiles the manifest.
+4. The workflow engine executes the manifest through native harness adapters and owns retries and verification.
 5. The console reads the generated state and artifacts to present progress to the user.
 
 ## Repository layout

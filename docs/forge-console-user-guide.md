@@ -2,6 +2,11 @@
 
 This walkthrough covers the everyday flow for opening the Forge Console, creating or switching projects, and monitoring a build without leaving the browser. It is kept in step with the console UI — see [updates.md](updates.md) for what changed in each release.
 
+> [!WARNING]
+> The committed screenshots are historical and may predate current controls.
+> They are orientation only, not evidence of current browser behavior, layout,
+> or accessibility. Refresh them before making current-browser claims.
+
 ---
 
 ## 1. Start the console
@@ -74,9 +79,11 @@ When a project is still at an earlier stage, the **Continue** button advances th
 Typical progression:
 
 1. **Idea → PRD**: draft the PRD.
-2. **PRD → team**: generate the agent team.
-3. **Team → build**: start the build, or enable **Manual build** first if you want to stop after manifest creation.
-4. **Paused or incomplete run**: resume the build.
+2. **PRD → team**: generate the agent team and ownership metadata.
+3. **Team → project skills**: generate or review project-specific skills.
+4. **Skills → manifest**: compile `docs/EXECUTION-MANIFEST.json`.
+5. **Manifest → build**: start the build, or stop after compilation for review.
+6. **Paused or incomplete run**: resume the build.
 
 The console polls for state changes and updates the button label as each stage
 completes. When a detached step finishes or fails, Overview keeps the result
@@ -116,6 +123,13 @@ Once the build starts, switch between the views to follow the work:
   shown as cards grouped into **Forge skills** and **Project skills**. Agent
   cards also expose primary and fallback model selectors when a model inventory
   has been discovered.
+
+The Console uses the selected harness root for team, report, and model-override
+operations. It does not merge agents with the same identity from other harness
+roots, so a skills-only directory cannot silently replace the generated team.
+For an existing compiled manifest, the manifest's `harnessRoot` is preferred
+over automatic detection. If that path is stale, update the selected root and
+recompile the manifest explicitly; the Console will not silently switch roots.
 - **Artifacts**: structured outputs produced by the run, browsable by type and task.
 - **Timeline**: a chronological record of important events and failures.
 
@@ -147,6 +161,22 @@ The Overview controls panel offers the same actions you would otherwise issue fr
 - **Reset changed tasks for review**: after feature reconciliation, resets completed or skipped tasks whose contracts changed back to pending. Review the changed task IDs before using this action.
 - **Launch \<harness\> CLI**: opens the project's harness CLI (opencode/copilot/claude) in a new terminal from the project folder, so you can watch the live run and take over manually. Also available on the Tasks header.
 
+### Authoring stages and model settings
+
+Authoring has three separate stages:
+
+1. **PRD** - capture or review the product requirements.
+2. **Team** - generate agents, ownership, and execution responsibilities.
+3. **Project skills** - generate or review project-specific skills before the
+   execution adapter compiles the manifest.
+
+Each stage has its own output and review boundary. A missing or failed skills
+stage is not equivalent to a successful "no skills required" result.
+The backend persists stage status, input fingerprints, outputs, timestamps,
+errors, and model provenance in versioned `docs/authoring-state.json`; the
+Console should project those states rather than infer readiness from whether a
+skill directory happens to exist.
+
 ### Assign models to agents
 
 Run the `forge-assign-models` skill after the team has been generated. It builds
@@ -175,7 +205,8 @@ explicitly copy the values into agent frontmatter when that is desired.
 The effective selection order is:
 
 ```text
-manual agent override → generated recommendation → harness/default model
+explicit agent override → saved recommendation → runner default (only when
+the runner supplies one)
 ```
 
 The **Model planning terminal** control in the Agents section opens a new

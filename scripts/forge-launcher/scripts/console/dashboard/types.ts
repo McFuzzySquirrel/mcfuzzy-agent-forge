@@ -141,6 +141,9 @@ export interface Summary {
   selectedTaskIds: string[];
   selectedTaskCount: number;
   job: BackgroundJob | null;
+  authoring?: AuthoringState;
+  authoringReady?: boolean;
+  authoringBlocker?: string;
 }
 
 export interface TaskRow {
@@ -219,6 +222,43 @@ export interface ModelInventory {
   last_verified?: string;
 }
 
+export type AuthoringStage = "prd" | "team" | "skills";
+
+export interface AuthoringConfig {
+  version: 1;
+  models: Partial<Record<AuthoringStage, string>>;
+}
+
+export interface AuthoringInventory {
+  runner?: string;
+  models: Array<{ id: string; provider?: string; last_verified?: string; capabilities?: Record<string, unknown> }>;
+  last_verified?: string;
+  diagnostics?: string[];
+}
+
+export interface AuthoringStageState {
+  status: "pending" | "running" | "complete" | "failed";
+  inputFingerprint: string;
+  outputFingerprint?: string;
+  outputs: string[];
+  noSkillsRequired?: boolean;
+  startedAt?: string;
+  completedAt?: string;
+  error?: string;
+  invocation?: {
+    runner: string;
+    requestedModel?: string;
+    effectiveModel?: string;
+    source: "invocation" | "environment" | "project" | "inherit";
+    inventoryVerifiedAt?: string;
+  };
+}
+
+export interface AuthoringState {
+  version: 1;
+  stages: Partial<Record<AuthoringStage, AuthoringStageState>>;
+}
+
 export interface SkillInfo {
   name: string;
   description: string;
@@ -267,7 +307,7 @@ export interface FileContent {
   content: string;
 }
 
-export type ControlAction = "run" | "resume" | "pause" | "stop" | "replay" | "reset-changed" | "draft-prd" | "draft-existing-prd" | "draft-team" | "compile-manifest" | "feature-prd" | "feature-increment";
+export type ControlAction = "run" | "resume" | "pause" | "stop" | "replay" | "reset-changed" | "draft-prd" | "draft-existing-prd" | "draft-team" | "draft-skills" | "compile-manifest" | "feature-prd" | "feature-increment";
 
 export type ExecutionMode = "auto" | "manual";
 export type SelectionScope = "single" | "range" | "list";
@@ -329,6 +369,7 @@ export interface CreateProjectRequest {
   prdPath?: string;
   /** Server-side paths of research/seed docs to copy into the new repo's docs/research/. */
   researchPaths?: string[];
+  authoringConfig?: AuthoringConfig;
 }
 
 export interface CreateProjectResult {

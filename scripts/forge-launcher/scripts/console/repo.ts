@@ -1,5 +1,9 @@
 import fs from "node:fs";
 import path from "node:path";
+import matter from "gray-matter";
+import { parseMetadata } from "../repo-metadata.ts";
+import { authoringReadiness, authoringStageIsCurrent, readAuthoringState } from "../authoring-state.ts";
+import type { AuthoringStage } from "../authoring-config.ts";
 
 import type {
   Actions,
@@ -34,6 +38,7 @@ import {
   type SelectionScope,
 } from "../engine-config.ts";
 import { currentJobForRepo, loadJobs, saveJobs } from "./jobs.ts";
+import type { JobRunnerOutcome } from "../job-runner.ts";
 import { resolveResources } from "../resources.ts";
 import { detectHarnessRoot, findAdapterDir, inferEngineHarness, looksLikeForgeRepo, type RepoPaths, repoPaths } from "./paths.ts";
 
@@ -278,6 +283,20 @@ function currentJob(repoRoot: string): BackgroundJob | null {
   return currentJobForRepo(repoRoot);
 }
 
+const AUTHORING_JOB_TYPES = new Set(["draft-prd", "draft-existing-prd", "draft-team", "draft-skills", "feature-prd", "feature-increment", "create-project"]);
+
+export function authoringBlocker(p: RepoPaths, readiness?: ReturnType<typeof authoringReadiness>): string | undefined {
+  const job = currentJob(p.repoRoot);
+  if (job?.status === "running" && AUTHORING_JOB_TYPES.has(job.type)) {
+    return `Authoring job ${job.type} is running; wait for it to finish before building.`;
+  }
+  const state = readAuthoringState(p.repoRoot);
+  if (state.stages.prd && state.stages.prd.status !== "complete") {
+    return state.stages.prd.error ?? "PRD authoring is incomplete; finish or retry it before building.";
+  }
+  return (readiness ?? authoringReadiness(p.repoRoot, detectHarnessRoot(p.repoRoot) ?? ".agents")).reason;
+}
+
 // ─── Summary ─────────────────────────────────────────────────────────────────
 
 function runSummary(p: RepoPaths, state: WorkflowState | null, manifest: ExecutionManifest | null): RunSummary | null {
@@ -340,8 +359,14 @@ export function summary(p: RepoPaths): Summary {
   const engineCfg = loadEngineConfig(p.repoRoot);
   const selection = activeSelection(state, engineCfg);
   const job = currentJob(p.repoRoot);
+  const readiness = authoringReadiness(p.repoRoot, harness ?? ".agents");
+  const blocker = authoringBlocker(p, readiness);
 
   return {
+    authoring: readAuthoringState(p.repoRoot),
+    authoringReady: !blocker,
+    authoringBlocker: blocker,
+    authoringNextStage: readiness.nextStage,
     repoRoot: p.repoRoot,
     repoName: path.basename(p.repoRoot),
     harness,
@@ -469,11 +494,8 @@ export function setModelOverride(p: RepoPaths, agent: string, primary?: string, 
 }
 
 function findAgentFile(repoRoot: string, name: string): string | null {
-  for (const root of [".opencode", ".agents", ".github", ".claude"]) {
-    const match = listAgents(repoRoot, root).find((agent) => agent.name === name);
-    if (match) return match.path;
-  }
-  return null;
+  const root = detectHarnessRoot(repoRoot);
+  return root ? listAgents(repoRoot, root).find((agent) => agent.name === name)?.path ?? null : null;
 }
 
 function updateAgentFrontmatter(file: string, primary?: string, fallback?: string): void {
@@ -596,49 +618,12 @@ export function docsIndex(p: RepoPaths): DocsIndex {
 
 // ─── Team ────────────────────────────────────────────────────────────────────
 
-function parseFrontmatter(markdown: string): Record<string, string> {
-  const match = markdown.match(/^---\r?\n([\s\S]*?)\r?\n---/);
-  if (!match) return {};
+function parseFrontmatter(markdown: string, source: string): Record<string, string> {
+  const { data } = parseMetadata(markdown, matter, source);
   const result: Record<string, string> = {};
-  const lines = match[1]!.split(/\r?\n/);
-  let currentKey: string | null = null;
-  let currentLines: string[] = [];
-  let blockMode: "fold" | "literal" | null = null;
-
-  const commit = () => {
-    if (currentKey === null) return;
-    const value = (blockMode === "literal" ? currentLines.join("\n") : currentLines.join(" "))
-      .replace(/\s+/g, " ")
-      .trim();
-    if (value) result[currentKey] = value;
-    currentKey = null;
-    currentLines = [];
-    blockMode = null;
-  };
-
-  for (const rawLine of lines) {
-    const trimmed = rawLine.trim();
-    if (currentKey !== null && /^[ \t]/.test(rawLine)) {
-      currentLines.push(trimmed);
-      continue;
-    }
-    commit();
-    if (!trimmed || trimmed.startsWith("#")) continue;
-    const idx = trimmed.indexOf(":");
-    if (idx === -1) continue;
-    const key = trimmed.slice(0, idx).trim();
-    const value = trimmed.slice(idx + 1).trim().replace(/^["']|["']$/g, "");
-    if (key && value) {
-      if (/^[>|](\s*[-+])?$/.test(value)) {
-        currentKey = key;
-        blockMode = value.startsWith("|") ? "literal" : "fold";
-        currentLines = [];
-      } else {
-        result[key] = value;
-      }
-    }
+  for (const [key, value] of Object.entries(data)) {
+    if (typeof value === "string") result[key] = value;
   }
-  commit();
   return result;
 }
 
@@ -689,7 +674,7 @@ function listAgents(repoRoot: string, harnessRoot: string): AgentInfo[] {
   const agentsDir = path.join(repoRoot, harnessRoot, "agents");
   return walk(agentsDir, (name) => name.endsWith(".md") && name !== "SKILL.md" && !excluded.has(name)).map((file) => {
     const raw = readText(file) ?? "";
-    const fm = parseFrontmatter(raw);
+    const fm = parseFrontmatter(raw, file);
     const content = raw.replace(/^---\r?\n[\s\S]*?\r?\n---\r?\n?/, "");
     const overrides = modelOverrides(repoPaths(repoRoot))[fm.name ?? path.basename(file, ".md")];
     return {
@@ -712,7 +697,7 @@ function listSkills(repoRoot: string, harnessRoot: string): SkillInfo[] {
   const skillsDir = path.join(repoRoot, harnessRoot, "skills");
   return walk(skillsDir, (name) => name === "SKILL.md").map((file) => {
     const raw = readText(file) ?? "";
-    const fm = parseFrontmatter(raw);
+    const fm = parseFrontmatter(raw, file);
     const dir = path.dirname(file);
     return {
       name: fm.name ?? path.basename(dir),
@@ -722,11 +707,6 @@ function listSkills(repoRoot: string, harnessRoot: string): SkillInfo[] {
       category: forgeSkillNames().has(path.basename(dir)) ? "forge" : "project",
     };
   });
-}
-
-function harnessRoots(repoRoot: string, preferred: string): string[] {
-  const roots = [preferred, ".opencode", ".agents", ".github", ".claude"];
-  return [...new Set(roots)].filter((root) => fs.existsSync(path.join(repoRoot, root)));
 }
 
 let cachedForgeSkills: Set<string> | null = null;
@@ -746,11 +726,10 @@ function forgeSkillNames(): Set<string> {
 export function team(p: RepoPaths): TeamIndex {
   const harnessRoot = detectHarnessRoot(p.repoRoot);
   if (!harnessRoot) return { harnessRoot: null, agents: [], skills: [] };
-  const roots = harnessRoots(p.repoRoot, harnessRoot);
   return {
     harnessRoot,
-    agents: roots.flatMap((root) => listAgents(p.repoRoot, root)),
-    skills: roots.flatMap((root) => listSkills(p.repoRoot, root)),
+    agents: listAgents(p.repoRoot, harnessRoot),
+    skills: listSkills(p.repoRoot, harnessRoot),
   };
 }
 
@@ -773,10 +752,11 @@ export function actions(p: RepoPaths): Actions {
   // The engine can compile a missing manifest itself when forge-execution-adapter
   // is bootstrapped, so allow Run when the adapter is present even without a manifest.
   const canCompile = manifest !== null || findAdapterDir(p.repoRoot) !== null;
+  const ready = !authoringBlocker(p);
 
   return {
-    canRun: canCompile && (state === null || state.status === "complete" || state.status === "failed"),
-    canResume: manifest !== null && state !== null && hasIncomplete && !live,
+    canRun: ready && !live && canCompile && (state === null || state.status === "complete" || state.status === "failed"),
+    canResume: ready && manifest !== null && state !== null && hasIncomplete && !live,
     canPause: live && state !== null && state.status === "running",
     canStop: live,
     failedTasks,
@@ -804,6 +784,7 @@ function jobLabel(job: BackgroundJob): string {
       case "create-project": return "creating";
       case "draft-prd": return "drafting PRD";
       case "draft-team": return "generating team";
+      case "draft-skills": return "generating skills";
       case "compile-manifest": return "compiling manifest";
       case "engine-run":
       case "engine-resume": return "running";
@@ -838,21 +819,100 @@ export function refreshJobs(): boolean {
   let changed = false;
   for (const job of jobs) {
     if (job.status !== "running" || isPidAlive(job.pid ?? null)) continue;
-    const outcome = resolveJobOutcome(job);
-    job.status = outcome.status;
-    job.message = outcome.message;
-    job.updatedAt = new Date().toISOString();
-    job.finishedAt = job.updatedAt;
+    const now = new Date().toISOString();
+    let terminal: JobRunnerOutcome | null = null;
+    try {
+      if (!job.resultPath && isAuthoringJob(job)) {
+        job.status = "failed";
+        job.message = "Authoring job ended without an attributable terminal receipt; inspect the job log before retrying.";
+        job.updatedAt = now;
+        job.finishedAt = now;
+        changed = true;
+        continue;
+      }
+      terminal = job.resultPath ? readJobOutcome(job.resultPath, job.id) : null;
+      if (job.resultPath && !terminal) {
+        job.status = "failed";
+        const detail = isAuthoringJob(job) ? authoringFailureDetail(job) : undefined;
+        job.message = `${isAuthoringJob(job) ? "Background authoring" : "Background"} process ended without recording a terminal outcome.${detail ? ` Previous stage diagnostic: ${detail}` : ""}`;
+      } else if (terminal && (terminal.exitCode !== 0 || terminal.signal !== null || terminal.error)) {
+        job.status = "failed";
+        job.message = formatJobFailure(terminal);
+      } else {
+        const outcome = resolveJobOutcome(job);
+        job.status = outcome.status;
+        job.message = outcome.message;
+      }
+    } catch (error) {
+      job.status = "failed";
+      job.message = `Failed to resolve background job outcome: ${error instanceof Error ? error.message : String(error)}`;
+    }
+    job.updatedAt = now;
+    job.finishedAt = terminal?.finishedAt ?? now;
     changed = true;
   }
   if (changed) saveJobs(jobs);
   return changed;
 }
 
+function isAuthoringJob(job: BackgroundJob): boolean {
+  return job.type === "draft-prd"
+    || job.type === "draft-existing-prd"
+    || job.type === "draft-team"
+    || job.type === "draft-skills"
+    || job.type === "feature-prd"
+    || job.type === "feature-increment"
+    || job.type === "create-project";
+}
+
+function authoringFailureDetail(job: BackgroundJob): string | undefined {
+  const stage: AuthoringStage | undefined = job.type === "draft-prd" || job.type === "draft-existing-prd" || job.type === "feature-prd"
+    ? "prd" : job.type === "draft-team" ? "team" : job.type === "draft-skills" ? "skills" : undefined;
+  if (!stage) return undefined;
+  return readAuthoringState(job.repoPath).stages[stage]?.error;
+}
+
+function readJobOutcome(resultPath: string, expectedId?: string): JobRunnerOutcome | null {
+  if (!fs.existsSync(resultPath)) return null;
+  const value = JSON.parse(fs.readFileSync(resultPath, "utf8")) as Partial<JobRunnerOutcome>;
+  if (
+    value.version !== 1
+    || typeof value.id !== "string"
+    || (expectedId !== undefined && value.id !== expectedId)
+    || (typeof value.exitCode !== "number" && value.exitCode !== null)
+    || (typeof value.signal !== "string" && value.signal !== null)
+    || typeof value.finishedAt !== "string"
+  ) {
+    throw new Error(`Invalid background job outcome: ${resultPath}`);
+  }
+  return value as JobRunnerOutcome;
+}
+
+function formatJobFailure(outcome: JobRunnerOutcome): string {
+  const reason = outcome.error
+    ?? (outcome.signal ? `terminated by ${outcome.signal}` : `exited with code ${outcome.exitCode ?? "unknown"}`);
+  return `Background process failed: ${reason}`;
+}
+
 function resolveJobOutcome(job: BackgroundJob): { status: BackgroundJob["status"]; message: string } {
+  const stage: AuthoringStage | undefined = job.type === "draft-prd" || job.type === "draft-existing-prd" || job.type === "feature-prd"
+    ? "prd" : job.type === "draft-team" ? "team" : job.type === "draft-skills" ? "skills" : undefined;
+  const authoring = readAuthoringState(job.repoPath);
+  if (stage && authoring.stages[stage]) {
+    const record = authoring.stages[stage]!;
+    return record.status === "complete" && authoringStageIsCurrent(job.repoPath, stage, detectHarnessRoot(job.repoPath) ?? ".agents")
+      ? { status: "complete", message: `${stage} authoring completed.` }
+      : { status: "failed", message: record.error ?? `${stage} authoring exited without a current completed stage.` };
+  }
   if (job.type === "create-project") {
     if (!looksLikeForgeRepo(job.repoPath)) {
       return { status: "failed", message: "Project creation ended before the forge repo was ready." };
+    }
+    if (job.autoDraft) {
+      const readiness = authoringReadiness(job.repoPath, detectHarnessRoot(job.repoPath) ?? ".agents");
+      if (!readiness.ready || !authoring.stages.skills) {
+        return { status: "failed", message: readiness.reason ?? "Auto-setup exited before completing project-skill authoring." };
+      }
     }
     return { status: "complete", message: "Project creation finished." };
   }
@@ -872,6 +932,8 @@ function resolveJobOutcome(job: BackgroundJob): { status: BackgroundJob["status"
 
   if (job.type === "feature-increment") {
     const p = repoPaths(job.repoPath);
+    const readiness = authoringReadiness(job.repoPath, detectHarnessRoot(job.repoPath) ?? ".agents");
+    if (!readiness.ready) return { status: "failed", message: readiness.reason ?? "Feature authoring is incomplete." };
     if (!fs.existsSync(p.featuresDir) || listMarkdown(p.featuresDir).length === 0) {
       return { status: "failed", message: "Feature increment exited without producing docs/features/*.md." };
     }
@@ -905,6 +967,8 @@ function resolveJobOutcome(job: BackgroundJob): { status: BackgroundJob["status"
       return hasProjectTeam(job.repoPath)
         ? { status: "complete", message: "Agent team generation completed." }
         : { status: "failed", message: "Agent team generation exited without producing a team." };
+    case "draft-skills":
+      return { status: "failed", message: "Project-skill generation exited without recording its completion." };
     case "compile-manifest":
       return fs.existsSync(p.manifestPath)
         ? { status: "complete", message: "Execution manifest compiled." }

@@ -75,7 +75,7 @@ If you prefer to drive the PRD yourself, use `forge-build-prd` directly (Step 2 
 
 `forge-auto-build` is the **terminal/headless execution fast-path**: it takes an existing, reviewed PRD and runs the entire build pipeline with no manual hand-offs. It does **not** generate a PRD - that is a deliberate, separate stage. It is driven by `forge-launcher` (`--headless`, or the auto-draft flow) rather than invoked as an in-harness slash command - inside a chat harness use `@project-orchestrator` (interactive) or `@workflow-orchestrator` (autonomous) instead.
 
-`forge-build-agent-team` → *(optional)* `forge-assign-models` → `forge-orchestrate-build` **(all phases, with validation + commit after each phase)**
+`forge-build-agent-team` → `forge-build-project-skills` → `forge-execution-adapter` → `forge-orchestrate-build` **(each stage has its own review boundary)**
 
 ```
 # Terminal / headless (recommended entry):
@@ -88,14 +88,20 @@ opencode run --auto "/forge-auto-build Use docs/PRD.md as the project PRD. GO"
 **How it works:**
 
 1. Its pre-flight check verifies a PRD representation exists -`docs/PRD.md`, or `docs/product-vision.md` + `docs/features/*.md` -then presents a single pre-flight gate. Review the plan and type `GO` to launch.
-2. After `GO`, the skill runs autonomously through all stages: agent team, (optional) model assignment, then every build phase.
+2. After `GO`, the flow advances through three separate authoring stages - PRD, team, and project skills - before manifest compilation and execution. A failed skills stage must be reported and retried explicitly; it is not silently treated as "no skills required".
+   The team-to-skills candidate handoff is required and immutable; an empty or
+   all-`omit` candidate set is the explicit successful no-skills result.
 3. After every build phase completes, validation checks run (build, lint, tests) and a commit is made automatically.
 4. If any validation fails, the run stops and reports the exact error -it does not proceed past a broken phase.
 5. A final summary lists every stage completed, every commit made, and the recommended next steps.
 
-> **Using the workflow engine:** at the pre-flight gate, type `GO --workflow-engine` to execute Stage 3 through `forge-workflow-engine` instead of the prompt-driven `forge-orchestrate-build`. That path installs the execution packages, compiles `docs/EXECUTION-MANIFEST.json`, and runs the engine (default harness: OpenCode).
+> **Using the workflow engine:** at the pre-flight gate, type `GO --workflow-engine` to execute the compiled manifest through `forge-workflow-engine` instead of the prompt-driven `forge-orchestrate-build`. That path installs the execution packages and runs the native engine (default harness: OpenCode), which owns retries and durable run state.
 
-> **Resuming after interruption:** If the run is interrupted, re-invoke the same flow - `forge-launcher resume` picks up at the current stage, or re-run `forge-auto-build` headless in the same repo (it reads `docs/PROGRESS.md` / `docs/WORKFLOW-STATE.json` and resumes from the last completed task).
+> **Resuming after interruption:** If the run is interrupted, use
+> `forge-launcher resume` to pick up the current authoring or manifest stage.
+> Once the engine has started, it resumes from `docs/WORKFLOW-STATE.json` and
+> the latest durable `docs/PROGRESS.md` checkpoint; authoring readiness comes
+> from `docs/authoring-state.json`, not an LLM-authored execution plan.
 
 ---
 
@@ -171,15 +177,17 @@ Report any gaps or issues.
 **From a monolithic PRD:**
 ```
 @workspace /forge-build-agent-team Analyze docs/PRD.md and generate a complete specialist agent team.
-Create agent files (`.md`) in .agents/agents/ and skill files in .agents/skills/.
-Ensure every PRD requirement has a clearly assigned primary owner agent.
+Create agent files (`.md`) in .agents/agents/ and persist ownership metadata.
+Ensure every PRD requirement has a clearly assigned primary owner agent. Do not
+create project skill packages in this stage.
 ```
 
 **From a decomposed Product Vision + Features:**
 ```
 @workspace /forge-build-agent-team Analyze docs/product-vision.md and all feature documents in docs/features/.
-Generate a complete specialist agent team (`.md` files) in .agents/agents/ and skills in .agents/skills/ 
-that covers all features holistically without overlap or gaps.
+Generate a complete specialist agent team (`.md` files) in .agents/agents/
+that covers all features holistically without overlap or gaps. Do not create
+project skill packages in this stage.
 ```
 
 ### 4b. Validate the team
@@ -191,21 +199,65 @@ primary owner agent, there are no ownership gaps, and no two agents have conflic
 Produce a responsibility matrix as a markdown table and save it to docs/agent-responsibility-matrix.md.
 ```
 
-After generating agents, commit them:
+After generating agents, commit the team and ownership artifacts:
 
 ```bash
-git add .agents/agents/ .agents/skills/ docs/
+git add .agents/agents/ docs/
 git commit -m "feat: generate specialist agent team from PRD"
 ```
+
+### 4c. Generate project skills
+
+Run the project-skill authoring stage separately after the team is reviewed.
+The stage must report an explicit success, including a valid no-skills-required
+outcome when appropriate; a missing or failed result is not silently treated as
+an empty skills set.
+
+The team stage writes the versioned handoff at
+`docs/SKILL-CANDIDATES.json`:
+
+```json
+{
+  "version": 1,
+  "candidates": [
+    {
+      "name": "project-skill-id",
+      "description": "What the project skill handles",
+      "consumers": ["agent-id"],
+      "action": "reuse",
+      "reason": "Existing skill satisfies the responsibility"
+    }
+  ]
+}
+```
+
+The project-skill stage may choose `reuse`, `extend`, `create`, or `omit`.
+`omit` preserves an existing package unless reconciliation explicitly retires
+it. The stage does not create or replace the execution manifest.
+
+From the launcher, invoke the independent stage with:
+
+```bash
+forge-launcher draft-skills --repo <path> \
+  --prd-model <id|inherit> --team-model <id|inherit> --skills-model <id|inherit>
+```
+
+Use `forge-launcher authoring-config` to save or clear the versioned project
+settings, and `forge-launcher authoring-models --runner copilot|opencode
+--refresh` to refresh the runner inventory before choosing an explicit model.
+Config writes validate schema only; live availability is checked when a stage
+is invoked. The inventory is stored separately from execution-agent overrides.
 
 ---
 
 ## Step 4.5 - Assign Models per Agent (Optional but Recommended)
 
-By default every agent uses your globally-selected model. Use the `forge-assign-models`
-skill to discover what models you actually have access to (harness subscription + local
-Ollama) and assign each agent an appropriately sized model so lightweight agents don't
-default to the most expensive one.
+An unset authoring or execution model inherits the active runner default. Do not
+claim a concrete default model ID unless the runner inventory reports one. The
+authoring model settings use `docs/authoring-config.json` with optional `prd`,
+`team`, and `skills` keys, plus `FORGE_PRD_MODEL`, `FORGE_TEAM_MODEL`, and
+`FORGE_SKILLS_MODEL` stage overrides. Explicit unavailable selections must fail
+clearly rather than being silently replaced.
 
 ### 4.5a. Discover available models
 
@@ -368,17 +420,6 @@ npm run workflow-engine -- run --harness stub
 # Parallel dispatch (opt-in, harness-gated) - up to 3 ready tasks at once
 npm run workflow-engine -- run --harness opencode --concurrency 3
 
-# FlowForge kernel handoff - requires compiled .workforce package + flowforge CLI
-npm run workflow-engine -- run --harness flowforge-kernel
-```
-
-If you want the kernel handoff path, compile the workforce package first:
-
-```bash
-cd .agents/skills/forge-workforce-compiler
-npm install
-npm run forge-workforce-compiler -- compile
-npm run forge-workforce-compiler -- validate --package dist/dev-myforge-project.workforce
 ```
 
 Or, use the `workflow-orchestrator` agent for a guided interactive experience:
@@ -466,12 +507,10 @@ Only modify skills I've approved in the audit report.
 | Audit skills | `@workspace /forge-optimize-skills Audit all skills in .agents/skills/ against best practices...` |
 | Apply skill improvements | `@workspace /forge-optimize-skills Apply the approved changes from docs/SKILL-AUDIT.md` |
 | Compile execution manifest | `cd .agents/skills/forge-execution-adapter && npm install && npm run forge-execution-adapter -- compile` |
-| Compile workforce package | `cd .agents/skills/forge-workforce-compiler && npm install && npm run forge-workforce-compiler -- compile` |
 | Dark run (OpenCode harness) | `cd .agents/skills/forge-workflow-engine && npm install && npm run workflow-engine -- run --harness opencode` |
 | Dark run (GitHub Copilot harness) | `cd .agents/skills/forge-workflow-engine && npm run workflow-engine -- run --harness copilot` |
 | Dark run (OpenAI harness) | `cd .agents/skills/forge-workflow-engine && npm run workflow-engine -- run --harness openai` |
 | Dark run (stub / dry-run) | `cd .agents/skills/forge-workflow-engine && npm run workflow-engine -- run --harness stub` |
-| Dark run (FlowForge kernel) | `cd .agents/skills/forge-workflow-engine && npm run workflow-engine -- run --harness flowforge-kernel` |
 | Standalone engine run (outside CLI) | `./scripts/forge-engine-run.sh --harness opencode --yes` (PowerShell: `.\scripts\forge-engine-run.ps1 -Harness copilot -Yes`; add `--dry-run`/`-DryRun` to print) |
 | Workflow status | `cd .agents/skills/forge-workflow-engine && npm run workflow-engine -- status` |
 | Replay failed task | `cd .agents/skills/forge-workflow-engine && npm run workflow-engine -- replay <task-id>` |

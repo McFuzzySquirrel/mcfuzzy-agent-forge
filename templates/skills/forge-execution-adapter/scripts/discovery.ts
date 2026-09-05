@@ -3,8 +3,8 @@ import { dirname, join, relative, resolve } from "node:path";
 import matter from "gray-matter";
 
 import type { AgentDescriptor, ForgeRepo, HarnessRoot, SkillDescriptor } from "./types.ts";
+import { HARNESS_ROOTS, parseMetadata, selectHarnessRoot } from "./repo-metadata.mjs";
 
-const HARNESS_ROOTS: HarnessRoot[] = [".agents", ".github", ".claude", ".opencode"];
 
 function isDir(path: string): boolean {
   return existsSync(path) && statSync(path).isDirectory();
@@ -26,27 +26,12 @@ export function detectRepoRoot(start = process.cwd()): string {
   throw new Error(`Could not detect an MyForge repository root from ${start}`);
 }
 
-function detectHarnessRoot(repoRoot: string): { root: HarnessRoot; warnings: string[] } {
-  const withAgents = HARNESS_ROOTS.filter((root) => isDir(join(repoRoot, root, "agents")));
-  const withSkills = HARNESS_ROOTS.filter((root) => isDir(join(repoRoot, root, "skills")));
-  // Prefer a root that owns agents: a skills-only root (e.g. a stray .github/
-  // that has skills but no agents) must not shadow the real harness root, or
-  // every task would fail owner matching. Only when no root has agents do we
-  // fall back to a skills-only root.
-  const matches = withAgents.length > 0 ? withAgents : withSkills;
-  if (matches.length === 0) {
+function detectHarnessRoot(repoRoot: string, preferred?: HarnessRoot): { root: HarnessRoot; warnings: string[] } {
+  const selected = selectHarnessRoot(repoRoot, preferred);
+  if (!selected.root) {
     throw new Error(`No supported harness root found under ${repoRoot}. Expected one of ${HARNESS_ROOTS.join(", ")}.`);
   }
-
-  const warnings: string[] = [];
-  const ignoredSkillsOnly = withSkills.filter((root) => !withAgents.includes(root));
-  if (withAgents.length > 0 && ignoredSkillsOnly.length > 0) {
-    warnings.push(`Ignoring skills-only harness root(s) ${ignoredSkillsOnly.join(", ")} (no agents/); using ${matches[0]}.`);
-  }
-  if (matches.length > 1) {
-    warnings.push(`Multiple harness roots detected (${matches.join(", ")}); using ${matches[0]}.`);
-  }
-  return { root: matches[0]!, warnings };
+  return { root: selected.root, warnings: selected.warnings };
 }
 
 function sectionBullets(body: string, heading: string): string[] {
@@ -65,16 +50,8 @@ function sectionBullets(body: string, heading: string): string[] {
 }
 
 function parseAgent(path: string, repoRoot: string): AgentDescriptor {
-  let parsed: ReturnType<typeof matter>;
-  try {
-    parsed = matter(readFileSync(path, "utf8"));
-  } catch (err) {
-    throw new Error(
-      `Invalid YAML frontmatter in ${path}: ${err instanceof Error ? err.message : String(err)}. ` +
-      "Hint: wrap description values in double quotes (e.g. `description: \"...\"`).",
-    );
-  }
-  const data = parsed.data as Record<string, unknown>;
+  const parsed = parseMetadata(readFileSync(path, "utf8"), matter, path);
+  const data = parsed.data;
   let override: { primary?: string; fallback?: string } | undefined;
   try {
     const overrides = JSON.parse(readFileSync(join(repoRoot, "docs", "model-overrides.json"), "utf8")) as Record<string, { primary?: string; fallback?: string }>;
@@ -102,15 +79,7 @@ function canonicalModelId(model: string): string {
 }
 
 function parseSkill(path: string, repoRoot: string): SkillDescriptor {
-  let parsed: ReturnType<typeof matter>;
-  try {
-    parsed = matter(readFileSync(path, "utf8"));
-  } catch (err) {
-    throw new Error(
-      `Invalid YAML frontmatter in ${path}: ${err instanceof Error ? err.message : String(err)}. ` +
-      "Hint: wrap description values in double quotes (e.g. `description: \"...\"`).",
-    );
-  }
+  const parsed = parseMetadata(readFileSync(path, "utf8"), matter, path);
   const dir = dirname(path);
   const list = (name: string) => {
     const full = join(dir, name);
@@ -148,9 +117,9 @@ function walk(dir: string, predicate: (entry: string) => boolean): string[] {
   return results.sort();
 }
 
-export function discoverForgeRepo(start = process.cwd()): ForgeRepo {
+export function discoverForgeRepo(start = process.cwd(), preferredHarness?: HarnessRoot): ForgeRepo {
   const repoRoot = detectRepoRoot(start);
-  const harness = detectHarnessRoot(repoRoot);
+  const harness = detectHarnessRoot(repoRoot, preferredHarness);
   const harnessRoot = harness.root;
   const agentRoot = join(repoRoot, harnessRoot, "agents");
   const skillRoot = join(repoRoot, harnessRoot, "skills");

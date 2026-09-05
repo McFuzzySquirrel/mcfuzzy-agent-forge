@@ -1,6 +1,6 @@
 ---
 name: forge-execution-adapter
-description: "Discover an MyForge repository, compile its PRD and generated agents into a structured execution manifest, and keep runtime checkpoints synchronized with docs/PROGRESS.md for external runners such as FlowForge-style engines."
+description: "Discover an MyForge repository, compile its PRD and generated agents into a structured execution manifest, and keep runtime checkpoints synchronized with docs/PROGRESS.md for native Forge execution."
 ---
 
 # Skill: Build a Forge Execution Adapter
@@ -30,6 +30,8 @@ When the user asks for a contract-driven execution bridge, run commands from thi
 npm install
 npm run forge-execution-adapter -- inspect
 npm run forge-execution-adapter -- compile
+npm run forge-execution-adapter -- inspect --harness-root .github
+npm run forge-execution-adapter -- compile --harness-root .github
 npm run forge-execution-adapter -- status
 ```
 
@@ -105,9 +107,10 @@ npm run forge-execution-adapter -- compile
 
 Resolve the repository root and detect which harness directory is active:
 
-- `.agents/` (canonical)
+- `.agents/`
 - `.github/`
 - `.claude/`
+- `.opencode/`
 
 Load:
 
@@ -116,7 +119,11 @@ Load:
 - all generated agent files
 - all installed skill files
 
-If multiple harness roots are present, prefer `.agents/` and emit a warning rather than guessing silently.
+Without `--harness-root`, selection prefers roots with actual generated agent
+Markdown, then agent directories, then skills directories, and emits ambiguity
+warnings. Pass `--harness-root <.github|.agents|.opencode|.claude>` to pin the
+root; the selected root is preserved through `inspect`, `compile`, and launcher
+recompilation.
 
 ### Step 2: Compile a Neutral Execution Manifest
 

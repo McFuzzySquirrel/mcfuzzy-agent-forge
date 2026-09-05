@@ -12,6 +12,7 @@ export type BackgroundJobType =
   | "draft-prd"
   | "draft-existing-prd"
   | "draft-team"
+  | "draft-skills"
   | "compile-manifest"
   | "engine-run"
   | "engine-resume"
@@ -29,13 +30,19 @@ export interface BackgroundJob {
   startedAt: string;
   updatedAt: string;
   finishedAt?: string;
+  resultPath?: string;
   status: BackgroundJobStatus;
   message: string;
   run?: boolean;
+  autoDraft?: boolean;
 }
 
 export function jobsPath(): string {
   return path.join(path.dirname(registryPath()), "jobs.json");
+}
+
+export function jobResultPath(id: string): string {
+  return path.join(path.dirname(jobsPath()), "job-results", `${id}.json`);
 }
 
 export function loadJobs(): BackgroundJob[] {
@@ -64,7 +71,10 @@ export function startJob(input: {
   taskId?: string;
   logPath?: string;
   message: string;
+  id?: string;
+  resultPath?: string;
   run?: boolean;
+  autoDraft?: boolean;
 }): BackgroundJob {
   const jobs = loadJobs();
   const now = new Date().toISOString();
@@ -76,17 +86,19 @@ export function startJob(input: {
     job.finishedAt = now;
   }
   const job: BackgroundJob = {
-    id: randomUUID(),
+    id: input.id ?? randomUUID(),
     type: input.type,
     repoPath: input.repoPath,
     pid: input.pid,
     taskId: input.taskId,
     logPath: input.logPath,
+    resultPath: input.resultPath,
     startedAt: now,
     updatedAt: now,
     status: "running",
     message: input.message,
     run: input.run,
+    autoDraft: input.autoDraft,
   };
   jobs.push(job);
   saveJobs(jobs);

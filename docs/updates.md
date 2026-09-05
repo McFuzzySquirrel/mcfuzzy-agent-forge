@@ -4,6 +4,101 @@ Detailed release and change notes for MyForge.
 
 ---
 
+## September 2026 - v3.52
+
+### Retire FlowForge integration and clarify the native pipeline
+
+- Active documentation now describes the native pipeline: separate PRD, team,
+  and project-skill authoring stages, execution-adapter manifest compilation,
+  and workflow-engine runtime dispatch.
+- Removed active command guidance for the retired FlowForge kernel and workforce
+  compiler while preserving historical research, story, ADR, and changelog
+  records.
+- Added ADR-038 to supersede the former workforce handoff decision and document
+  non-destructive migration expectations.
+- Corrected the architecture boundary: the execution adapter compiles the
+  manifest; the workflow engine owns retries, verification, and durable state.
+- Marked committed Console screenshots as historical until they are refreshed
+  against a current browser session.
+- Standardized metadata discovery across the adapter, launcher, and Console:
+  explicit roots win, fallback prefers generated agents and then tooling
+  agents/directories, and Console operations stay scoped to the selected
+  harness without merging duplicate identities.
+- The workflow-engine test entry point now performs explicit recursive
+  cross-platform discovery of root and nested `.test.ts` files and fails when
+  discovery is empty. After `npm ci` resolved the local `tsx` dependency, the
+  completed Linux Node 22.22.2 baseline is standard engine 130/130, final
+  targeted engine 92/92, launcher 110/110, and adapter 22/22. Historical
+  Windows failures remain archival evidence; no Windows result is implied by
+  this entry.
+- Two subsequent explicit-harness-root regression tests also pass; a later
+  full integration run is still required before treating that addition as a
+  replacement for the recorded 130-test engine baseline.
+- Authoring model configuration now has a versioned
+  `docs/authoring-config.json` contract for independent `prd`, `team`, and
+  `skills` models, with matching stage environment overrides and explicit
+  inheritance/unavailability semantics.
+- Independent authoring progress is persisted in versioned
+  `docs/authoring-state.json`, including stage status, input/output
+  fingerprints, outputs, and invocation provenance for resumable PRD, team, and
+  project-skill work.
+- Authoring now exposes separate `draft-skills`, `authoring-config`, and
+  `authoring-models` launcher commands. All authoring entry points accept
+  independent `--prd-model`, `--team-model`, and `--skills-model` overrides;
+  runner inventories are refreshed and validated separately from execution
+  model overrides.
+- Workflow execution now persists each task's authoritative state, progress,
+  and commit bookkeeping before starting the next task, validates owners before
+  dispatch, and fails discovery errors explicitly. Native adapters share a
+  read-only `TaskAttemptRequest`; capability requirements default
+  conservatively to `repository-tools`, while OpenAI accepts only explicit
+  text tasks.
+- The native adapter contract now uses read-only `TaskAttemptRequest` values,
+  explicit capabilities and transport defaults, and optional run-scoped
+  `prepare`/`cleanup` hooks. OpenCode-owned server lifecycles are cleaned up
+  reliably while externally attached servers remain operator-owned.
+- Added [ADR-040](adr/040-native-adapter-contracts.md) as the accepted native
+  adapter contract decision.
+- Added [ADR-039](adr/039-independent-authoring-models-and-stages.md) for the
+  independent PRD, team, and project-skill stages, their model precedence, and
+  persisted authoring configuration/state contracts.
+- Task records now classify failures as `retryable`, `configuration`,
+  `exception`, `timeout`, or `cancelled`; cancellation emits
+  `task.cancelled`. An `AbortSignal` can cancel immediately and leave the
+  current task pending with the run paused for resume, distinct from graceful
+  CLI pause/stop after the in-flight task.
+- Initial auto-draft now runs PRD → team → project skills → native manifest
+  compilation → engine decision. The obsolete fourth LLM plan-and-validate
+  invocation no longer authors `docs/PROGRESS.md`; manual stage handoffs retain
+  their stage-specific model arguments.
+- Authoring state now records the invoked skill and argv. The team-to-skills
+  candidate handoff fails closed when required data is missing, while empty or
+  all-`omit` candidates explicitly complete as `no-skills-required`; authoring
+  cannot write compiler- or engine-owned manifest/progress artifacts.
+- The stable authoring CLI now exposes separate `draft-prd`,
+  `draft-existing-prd`, `draft-team`, `draft-skills`, `feature-prd`,
+  `feature-increment`, and `compile-manifest` stages. Direct stages are
+  headless; `--headless` full-flow mode starts the native engine after
+  preparation, and supplied PRDs skip PRD drafting. Config saves validate schema
+  without probing live model availability.
+- Engine subprocess cleanup now owns dedicated POSIX process groups and
+  recursive Windows termination, with bounded pipe settlement and explicit
+  cleanup exceptions that prevent unsafe automatic retries. Replay persists its
+  pending reset before preparation and preserves a paused pending task when
+  cancellation occurs before or during replay. Linux Node 22 engine validation
+  is now 138/138; the Windows implementation is configured but has not been
+  executed here.
+- Added `.github/workflows/validation.yml` with a Node 22 Linux/Windows matrix
+  for launcher, adapter, engine, and skill-review typechecks/tests, plus the
+  team validation gate and launcher build/version checks. This configures
+  cross-platform CI only; no Windows run is claimed here.
+- Console and `engine-run` now prefer the compiled manifest's selected
+  `harnessRoot` over automatic detection, while explicit authoring CLI
+  selection remains higher priority. A stale manifest root must be updated and
+  recompiled explicitly; roots are never switched silently.
+
+---
+
 ## September 2026 - v3.51
 
 ### Fix Copilot model terminal launches on Windows

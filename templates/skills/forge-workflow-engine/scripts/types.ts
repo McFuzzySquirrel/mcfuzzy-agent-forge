@@ -1,6 +1,6 @@
-import type { AgentDescriptor, ExecutionManifest, ManifestTask } from "../../forge-execution-adapter/scripts/types.ts";
+import type { AgentDescriptor, ExecutionManifest, ManifestTask, TaskCapability } from "../../forge-execution-adapter/scripts/types.ts";
 
-export type { AgentDescriptor, ExecutionManifest, ManifestTask };
+export type { AgentDescriptor, ExecutionManifest, ManifestTask, TaskCapability };
 
 /** Default per-task timeout (10 minutes), matching the previous hardcoded value. */
 export const DEFAULT_TASK_TIMEOUT_MS = 10 * 60 * 1000;
@@ -31,6 +31,7 @@ export interface TaskRecord {
   outputFiles: string[];
   agentOutput?: string;
   errorMessage?: string;
+  failureKind?: TaskFailureKind;
   /** ID of the artifact produced by this task, if any */
   artifactId?: string;
   /** IDs of artifacts consumed as input context for this task */
@@ -65,41 +66,40 @@ export interface TaskResult {
   stderr: string;
   durationMs: number;
   errorMessage?: string;
+  failureKind?: TaskFailureKind;
+}
+
+export type TaskFailureKind = "retryable" | "configuration" | "exception" | "timeout" | "cancelled";
+export type DeepReadonly<T> = { readonly [K in keyof T]: DeepReadonly<T[K]> };
+
+export interface TaskAttemptRequest {
+  readonly agent: DeepReadonly<AgentDescriptor>;
+  readonly task: DeepReadonly<ManifestTask>;
+  readonly effectiveModel?: string;
+  readonly repoRoot: string;
+  readonly contextBlock: string;
+  readonly requiredCapabilities: readonly TaskCapability[];
+  readonly attempt: Readonly<{ number: number; maxRetries: number; runId: string }>;
+  readonly budget: Readonly<{ timeoutMs: number }>;
+  readonly instructions: string;
+  readonly signal?: AbortSignal;
+}
+
+export interface HarnessRunContext {
+  readonly repoRoot: string;
+  readonly runId: string;
+  readonly signal?: AbortSignal;
 }
 
 export interface HarnessAdapter {
-  name: string;
-  /**
-   * True when the adapter can be safely invoked concurrently (stateless and
-   * non-blocking).  The engine only parallelizes ready tasks when the selected
-   * harness opts in; otherwise it forces sequential execution.
-   */
-  supportsConcurrency: boolean;
-  invoke(
-    agent: AgentDescriptor,
-    task: ManifestTask,
-    context: WorkflowState,
-    repoRoot: string,
-    /**
-     * Optional pre-rendered context projection markdown block.
-     * When provided by the engine, the adapter prepends this to the
-     * user prompt so the agent sees only the projected artifact summary
-     * rather than the full workflow state.
-     */
-    contextBlock?: string,
-    /**
-     * Effective per-task timeout in milliseconds. Computed by the engine as
-     * `task.timeoutMs ?? opts.taskTimeoutMs`. Adapters should use this instead
-     * of a hardcoded timeout; `undefined` means "use the adapter default".
-     */
-    timeoutMs?: number,
-    /**
-     * Maximum retries the engine allows for this task before marking it failed
-     * (`opts.maxRetries`). Provided so prompt-building adapters can tell the
-     * agent its retry budget (e.g. that hollow/invalid results are re-run).
-     */
-    maxRetries?: number,
-  ): Promise<TaskResult>;
+  readonly name: string;
+  /** Transport support only; engine attribution still requires serialization. */
+  readonly supportsConcurrency: boolean;
+  readonly capabilities: readonly TaskCapability[];
+  readonly defaultModel?: string;
+  prepare?(context: HarnessRunContext): Promise<void>;
+  cleanup?(): Promise<void>;
+  invoke(request: TaskAttemptRequest): Promise<TaskResult>;
 }
 
 // ─── Engine options ───────────────────────────────────────────────────────────
@@ -122,9 +122,8 @@ export interface EngineOptions {
   /** Interval (ms) between heartbeat lines while a task is executing; 0 disables. */
   heartbeatMs: number;
   /**
-   * Maximum number of ready tasks to execute concurrently. Values <= 1 run
-   * sequentially (the previous behavior). Ignored when the harness does not
-   * declare `supportsConcurrency`.
+   * Reserved concurrency setting. Tasks remain serialized until output
+   * attribution is isolated per task, regardless of transport concurrency.
    */
   maxConcurrency: number;
   /**
@@ -149,7 +148,7 @@ export interface EngineOptions {
   runValidation: boolean;
   /**
    * Auto-commit the working tree after each task completes (one commit per task,
-   * sequenced after the wave merge so it is safe with concurrency). Defaults to
+   * completed before starting the next task). Defaults to
    * `true`; set `false` (`--no-auto-commit` / `FORGE_ENGINE_AUTO_COMMIT=0`) to
    * disable. Commit failures are logged and never fail the task or the run.
    */
@@ -163,6 +162,8 @@ export interface EngineOptions {
   selectionScope?: SelectionScope;
   selectedTaskIds?: string[];
   pauseRequested: boolean;
+  /** Immediate cancellation, distinct from graceful pause/stop after a task. */
+  signal?: AbortSignal;
   /**
    * In-process stop flag (e.g. set by SIGINT/SIGTERM handlers). The engine
    * checks this alongside the control file at the top of each task wave and
@@ -185,6 +186,7 @@ export interface AuditEvent {
     | "task.started"
     | "task.complete"
     | "task.failed"
+    | "task.cancelled"
     | "task.retrying"
     | "task.skipped"
     | "task.committed"

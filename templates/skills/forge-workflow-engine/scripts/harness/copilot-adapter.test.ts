@@ -5,7 +5,9 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 
 import { CopilotAdapter } from "./copilot-adapter.ts";
-import type { AgentDescriptor, ManifestTask, WorkflowState } from "../types.ts";
+import type { AgentDescriptor, ManifestTask } from "../types.ts";
+import { prepareTaskRequest } from "../request.ts";
+import { makeNodeShim } from "../test-support.ts";
 
 interface Shim {
   bin: string;
@@ -14,16 +16,12 @@ interface Shim {
 
 function makeShim(): Shim {
   const dir = mkdtempSync(join(tmpdir(), "forge-copilot-adapter-"));
-  const bin = join(dir, "fake-copilot");
   const argsFile = join(dir, "args.json");
-  writeFileSync(
-    bin,
-    `#!/usr/bin/env node
+  const bin = makeNodeShim(dir, "fake-copilot", `
 const fs = require("fs");
 fs.writeFileSync(${JSON.stringify(argsFile)}, JSON.stringify(process.argv.slice(2)));
 process.exit(0);
 `,
-    { mode: 0o755 },
   );
   return { bin, argsFile };
 }
@@ -58,7 +56,7 @@ async function invokeWith(shim: Shim, agent: AgentDescriptor, root: string): Pro
   process.env.COPILOT_BIN = shim.bin;
   try {
     const adapter = new CopilotAdapter();
-    const result = await adapter.invoke(agent, makeTask(), {} as WorkflowState, root);
+    const result = await adapter.invoke(prepareTaskRequest({ agent, task: makeTask(), repoRoot: root, defaultModel: adapter.defaultModel }));
     assert.equal(result.success, true);
   } finally {
     if (original === undefined) delete process.env.COPILOT_BIN;
@@ -146,7 +144,7 @@ test("prompt surfaces the per-task timeout and retry budget when provided", asyn
   process.env.COPILOT_BIN = shim.bin;
   try {
     const adapter = new CopilotAdapter();
-    const result = await adapter.invoke(agent, makeTask(), {} as WorkflowState, root, undefined, 30_000, 3);
+    const result = await adapter.invoke(prepareTaskRequest({ agent, task: makeTask(), repoRoot: root, timeoutMs: 30_000, maxRetries: 3 }));
     assert.equal(result.success, true);
   } finally {
     if (original === undefined) delete process.env.COPILOT_BIN;

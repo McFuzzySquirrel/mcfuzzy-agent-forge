@@ -23,7 +23,6 @@ import {
   loadState,
   markTaskComplete,
   markTaskFailed,
-  markTaskSkipped,
   markTaskStarted,
   reconcileState,
   saveState,
@@ -38,6 +37,7 @@ import { ArtifactStore } from "./artifacts.ts";
 import { commitTaskWork } from "./commit.ts";
 import { captureWorktree, diffWorktree, runTaskValidation, verifyTaskResult } from "./verify.ts";
 import { clearControl, readControl } from "./control.ts";
+import { assertTaskCapabilities, prepareTaskRequest } from "./request.ts";
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -158,6 +158,10 @@ function expandSelectedTaskIds(manifest: ExecutionManifest, selectedTaskIds: str
     const task = findManifestTask(manifest, taskId);
     if (!task) return;
     visiting.add(taskId);
+    const phase = manifest.phases.find((candidate) => candidate.tasks.some((entry) => entry.id === taskId));
+    for (const phaseId of phase?.dependencies ?? []) {
+      for (const prerequisite of manifest.phases.find((candidate) => candidate.id === phaseId)?.tasks ?? []) visit(prerequisite.id);
+    }
     for (const depId of task.dependencies ?? []) visit(depId);
     visiting.delete(taskId);
     selected.add(taskId);
@@ -217,8 +221,8 @@ export function nextReadyTasks(manifest: ExecutionManifest, state: WorkflowState
  * Restrict a ready frontier so that at most one task per owner runs in a single
  * wave. Tasks owned by the same agent share a subsystem (project dir, build
  * outputs, ports), so dispatching them concurrently can collide even when the
- * dependency graph considers them independent. Cross-owner tasks still
- * parallelize up to `--concurrency`; same-owner tasks drain one per wave.
+ * dependency graph considers them independent. The current scheduler also
+ * serializes cross-owner tasks for repository-wide output attribution.
  *
  * First task per owner wins (manifest order); later same-owner entries stay
  * `pending` and re-enter the frontier on the next wave. Unassigned tasks share
@@ -273,15 +277,7 @@ async function executeTask(
   }
 
   if (!agent) {
-    console.warn(`[engine] No agent found for task ${task.id} (owner: ${task.ownerAgent ?? "unassigned"}). Skipping.`);
-    writeAuditEvent(opts.auditPath, {
-      timestamp: new Date().toISOString(),
-      action: "task.skipped",
-      runId: state.runId,
-      taskId: task.id,
-      note: `No agent matched owner '${task.ownerAgent ?? "unassigned"}'`,
-    });
-    return markTaskSkipped(state, task.id);
+    throw new Error(`Task '${task.id}' requires missing owner '${task.ownerAgent ?? "unassigned"}'. Restore its agent file or correct ownerAgent and recompile.`);
   }
 
   // ── Context projection ──────────────────────────────────────────────────────
@@ -345,6 +341,21 @@ async function executeTask(
 
   console.log(`[engine] Starting task ${task.id}: ${task.title} (@${agent.name})`);
 
+  const cancelAttempt = (): WorkflowState => {
+    currentState = {
+      ...currentState,
+      tasks: { ...currentState.tasks, [task.id]: {
+        ...currentState.tasks[task.id]!, status: "pending", startedAt: undefined, completedAt: undefined,
+        errorMessage: "Task cancelled", failureKind: "cancelled",
+      } },
+    };
+    writeAuditEvent(opts.auditPath, {
+      timestamp: new Date().toISOString(), action: "task.cancelled", runId: currentState.runId, taskId: task.id,
+      note: "Attempt cancelled; task remains pending for resume",
+    });
+    return currentState;
+  };
+
   for (let attempt = 0; attempt <= opts.maxRetries; attempt += 1) {
     if (attempt > 0) {
       // A stop/pause arrived during the failed attempt. Do not start another
@@ -363,6 +374,11 @@ async function executeTask(
         attempt: attempt + 1,
       });
       await sleep(opts.retryDelayMs);
+      if (shouldStop()) {
+        return { ...currentState, tasks: { ...currentState.tasks, [task.id]: { ...currentState.tasks[task.id]!, status: "pending", startedAt: undefined } } };
+      }
+      currentState = markTaskStarted(currentState, task.id);
+      saveState(opts.statePath, currentState);
     }
 
     const invokeStart = Date.now();
@@ -377,15 +393,22 @@ async function executeTask(
 
     let result: TaskResult;
     try {
-      result = await opts.harness.invoke(
-        agent,
-        task,
-        currentState,
-        opts.repoRoot,
-        contextBlock,
-        task.timeoutMs ?? opts.taskTimeoutMs,
-        opts.maxRetries,
-      );
+      result = await opts.harness.invoke(prepareTaskRequest({
+        agent, task, repoRoot: opts.repoRoot, contextBlock,
+        defaultModel: opts.harness.defaultModel, timeoutMs: opts.taskTimeoutMs,
+        maxRetries: opts.maxRetries, attempt: currentState.tasks[task.id]!.attempt,
+        runId: currentState.runId, signal: opts.signal,
+      }));
+    } catch (error) {
+      if (opts.signal?.aborted) return cancelAttempt();
+      const message = `Adapter exception: ${error instanceof Error ? error.message : String(error)}`;
+      currentState = markTaskFailed(currentState, task.id, message);
+      currentState.tasks[task.id] = { ...currentState.tasks[task.id]!, failureKind: "exception" };
+      writeAuditEvent(opts.auditPath, {
+        timestamp: new Date().toISOString(), action: "task.failed", runId: currentState.runId,
+        taskId: task.id, phaseId: entry.phaseId, note: message,
+      });
+      return currentState;
     } finally {
       if (heartbeat) clearInterval(heartbeat);
     }
@@ -395,6 +418,7 @@ async function executeTask(
     const failTask = (msg: string): WorkflowState => {
       console.error(`[engine] Task ${task.id} FAILED after ${attempt + 1} attempt(s): ${msg}`);
       currentState = markTaskFailed(currentState, task.id, msg);
+      currentState.tasks[task.id] = { ...currentState.tasks[task.id]!, failureKind: result.failureKind ?? "retryable" };
       writeAuditEvent(opts.auditPath, {
         timestamp: new Date().toISOString(),
         action: "task.failed",
@@ -406,6 +430,8 @@ async function executeTask(
       });
       return currentState;
     };
+
+    if (opts.signal?.aborted) return cancelAttempt();
 
     if (result.success) {
       // ── Output verification: never report a task complete with no evidence ─
@@ -490,7 +516,8 @@ async function executeTask(
       return currentState;
     }
 
-    if (attempt === opts.maxRetries) {
+    if (attempt === opts.maxRetries || result.failureKind === "configuration" ||
+        result.failureKind === "exception" || result.failureKind === "cancelled") {
       return failTask(result.errorMessage ?? result.stderr);
     }
   }
@@ -498,9 +525,40 @@ async function executeTask(
   return currentState;
 }
 
+async function preflightOwners(
+  manifest: ExecutionManifest, state: WorkflowState, opts: EngineOptions,
+): Promise<AgentDescriptor[]> {
+  try {
+    const { discoverForgeRepo } = await import("../../forge-execution-adapter/scripts/discovery.ts");
+    const { agents } = discoverForgeRepo(opts.repoRoot, manifest.harnessRoot);
+    const selected = scopedTaskSet(state.selection);
+    const unresolved = flattenManifest(manifest).filter(({ task }) =>
+      (!selected || selected.has(task.id)) && !isTaskDone(state.tasks[task.id]?.status) &&
+      !findAgentForTask(agents, task.ownerAgent));
+    if (unresolved.length > 0) {
+      throw new Error(`Missing required owners: ${unresolved.map(({ task }) => `${task.id} (${task.ownerAgent ?? "unassigned"})`).join(", ")}. Restore agent files or correct ownerAgent and recompile.`);
+    }
+    for (const { task } of flattenManifest(manifest)) {
+      if ((selected && !selected.has(task.id)) || isTaskDone(state.tasks[task.id]?.status)) continue;
+      assertTaskCapabilities(task, opts.harness);
+      prepareTaskRequest({ agent: findAgentForTask(agents, task.ownerAgent)!, task,
+        repoRoot: opts.repoRoot, defaultModel: opts.harness.defaultModel, timeoutMs: opts.taskTimeoutMs,
+        maxRetries: opts.maxRetries });
+    }
+    return agents;
+  } catch (error) {
+    const message = `Owner preflight failed: ${error instanceof Error ? error.message : String(error)}`;
+    const failed = { ...state, status: "failed" as const, blockers: [...state.blockers, message] };
+    saveState(opts.statePath, failed);
+    syncProgressMd(opts.progressPath, failed, manifest);
+    writeAuditEvent(opts.auditPath, { timestamp: new Date().toISOString(), action: "run.failed", runId: state.runId, note: message });
+    throw new Error(message, { cause: error });
+  }
+}
+
 // ─── Main engine loop ─────────────────────────────────────────────────────────
 
-export async function runEngine(opts: EngineOptions): Promise<WorkflowState> {
+async function runEngineSession(opts: EngineOptions): Promise<WorkflowState> {
   const manifest = loadManifest(opts.manifestPath);
   const graphWarnings = validateManifestDependencies(manifest);
   for (const warning of graphWarnings) console.warn(`[engine] Warning: ${warning}`);
@@ -552,7 +610,7 @@ export async function runEngine(opts: EngineOptions): Promise<WorkflowState> {
     console.log("[engine] Previous run ended in failure. Use `replay` to re-run failed tasks, or `run` to reset.");
   }
 
-  state = { ...state, status: "running" };
+  state = { ...state, status: "running", harness: opts.harness.name };
   saveState(opts.statePath, state);
   writeAuditEvent(opts.auditPath, {
     timestamp: new Date().toISOString(),
@@ -561,28 +619,20 @@ export async function runEngine(opts: EngineOptions): Promise<WorkflowState> {
     note: `harness=${opts.harness.name}`,
   });
 
-  const agentsDir = manifest.harnessRoot ? `${opts.repoRoot}/${manifest.harnessRoot}/agents` : "";
-  const { discoverForgeRepo } = await import("../../forge-execution-adapter/scripts/discovery.ts");
-  let agents: AgentDescriptor[] = [];
-  try {
-    const repo = discoverForgeRepo(opts.repoRoot);
-    agents = repo.agents;
-  } catch {
-    console.warn("[engine] Could not discover agent files; owner matching will be skipped.");
-  }
+  const agents = await preflightOwners(manifest, state, opts);
+  await opts.harness.prepare?.({ repoRoot: opts.repoRoot, runId: state.runId, signal: opts.signal });
 
   const store = new ArtifactStore({ artifactsPath: opts.artifactsPath });
   // Output attribution compares repository-wide worktree snapshots; running
   // tasks concurrently can attribute another task's file changes to the current
   // task. Keep execution serialized until task-isolated attribution is used.
-  const concurrency = 1;
   let currentPhaseId: string | undefined;
 
   // Stop signal: the in-process flag (SIGINT/SIGTERM) OR a pause/stop request
   // written to the control file by `workflow-engine pause|stop`. Checked at the
   // top of each wave so a running task finishes before the run pauses.
   const shouldStop = (): boolean =>
-    Boolean(opts.pauseRequested || opts.stopRequested?.() || readControl(opts.controlPath) !== null);
+    Boolean(opts.pauseRequested || opts.stopRequested?.() || opts.signal?.aborted || readControl(opts.controlPath) !== null);
 
   while (!isComplete(manifest, state) && !shouldStop()) {
     if (hasFailed(state)) {
@@ -615,34 +665,15 @@ export async function runEngine(opts: EngineOptions): Promise<WorkflowState> {
       }
     }
 
-    // Dispatch the ready frontier concurrently (bounded). Each executeTask is
-    // derived from the same base state and returns only its own task's
-    // transition, which is merged back deterministically below.
-    const results = await mapLimit(ready, concurrency, (entry) =>
-      executeTask(entry, agents, state, opts, store, shouldStop),
-    );
-
-    for (let i = 0; i < ready.length; i += 1) {
-      const taskId = ready[i]!.task.id;
-      const record = results[i]!.tasks[taskId];
-      if (record) {
-        state = {
-          ...state,
-          lastUpdatedAt: results[i]!.lastUpdatedAt,
-          tasks: { ...state.tasks, [taskId]: record },
-        };
-      }
-    }
-
-    saveState(opts.statePath, state);
-    syncProgressMd(opts.progressPath, state, manifest);
-
-    // Auto-commit: one commit per task that completed in this wave, sequenced
-    // after the merge (safe with any concurrency). Runs after saveState +
-    // syncProgressMd so the engine-owned files (WORKFLOW-STATE, audit, PROGRESS)
-    // are included in the same commit as the task's work. Defaults to on.
-    if (opts.autoCommit !== false) {
-      for (const entry of ready) {
+    // Every task starts from the authoritative state; durability and commit
+    // attribution must finish before another task can touch the worktree.
+    for (const entry of ready) {
+      if (shouldStop() || hasFailed(state)) break;
+      state = setCurrentPhase(state, entry.phaseId);
+      state = await executeTask(entry, agents, state, opts, store, shouldStop);
+      saveState(opts.statePath, state);
+      syncProgressMd(opts.progressPath, state, manifest);
+      if (opts.autoCommit !== false) {
         const record = state.tasks[entry.task.id];
         if (record?.status !== "complete") continue;
         const sha = await commitTaskWork(
@@ -705,7 +736,7 @@ export async function runEngine(opts: EngineOptions): Promise<WorkflowState> {
 
 // ─── Replay a single failed task ──────────────────────────────────────────────
 
-export async function replayTask(taskId: string, opts: EngineOptions): Promise<WorkflowState> {
+async function replayTaskSession(taskId: string, opts: EngineOptions): Promise<WorkflowState> {
   const manifest = loadManifest(opts.manifestPath);
   let state = loadState(opts.statePath);
   if (!state) throw new Error("No workflow state found. Run the engine first.");
@@ -717,30 +748,45 @@ export async function replayTask(taskId: string, opts: EngineOptions): Promise<W
   state = {
     ...state,
     status: "running",
+    harness: opts.harness.name,
     selection: undefined,
     tasks: {
       ...state.tasks,
-      [taskId]: { ...record, status: "pending", errorMessage: undefined },
+      [taskId]: {
+        ...record, status: "pending", errorMessage: undefined, failureKind: undefined,
+        startedAt: undefined, completedAt: undefined,
+      },
     },
   };
-
-  const { discoverForgeRepo } = await import("../../forge-execution-adapter/scripts/discovery.ts");
-  let agents: AgentDescriptor[] = [];
-  try {
-    const repo = discoverForgeRepo(opts.repoRoot);
-    agents = repo.agents;
-  } catch {
-    console.warn("[engine] Could not discover agent files.");
-  }
 
   const store = new ArtifactStore({ artifactsPath: opts.artifactsPath });
   const phaseId = findPhaseForTask(manifest, taskId);
   const task = findTask(manifest, taskId);
   if (!task || !phaseId) throw new Error(`Task '${taskId}' not found in manifest.`);
+  const dependencyIds = expandSelectedTaskIds(manifest, [taskId]).filter((id) => id !== taskId);
+  const replayRecords = state.tasks;
+  const incomplete = dependencyIds.filter((id) => !isTaskDone(replayRecords[id]?.status));
+  if (incomplete.length > 0) throw new Error(`Cannot replay '${taskId}': incomplete dependencies ${incomplete.join(", ")}. Run them first.`);
+  const agents = await preflightOwners(manifest, {
+    ...state, selection: { mode: "manual", taskIds: [taskId] },
+  }, opts);
+  saveState(opts.statePath, state);
+  if (!opts.signal?.aborted) {
+    await opts.harness.prepare?.({ repoRoot: opts.repoRoot, runId: state.runId, signal: opts.signal });
+  }
 
   const entry = { phaseId, phaseIndex: manifest.phases.findIndex((p) => p.id === phaseId), task };
-  state = await executeTask(entry, agents, state, opts, store, () => false);
-  if (!hasFailed(state) && isComplete(manifest, state)) {
+  state = await executeTask(entry, agents, state, opts, store, () => Boolean(opts.signal?.aborted));
+  if (opts.signal?.aborted && !isComplete(manifest, state)) {
+    state = { ...state, status: "paused" };
+    writeAuditEvent(opts.auditPath, {
+      timestamp: new Date().toISOString(), action: "run.paused", runId: state.runId,
+      note: "Replay cancelled; pending work can be resumed",
+    });
+    clearControl(opts.controlPath);
+  } else if (hasFailed(state)) {
+    state = { ...state, status: "failed" };
+  } else if (isComplete(manifest, state)) {
     state = { ...state, status: "complete" };
   }
 
@@ -768,4 +814,40 @@ export async function replayTask(taskId: string, opts: EngineOptions): Promise<W
   }
 
   return state;
+}
+
+async function withHarnessLifecycle(opts: EngineOptions, run: () => Promise<WorkflowState>): Promise<WorkflowState> {
+  try {
+    try {
+      return await run();
+    } finally {
+      await opts.harness.cleanup?.();
+    }
+  } catch (error) {
+    const state = loadState(opts.statePath);
+    if (state) {
+      const message = error instanceof Error ? error.message : String(error);
+      const cancelled = opts.signal?.aborted;
+      let failed: WorkflowState = { ...state, status: cancelled ? "paused" : "failed", blockers: [...state.blockers, message] };
+      for (const record of Object.values(failed.tasks)) {
+        if (record.status === "running") {
+          failed = markTaskFailed(failed, record.taskId, message);
+          failed.tasks[record.taskId] = { ...failed.tasks[record.taskId]!, failureKind: cancelled ? "cancelled" : "exception",
+            ...(cancelled ? { status: "pending", startedAt: undefined, completedAt: undefined } : {}) };
+        }
+      }
+      saveState(opts.statePath, failed);
+      syncProgressMd(opts.progressPath, failed, loadManifest(opts.manifestPath));
+      writeAuditEvent(opts.auditPath, { timestamp: new Date().toISOString(), action: cancelled ? "run.paused" : "run.failed", runId: state.runId, note: message });
+    }
+    throw error;
+  }
+}
+
+export function runEngine(opts: EngineOptions): Promise<WorkflowState> {
+  return withHarnessLifecycle(opts, () => runEngineSession(opts));
+}
+
+export function replayTask(taskId: string, opts: EngineOptions): Promise<WorkflowState> {
+  return withHarnessLifecycle(opts, () => replayTaskSession(taskId, opts));
 }

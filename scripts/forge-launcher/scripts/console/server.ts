@@ -11,6 +11,10 @@ import { resolveResources } from "../resources.ts";
 import { resolveInputFile } from "../paths.ts";
 import { launchCliInTerminal } from "../terminal.ts";
 import { RunController, type ControlDeps } from "./control.ts";
+import { IncrementalLineReader } from "./incremental-reader.ts";
+import { consoleAuthoringInventory } from "./authoring.ts";
+import { loadAuthoringConfig, saveAuthoringConfig, validateAuthoringConfig } from "../authoring-config.ts";
+import type { InventoryProbe } from "../authoring-inventory.ts";
 import {
   detectHarnessRoot,
   loadRegistry,
@@ -41,6 +45,7 @@ export interface ConsoleServerOptions {
   allowExternalOpen?: boolean;
   /** Injectable "launch a harness CLI in a terminal" seam (defaults to launchCliInTerminal). */
   launchCli?: (cli: string, dir: string, args: string[]) => Promise<boolean>;
+  inventoryProbe?: InventoryProbe;
 }
 
 export interface ConsoleServer {
@@ -203,8 +208,9 @@ export async function startConsoleServer(options: ConsoleServerOptions = {}): Pr
   const controller = new RunController(options.repoRoot ?? "", options.deps);
 
   let currentRepo: string | null = options.repoRoot ?? null;
-  const auditOffsetRef = { offset: 0 };
-  const logOffsetRef = { offset: 0 };
+  const auditReader = new IncrementalLineReader({ partialLinePolicy: "hold" });
+  const logReader = new IncrementalLineReader({ partialLinePolicy: "emit" });
+  const authoringReader = new IncrementalLineReader({ partialLinePolicy: "hold" });
 
   const currentPaths = () => (currentRepo ? repoPaths(currentRepo) : null);
 
@@ -231,64 +237,54 @@ export async function startConsoleServer(options: ConsoleServerOptions = {}): Pr
 
   function resetOffsets(): void {
     const p = currentPaths();
-    auditOffsetRef.offset = p ? fileSize(p.auditPath) : 0;
-    logOffsetRef.offset = p ? fileSize(p.logPath) : 0;
-  }
-
-  function fileSize(file: string): number {
-    try {
-      return fs.statSync(file).size;
-    } catch {
-      return 0;
-    }
+    auditReader.reset(p?.auditPath, true);
+    logReader.reset(p?.logPath, true);
+    authoringReader.reset(p?.logPath, true);
   }
 
   // ── Audit/log tailing (single poller, follows the current repo) ────────────
-  function readNewLines(file: string, offsetRef: { offset: number }): string[] {
-    let size: number;
-    try {
-      size = fs.statSync(file).size;
-    } catch {
-      return [];
-    }
-    if (size < offsetRef.offset) offsetRef.offset = 0;
-    if (size <= offsetRef.offset) return [];
-    const fd = fs.openSync(file, "r");
-    const buffer = Buffer.alloc(size - offsetRef.offset);
-    fs.readSync(fd, buffer, 0, buffer.length, offsetRef.offset);
-    fs.closeSync(fd);
-    offsetRef.offset = size;
-    return buffer.toString("utf8").split("\n").filter((l) => l.length > 0);
-  }
-
   resetOffsets();
 
   const poller = setInterval(() => {
-    const jobsChanged = repo.refreshJobs();
-    const p = currentPaths();
-    if (p) {
-      for (const line of readNewLines(p.auditPath, auditOffsetRef)) {
-        const trimmed = line.trim();
-        if (!trimmed) continue;
+    try {
+      const jobsChanged = repo.refreshJobs();
+      const p = currentPaths();
+      if (p) {
         try {
-          broadcast("audit", JSON.parse(trimmed));
-        } catch {
-          // partial line mid-append
-        }
-      }
-      for (const line of readNewLines(p.logPath, logOffsetRef)) {
-        broadcast("log", { line });
-        if (line.startsWith(FORGE_EVENT_PREFIX)) {
-          try {
-            const event = JSON.parse(line.slice(FORGE_EVENT_PREFIX.length));
-            if (event && typeof event.type === "string") broadcast("authoring", event);
-          } catch {
-            // Keep malformed or partial authoring records as ordinary log lines.
+          for (const line of auditReader.read(p.auditPath).lines) {
+            const trimmed = line.trim();
+            if (!trimmed) continue;
+            try {
+              broadcast("audit", JSON.parse(trimmed));
+            } catch (error) {
+              onLog(`  console: invalid audit record: ${error instanceof Error ? error.message : String(error)}`);
+            }
           }
+        } catch (error) {
+          onLog(`  console: failed to read audit log: ${error instanceof Error ? error.message : String(error)}`);
+        }
+        try {
+          for (const line of logReader.read(p.logPath).lines) {
+            broadcast("log", { line });
+          }
+          for (const line of authoringReader.read(p.logPath).lines) {
+            if (line.startsWith(FORGE_EVENT_PREFIX)) {
+              try {
+                const event = JSON.parse(line.slice(FORGE_EVENT_PREFIX.length));
+                if (event && typeof event.type === "string") broadcast("authoring", event);
+              } catch (error) {
+                onLog(`  console: invalid authoring record: ${error instanceof Error ? error.message : String(error)}`);
+              }
+            }
+          }
+        } catch (error) {
+          onLog(`  console: failed to read engine log: ${error instanceof Error ? error.message : String(error)}`);
         }
       }
+      if (jobsChanged) broadcast("snapshot", snapshotEvent());
+    } catch (error) {
+      onLog(`  console: poller error: ${error instanceof Error ? error.message : String(error)}`);
     }
-    if (jobsChanged) broadcast("snapshot", snapshotEvent());
   }, POLL_INTERVAL_MS);
   poller.unref?.();
 
@@ -351,6 +347,12 @@ export async function startConsoleServer(options: ConsoleServerOptions = {}): Pr
             return p ? sendJson(res, 200, repo.team(p)) : sendJson(res, 200, { harnessRoot: null, agents: [], skills: [] });
           case "/api/model-inventory":
             return p ? sendJson(res, 200, repo.modelInventory(p)) : sendJson(res, 200, { models: [] });
+          case "/api/authoring-config":
+            return sendJson(res, 200, p ? loadAuthoringConfig(p.repoRoot) : { version: 1, models: {} });
+          case "/api/authoring-inventory": {
+            const query = new URLSearchParams(rawUrl.split("?")[1] ?? "");
+            return sendJson(res, 200, await consoleAuthoringInventory(p?.repoRoot, query.get("runner") ?? undefined));
+          }
           case "/api/actions":
             return p ? sendJson(res, 200, repo.actions(p)) : sendJson(res, 200, { canRun: false, canResume: false, canPause: false, canStop: false, failedTasks: [] });
           case "/api/projects": {
@@ -396,6 +398,21 @@ export async function startConsoleServer(options: ConsoleServerOptions = {}): Pr
         if (!authorized) return sendText(res, 403, "forbidden");
         const body = (await readBody(req)) as Record<string, unknown>;
 
+        if (urlPath === "/api/authoring-config") {
+          if (!currentRepo) return sendJson(res, 400, { ok: false, message: "no repo selected" });
+          let config;
+          try {
+            config = validateAuthoringConfig(body);
+          } catch (error) {
+            return sendJson(res, 400, { ok: false, message: error instanceof Error ? error.message : String(error) });
+          }
+          const saved = saveAuthoringConfig(currentRepo, config);
+          broadcast("snapshot", snapshotEvent());
+          return sendJson(res, 200, { ok: true, config: saved, message: "Authoring models saved. Omitted stages inherit the runner default." });
+        }
+        if (urlPath === "/api/authoring-inventory/refresh") {
+          return sendJson(res, 200, await consoleAuthoringInventory(currentRepo ?? undefined, body.runner, true, options.inventoryProbe));
+        }
         if (urlPath === "/api/control") {
           const action = body.action as ControlAction;
           const taskId = typeof body.taskId === "string" ? body.taskId : undefined;
@@ -545,6 +562,13 @@ export async function startConsoleServer(options: ConsoleServerOptions = {}): Pr
           const req = body as unknown as CreateProjectRequest;
           if (!req.name || !req.idea) {
             return sendJson(res, 400, { ok: false, message: "name and idea are required" });
+          }
+          if (req.authoringConfig !== undefined) {
+            try {
+              req.authoringConfig = validateAuthoringConfig(req.authoringConfig);
+            } catch (error) {
+              return sendJson(res, 400, { ok: false, message: error instanceof Error ? error.message : String(error) });
+            }
           }
           if (req.concurrency !== undefined) {
             if (typeof req.concurrency !== "number" || !Number.isInteger(req.concurrency) || req.concurrency <= 0) {

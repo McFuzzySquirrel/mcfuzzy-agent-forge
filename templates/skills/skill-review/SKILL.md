@@ -22,7 +22,7 @@ When the user asks for script-based validation, run commands from this skill dir
 
 ```bash
 npm install
-npm run skill-review -- --provider stdout --min-score 1.5
+npm run skill-review -- --provider stdout --min-score 2 --fail-below --min-axis 2 --fail-axis-below --fail-structural
 ```
 
 The script auto-detects the git repository root, so it can be run from inside the skill folder.
@@ -56,6 +56,10 @@ Also check:
 - [ ] YAML frontmatter is valid
 - [ ] File references use relative paths from skill root
 - [ ] No more than one level of reference chain depth
+
+For generation gates, use `--fail-below` together with
+`--fail-axis-below --min-axis 2 --fail-structural`. An average score is
+advisory unless every axis and structural check passes.
 
 Before applying any edits, write a short review plan that lists the top issues, the proposed changes, and the reason for each change. Present that plan to the user first.
 

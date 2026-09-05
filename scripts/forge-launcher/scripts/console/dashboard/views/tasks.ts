@@ -21,6 +21,7 @@ let tableHost: HTMLElement | null = null;
 let countLine: HTMLElement | null = null;
 let selectedIds = new Set<string>();
 let selectionScope: SelectionScope | null = null;
+let refreshGeneration = 0;
 
 export function unmountTasks(): void {
   for (const u of unsub) u();
@@ -46,6 +47,9 @@ export async function renderTasks(container: HTMLElement): Promise<void> {
   unmountTasks();
   container.textContent = "";
   const myGen = ++gen;
+  unsub.push(store.subscribe(() => {
+    void refresh();
+  }));
 
   const fromHash = taskFilterFromHash();
   if (fromHash) {
@@ -143,11 +147,13 @@ export async function renderTasks(container: HTMLElement): Promise<void> {
     ]),
   );
 
+  const request = ++refreshGeneration;
   try {
     allTasks = await api.tasks();
   } catch {
     allTasks = [];
   }
+  if (request !== refreshGeneration || myGen !== gen) return;
   for (const task of allTasks) {
     rangeStart.appendChild(el("option", { value: task.id }, `${task.id} — ${task.title}`));
     rangeEnd.appendChild(el("option", { value: task.id }, `${task.id} — ${task.title}`));
@@ -181,7 +187,7 @@ export async function renderTasks(container: HTMLElement): Promise<void> {
 }
 
 function chip(label: string, active: boolean, onClick: () => void): HTMLElement {
-  const node = el("span", { className: active ? "chip active" : "chip" }, label);
+  const node = el("button", { className: active ? "chip active" : "chip", type: "button", "aria-pressed": String(active) }, label);
   node.addEventListener("click", onClick);
   return node;
 }
@@ -197,8 +203,11 @@ async function launchCli(): Promise<void> {
 }
 
 async function refresh(): Promise<void> {
+  const request = ++refreshGeneration;
   try {
-    allTasks = await api.tasks();
+    const tasks = await api.tasks();
+    if (request !== refreshGeneration) return;
+    allTasks = tasks;
   } catch {
     // keep the existing rows on failure
   }
@@ -281,7 +290,7 @@ function renderTable(): void {
   }
 
   tableHost.appendChild(
-    el("table", null, [
+    el("div", { className: "table-scroll" }, [el("table", null, [
       el("thead", null, [
         el("tr", null, [
           plainTh("Pick"),
@@ -296,12 +305,13 @@ function renderTable(): void {
         ]),
       ]),
       tbody,
-    ]),
+    ])]),
   );
 }
 
 function checkboxCell(taskId: string): HTMLElement {
   const input = el("input", { type: "checkbox", checked: selectedIds.has(taskId) ? true : null }) as HTMLInputElement;
+  input.setAttribute("aria-label", `Select task ${taskId}`);
   input.addEventListener("click", (event) => event.stopPropagation());
   input.addEventListener("change", () => {
     if (input.checked) selectedIds.add(taskId);
@@ -369,13 +379,22 @@ function plainTh(label: string): HTMLElement {
 
 function th(label: string, key: SortKey): HTMLElement {
   const node = el("th", { className: "sortable" }, sortKey === key ? `${label} ${sortDir === 1 ? "▲" : "▼"}` : label);
-  node.addEventListener("click", () => {
+  const sort = (): void => {
     if (sortKey === key) sortDir = sortDir === 1 ? -1 : 1;
     else {
       sortKey = key;
       sortDir = 1;
     }
     renderTable();
+  };
+  node.addEventListener("click", sort);
+  node.setAttribute("tabindex", "0");
+  node.setAttribute("role", "button");
+  node.addEventListener("keydown", (event) => {
+    if (event.key === "Enter" || event.key === " ") {
+      event.preventDefault();
+      sort();
+    }
   });
   return node;
 }

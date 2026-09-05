@@ -202,7 +202,7 @@ test("compileExecutionManifest does not treat framework names like ASP.NET as ex
   assert.ok(task2.expectedOutputs.includes("src/HumanGateway.Core"), "real paths still extracted");
 });
 
-test("compileExecutionManifest prefers an orchestrator fallback owner", () => {
+test("compileExecutionManifest excludes Forge coordinators from fallback owners", () => {
   const root = createFixture();
   writeFileSync(join(root, ".agents", "agents", "workflow-orchestrator.md"), `---
 name: workflow-orchestrator
@@ -220,8 +220,46 @@ description: Coordinates the build and handles cross-cutting polish.
 
   const task = manifest.phases[0]?.tasks[0];
   assert.ok(task);
-  assert.equal(task.ownerAgent, "workflow-orchestrator");
-  assert.match(manifest.warnings.join("\n"), /defaulting to 'workflow-orchestrator'/);
+  assert.equal(task.ownerAgent, "api-engineer");
+  assert.match(manifest.warnings.join("\n"), /defaulting to 'api-engineer'/);
+});
+
+test("bootstrapped tooling agents cannot displace a generated specialist during compilation", () => {
+  const root = mkdtempSync(join(tmpdir(), "forge-bootstrapped-team-"));
+  const agentRoot = join(root, ".github", "agents");
+  mkdirSync(agentRoot, { recursive: true });
+  mkdirSync(join(root, "docs"), { recursive: true });
+  for (const name of ["forge-team-builder", "project-orchestrator", "workflow-orchestrator"]) {
+    writeFileSync(join(agentRoot, `${name}.md`),
+      `---\nname: ${name}\ndescription: Creates service entry point src/index.ts and coordinates the foundation build.\n---\n`);
+  }
+  writeFileSync(join(agentRoot, "service-engineer.md"),
+    "---\nname: service-engineer\ndescription: Implements application services.\n---\n");
+  writeFileSync(join(root, "docs", "PRD.md"),
+    "# PRD\n\n## Phase 1: Foundation\n- Create service entry point `src/index.ts`\n- Zygomorphic flux calibration\n");
+  const repo = discoverForgeRepo(root, ".github");
+  assert.equal(repo.agents.length, 4, "discovery must retain tooling for legacy execution");
+  const compiled = compileExecutionManifestDetailed(repo);
+  const tasks = compiled.manifest.phases.flatMap((phase) => phase.tasks);
+  assert.equal(tasks.length, 2);
+  assert.ok(tasks.every((task) => task.ownerAgent === "service-engineer"), "both scoring and fallback use implementation candidates only");
+  assert.deepEqual(compiled.manifest.phases[0]?.ownerAgents, ["service-engineer"]);
+  assert.deepEqual(compiled.validation.orphanAgents, []);
+  assert.deepEqual(compiled.validation.unassignedTasks, []);
+  assert.ok(!compiled.manifest.warnings.some((warning) => /(?:→|defaulting to).*forge-team-builder/.test(warning)));
+});
+
+test("tooling-only compilation leaves implementation work unassigned with an actionable warning", () => {
+  const root = mkdtempSync(join(tmpdir(), "forge-tooling-only-"));
+  mkdirSync(join(root, ".github", "agents"), { recursive: true });
+  mkdirSync(join(root, "docs"), { recursive: true });
+  writeFileSync(join(root, ".github", "agents", "forge-team-builder.md"),
+    "---\nname: forge-team-builder\ndescription: Create service entry point.\n---\n");
+  writeFileSync(join(root, "docs", "PRD.md"), "# PRD\n\n## Phase 1: Foundation\n- Create service entry point `src/index.ts`\n");
+  const compiled = compileExecutionManifestDetailed(discoverForgeRepo(root, ".github"));
+  assert.equal(compiled.manifest.phases[0]?.tasks[0]?.ownerAgent, undefined);
+  assert.deepEqual(compiled.validation.unassignedTasks, ["1.1"]);
+  assert.match(compiled.manifest.warnings.join("\n"), /Generate a project-specific team/);
 });
 
 test("compileExecutionManifest defaults to fine granularity and records it", () => {

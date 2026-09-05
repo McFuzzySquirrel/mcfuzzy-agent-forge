@@ -18,8 +18,6 @@ import { OpenCodeAdapter } from "./harness/opencode-adapter.ts";
 import { CopilotAdapter } from "./harness/copilot-adapter.ts";
 import { OpenAIAdapter } from "./harness/openai-adapter.ts";
 import { StubAdapter } from "./harness/stub-adapter.ts";
-import { FlowForgeKernelAdapter } from "./harness/flowforge-kernel-adapter.ts";
-import { startAttachServer } from "./harness/opencode-server.ts";
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -27,7 +25,7 @@ function usage(): never {
   console.log(`forge-workflow-engine
 
 Usage:
-  npm run workflow-engine -- run     [--repo <path>] [--harness opencode|copilot|openai|stub|flowforge-kernel]
+  npm run workflow-engine -- run     [--repo <path>] [--harness opencode|copilot|openai|stub]
                                      [--max-retries <n>] [--retry-delay-ms <ms>] [--heartbeat-ms <ms>] [--concurrency <n>] [--task-timeout-ms <ms>] [--yes]
                                      [--allow-noop] [--run-validation]
                                      [--auto-commit|--no-auto-commit] [--commit-message-template <tmpl>]
@@ -35,7 +33,7 @@ Usage:
                                      [--viz [port]] [--no-open]
                                      [--keep-alive] [--keep-alive-port <port>] [--attach <url>] [--no-keep-alive]
   npm run workflow-engine -- status  [--repo <path>]
-  npm run workflow-engine -- replay  <task-id> [--repo <path>] [--harness opencode|copilot|openai|stub|flowforge-kernel]
+  npm run workflow-engine -- replay  <task-id> [--repo <path>] [--harness opencode|copilot|openai|stub]
   npm run workflow-engine -- pause   [--repo <path>]
   npm run workflow-engine -- stop    [--repo <path>]
   npm run workflow-engine -- viz     [--repo <path>] [--port <port>] [--no-open]
@@ -43,7 +41,7 @@ Usage:
 Environment variables:
   FORGE_ENGINE_YES      Skip the pre-run confirmation gate (same as --yes)
   FORGE_ENGINE_HEARTBEAT_MS  Heartbeat interval in ms while a task runs (default: 60000)
-  FORGE_ENGINE_CONCURRENCY   Max ready tasks to run in parallel (default: 1; ignored unless harness supports concurrency)
+  FORGE_ENGINE_CONCURRENCY   Reserved concurrency setting (execution remains serialized for output attribution)
   FORGE_ENGINE_TASK_TIMEOUT_MS   Per-task timeout in ms (default: 600000 / 10 min; per-task manifest timeoutMs overrides)
   FORGE_ENGINE_ALLOW_NOOP        "1" to allow tasks that produce no expected outputs, no file changes, and only
                                  trivial agent output to count as complete (bypasses the no-op output gate)
@@ -69,16 +67,9 @@ Pause & stop:
   COPILOT_EXTRA_FLAGS    Extra flags passed to copilot -p (e.g. "--model gpt-4o")
   OPENAI_API_KEY         Required for --harness openai
   OPENAI_BASE_URL        OpenAI API base URL (default: https://api.openai.com/v1)
-  OPENAI_MODEL           Model override for OpenAI adapter (default: gpt-4o)
+  OPENAI_MODEL           Transport default below task/agent models (default: gpt-4o)
   STUB_FAIL_TASK_IDS     Comma-separated task IDs to fail in stub adapter
   STUB_DELAY_MS          Simulated latency for stub adapter
-  FLOWFORGE_KERNEL_BIN               FlowForge CLI binary (default: flowforge)
-  FLOWFORGE_WORKFORCE_PATH           Optional override for compiled .workforce directory
-  FLOWFORGE_WORKFLOW_ID              Workflow id in workforce package (default: forge-build)
-  FLOWFORGE_KERNEL_MOCK              Use --mock when invoking FlowForge CLI (default: false)
-  FLOWFORGE_KERNEL_EXTRA_FLAGS       Extra flags appended to FlowForge kernel command
-  FLOWFORGE_KERNEL_COMMAND_ARGS_JSON Optional JSON array of args with placeholders
-  FLOWFORGE_VALIDATE_WORKFORCE       Validate workforce before run (default: true)
 `);
   process.exit(1);
 }
@@ -137,15 +128,32 @@ function detectRepoRoot(start = process.cwd()): string {
 
 import { shouldKeepAlive, remainingTaskCount, type KeepAliveDecision } from "./keepalive.ts";
 
+function harnessNameFor(args: string[], repoRoot: string): string {
+  const explicit = flag(args, "--harness") ?? process.env["FORGE_ENGINE_HARNESS"];
+  if (explicit !== undefined) return explicit;
+  const configPath = join(repoRoot, "docs", "engine-config.json");
+  if (!existsSync(configPath)) return "opencode";
+  const config: unknown = JSON.parse(readFileSync(configPath, "utf8"));
+  if (typeof config !== "object" || config === null || Array.isArray(config)) {
+    throw new Error(`Invalid engine configuration at ${configPath}: expected an object.`);
+  }
+  if (!("harness" in config)) return "opencode";
+  if (typeof config.harness !== "string" || !config.harness.trim()) {
+    throw new Error(`Invalid engine harness in ${configPath}. Select opencode, copilot, openai, or stub.`);
+  }
+  return config.harness;
+}
+
 function resolveHarness(name: string | undefined, attachUrl?: string): HarnessAdapter {
   switch (name ?? "opencode") {
     case "opencode": return new OpenCodeAdapter({ attachUrl });
     case "copilot": return new CopilotAdapter();
     case "openai": return new OpenAIAdapter();
     case "stub": return new StubAdapter();
-    case "flowforge-kernel": return new FlowForgeKernelAdapter();
+    case "flowforge-kernel":
+      throw new Error("The flowforge-kernel harness is retired. Select opencode or copilot for native repository execution (openai supports explicit text tasks only), and update docs/engine-config.json or FORGE_ENGINE_HARNESS. Existing .workforce artifacts are preserved.");
     default:
-      console.error(`Unknown harness: '${name}'. Choose opencode, copilot, openai, stub, or flowforge-kernel.`);
+      console.error(`Unknown harness: '${name}'. Choose opencode, copilot, openai, or stub.`);
       process.exit(1);
   }
 }
@@ -227,7 +235,7 @@ async function confirmPreRun(opts: EngineOptions, args: string[], keepAlive?: Ke
   console.log(`  Tasks   : ${taskCount}`);
   console.log(`  Timeout : ${opts.taskTimeoutMs}ms per task (--task-timeout-ms / per-task timeoutMs overrides)`);
   console.log(`  Retries : ${opts.maxRetries} max, ${opts.retryDelayMs}ms between attempts (--max-retries / --retry-delay-ms)`);
-  console.log(`  Concurrency: ${opts.maxConcurrency} (--concurrency; sequential unless the harness opts in)`);
+  console.log(`  Concurrency: serialized for repository output attribution (--concurrency is reserved)`);
   console.log(`  Keep-alive: ${keepAliveLabel}`);
   console.log(`  Output gate: ${opts.allowNoop ? "relaxed (--allow-noop: no-op tasks allowed)" : "strict (missing outputs / no-op tasks are retried then failed)"}`);
   if (opts.runValidation) console.log("  Validation: running manifest validationCommands per task (--run-validation)");
@@ -270,7 +278,7 @@ async function confirmPreRun(opts: EngineOptions, args: string[], keepAlive?: Ke
 async function cmdRun(args: string[]): Promise<void> {
   const repoArg = flag(args, "--repo");
   const repoRoot = repoArg ? resolve(repoArg) : detectRepoRoot();
-  const harnessName = flag(args, "--harness") ?? process.env["FORGE_ENGINE_HARNESS"] ?? "opencode";
+  const harnessName = harnessNameFor(args, repoRoot);
   const manifestPath = join(repoRoot, "docs", "EXECUTION-MANIFEST.json");
 
   if (!existsSync(manifestPath)) {
@@ -300,20 +308,6 @@ async function cmdRun(args: string[]): Promise<void> {
     console.warn("[engine] --keep-alive only applies to the opencode harness; ignoring.");
   }
 
-  if (decision.startServer) {
-    const port = Number(flag(args, "--keep-alive-port") ?? "0") || undefined;
-    const startedAt = Date.now();
-    const server = await startAttachServer({
-      bin: process.env["OPENCODE_BIN"] ?? "opencode",
-      repoRoot,
-      port,
-    });
-    console.log(`[engine] opencode attach server ready at ${server.url} in ${Date.now() - startedAt}ms`);
-    await runWithServer(args, repoRoot, harnessName, server.url, decision);
-    await server.stop();
-    return;
-  }
-
   await runWithServer(args, repoRoot, harnessName, attachUrl, decision);
 }
 
@@ -325,6 +319,12 @@ async function runWithServer(
   decision: KeepAliveDecision,
 ): Promise<void> {
   const opts = buildOptions(args, repoRoot, harnessName, attachUrl);
+  if (harnessName === "opencode") {
+    opts.harness = new OpenCodeAdapter({
+      attachUrl, startServer: decision.startServer,
+      port: Number(flag(args, "--keep-alive-port") ?? "0") || undefined,
+    });
+  }
 
   // Stop signal: Ctrl+C / SIGTERM set an in-process flag the engine checks at
   // the top of each task wave (alongside the docs/engine-control.json file).
@@ -338,8 +338,10 @@ async function runWithServer(
     signalStopped = true;
     console.log(`[engine] Received ${signal} - stopping after the current task.`);
   };
-  process.on("SIGINT", () => onStopSignal("SIGINT"));
-  process.on("SIGTERM", () => onStopSignal("SIGTERM"));
+  const onInterrupt = () => onStopSignal("SIGINT");
+  const onTerminate = () => onStopSignal("SIGTERM");
+  process.on("SIGINT", onInterrupt);
+  process.on("SIGTERM", onTerminate);
 
   writePid(opts.pidPath, process.pid);
 
@@ -362,6 +364,7 @@ async function runWithServer(
     const state = await runEngine({ ...opts, stopRequested: () => signalStopped });
 
     console.log(`\nRun ${state.runId} finished with status: ${state.status}`);
+    if (state.status === "failed") process.exitCode = 1;
     const completed = Object.values(state.tasks).filter((t) => t.status === "complete").length;
     const total = Object.keys(state.tasks).length;
     console.log(`Tasks: ${completed}/${total} complete`);
@@ -379,6 +382,8 @@ async function runWithServer(
       for (const b of state.blockers) console.log(`  - ${b}`);
     }
   } finally {
+    process.off("SIGINT", onInterrupt);
+    process.off("SIGTERM", onTerminate);
     removePid(opts.pidPath);
     if (viz) await viz.stop();
   }
@@ -433,10 +438,11 @@ async function cmdReplay(args: string[]): Promise<void> {
   const rest = args.slice(1);
   const repoArg = flag(rest, "--repo");
   const repoRoot = repoArg ? resolve(repoArg) : detectRepoRoot();
-  const harnessName = flag(rest, "--harness");
+  const harnessName = harnessNameFor(rest, repoRoot);
   const attachUrl = flag(rest, "--attach") ?? process.env["FORGE_ENGINE_ATTACH_URL"];
   const opts = buildOptions(rest, repoRoot, harnessName, attachUrl);
   const state = await replayTask(taskId, opts);
+  if (state.status === "failed") process.exitCode = 1;
   const record = state.tasks[taskId];
   console.log(`Replay of task ${taskId}: ${record?.status}`);
   if (record?.errorMessage) console.error(`Error: ${record.errorMessage}`);
