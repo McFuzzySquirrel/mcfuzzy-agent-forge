@@ -56,8 +56,8 @@ test("model discovery works before a project exists and filters by runner", asyn
     inventoryProbe: async (runner, args) => {
       probes++;
       assert.equal(runner, "copilot");
-      assert.deepEqual(args, ["-p", "/model list"]);
-      return { code: 0, stdout: "gpt-6-astra\ngpt-5.6-luna\n", stderr: "" };
+      assert.deepEqual(args, ["--help"]);
+      return { code: 0, stdout: "Models:\n- gpt-6-astra\n- gpt-5.6-luna\n", stderr: "" };
     },
   });
   t.after(() => server.stop());

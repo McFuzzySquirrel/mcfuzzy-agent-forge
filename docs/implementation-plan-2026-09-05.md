@@ -3,7 +3,9 @@
 ## WIP checkpoint - 5 September 2026
 
 Implementation was paused at the user's request to conserve AI credits and
-preserve the work on a new remote branch. This is **not a release-ready change**.
+preserve the work on a new remote branch. The checkpoint below records the
+paused state. The completion update that follows records the subsequent
+implementation and validation evidence.
 The user authorized this checkpoint commit and push; the earlier no-commit
 restriction below describes the original implementation authorization.
 
@@ -27,7 +29,58 @@ restriction below describes the original implementation authorization.
   improvements, pure-state coverage, five refreshed screenshots, draft migration
   docs/ADRs, and a Linux/Windows CI matrix.
 
-### Resume here: known unfinished work
+### Completion update - 5 September 2026
+
+All seven checkpoint work items are implemented. The remaining limitations are
+environmental: the installed Copilot CLI 1.0.83 exposes no model IDs through
+its non-generative `--help` metadata, so live Copilot refresh fails closed for
+explicit selections and inherited defaults remain available; no Windows or
+interactive browser session was available for this run.
+
+1. **Authoritative Copilot inventory:** complete. Copilot refresh uses
+   `copilot --help` metadata only, with strict model-section parsing and
+   explicit failure when the CLI exposes no IDs. Injected probes and Console
+   tests use the metadata contract; no model prompt is submitted.
+2. **Creation persistence and fingerprints:** complete. New Project model
+   selections flow through the project creation save path, direct stage
+   overrides remain invocation-scoped, and authored fingerprints ignore
+   dependency/build/coverage/cache directories.
+3. **Quality parity:** complete. Team validation and `skill-review` consume
+   the shared rubric and structural checker, with parity and team-only tests.
+4. **Launcher quality gate:** complete. Affected non-omit skill outputs receive
+   structural and minimum-per-axis checks before skills completion/readiness;
+   empty/all-omit handoffs succeed explicitly and team validation does not
+   require future skill packages.
+5. **Astra UI findings:** complete in the frontend contracts. Task controls
+   are wired before asynchronous responses can be superseded; model selections
+   survive inventory/harness changes; dirty saves block retries; stale stages
+   expose regeneration; and same-project snapshots refresh generated listings
+   and stage actions.
+6. **Template/reference/retirement audit:** complete for active templates and
+   mode references. `forge-auto-build` now documents the independent skill
+   stage, the historical review is marked as remediated, and ADR-041 plus the
+   v3.53 changelog/README entries record the final contracts.
+7. **Final assembly:** complete for available tooling. Launcher 177 tests,
+   launcher typecheck/build/version check, execution adapter 27 tests plus
+   typecheck, workflow engine 139 tests plus typecheck, team validator 12
+   tests, skill-review 4 tests plus typecheck, and packed bootstrap smoke all
+   pass.
+
+### Closeout update
+
+The active documentation audit is complete. Current launcher, Console, skill,
+schema, and bundled-resource guidance now describes non-generative
+`copilot --help` metadata discovery and fail-closed explicit selections.
+Historical ADRs, research, release entries, and regression fixtures retain
+their superseded FlowForge and `/model list` references as historical records.
+The final available validation rerun passed, including launcher packaging
+manifest inspection; Windows and interactive browser execution remain
+environmental limitations rather than unverified completion claims.
+
+### Historical unfinished-work list
+
+The original list is retained as an audit record; the completion update above
+supersedes its unfinished status.
 
 1. **Authoritative Copilot inventory:** `authoring-inventory.ts` still needs its
    `copilot -p "/model list"` discovery path verified/replaced. Do not use a model
@@ -81,7 +134,8 @@ but the final package must be rebuilt after the remaining changes.
 
 Windows execution and live model authoring were not performed. Browser scripts
 and disposable packaging fixtures were session-only; they are not in this commit.
-The v3.52 release text and ADRs are drafts until integration is complete.
+At the checkpoint, the v3.52 release text and ADRs were drafts; the completion
+update above records the subsequent integration and documentation work.
 
 ## Goal and confirmed scope
 
@@ -308,3 +362,15 @@ Use existing tooling; install dependencies only after a manifest change or missi
 - Batch targeted selectors; broaden for integration/discovery/observed impact. Establish Windows/Linux results for cross-platform changes.
 
 Completion requires regression-covered retained review fixes, retired integration no longer shipping, real independent model-routed authoring, safe migration, UI input persistence, and enforceable template gates. Old review results, heuristic scores, unresolved runner defaults, and old screenshots are not current execution evidence.
+
+## Console media refresh closeout
+
+The supplied beta-5 Console captures are now committed under
+`docs/images/forge-console/beta-5`. The Visual Tour and Console reference use
+the current desktop captures for Overview, Tasks, Plan & Team/Documents, New
+Project, and Help, and include responsive links for the available widths.
+The README's old GitHub attachment was replaced with
+`console-walkthrough.gif`, generated from the beta-5 desktop captures.
+
+The older TaskFlow images remain only for Board, task detail, logs, artifacts,
+and timeline because no corresponding beta-5 replacements were supplied.

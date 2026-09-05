@@ -48,9 +48,10 @@ If you are creating a repo from the browser, the wizard collects:
 - the initial **idea**,
 - optionally an **existing PRD** and **research/seed documents** — browse a file
   picker or type absolute paths (comma-separated for multiple research files).
-  Existing PRDs must be `.md` or `.txt`; research/seed files may be `.md`,
-  `.txt`, `.pdf`, or `.docx`. They are copied to `docs/PRD.md` /
-  `docs/research/` and inform the PRD build,
+Uploaded files must be plain text or Markdown (`.md` or `.txt`) because the
+browser staging path reads text directly. Existing PRDs are copied to
+`docs/PRD.md`; research/seed files are copied to `docs/research/` and inform
+the PRD build,
 - and whether setup should run automatically after creation (draft the PRD and generate the agent team).
 - **Concurrency preference** (optional): a stored engine setting carried into
   `docs/engine-config.json` and later runs. Leave blank to use the engine
@@ -184,7 +185,8 @@ Run the `forge-assign-models` skill after the team has been generated. It builds
 environment:
 
 - `opencode models` for OpenCode models,
-- `copilot -p "/model list"` for Copilot models,
+- `copilot --help` metadata for Copilot models when the installed CLI exposes
+  an authoritative model section,
 - the local Ollama API when Ollama is running, and
 - the configured BYOK provider when `COPILOT_PROVIDER_BASE_URL` is set.
 
@@ -215,7 +217,7 @@ message, and launch it using one of these commands:
 
 ```bash
 opencode --prompt "<message>"
-copilot -i "<message>"
+copilot -i "<message>" --yolo
 ```
 
 The assistant is not applied automatically. Review its changes and update the

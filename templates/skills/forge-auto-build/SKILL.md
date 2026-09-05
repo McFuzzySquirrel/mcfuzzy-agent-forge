@@ -81,6 +81,7 @@ When the user invokes this skill, perform the following before touching any file
      - With `--workflow-engine`: compile `docs/EXECUTION-MANIFEST.json` and execute the build through `forge-workflow-engine`
 6. **State the commit strategy** explicitly:
    - After Stage 1: `chore: bootstrap MyForge agent templates and skill candidates`
+   - After Stage 1b: `feat: generate project skills`
    - After each build phase N: `feat: complete Phase N -<phase name>`
    - After all phases: `chore: auto-build complete -all phases delivered`
 7. **Present the pre-flight checklist** (see below).
@@ -141,7 +142,27 @@ When it finishes:
   git add {HARNESS_AGENTS_DIR}/ {HARNESS_SKILLS_DIR}/ docs/
   git commit -m "chore: bootstrap MyForge agent and skill templates"
   ```
-- Report: "Stage 1 complete -agent team committed. Moving to Stage 2."
+- Report: "Stage 1 complete -agent team and skill handoff committed. Moving to Stage 1b."
+
+---
+
+### Stage 1b: Run `forge-build-project-skills`
+
+Invoke the independent project-skill stage against
+`docs/SKILL-CANDIDATES.json`. It may reuse unchanged packages, but it must
+create or extend only non-omit candidates and must pass the structural and
+per-axis quality gate for the affected files. An empty or all-`omit` handoff is
+an explicit successful no-skills stage.
+
+When it finishes:
+- Verify the candidate handoff is unchanged and project skills are present only
+  for non-omit candidates.
+- Commit:
+  ```
+  git add {HARNESS_SKILLS_DIR}/ docs/authoring-state.json
+  git commit -m "feat: generate project skills"
+  ```
+- Report: "Stage 1b complete -project skills reviewed and committed. Moving to Stage 2."
 
 ---
 
@@ -273,7 +294,8 @@ After the selected Stage 3 build path is complete:
 === forge-auto-build: Complete ===
 
 Stages completed:
-  ✅ Stage 1: Agent team generated (N agents, M skills)
+  ✅ Stage 1: Agent team generated (N agents, M skill candidates)
+  ✅ Stage 1b: Project skills [generated | not required]
   [✅ or ⏭️] Stage 2: Per-agent models [applied | skipped]
   ✅ Stage 3: Build execution completed via [forge-orchestrate-build | forge-workflow-engine]
 

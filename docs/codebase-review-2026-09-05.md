@@ -1,7 +1,7 @@
 # Codebase Review: Reliability, Reuse, and Maintainability
 
 Date: 2026-09-05  
-Status: Findings recorded; remediation not implemented  
+Status: Historical baseline; remediation completed in the September 2026 modernization work
 Environment: Windows with PowerShell
 
 ## Executive Summary
@@ -288,7 +288,10 @@ Failure details retained from the review:
 - Launcher: two assertion failures were observed. Their individual names and complete diagnostics were not retained; rerun and capture them before remediation.
 - Workforce compiler: missing development dependencies prevented local verification. This is an environment limitation, not proof that its source or tests are defective.
 
-The review did not install missing dependencies or change implementation files. The worktree was clean after the review's test runs. This document and its release-note entry are subsequent documentation changes.
+The review did not install missing dependencies or change implementation files. The
+review remains the historical baseline; subsequent modernization work addressed
+its actionable launcher, authoring, adapter, lifecycle, template, and Console
+findings without rewriting the original evidence or platform caveats.
 
 ## Remediation Sequence
 

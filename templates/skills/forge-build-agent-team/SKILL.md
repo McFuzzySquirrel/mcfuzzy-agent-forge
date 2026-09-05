@@ -74,13 +74,15 @@ Run the standalone validator from this package:
 ```bash
 node scripts/validate-frontmatter.mjs --repo <repo-root>
 node scripts/validate-team.mjs --repo <repo-root> --fail-structural \
-  --min-axis 2 --fail-axis-below
+  --agents-only --min-axis 2 --fail-axis-below
 ```
 
-The gate must discover `.github` as well as other supported roots, reject
-invalid frontmatter/structure/references, and block any skill with an axis
-below threshold even when its average is high. Do not report a successful
-team when discovery fails or no required owner is present.
+The team-stage gate validates agents and the candidate handoff without
+requiring project skill packages that do not exist until the next stage. The
+independent `forge-build-project-skills` stage runs the same validator with
+`--skills-only --fail-structural --min-axis 2 --fail-axis-below` against only
+the affected non-omit candidate files. Both gates reject invalid structure and
+block any failing axis rather than relying on an average.
 
 ## Handoff ownership
 

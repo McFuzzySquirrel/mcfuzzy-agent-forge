@@ -102,6 +102,12 @@ test("scopes quality blocking to affected project skills", (t) => {
   ]), 0);
 });
 
+test("team-only validation does not require project skills before the skills stage", (t) => {
+  const root = fixture(t);
+  writeFileSync(join(root, ".github", "agents", "builder.md"), agentText);
+  assert.equal(run(root, ["--agents-only", "--fail-structural", "--min-axis", "2", "--fail-axis-below"]), 0);
+});
+
 test("validates candidate consumers against generated agent names", (t) => {
   const root = fixture(t);
   writeFileSync(join(root, ".github", "agents", "builder.md"), agentText);

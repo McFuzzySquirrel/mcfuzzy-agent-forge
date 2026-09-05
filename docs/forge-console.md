@@ -3,9 +3,9 @@
 > A local web UI that fronts `forge-launcher` (authoring) and `forge-launcher engine-run` → `workflow-engine` (build). Create a project, draft the PRD, generate the agent team, generate project skills, compile the manifest, and monitor/control the build - all from your browser.
 
 > [!WARNING]
-> The committed screenshots are historical and may predate current controls.
-> They are orientation only, not evidence of current browser behavior, layout,
-> or accessibility. Refresh them before making current-browser claims.
+> The Visual Tour includes refreshed beta-5 captures for Overview, Tasks,
+> Plan & Team, New Project, and Help. The remaining legacy TaskFlow images are
+> orientation only until matching current captures are available.
 
 > **Screenshots:** see the [Visual Tour](forge-console-screenshots.md) for a walkthrough of every view.
 >

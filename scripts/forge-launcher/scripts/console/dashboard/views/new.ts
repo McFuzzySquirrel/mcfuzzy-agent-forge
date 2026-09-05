@@ -143,11 +143,15 @@ function buildAuthoringControls(harness: HTMLSelectElement): AuthoringControls {
       if (id !== requestId) return;
       for (const [stage, select] of selects) {
         const previous = select.value;
+        const available = new Set(inventory.models.map((model) => model.id));
         select.replaceChildren(
           el("option", { value: "" }, "Inherit runner default"),
+          ...(previous && !available.has(previous)
+            ? [el("option", { value: previous }, `Unavailable for ${selectedHarness}: ${previous}`)]
+            : []),
           ...inventory.models.map((model) => el("option", { value: model.id }, model.provider ? `${model.id} (${model.provider})` : model.id)),
         );
-        if (inventory.models.some((model) => model.id === previous)) select.value = previous;
+        if (previous) select.value = previous;
         select.disabled = false;
         select.setAttribute("aria-label", `${stage} authoring model`);
       }

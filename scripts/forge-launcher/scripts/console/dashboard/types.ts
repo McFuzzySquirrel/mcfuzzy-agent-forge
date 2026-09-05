@@ -144,6 +144,7 @@ export interface Summary {
   authoring?: AuthoringState;
   authoringReady?: boolean;
   authoringBlocker?: string;
+  authoringNextStage?: AuthoringStage;
 }
 
 export interface TaskRow {

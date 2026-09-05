@@ -75,7 +75,9 @@ function listFiles(repo: string, relative: string): string[] {
   if (!fs.existsSync(full)) return [];
   if (fs.lstatSync(full).isSymbolicLink()) return [];
   if (fs.statSync(full).isFile()) return [relative];
-  return fs.readdirSync(full).sort().flatMap((name) => listFiles(repo, path.join(relative, name)));
+  const ignored = new Set([".git", "node_modules", "dist", "build", "coverage", ".cache", ".turbo", ".next"]);
+  return fs.readdirSync(full).filter((name) => !ignored.has(name)).sort()
+    .flatMap((name) => listFiles(repo, path.join(relative, name)));
 }
 
 export function fingerprintFiles(repo: string, inputs: string[], extra = ""): string {

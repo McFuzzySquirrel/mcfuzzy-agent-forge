@@ -15,13 +15,18 @@ const USAGE = `forge-launcher - One command from zero to auto-build
 
 Usage:
   forge-launcher [options]
+  forge-launcher help
   forge-launcher bootstrap [TARGET_DIR] [--harness agents|github|claude|opencode] [--force] [--init-git]
+  forge-launcher console [--repo <path>] [--port <n>] [--no-open]
   forge-launcher engine-run [--repo <path>] [--harness <h>] [--granularity <fine|coarse>]
                             [--concurrency <n>] [--task-timeout-ms <ms>] [--max-retries <n>]
                             [--retry-delay-ms <ms>] [--heartbeat-ms <ms>] [--yes] [--dry-run]
                             [--viz [--viz-port <n>]] [--no-open]
                             [--keep-alive [--keep-alive-port <n>]] [--no-keep-alive] [--attach <url>]
+                            [--allow-noop] [--run-validation]
                             [--auto-commit|--no-auto-commit] [--commit-message-template <tmpl>]
+                            [--execution-mode <auto|manual>] [--selection-scope <single|range|list>]
+                            [--selected-tasks <id,id,...>] [--stop] [--pause]
                             [--stop] [--pause]
   forge-launcher resume [--repo <path>] [--non-interactive] [--dry-run]
   forge-launcher draft-prd [--repo <path>]      # headless: idea → PRD (Forge Console pipeline)

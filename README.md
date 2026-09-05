@@ -7,7 +7,7 @@
 
 > MyForge turns an idea into a reviewed PRD, a specialist agent team, and an autonomous build.
 
-**Latest: v3.52** — see [docs/updates.md](docs/updates.md) for release notes.
+**Latest: v3.53** — see [docs/updates.md](docs/updates.md) for release notes.
 
 MyForge is a PRD-first workflow for turning product requirements into working software. It combines structured planning, agent-based implementation, and execution orchestration in one path so a project can move from concept to build without losing the review checkpoints that matter.
 
@@ -21,7 +21,10 @@ MyForge is a PRD-first workflow for turning product requirements into working so
 
 
 
-https://github.com/user-attachments/assets/f03d855f-4f97-4544-95f2-f14625f42e94
+![Forge Console beta-5 walkthrough](docs/images/forge-console/beta-5/console-walkthrough.gif)
+
+See the [Forge Console visual tour](docs/forge-console-screenshots.md) for
+the full screenshot walkthrough, including responsive beta-5 captures.
 
 
 
@@ -38,21 +41,27 @@ https://github.com/user-attachments/assets/f03d855f-4f97-4544-95f2-f14625f42e94
 ```bash
 git clone https://github.com/McFuzzySquirrel/mcfuzzy-agent-forge.git
 cd mcfuzzy-agent-forge
-./scripts/forge-launcher.sh
+cd scripts/forge-launcher
+npm install
+npm run build
+node dist/cli.js
 ```
 
-This is the simplest manual path if you want to use the repository directly.
+The shell wrapper delegates to the built Node package and remains available for
+compatibility with existing workflows. To run the package directly instead,
+use `node dist/cli.js` from `scripts/forge-launcher`.
 
 ### Option 2: Install the npm package from source
 
-The npm package is not published yet, but you can install it locally from this repository:
+The npm package is not published yet, but the current pre-release is
+`forge-launcher@1.0.0-beta.5`. You can install it locally from this repository:
 
 ```bash
 git clone https://github.com/McFuzzySquirrel/mcfuzzy-agent-forge.git
 cd mcfuzzy-agent-forge/scripts/forge-launcher
 npm install
 npm pack
-npm install -g ./forge-launcher-1.0.0-beta.4.tgz
+npm install -g ./forge-launcher-1.0.0-beta.5.tgz
 ```
 
 Once installed, run:
@@ -79,7 +88,7 @@ For the manual prompting flow and the CLI’s expected prompts, see [docs/prompt
 - `forge-launcher` - the entry point for onboarding, authoring, and launching builds
 - `forge-workflow-engine` - the execution engine for orchestration, checkpoints, replay, and state
 - `forge-execution-adapter` - compiles the authored plan into the execution manifest consumed by the workflow engine
-- `forge-workflow-engine` - executes the manifest, owns retries and durable run state, and dispatches through native harness adapters
+- Native harness adapters - dispatch execution through Copilot, OpenCode, OpenAI text tasks, or the offline stub
 - Forge Console - a local web UI for authoring, monitoring, and controlling runs
 
 ## Documentation

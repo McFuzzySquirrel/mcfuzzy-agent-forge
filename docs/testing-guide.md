@@ -80,7 +80,7 @@ git clone https://github.com/McFuzzySquirrel/mcfuzzy-agent-forge.git
 cd mcfuzzy-agent-forge/scripts/forge-launcher
 npm install                               # install package deps from the fresh clone
 npm pack
-npm install -g ./forge-launcher-1.0.0-beta.4.tgz
+npm install -g ./forge-launcher-1.0.0-beta.5.tgz
 ```
 
 ### Step 2: Create a fresh project

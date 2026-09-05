@@ -4,6 +4,33 @@ Detailed release and change notes for MyForge.
 
 ---
 
+## September 2026 - v3.53
+
+### Complete authoring quality and Console modernization
+
+- Replaced Copilot's generative `/model list` inventory probe with
+  non-generative CLI metadata discovery and explicit failure semantics.
+- Preserved New Project's independent PRD, team, and project-skill model
+  selections, kept invocation overrides temporary, and excluded dependency,
+  build, coverage, and cache directories from authoring fingerprints.
+- Unified team validation and `skill-review` scoring/structural checks, then
+  enforced the structural and per-axis gate on affected non-omit project
+  skills before authoring completion or manifest compilation.
+- Fixed Console task-control races, model preservation across inventory and
+  harness changes, dirty-save/retry behavior, stale-stage regeneration, and
+  same-project generated-list refreshes.
+- Updated active launcher, Console, skill, schema, and bundled-resource
+  documentation to match the non-generative inventory contract.
+- Updated the README clone and package-install paths for
+  `forge-launcher@1.0.0-beta.5`.
+- Synchronized launcher help and Console user guides, including supported
+  text-upload formats, Copilot planning flags, and targeted engine options.
+- Added ADR-041 documenting the shared authoring-quality and Console contracts.
+- Refreshed the Console visual tour with the supplied beta-5 screenshots and
+  added a committed README walkthrough GIF.
+
+---
+
 ## September 2026 - v3.52
 
 ### Retire FlowForge integration and clarify the native pipeline

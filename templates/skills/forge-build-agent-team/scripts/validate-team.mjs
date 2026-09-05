@@ -3,6 +3,7 @@
 import { existsSync, readdirSync, readFileSync, statSync } from "node:fs";
 import { join, relative, resolve } from "node:path";
 import { selectHarnessRoot } from "../../forge-execution-adapter/scripts/repo-metadata.mjs";
+import { checkSkillStructure, scoreSkill } from "./quality-rubric.mjs";
 
 const args = process.argv.slice(2);
 const valueFor = (flag) => {
@@ -19,14 +20,8 @@ const candidateFile = valueFor("--candidate-file") ?? join(repoRoot, "docs", "SK
 const minAxis = Number(valueFor("--min-axis") ?? "1");
 const failAxisBelow = hasFlag("--fail-axis-below");
 const failStructural = hasFlag("--fail-structural");
-const AXES = [
-  ["contextEconomy", (text) => text.length < 12000 && !/what is an? |stands for|in simple terms/i.test(text)],
-  ["gotchasCoverage", (text) => /^##\s+Gotchas\b/im.test(text) && (text.match(/^\s*[-*]/gm) ?? []).length >= 3],
-  ["proceduralClarity", (text) => /^##\s+Process\b/im.test(text) && (text.match(/^###?\s+Step\s+\d+/gm) ?? []).length >= 2],
-  ["progressiveDisclosure", (text) => text.length < 20000 && /references\//i.test(text) && /load (?:when|`references\/)/i.test(text)],
-  ["calibration", (text) => /(?:by default|if that doesn't work|fallback|alternatively|standard command)/i.test(text) && /`[^`]{3,}`|```/i.test(text)],
-  ["validation", (text) => /^##\s+Validation\b/im.test(text) && (text.match(/^\s*-\s*\[[ x]\]/gm) ?? []).length >= 3],
-];
+const agentsOnly = hasFlag("--agents-only");
+const skillsOnly = hasFlag("--skills-only");
 
 function walk(dir, out = []) {
   if (!existsSync(dir)) return out;
@@ -101,8 +96,21 @@ function validateFile(file, kind, expectedName, root) {
     for (const link of links(text)) {
       if (!existsSync(resolve(file, "..", link))) errors.push(`missing referenced file ${link}`);
     }
+    errors.push(...checkSkillStructure({
+      name: expectedName,
+      parentDir: file.split(/[\\/]/).slice(-2, -1)[0],
+      rawFrontmatter: parsed.data,
+      text,
+      resolveReference: (reference) => existsSync(resolve(file, "..", reference)),
+    }).filter((error) => !errors.includes(error)));
   }
-  const scores = Object.fromEntries(AXES.map(([axis, predicate]) => [axis, predicate(text) ? 3 : 1]));
+  const scores = kind === "skill"
+    ? scoreSkill(text, {
+      hasRefsDirOnDisk: existsSync(join(file, "..", "references")),
+      hasAssetsDirOnDisk: existsSync(join(file, "..", "assets")),
+      hasScriptsDirOnDisk: existsSync(join(file, "..", "scripts")),
+    })
+    : {};
   return { file: relative(root, file), kind, errors, scores };
 }
 
@@ -148,19 +156,21 @@ function main() {
   const skills = explicitSkills ? resolve(explicitSkills) : join(harness, "skills");
   const agents = join(harness, "agents");
   const results = [];
-  for (const file of walk(agents).filter((entry) => entry.endsWith(".md") && !entry.endsWith("SKILL.md"))) {
-    const result = validateFile(file, "agent", file.split("/").pop().replace(/\.md$/, ""), repoRoot);
-    result.expectedName = file.split("/").pop().replace(/\.md$/, "");
+  if (!skillsOnly) for (const file of walk(agents).filter((entry) => entry.endsWith(".md") && !entry.endsWith("SKILL.md"))) {
+    const result = validateFile(file, "agent", file.split(/[\\/]/).at(-1).replace(/\.md$/, ""), repoRoot);
+    result.expectedName = file.split(/[\\/]/).at(-1).replace(/\.md$/, "");
     results.push(result);
   }
-  const skillFiles = explicitSkillFiles.length > 0
-    ? explicitSkillFiles.map((file) => resolve(repoRoot, file))
-    : walk(skills).filter((entry) => entry.endsWith("SKILL.md"));
-  for (const file of skillFiles) {
-    results.push(validateFile(file, "skill", file.split("/").slice(-2, -1)[0], repoRoot));
+  if (!agentsOnly) {
+    const skillFiles = explicitSkillFiles.length > 0
+      ? explicitSkillFiles.map((file) => resolve(repoRoot, file))
+      : walk(skills).filter((entry) => entry.endsWith("SKILL.md"));
+    for (const file of skillFiles) {
+      results.push(validateFile(file, "skill", file.split(/[\\/]/).slice(-2, -1)[0], repoRoot));
+    }
   }
   const structural = results.filter((result) => result.errors.length > 0);
-  const candidateErrors = validateCandidates(results);
+  const candidateErrors = skillsOnly ? [] : validateCandidates(results);
   const axisFailures = results.filter((result) => result.kind === "skill").flatMap((result) =>
     Object.entries(result.scores).filter(([, score]) => score < minAxis).map(([axis]) => `${result.file}: ${axis}`),
   );

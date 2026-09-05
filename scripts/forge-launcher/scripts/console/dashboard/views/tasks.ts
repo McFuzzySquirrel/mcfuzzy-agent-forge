@@ -22,6 +22,8 @@ let countLine: HTMLElement | null = null;
 let selectedIds = new Set<string>();
 let selectionScope: SelectionScope | null = null;
 let refreshGeneration = 0;
+let rangeStartControl: HTMLSelectElement | null = null;
+let rangeEndControl: HTMLSelectElement | null = null;
 
 export function unmountTasks(): void {
   for (const u of unsub) u();
@@ -36,6 +38,9 @@ export function unmountTasks(): void {
   countLine = null;
   selectedIds = new Set<string>();
   selectionScope = null;
+  rangeStartControl = null;
+  rangeEndControl = null;
+  refreshGeneration += 1;
 }
 
 function taskFilterFromHash(): string | null {
@@ -111,6 +116,8 @@ export async function renderTasks(container: HTMLElement): Promise<void> {
 
   const rangeStart = el("select", { className: "replay-select" });
   const rangeEnd = el("select", { className: "replay-select" });
+  rangeStartControl = rangeStart as HTMLSelectElement;
+  rangeEndControl = rangeEnd as HTMLSelectElement;
   const addRange = el("button", { className: "btn btn-sm" }, "Add range");
   const saveSelection = el("button", { className: "btn btn-sm" }, "Save selection");
   const clearSelection = el("button", { className: "btn btn-sm" }, "Clear");
@@ -147,17 +154,6 @@ export async function renderTasks(container: HTMLElement): Promise<void> {
     ]),
   );
 
-  const request = ++refreshGeneration;
-  try {
-    allTasks = await api.tasks();
-  } catch {
-    allTasks = [];
-  }
-  if (request !== refreshGeneration || myGen !== gen) return;
-  for (const task of allTasks) {
-    rangeStart.appendChild(el("option", { value: task.id }, `${task.id} — ${task.title}`));
-    rangeEnd.appendChild(el("option", { value: task.id }, `${task.id} — ${task.title}`));
-  }
   addRange.addEventListener("click", () => {
     const ordered = allTasks.map((task) => task.id);
     const from = ordered.indexOf((rangeStart as HTMLSelectElement).value);
@@ -182,6 +178,15 @@ export async function renderTasks(container: HTMLElement): Promise<void> {
   resumeSelection.addEventListener("click", () => {
     void runSelectionAction("resume");
   });
+
+  const request = ++refreshGeneration;
+  try {
+    allTasks = await api.tasks();
+  } catch {
+    allTasks = [];
+  }
+  if (request !== refreshGeneration || myGen !== gen) return;
+  syncRangeOptions();
   if (myGen !== gen) return;
   renderTable();
 }
@@ -211,7 +216,19 @@ async function refresh(): Promise<void> {
   } catch {
     // keep the existing rows on failure
   }
+  syncRangeOptions();
   renderTable();
+}
+
+function syncRangeOptions(): void {
+  if (!rangeStartControl || !rangeEndControl) return;
+  const previousStart = rangeStartControl.value;
+  const previousEnd = rangeEndControl.value;
+  const options = allTasks.map((task) => el("option", { value: task.id }, `${task.id} — ${task.title}`));
+  rangeStartControl.replaceChildren(...options.map((option) => option.cloneNode(true)));
+  rangeEndControl.replaceChildren(...options);
+  if (allTasks.some((task) => task.id === previousStart)) rangeStartControl.value = previousStart;
+  if (allTasks.some((task) => task.id === previousEnd)) rangeEndControl.value = previousEnd;
 }
 
 function visibleTasks(): TaskRow[] {

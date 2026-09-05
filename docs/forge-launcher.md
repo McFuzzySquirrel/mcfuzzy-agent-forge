@@ -92,7 +92,7 @@ manual opening. Headless and CI workflows do not require it.
 
 ### npm package (recommended, cross-platform)
 
-> The npm package is a **pre-release** (`forge-launcher@beta`, v1.0.0-beta.4).
+> The npm package is a **pre-release** (`forge-launcher@beta`, v1.0.0-beta.5).
 > Until it is published, install it locally from the clone (see the README
 > "Try the npm launcher locally" section) or use the legacy wrappers below.
 
@@ -131,8 +131,8 @@ development:
 ```bash
 cd scripts/forge-launcher
 npm install                               # install package deps from the fresh clone
-npm pack                                  # build + stage templates → forge-launcher-1.0.0-beta.4.tgz
-npm install -g ./forge-launcher-1.0.0-beta.4.tgz   # global `forge-launcher`
+npm pack                                  # build + stage templates → forge-launcher-1.0.0-beta.5.tgz
+npm install -g ./forge-launcher-1.0.0-beta.5.tgz   # global `forge-launcher`
 
 # dev alternative (once dist/ is built): global symlink
 npm run build && npm link
@@ -222,6 +222,10 @@ All authoring entry points accept the three stage model overrides:
 override and resume runner inheritance. `authoring-models` refreshes or reads
 the runner inventory; explicit selections are checked against that inventory
 and fail clearly when unavailable or incompatible.
+Copilot refresh uses the CLI's non-generative `--help` metadata interface; it
+never submits `/model list` or another model-selection prompt. If the installed
+Copilot version does not expose model IDs in its metadata, refresh reports an
+explicit discovery error, while inherited runner defaults remain usable.
 
 In non-interactive runs, set `FORGE_AUTO_DRAFT=1` instead:
 

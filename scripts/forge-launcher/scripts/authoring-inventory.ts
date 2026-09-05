@@ -20,7 +20,12 @@ export interface AuthoringInvocation {
   argv?: string[];
   skill?: string;
 }
-export type InventoryProbe = (runner: AuthoringRunner, args: string[], repo: string) => Promise<{ code: number; stdout: string; stderr: string }>;
+export interface InventoryProbeResult {
+  code: number;
+  stdout: string;
+  stderr: string;
+}
+export type InventoryProbe = (runner: AuthoringRunner, args: string[], repo: string) => Promise<InventoryProbeResult>;
 const MAX_AGE_MS = 7 * 24 * 60 * 60 * 1000;
 const inventoryPath = (repo: string) => path.join(repo, "docs", "research", "model-inventory.json");
 const record = (value: unknown): value is Record<string, unknown> => typeof value === "object" && value !== null && !Array.isArray(value);
@@ -79,16 +84,38 @@ export function parseModelInventoryOutput(text: string, runner: AuthoringRunner)
   return [...ids];
 }
 
+function parseCopilotMetadataOutput(text: string): string[] {
+  try {
+    const value: unknown = JSON.parse(text);
+    if (record(value) && Array.isArray(value.models)) {
+      const ids = value.models.flatMap((model) => {
+        if (!record(model)) return [];
+        const id = typeof model.id === "string" ? model.id : typeof model.name === "string" ? model.name : "";
+        return id ? [id] : [];
+      });
+      return parseModelInventoryOutput(ids.join("\n"), "copilot");
+    }
+  } catch {
+    // Copilot help is text in current releases; JSON metadata is accepted when exposed.
+  }
+  const lines = text.split(/\r?\n/);
+  const start = lines.findIndex((line) => /^\s*(?:available\s+)?models?\s*:?\s*$/i.test(line));
+  if (start < 0) return [];
+  const end = lines.slice(start + 1).findIndex((line) => /^\s*[A-Za-z][A-Za-z ]{2,}:\s*$/.test(line));
+  const section = lines.slice(start + 1, end < 0 ? undefined : start + 1 + end).join("\n");
+  return parseModelInventoryOutput(section, "copilot");
+}
+
 const defaultProbe: InventoryProbe = (runner, args, repo) => runCommand(runner, args, { cwd: repo, capture: true });
 
-/** Only runs inventory commands, never a generation prompt. Preserves unrelated provider sections. */
+/** Uses runner metadata only; Copilot's prompt UI is deliberately not queried. */
 export async function refreshAuthoringInventory(repo: string, runner: AuthoringRunner, probe: InventoryProbe = defaultProbe): Promise<AuthoringInventory> {
   if (runner === "stub") return readAuthoringInventory(repo);
-  const args = runner === "opencode" ? ["models"] : ["-p", "/model list"];
+  const args = runner === "opencode" ? ["models"] : ["--help"];
   const result = await probe(runner, args, repo);
   if (result.code !== 0) throw new Error(`${runner} model discovery failed (${result.code}): ${result.stderr.trim() || result.stdout.trim()}`);
-  const ids = parseModelInventoryOutput(result.stdout, runner);
-  if (!ids.length) throw new Error(`${runner} model discovery returned no unambiguous model IDs. Refresh docs/research/model-inventory.json from the runner's model picker.`);
+  const ids = runner === "copilot" ? parseCopilotMetadataOutput(result.stdout) : parseModelInventoryOutput(result.stdout, runner);
+  if (!ids.length) throw new Error(`${runner} model discovery returned no unambiguous model IDs. Verify docs/research/model-inventory.json from a trusted runner inventory or select inherit.`);
   const raw = readRawInventory(repo);
   const prior = readAuthoringInventory(repo);
   const now = new Date().toISOString();

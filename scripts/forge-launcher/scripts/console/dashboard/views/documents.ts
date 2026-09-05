@@ -10,12 +10,16 @@ let unsub: Array<() => void> = [];
 let detailHost: HTMLElement | null = null;
 let generation = 0;
 let authoringStagesHost: HTMLElement | null = null;
+let agentsHost: HTMLElement | null = null;
+let skillsHost: HTMLElement | null = null;
 
 export function unmountDocuments(): void {
   for (const u of unsub) u();
   unsub = [];
   detailHost = null;
   authoringStagesHost = null;
+  agentsHost = null;
+  skillsHost = null;
   generation += 1;
   authoringGeneration += 1;
 }
@@ -61,6 +65,7 @@ export function renderDocuments(container: HTMLElement): void {
 
   // ── Agents ────────────────────────────────────────────────────────────────
   const agentsSection = section("Agents");
+  agentsHost = agentsSection.body;
   container.appendChild(agentsSection.root);
   void api.team()
     .then((team) => {
@@ -71,6 +76,7 @@ export function renderDocuments(container: HTMLElement): void {
 
   // ── Skills ────────────────────────────────────────────────────────────────
   const skillsSection = section("Skills");
+  skillsHost = skillsSection.body;
   container.appendChild(skillsSection.root);
   void api.team()
     .then((team) => {
@@ -78,6 +84,10 @@ export function renderDocuments(container: HTMLElement): void {
       renderSkills(skillsSection.body, team);
     })
     .catch(() => skillsSection.body.appendChild(el("div", { className: "dim" }, "Failed to load skills.")));
+  unsub.push(store.subscribe(() => {
+    void refreshGeneratedListings();
+    refreshDocuments();
+  }));
 }
 
 export function refreshDocuments(): void {
@@ -89,6 +99,7 @@ export function refreshDocuments(): void {
     const badge = card.querySelector<HTMLElement>("[data-authoring-stage-status]");
     const model = card.querySelector<HTMLElement>("[data-authoring-stage-model]");
     const error = card.querySelector<HTMLElement>("[data-authoring-stage-error]");
+    const action = card.querySelector<HTMLButtonElement>("[data-authoring-stage-action]");
     const presentation = stagePresentation(stage, state);
     if (badge) {
       badge.className = `badge badge-${presentation.className}`;
@@ -98,6 +109,13 @@ export function refreshDocuments(): void {
     if (error) {
       error.textContent = state?.error ?? "";
       error.hidden = !state?.error;
+    }
+    if (action) {
+      const stale = state?.status === "complete" && store.summary?.authoringNextStage === stage;
+      const available = (state?.status === "failed" || stale) && !state.noSkillsRequired;
+      action.hidden = !available;
+      action.textContent = stale ? `Regenerate ${stage.toUpperCase()}` : `Retry ${stage.toUpperCase()}`;
+      action.disabled = !available;
     }
   }
 }
@@ -141,8 +159,10 @@ async function loadAuthoringSettings(panel: HTMLElement, generation: number): Pr
   }
 }
 
-function buildAuthoringSettings(panel: HTMLElement, initial: AuthoringConfig, inventory: AuthoringInventory): HTMLElement {
+function buildAuthoringSettings(panel: HTMLElement, initial: AuthoringConfig, inventory: AuthoringInventory, initialDirty = false): HTMLElement {
   let config: AuthoringConfig = { version: 1, models: { ...initial.models } };
+  let dirty = initialDirty;
+  let saveInFlight = false;
   const stages: Array<[AuthoringStage, string]> = [
     ["prd", "PRD authoring model"],
     ["team", "Team authoring model"],
@@ -152,6 +172,10 @@ function buildAuthoringSettings(panel: HTMLElement, initial: AuthoringConfig, in
   const status = el("div", { className: "dim small", role: "status", "aria-live": "polite" }, inventory.models.length > 0 ? `${inventory.models.length} models available.` : (inventory.diagnostics?.join(" ") || "No models reported; empty selections inherit."));
   const save = el("button", { className: "btn btn-primary", type: "button" }, "Save authoring settings") as HTMLButtonElement;
   const refresh = el("button", { className: "btn btn-sm", type: "button" }, "Refresh inventory") as HTMLButtonElement;
+  const retryButtons: Array<{ button: HTMLButtonElement; stage: AuthoringStage }> = [];
+  const updateRetryState = (): void => {
+    for (const { button } of retryButtons) button.disabled = dirty || saveInFlight || button.hidden;
+  };
 
   for (const [stage, label] of stages) {
     const select = el("select", { id: `authoring-model-${stage}`, "aria-label": label }) as HTMLSelectElement;
@@ -164,6 +188,11 @@ function buildAuthoringSettings(panel: HTMLElement, initial: AuthoringConfig, in
       select.appendChild(el("option", { value: model.id }, model.provider ? `${model.id} (${model.provider})` : model.id));
     }
     select.value = selected ?? "";
+    select.addEventListener("change", () => {
+      dirty = true;
+      updateRetryState();
+      status.textContent = "Unsaved authoring model changes.";
+    });
     selects.set(stage, select);
   }
 
@@ -173,11 +202,14 @@ function buildAuthoringSettings(panel: HTMLElement, initial: AuthoringConfig, in
       if (select.value) next.models[stage] = select.value;
     }
     save.disabled = true;
+    saveInFlight = true;
+    updateRetryState();
     status.textContent = "Saving authoring settings…";
     void api.saveAuthoringConfig(next)
       .then((result) => {
         if (!result.ok) throw new Error(result.message || "save failed");
         config = { version: 1, models: { ...result.config.models } };
+        dirty = false;
         status.textContent = result.message || "Authoring settings saved.";
         toast(status.textContent);
       })
@@ -185,15 +217,23 @@ function buildAuthoringSettings(panel: HTMLElement, initial: AuthoringConfig, in
         status.textContent = error instanceof Error ? error.message : "Unable to save authoring settings.";
         toast(status.textContent);
       })
-      .finally(() => { save.disabled = false; });
+      .finally(() => {
+        saveInFlight = false;
+        save.disabled = false;
+        updateRetryState();
+      });
   });
 
   refresh.addEventListener("click", () => {
     refresh.disabled = true;
     const runner = inventory.runner ?? (store.summary?.harness === "github" ? "copilot" : "opencode");
+    for (const [stage, select] of selects) {
+      if (select.value) config.models[stage] = select.value;
+      else delete config.models[stage];
+    }
     void api.refreshAuthoringInventory(runner)
       .then((next) => {
-        panel.replaceChildren(buildAuthoringSettings(panel, config, next));
+        panel.replaceChildren(buildAuthoringSettings(panel, config, next, dirty));
       })
       .catch((error) => {
         status.textContent = error instanceof Error ? error.message : "Unable to refresh inventory.";
@@ -205,18 +245,22 @@ function buildAuthoringSettings(panel: HTMLElement, initial: AuthoringConfig, in
     const state = store.summary?.authoring?.stages[stage];
     const output = state?.outputs.length ? ` · ${state.outputs.length} output${state.outputs.length === 1 ? "" : "s"}` : "";
     const presentation = stagePresentation(stage, state);
-    const retry = state?.status === "failed" && !state.noSkillsRequired
-      ? el("button", { className: "btn btn-sm", type: "button" }, `Retry ${label.replace(" authoring model", "")}`)
-      : null;
-    if (retry) {
-      retry.addEventListener("click", () => {
-        retry.setAttribute("disabled", "");
-        void api.control(stage === "prd" ? "draft-prd" : stage === "team" ? "draft-team" : "draft-skills")
-          .then((result) => toast(result.message))
-          .catch((error) => toast(error instanceof Error ? error.message : "retry failed"))
-          .finally(() => retry.removeAttribute("disabled"));
-      });
-    }
+    const stale = state?.status === "complete" && store.summary?.authoringNextStage === stage;
+    const actionButton = el("button", { className: "btn btn-sm", type: "button", "data-authoring-stage-action": "true" }) as HTMLButtonElement;
+    retryButtons.push({ button: actionButton, stage });
+    actionButton.hidden = !(state?.status === "failed" || stale) || Boolean(state?.noSkillsRequired);
+    actionButton.textContent = stale ? `Regenerate ${label.replace(" authoring model", "")}` : `Retry ${label.replace(" authoring model", "")}`;
+    actionButton.addEventListener("click", () => {
+      if (dirty || saveInFlight) {
+        toast("Save authoring model changes before retrying this stage.");
+        return;
+      }
+      actionButton.disabled = true;
+      void api.control(stage === "prd" ? "draft-prd" : stage === "team" ? "draft-team" : "draft-skills")
+        .then((result) => toast(result.message))
+        .catch((error) => toast(error instanceof Error ? error.message : "retry failed"))
+        .finally(() => { actionButton.disabled = false; });
+    });
     return el("div", { className: "authoring-stage", "data-authoring-stage": stage }, [
       el("div", { className: "row between wrap" }, [
         el("strong", null, label.replace(" model", "")),
@@ -224,9 +268,10 @@ function buildAuthoringSettings(panel: HTMLElement, initial: AuthoringConfig, in
       ]),
       el("span", { className: "dim small", "data-authoring-stage-model": "true" }, `${state?.invocation?.effectiveModel ?? (presentation.className === "no-run" ? "existing project artifact" : config.models[stage] ?? "runner default")}${output}`),
       el("span", { className: "error-text small", "data-authoring-stage-error": "true", hidden: state?.error ? null : true }, state?.error ?? ""),
-      retry,
+      actionButton,
     ]);
   });
+  updateRetryState();
   const stageHost = el("div", { className: "authoring-stages" }, stageCards);
   authoringStagesHost = stageHost;
 
@@ -238,6 +283,19 @@ function buildAuthoringSettings(panel: HTMLElement, initial: AuthoringConfig, in
       ? el("p", { className: "error-text", role: "alert" }, "Authoring is incomplete; build controls remain unavailable until the active stages are ready.")
       : null,
   ]);
+}
+
+async function refreshGeneratedListings(): Promise<void> {
+  if (!agentsHost && !skillsHost) return;
+  const currentGeneration = ++generation;
+  try {
+    const team = await api.team();
+    if (currentGeneration !== generation) return;
+    if (agentsHost) renderAgents(agentsHost, team);
+    if (skillsHost) renderSkills(skillsHost, team);
+  } catch {
+    // Keep the last generated listing visible while the snapshot catches up.
+  }
 }
 
 function renderDocList(list: HTMLElement, docs: DocsIndex): void {

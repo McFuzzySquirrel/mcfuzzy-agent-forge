@@ -564,9 +564,14 @@ async function validateAuthoringOutputs(stage: AuthoringStage, skill: string, be
   }
   if (outputs.length) {
     const checker = path.join(resolveResources().templatesDir, "skills", "forge-build-agent-team", "scripts", "validate-frontmatter.mjs");
-    const code = await runLoggedStep("Checking generated skill structure", process.execPath,
-      [checker, "--repo", state.repoDir, "--harness-root", path.join(state.repoDir, harnessRootDir())], { cwd: state.repoDir });
-    if (code !== 0) throw new Error("Project skill structural validation failed.");
+    const qualityChecker = path.join(resolveResources().templatesDir, "skills", "forge-build-agent-team", "scripts", "validate-team.mjs");
+    const frontmatterCode = await runLoggedStep("Checking generated skill structure", process.execPath,
+      [checker, "--repo", state.repoDir, "--harness-root", path.join(state.repoDir, harnessRootDir()), "--skills-only", ...outputs.flatMap((output) => ["--skill-file", output])], { cwd: state.repoDir });
+    if (frontmatterCode !== 0) throw new Error("Project skill structural validation failed.");
+    const qualityCode = await runLoggedStep("Checking generated skill quality", process.execPath,
+      [qualityChecker, "--repo", state.repoDir, "--harness-root", path.join(state.repoDir, harnessRootDir()), "--skills-only",
+        "--fail-structural", "--min-axis", "2", "--fail-axis-below", ...outputs.flatMap((output) => ["--skill-file", output])], { cwd: state.repoDir });
+    if (qualityCode !== 0) throw new Error("Project skill quality validation failed.");
   }
   return outputs;
 }
@@ -751,7 +756,39 @@ async function runStubSkill(msg: string, opts: LauncherOptions): Promise<boolean
       if (candidate.action === "omit" || candidate.action === "reuse") continue;
       const file = path.join(harnessSkillsDir(), candidate.name, "SKILL.md");
       fs.mkdirSync(path.dirname(file), { recursive: true });
-      fs.writeFileSync(file, `---\nname: ${candidate.name}\ndescription: ${JSON.stringify(candidate.description)}\n---\n# ${candidate.name}\n\n${candidate.reason}\n`);
+      fs.mkdirSync(path.join(path.dirname(file), "references"), { recursive: true });
+      fs.writeFileSync(file, [
+        "---",
+        `name: ${candidate.name}`,
+        `description: ${JSON.stringify(candidate.description)}`,
+        "---",
+        `# ${candidate.name}`,
+        "",
+        "## Process",
+        "### Step 1: Inspect",
+        "Inspect the project context and identify the applicable path.",
+        "### Step 2: Apply",
+        "Use the standard command by default, then apply the smallest change.",
+        "If that doesn't work, use the fallback command instead.",
+        "",
+        "Load `references/details.md` when the task needs extended guidance.",
+        "",
+        "## Gotchas",
+        "- Repository paths are relative to the project root.",
+        "- Existing files are preserved unless the task explicitly selects them.",
+        "- The fallback command is required when the standard command is unavailable.",
+        "",
+        "## Validation",
+        "- [ ] Run the standard check.",
+        "- [ ] Check the generated output.",
+        "- [ ] Review the reference guidance.",
+        "",
+        "```bash",
+        "npm test",
+        "```",
+        "",
+      ].join("\n"));
+      fs.writeFileSync(path.join(path.dirname(file), "references", "details.md"), `${candidate.reason}\n`);
     }
     return true;
   }
@@ -2132,16 +2169,7 @@ async function runDraftSkillsInternal(repoDir: string): Promise<number> {
   }
   if (authoringStageIsCurrent(repoDir, "skills", harnessRootDir())) { out("Project skills already complete."); return 0; }
   if (!candidates.candidates.some((candidate) => candidate.action !== "omit")) {
-    let invocation: AuthoringInvocation;
-    try {
-      invocation = await resolveAuthoringModel(repoDir, "skills", headlessRunner(), state.options.models, state.env, state.options.dependencies?.inventoryProbe);
-    } catch (error) {
-      if (!state.options.dryRun) saveAuthoringStage(repoDir, "skills", {
-        status: "failed", inputFingerprint: stageInputFingerprint(repoDir, "skills", harnessRootDir()), outputs: [],
-        error: error instanceof Error ? error.message : String(error), completedAt: new Date().toISOString(),
-      });
-      throw error;
-    }
+    const invocation: AuthoringInvocation = { runner: headlessRunner(), source: "inherit" };
     if (!state.options.dryRun) saveAuthoringStage(repoDir, "skills", {
       status: "complete", inputFingerprint: stageInputFingerprint(repoDir, "skills", harnessRootDir()),
       outputs: [], outputFingerprint: fingerprintFiles(repoDir, []), noSkillsRequired: true, completedAt: new Date().toISOString(), invocation,

@@ -7,7 +7,7 @@ import { execFileSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
 import { loadAuthoringConfig, saveAuthoringConfig, selectAuthoringModel, writeAuthoringJson } from "./authoring-config.ts";
 import { authoringArgv, parseModelInventoryOutput, refreshAuthoringInventory, resolveAuthoringModel } from "./authoring-inventory.ts";
-import { authoringReadiness, authoringStageIsCurrent, readAuthoringState, readSkillCandidates } from "./authoring-state.ts";
+import { authoringReadiness, authoringStageIsCurrent, fingerprintFiles, readAuthoringState, readSkillCandidates } from "./authoring-state.ts";
 import { runDraftPrd, runDraftSkills, runDraftTeam, runFeatureIncrement, runLauncher, runResume, type LauncherOptions } from "./launcher.ts";
 import { createSessionScope } from "./launcher-session.ts";
 import { prompts, withPromptSession } from "./prompts.ts";
@@ -86,6 +86,33 @@ test("inventory is discoverable before PRD and retains other providers and fresh
   assert.equal(fs.existsSync(path.join(repo, "docs/PRD.md")), false);
 });
 
+test("Copilot inventory uses non-generative help metadata, never a model prompt", async (t) => {
+  const repo = fixture(t);
+  const result = await refreshAuthoringInventory(repo, "copilot", async (runner, args) => {
+    assert.equal(runner, "copilot");
+    assert.deepEqual(args, ["--help"]);
+    return { code: 0, stdout: "Models:\n- gpt-6-astra\n- gpt-5.6-luna\n", stderr: "" };
+  });
+  assert.deepEqual(result.models.map((model) => model.id), ["gpt-6-astra", "gpt-5.6-luna"]);
+});
+
+test("Copilot metadata failure is explicit while inherited selection remains unresolved", async (t) => {
+  const repo = fixture(t);
+  await assert.rejects(
+    refreshAuthoringInventory(repo, "copilot", async (_runner, args) => {
+      assert.deepEqual(args, ["--help"]);
+      return { code: 1, stdout: "", stderr: "Copilot is not logged in" };
+    }),
+    /copilot model discovery failed/,
+  );
+  assert.deepEqual(
+    await resolveAuthoringModel(repo, "prd", "copilot", {}, {}, async () => {
+      throw new Error("inherited selection must not probe");
+    }),
+    { runner: "copilot", source: "inherit" },
+  );
+});
+
 test("inventory parser rejects prose and preserves qualified OpenCode IDs", () => {
   assert.deepEqual(parseModelInventoryOutput("Available models:\n- anthropic/claude-4\nopenai/gpt-5\nNo models available\n", "opencode"), ["anthropic/claude-4", "openai/gpt-5"]);
   assert.deepEqual(parseModelInventoryOutput("Models:\n1. claude-4 (default)\ngpt-5\n", "copilot"), ["claude-4", "gpt-5"]);
@@ -111,6 +138,18 @@ test("inherited defaults stay unresolved and never get a frozen default model", 
   const result = await resolveAuthoringModel(repo, "prd", "copilot", {}, {}, async () => { throw new Error("must not guess"); });
   assert.deepEqual(result, { runner: "copilot", source: "inherit" });
   assert.equal(authoringArgv(result, repo, "/fixture").includes("--model"), false);
+});
+
+test("dependency, build, and cache directories do not invalidate authored fingerprints", (t) => {
+  const repo = fixture(t);
+  write(repo, ".github/agents/worker.md", "---\nname: worker\ndescription: \"Worker\"\n---\n");
+  const before = fingerprintFiles(repo, [".github/agents"]);
+  for (const dir of ["node_modules", "dist", "build", "coverage", ".cache", ".turbo", ".next"]) {
+    write(repo, `.github/agents/${dir}/generated.txt`, `${dir}-noise`);
+  }
+  assert.equal(fingerprintFiles(repo, [".github/agents"]), before);
+  write(repo, ".github/agents/worker.md", "---\nname: worker\ndescription: \"Changed worker\"\n---\n");
+  assert.notEqual(fingerprintFiles(repo, [".github/agents"]), before);
 });
 
 test("explicit incompatible, unavailable, stale and tool-less selections never fall back", async (t) => {
@@ -155,6 +194,18 @@ test("stub team produces handoff only and no-skills completion is durable", asyn
   assert.equal(authoringReadiness(repo, ".github").ready, true, "implementation-agent overrides must not couple to authoring readiness");
   write(repo, "docs/PRD.md", "# Changed requirements");
   assert.equal(authoringReadiness(repo, ".github").ready, false);
+});
+
+test("all-omit handoffs complete without requiring a skills inventory", async (t) => {
+  const repo = fixture(t);
+  write(repo, "docs/PRD.md", "# Fixture PRD");
+  write(repo, ".github/agents/project-agent.md", '---\nname: project-agent\ndescription: "Project agent"\n---\n');
+  writeAuthoringJson(path.join(repo, "docs/SKILL-CANDIDATES.json"), {
+    version: 1,
+    candidates: [{ name: "unused", description: "Unused project procedure.", consumers: ["project-agent"], action: "omit", reason: "Not needed." }],
+  });
+  assert.equal(await runDraftSkills(repo, { ...stub, models: { skills: "unavailable-explicit-model" } }), 0);
+  assert.equal(readAuthoringState(repo).stages.skills?.noSkillsRequired, true);
 });
 
 test("legacy team without new markers remains build-ready", (t) => {
@@ -299,7 +350,38 @@ test("planned missing or structurally invalid skills fail the durable gate", asy
   write(repo, ".github/skills/project-fixture/SKILL.md", "# Missing frontmatter\n");
   await assert.rejects(runDraftSkills(repo, stub), /structural validation failed/);
   assert.equal(readAuthoringState(repo).stages.skills?.status, "failed");
-  write(repo, ".github/skills/project-fixture/SKILL.md", '---\nname: project-fixture\ndescription: "Fixture procedure"\n---\n# Procedure\n');
+  write(repo, ".github/skills/project-fixture/SKILL.md", [
+    "---",
+    "name: project-fixture",
+    'description: "Fixture procedure for repeatable project validation work."',
+    "---",
+    "# Procedure",
+    "",
+    "## Process",
+    "### Step 1: Inspect",
+    "Inspect the project fixture and choose the applicable path.",
+    "### Step 2: Change",
+    "Apply the smallest change, then use the standard command by default.",
+    "If that doesn't work, use the fallback command instead.",
+    "",
+    "Load `references/details.md` when the fixture needs extended guidance.",
+    "",
+    "## Gotchas",
+    "- Fixture paths are rooted at the repository.",
+    "- Existing files must remain untouched unless selected.",
+    "- The fallback command is required when the standard command is unavailable.",
+    "",
+    "## Validation",
+    "- [ ] Run the standard command.",
+    "- [ ] Check the generated output.",
+    "- [ ] Review the reference guidance.",
+    "",
+    "```bash",
+    "npm test",
+    "```",
+    "",
+  ].join("\n"));
+  write(repo, ".github/skills/project-fixture/references/details.md", "Extended fixture details.\n");
   assert.equal(await runDraftSkills(repo, stub), 0);
   assert.equal(authoringReadiness(repo, ".github").ready, true);
 });
