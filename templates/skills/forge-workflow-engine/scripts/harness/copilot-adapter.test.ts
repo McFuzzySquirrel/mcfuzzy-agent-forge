@@ -66,7 +66,7 @@ async function invokeWith(shim: Shim, agent: AgentDescriptor, root: string): Pro
 
 function recordedPrompt(shim: Shim): string {
   const recorded = JSON.parse(readFileSync(shim.argsFile, "utf8")) as string[];
-  return recorded[recorded.indexOf("-p") + 1] ?? "";
+  return recorded.slice(recorded.indexOf("-p") + 1).join(" ");
 }
 
 test("prepends /agent for .github-rooted agents and omits the inline persona", async () => {

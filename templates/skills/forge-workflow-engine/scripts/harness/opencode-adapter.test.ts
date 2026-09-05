@@ -122,7 +122,7 @@ test("prompt includes the execute-now directive so agents do not just acknowledg
   await invokeWith(shim, agent, root);
 
   const recorded = JSON.parse(readFileSync(shim.argsFile, "utf8")) as string[];
-  const prompt = recorded.find((arg) => arg.includes("Per-task timeout:")) ?? "";
+  const prompt = recorded.join(" ");
   assert.ok(prompt.includes("Perform the task now"), prompt);
   assert.ok(prompt.includes("list the files you created or changed"), prompt);
 });

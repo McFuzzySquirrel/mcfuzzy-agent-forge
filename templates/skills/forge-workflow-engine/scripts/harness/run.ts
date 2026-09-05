@@ -97,7 +97,7 @@ export function runCommand(
       }, CLEANUP_TIMEOUT_MS);
       const finished = () => {
         terminationFinished = true;
-        if (closed) settle(exitStatus);
+        if (closed) settle(null);
       };
       if (!child.pid) {
         finished();
