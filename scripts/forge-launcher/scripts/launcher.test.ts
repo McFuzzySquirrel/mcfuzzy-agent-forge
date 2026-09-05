@@ -392,7 +392,7 @@ test("headless skill command pins the repo dir with --dir", async () => {
   // opencode resolves its project dir from its parent process, not the child's
   // spawn cwd, so the launcher must pass --dir explicitly or the skill runs in
   // the wrong repository and its input (docs/IDEA.md) is reported missing.
-  assert.ok(out.includes(`opencode run --auto --dir "${repo}"`), out);
+  assert.match(out, new RegExp(`opencode run --auto --dir "[^"]*[\\\\/]${path.basename(repo)}"`), out);
 });
 
 test("non-interactive run with a PRD queues the separate team authoring stage", async () => {

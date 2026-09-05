@@ -3,7 +3,7 @@ import { createRequire } from "node:module";
 import { spawn } from "node:child_process";
 import fs from "node:fs";
 import path from "node:path";
-import { fileURLToPath } from "node:url";
+import { fileURLToPath, pathToFileURL } from "node:url";
 
 export interface JobRunnerOutcome {
   version: 1;
@@ -19,7 +19,7 @@ const IS_SOURCE = import.meta.url.endsWith(".ts");
 const ENTRY = fileURLToPath(new URL(IS_SOURCE ? "./job-runner.ts" : "./job-runner.js", import.meta.url));
 
 function nodePrefix(): string[] {
-  return IS_SOURCE ? ["--import", nodeRequire.resolve("tsx")] : [];
+  return IS_SOURCE ? ["--import", pathToFileURL(nodeRequire.resolve("tsx")).href] : [];
 }
 
 export function jobRunnerCommand(

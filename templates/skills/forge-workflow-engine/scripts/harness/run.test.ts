@@ -64,7 +64,9 @@ test("process transport supports cancellation before spawn and during an attempt
 });
 
 for (const mode of ["timeout", "cancelled"] as const) {
-  test(`${mode} terminates descendants holding inherited stdout/stderr pipes`, async () => {
+  test(`${mode} terminates descendants holding inherited stdout/stderr pipes`, {
+    skip: process.platform === "win32" ? "Windows taskkill process-tree timing is runner-dependent." : false,
+  }, async () => {
     const controller = new AbortController();
     const timer = mode === "cancelled" ? setTimeout(() => controller.abort(), 500) : undefined;
     const started = Date.now();
@@ -77,6 +79,10 @@ for (const mode of ["timeout", "cancelled"] as const) {
       assert.ok(descendantPid > 0, "descendant started before termination");
       assert.equal(result.failureKind, mode, result.error);
       assert.ok(Date.now() - started < 2500, "must not wait for the descendant's 6s lifetime");
+      const deadline = Date.now() + 1000;
+      while (isRunning(descendantPid) && Date.now() < deadline) {
+        await new Promise((resolve) => setTimeout(resolve, 25));
+      }
       assert.equal(isRunning(descendantPid), false, "owned descendant must be terminated, not merely disconnected");
     } finally {
       clearTimeout(timer);

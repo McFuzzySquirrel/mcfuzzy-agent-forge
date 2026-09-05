@@ -90,7 +90,7 @@ export function fingerprintFiles(repo: string, inputs: string[], extra = ""): st
       hash.update("\0");
       const content = fs.readFileSync(path.join(repo, file));
       // Execution-only frontmatter overrides must not invalidate authoring readiness.
-      if (file.split(path.sep).includes("agents") && file.endsWith(".md")) {
+      if (file.split(/[\\/]/).includes("agents") && file.endsWith(".md")) {
         hash.update(content.toString("utf8").replace(/^(---\r?\n)([\s\S]*?)(\r?\n---)/, (_match, start: string, metadata: string, end: string) =>
           start + metadata.split(/\r?\n/).filter((line) => !/^model(?:Fallback)?:/.test(line)).join("\n") + end));
       } else hash.update(content);
