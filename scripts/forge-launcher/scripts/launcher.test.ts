@@ -206,6 +206,11 @@ test("headless PRD message includes the gap check the manual flow runs", () => {
   assert.ok(msg.includes("acceptance criteria"), msg);
   assert.ok(msg.includes("non-functional requirements"), msg);
   assert.ok(msg.includes("implementation phases"), msg);
+  assert.ok(msg.includes("15 or more functional requirements or 3 or more implementation phases"), msg);
+  assert.ok(msg.includes("automatically invoke forge-decompose-prd"), msg);
+  assert.ok(msg.includes("docs/product-vision.md"), msg);
+  assert.ok(msg.includes("docs/features/*.md"), msg);
+  assert.ok(msg.includes("otherwise keep the monolithic docs/PRD.md"), msg);
 });
 
 test("team-generation prompt targets the selected harness directories", () => {
@@ -213,6 +218,8 @@ test("team-generation prompt targets the selected harness directories", () => {
   assert.ok(buildTeamPrompt("docs/PRD.md", "opencode").includes(".opencode/skills/"));
   assert.ok(buildTeamPrompt("docs/PRD.md", "github").includes(".github/agents/"));
   assert.ok(buildTeamPrompt("docs/PRD.md", "github").includes(".github/skills/"));
+  assert.match(buildTeamPrompt("docs/PRD.md", "opencode"), /reusable, repeated, or fragile project-specific processes/);
+  assert.match(buildTeamPrompt("docs/PRD.md", "opencode"), /action create when a needed process has no suitable package/);
 });
 
 test("auto-draft engine command carries configured granularity/concurrency/timeout/retries", async () => {

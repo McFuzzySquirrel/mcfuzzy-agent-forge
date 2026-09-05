@@ -444,7 +444,9 @@ export function buildTeamPrompt(prdSource: string, harness: HarnessName): string
   return `/forge-build-agent-team Use ${prdSource} to build the agent team. ` +
     `Write agent files under ${harnessRoot}/agents/. Write docs/SKILL-CANDIDATES.json as ` +
     `{version:1,candidates:[]}, with each candidate containing name, description, consumers (agent-name strings), action (reuse, extend, create, or omit), and reason. ` +
-    `Keep candidates empty when no project skills are required. ` +
+    `Analyze the PRD for reusable, repeated, or fragile project-specific processes. ` +
+    `Add a candidate with action create when a needed process has no suitable package, extend when an existing package needs additive guidance, reuse when an existing package satisfies it, or omit when the responsibility is not justified. ` +
+    `Keep candidates empty only when no project skills are required. ` +
     `Plan references under ${harnessRoot}/skills/ but do not create or modify skill packages; forge-build-project-skills owns them. ` +
     `Do not write a manifest, compiled responsibility matrix, engine state, or progress file, and do not start the build.`;
 }
@@ -455,7 +457,7 @@ export function buildTeamPrompt(prdSource: string, harness: HarnessName): string
  * same PRD gap check the manual flow does (acceptance criteria, tech stack,
  * non-functional requirements, phases) and fill any gaps before approving. */
 const PRD_HEADLESS_MSG =
-  "Use docs/IDEA.md as the project idea. Headless mode: auto-proceed with default assumptions and approve the PRD. After drafting, run a PRD gap check: every major component must have clear acceptance criteria, a defined tech stack, non-functional requirements (performance, security, privacy), and implementation phases; fill any gaps before approving. Run only PRD authoring and review. Do not generate agents or skills, compile a manifest, or start execution; the launcher invokes those stages separately.";
+  "Use docs/IDEA.md as the project idea. Headless mode: auto-proceed with default assumptions and approve the PRD. After drafting, run a PRD gap check: every major component must have clear acceptance criteria, a defined tech stack, non-functional requirements (performance, security, privacy), and implementation phases; fill any gaps before approving. Then evaluate the automatic decomposition threshold: 15 or more functional requirements or 3 or more implementation phases. If the PRD qualifies, automatically invoke forge-decompose-prd and verify docs/product-vision.md plus docs/features/*.md; otherwise keep the monolithic docs/PRD.md and report that decomposition was not required. Do not generate agents or project skills, compile a manifest, or start execution; the launcher invokes those later stages separately.";
 
 const EXISTING_PROJECT_PRD_MSG =
   "Author the project's PRD using forge-build-prd authoring semantics, not an auto-build or implementation workflow. This is an existing repository: inspect source code, documentation, tests, package manifests, configuration, and git history as context; infer the product purpose and current capabilities. Produce docs/PRD.md as a project PRD. Headless mode: ask no questions and use explicit assumptions. Include functional requirements with acceptance criteria, technology stack, non-functional requirements (performance, security, privacy), constraints, and implementation phases. Do not implement code, generate agents, compile a manifest, or run the workflow.";
