@@ -17,7 +17,7 @@ The landing page. Two action cards - **Create a new project** (→ `#/new`) and
 **Open an existing project** (→ `#/projects`) - plus a **Recent projects**
 dropdown for one-click return to a prior project.
 
-![Home - landing page](images/forge-console/01-home.png)
+![Home - landing page](images/forge-console/current/home-1024.png)
 
 ## 2. Overview
 
@@ -26,7 +26,7 @@ first. PRD, team, and project-skill authoring have separate status and model
 summaries. Authoring retries are distinct from native execution controls;
 legacy projects do not need to regenerate a team just to resume a build.
 
-![Overview - run status + pipeline + controls](images/forge-console/02-overview.png)
+![Overview - run status + pipeline + controls](images/forge-console/current/overview-1024.png)
 
 ## 3. Board
 
@@ -80,7 +80,7 @@ overrides separate from authoring settings.
 Expanding **Documents** and selecting the PRD renders it as Markdown, with an
 **Open externally** button to edit it in your editor.
 
-![Plan & Team - PRD rendered](images/forge-console/09-plan-team-doc.png)
+![Plan & Team - rendered document detail](images/forge-console/current/documents-detail-1440.png)
 
 ## 10. Artifacts
 

@@ -102,6 +102,7 @@ For the manual prompting flow and the CLI’s expected prompts, see [docs/prompt
 - [docs/THE-STORY.md](docs/THE-STORY.md)
 - [docs/THE-STORY-PART-2.md](docs/THE-STORY-PART-2.md)
 - [docs/THE-STORY-PART-3.md](docs/THE-STORY-PART-3.md)
+- [docs/THE-STORY-PART-4.md](docs/THE-STORY-PART-4.md)
 - [docs/prompt-playbook.md](docs/prompt-playbook.md)
 - [docs/updates.md](docs/updates.md)
 - [ARCHITECTURE.md](ARCHITECTURE.md)
