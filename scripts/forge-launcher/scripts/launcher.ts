@@ -1235,7 +1235,7 @@ async function preflightCheck(): Promise<void> {
 }
 
 function commandExists(cmd: string): boolean {
-  const pathVar = state.env.PATH ?? "";
+  const pathVar = state.env.PATH ?? state.env.Path ?? "";
   const isWin = process.platform === "win32";
   const exts = isWin ? ["", ".exe", ".cmd", ".bat"] : [""];
   for (const dir of pathVar.split(path.delimiter)) {

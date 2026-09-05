@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 import { mkdtempSync, mkdirSync, writeFileSync, appendFileSync, readFileSync, renameSync, existsSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { basename, join } from "node:path";
 import { get as httpGet, request as httpRequest } from "node:http";
 
 import { startConsoleServer, type ConsoleServer } from "./console/server.ts";
@@ -248,7 +248,7 @@ async function withServer<T>(
 test("serves summary, tasks, docs, team, and actions", async () => {
   await withServer(async (server, repo) => {
     const summary = await getJson(`${server.url}/api/summary`) as { repoName: string; hasPrd: boolean; hasTeam: boolean; defaultTimeoutMs: number; run: { status: string; counts: { complete: number; running: number }; completedDurationMs: number } };
-    assert.equal(summary.repoName, repo.split("/").pop());
+    assert.equal(summary.repoName, basename(repo));
     assert.equal(summary.hasPrd, true);
     assert.equal(summary.hasTeam, true);
     assert.equal(summary.run.status, "running");

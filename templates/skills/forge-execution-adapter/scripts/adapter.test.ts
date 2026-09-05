@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { mkdtempSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { join, normalize } from "node:path";
 
 import { compileExecutionManifest, compileExecutionManifestDetailed, validateManifestSafety, validateTeam } from "./compiler.ts";
 import { discoverForgeRepo } from "./discovery.ts";
@@ -434,7 +434,7 @@ test("discoverForgeRepo detects the decomposed feature layout", () => {
   const repo = discoverForgeRepo(root);
   assert.equal(repo.sourceLayout, "features");
   assert.equal(repo.featurePaths.length, 3);
-  assert.ok(repo.visionPath.endsWith("docs/product-vision.md"));
+  assert.equal(normalize(repo.visionPath), normalize(join(root, "docs", "product-vision.md")));
 });
 
 test("compileExecutionManifest compiles features in dependency order with feature-tagged ids", () => {

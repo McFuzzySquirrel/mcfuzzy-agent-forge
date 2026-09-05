@@ -12,7 +12,7 @@
   ],
   "scripts": {
     "build": "tsc && tsc -p tsconfig.client.json && node scripts/copy-client-assets.mjs",
-    "test": "node --import tsx --test scripts/*.test.ts",
+    "test": "node --import tsx --test --test-concurrency=1 scripts/*.test.ts",
     "typecheck": "tsc --noEmit && tsc -p tsconfig.client.json --noEmit",
     "check:version": "tsx scripts/version-consistency.ts",
     "prepack": "npm run build && node scripts/stage-resources.mjs"

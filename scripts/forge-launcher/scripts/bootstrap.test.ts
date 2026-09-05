@@ -69,8 +69,8 @@ test("expandPath expands ~, ~/..., $VAR and ${VAR}", () => {
   assert.equal(expandPath("~"), os.homedir());
   assert.equal(expandPath("~/x"), path.join(os.homedir(), "x"));
   process.env.FL_TEST_HOME = "/tmp";
-  assert.equal(expandPath("$FL_TEST_HOME/y"), path.join("/tmp", "y"));
-  assert.equal(expandPath("${FL_TEST_HOME}/y"), path.join("/tmp", "y"));
+  assert.equal(path.normalize(expandPath("$FL_TEST_HOME/y")), path.normalize(path.join("/tmp", "y")));
+  assert.equal(path.normalize(expandPath("${FL_TEST_HOME}/y")), path.normalize(path.join("/tmp", "y")));
   delete process.env.FL_TEST_HOME;
 });
 
