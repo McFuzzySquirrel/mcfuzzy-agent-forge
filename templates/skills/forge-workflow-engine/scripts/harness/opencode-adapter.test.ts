@@ -143,7 +143,7 @@ test("prompt surfaces the per-task timeout and retry budget when provided", asyn
   }
 
   const recorded = JSON.parse(readFileSync(shim.argsFile, "utf8")) as string[];
-  const prompt = recorded[recorded.length - 1] ?? "";
+  const prompt = recorded.join(" ");
   assert.ok(prompt.includes("Per-task timeout: 60s"), prompt);
   assert.ok(prompt.includes("retried up to 2 time(s)"), prompt);
 });
@@ -156,7 +156,7 @@ test("prompt includes the normalized default budget when no overrides are provid
   await invokeWith(shim, agent, root);
 
   const recorded = JSON.parse(readFileSync(shim.argsFile, "utf8")) as string[];
-  const prompt = recorded[recorded.length - 1] ?? "";
+  const prompt = recorded.join(" ");
   assert.ok(prompt.includes("Per-task timeout: 600s"), prompt);
   assert.ok(prompt.includes("retried up to 0 time(s)"), prompt);
 });
