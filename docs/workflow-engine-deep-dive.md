@@ -135,15 +135,17 @@ This is a simplified but correct DAG walk. Because tasks always move from `pendi
 Once a task is ready, `executeTask` takes over:
 
 ```
-1. Look up which agent owns this task (by name match against discovered .agent.md files)
-   → If no agent found: skip the task (warn, don't fail)
+1. Validate the selected `manifest.harnessRoot`, discover the owning agent, and
+   fail on missing owners or discovery errors before spawning a process.
 
 2. markTaskStarted() → saves state with status:"running", increments attempt counter
 
 3. for attempt in range(0, maxRetries+1):
-       result = harness.invoke(agent, task, state, repoRoot)
+       request = prepareTaskRequest(agent, task, projectedContext, budget, attempt)
+       result = harness.invoke(request)
        if result.success:
            markTaskComplete(state, outputFiles, stdout)
+           saveState() + syncProgressMd() + finish commit bookkeeping
            write audit event: task.complete
            return
        if last attempt:
@@ -157,6 +159,18 @@ Once a task is ready, `executeTask` takes over:
 
 The retry loop is the engine's resilience mechanism. If a model call fails transiently - network timeout, rate limit, model error - the task is retried up to `--max-retries` times (default: 2) with a configurable delay (default 5 seconds). Only if all attempts fail does the task enter the `failed` state, which halts the phase.
 
+`TaskResult.failureKind` and persisted `TaskRecord.failureKind` classify failure
+outcomes as `retryable`, `configuration`, `exception`, `timeout`, or
+`cancelled`. Ordinary returned failures, explicit retryable failures,
+timeouts, and verification failures retry up to the configured limit.
+Configuration, exception, and cancellation failures are terminal; unexpected
+thrown adapter promises are persisted as terminal failures without blind
+retries. Cancellation appends a `task.cancelled` audit event. An `AbortSignal`
+is an immediate cancellation boundary: the interrupted task remains pending and
+the run is persisted as paused for resume. This differs from the graceful CLI
+pause/stop path, which allows the in-flight task to finish before persisting
+`paused`.
+
 ### Heartbeat
 
 A long harness call (e.g. a multi-minute `opencode run` or `copilot -p`) is silent, which can look like a hang. While `harness.invoke` is in flight, the engine prints a heartbeat line at a fixed interval:
@@ -169,7 +183,7 @@ The interval defaults to 60 seconds and is controlled with `--heartbeat-ms <ms>`
 
 ### Per-task timeout
 
-Every harness call also runs under a per-task timeout (default **10 minutes**, configurable via `--task-timeout-ms` / `FORGE_ENGINE_TASK_TIMEOUT_MS`). If the call exceeds it, the adapter kills the child process (`runCommand` sends `SIGKILL`) or aborts the HTTP request (`openai`), and the task fails subject to the retry loop. A task can declare its own longer budget with a `timeoutMs` field in the manifest, which overrides the engine-wide default. Because `runCommand` is async, the timeout does not block the heartbeat. See ADR-022.
+Every harness call also runs under a per-task timeout (default **10 minutes**, configurable via `--task-timeout-ms` / `FORGE_ENGINE_TASK_TIMEOUT_MS`). If the call exceeds it, the adapter terminates the owned process tree: POSIX uses a dedicated process group, while Windows uses recursive `taskkill`; the HTTP adapter aborts its request. Cleanup and pipe settlement are bounded, and incomplete cleanup is surfaced as an exception so it cannot be blindly retried. A task can declare its own longer budget with a `timeoutMs` field in the manifest, which overrides the engine-wide default. Because `runCommand` is async, the timeout does not block the heartbeat. See ADR-022.
 
 ### State is always saved before the next loop iteration
 
@@ -200,23 +214,26 @@ logged — it never fails a task that already succeeded.
 
 ## The Harness Abstraction
 
-The `HarnessAdapter` interface is the plugin point of the whole system:
+The `HarnessAdapter` interface is the plugin point of the whole system. Adapters
+receive a read-only request rather than mutable workflow state:
 
 ```typescript
 interface HarnessAdapter {
-  name: string;
-  supportsConcurrency: boolean;
-  invoke(
-    agent: AgentDescriptor,
-    task: ManifestTask,
-    context: WorkflowState,
-    repoRoot: string,
-    contextBlock?: string,
-    timeoutMs?: number,
-    maxRetries?: number,
-  ): Promise<TaskResult>;
+  readonly name: string;
+  readonly supportsConcurrency: boolean;
+  capabilities: readonly TaskCapability[];
+  readonly defaultModel?: string;
+  prepare?(context: HarnessRunContext): Promise<void>;
+  invoke(request: TaskAttemptRequest): Promise<TaskResult>;
+  cleanup?(context: HarnessRunContext): Promise<void>;
 }
 ```
+
+`supportsConcurrency` describes transport capability only; the engine currently
+serializes repository tasks regardless of that flag or the configured
+concurrency value. `prepare` and `cleanup` are run-scoped hooks. Cleanup runs
+in `finally` around both normal runs and replay, including preparation failure,
+and must be safe when preparation did not complete or cleanup already ran.
 
 Each adapter translates a `(agent, task)` pair into a real execution call:
 
@@ -256,22 +273,48 @@ passed to the Copilot CLI. Select it with `--harness copilot` (or
 
 ### `OpenAIAdapter`
 
-Sends a `POST /v1/chat/completions` with:
+The OpenAI adapter is text-only. It rejects legacy tasks and any task requiring
+repository tools before making a request. A valid text task sends a
+`POST /v1/chat/completions` with:
 
 - System message: the agent's `rawBody` (the content of the `.agent.md` file) plus injected constraints
 - User message: the task title, description, expected outputs, and validation commands
 
-This enables fully API-driven builds without any local tooling installed.
+This enables fully API-driven builds without any local tooling installed, but
+only for tasks explicitly requiring `text`.
+
+### Common task request and capabilities
+
+The engine prepares a read-only `TaskAttemptRequest` before each adapter call.
+It contains the agent and task descriptors, effective model, projected context,
+repository root, attempt metadata, and budget. Effective model precedence is:
+
+```text
+task.model → agent.model → transport default
+```
+
+`modelFallback` is metadata only and does not trigger execution fallback.
+`ManifestTask.requiredCapabilities` accepts `text` and `repository-tools`.
+Omitted or empty values conservatively default to `repository-tools`; declare
+`requiredCapabilities: ["text"]` only for genuinely text-only tasks.
+Capabilities are checked before transport invocation, so incompatible tasks
+make no model or process call.
+
+The OpenCode adapter owns its run-scoped server lifecycle. The engine invokes
+`prepare` and `cleanup` with `finally` semantics for run and replay paths:
+owned servers are stopped during cleanup, reused owned servers are handled
+without duplicate launches, and externally attached servers are never stopped
+by the engine.
 
 ### `StubAdapter`
 
 Returns a synthetic success for every task without making any real call. The environment variable `STUB_FAIL_TASK_IDS` can be set to a comma-separated list of task IDs that should fail - useful for testing the retry and failure handling logic without a real backend.
 
-### `FlowForgeKernelAdapter`
-
-Hands task execution to a FlowForge CLI/runtime path (`flowforge run ...`) against a compiled `.workforce` package. It can run a pre-dispatch workforce validation gate via `forge-workforce-compiler` and supports command templating through environment variables for deployment-specific handoff contracts.
-
-The beauty of this pattern: **the engine code never changes when you swap backends**. Adding a new harness (say, a Claude MCP adapter, a local Ollama runner, or a GitHub Actions backend) only requires implementing the `HarnessAdapter` interface and registering it in `cli.ts`.
+The engine is intentionally native to the supported harness adapters. The
+execution adapter compiles the manifest before the run; the workflow engine
+then owns dispatch, output verification, retries, timeouts, and durable state.
+Adding a supported backend requires implementing the `HarnessAdapter` interface
+and registering it in `cli.ts`.
 
 ---
 
@@ -331,7 +374,11 @@ When a task fails and you've fixed the root cause (maybe the agent prompt needed
 npm run workflow-engine -- replay P1-T3 --harness opencode
 ```
 
-`replayTask` resets that single task's record to `pending` while leaving all completed tasks untouched, then calls `executeTask` directly. This is surgical recovery without side effects on the rest of the build.
+`replayTask` persists the reset-to-`pending` intent before preparation. If the
+run is already aborted, replay skips preparation and dispatch, finalizes the
+paused state and `run.paused` audit event, and retains the pending task for a
+later resume. This is surgical recovery without side effects on the rest of
+the build.
 
 ---
 
@@ -371,8 +418,9 @@ workflow-engine run --harness opencode
               ├─ for each ready task in the wave                    │
               │     markTaskStarted() → save running snapshot       │
               │     capture worktree baseline                       │
-              │     harness.invoke(agent, task, contextBlock, ...)  │
-              │       ↳ opencode run / copilot -p / API / kernel    │
+              │     prepare readonly TaskAttemptRequest             │
+              │     harness.invoke(request)                          │
+              │       ↳ opencode run / copilot -p / API              │
               │     verify outputs + enrich changed files           │
               │     markTaskComplete/Failed/Skipped                 │
               │                                                     │

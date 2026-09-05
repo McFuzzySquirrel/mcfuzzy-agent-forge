@@ -159,6 +159,39 @@ test("non-interactive run with no PRD bootstraps and queues forge-auto-build-prd
   assert.ok(!out.includes("/forge-auto-build Use docs/PRD.md as the project PRD"));
 });
 
+test("new-project model options persist while inherit clears saved choices and bypasses stage env", async (t) => {
+  const parent = tmpDir();
+  t.after(() => fs.rmSync(parent, { recursive: true, force: true }));
+  const repo = path.join(parent, "saved-authoring-models");
+  fs.mkdirSync(path.join(repo, "docs", "research"), { recursive: true });
+  fs.writeFileSync(path.join(repo, "docs", "authoring-config.json"), JSON.stringify({
+    version: 1, models: { team: "old-team-1" },
+  }));
+  fs.writeFileSync(path.join(repo, "docs", "research", "model-inventory.json"), JSON.stringify({
+    last_verified: new Date().toISOString(), stub: { models: [{ id: "prd-1" }] },
+  }));
+  const { code, out } = await runCli([
+    "--non-interactive", "--no-update-check",
+    "--prd-model", "prd-1", "--team-model", "inherit", "--skills-model", "skills-3",
+  ], {
+    FORGE_HARNESS_CHOICE: "4",
+    FORGE_REPO_NAME: "saved-authoring-models",
+    FORGE_REPO_PARENT_DIR: parent,
+    FORGE_HOME: path.join(parent, "console-home"),
+    FORGE_IDEA: "A thing",
+    FORGE_YN_DEFAULT: "n",
+    FORGE_AUTO_DRAFT: "0",
+    FORGE_RUN_WITH: "stub",
+    FORGE_PRD_MODEL: "unavailable-environment-model",
+    FORGE_TEAM_MODEL: "unavailable-environment-team",
+  });
+  assert.equal(code, 0, out);
+  assert.deepEqual(JSON.parse(fs.readFileSync(path.join(repo, "docs", "authoring-config.json"), "utf8")), {
+    version: 1, models: { prd: "prd-1", skills: "skills-3" },
+  });
+  assert.equal(fs.existsSync(path.join(repo, "docs", "PRD.md")), false);
+});
+
 test("GitHub projects default to the copilot engine harness", () => {
   assert.equal(defaultEngineHarness("github"), "copilot");
   assert.equal(defaultEngineHarness("opencode"), "opencode");
@@ -173,6 +206,11 @@ test("headless PRD message includes the gap check the manual flow runs", () => {
   assert.ok(msg.includes("acceptance criteria"), msg);
   assert.ok(msg.includes("non-functional requirements"), msg);
   assert.ok(msg.includes("implementation phases"), msg);
+  assert.ok(msg.includes("15 or more functional requirements or 3 or more implementation phases"), msg);
+  assert.ok(msg.includes("automatically invoke forge-decompose-prd"), msg);
+  assert.ok(msg.includes("docs/product-vision.md"), msg);
+  assert.ok(msg.includes("docs/features/*.md"), msg);
+  assert.ok(msg.includes("otherwise keep the monolithic docs/PRD.md"), msg);
 });
 
 test("team-generation prompt targets the selected harness directories", () => {
@@ -180,6 +218,8 @@ test("team-generation prompt targets the selected harness directories", () => {
   assert.ok(buildTeamPrompt("docs/PRD.md", "opencode").includes(".opencode/skills/"));
   assert.ok(buildTeamPrompt("docs/PRD.md", "github").includes(".github/agents/"));
   assert.ok(buildTeamPrompt("docs/PRD.md", "github").includes(".github/skills/"));
+  assert.match(buildTeamPrompt("docs/PRD.md", "opencode"), /reusable, repeated, or fragile project-specific processes/);
+  assert.match(buildTeamPrompt("docs/PRD.md", "opencode"), /action create when a needed process has no suitable package/);
 });
 
 test("auto-draft engine command carries configured granularity/concurrency/timeout/retries", async () => {
@@ -359,13 +399,13 @@ test("headless skill command pins the repo dir with --dir", async () => {
   // opencode resolves its project dir from its parent process, not the child's
   // spawn cwd, so the launcher must pass --dir explicitly or the skill runs in
   // the wrong repository and its input (docs/IDEA.md) is reported missing.
-  assert.ok(out.includes(`opencode run --auto --dir "${repo}"`), out);
+  assert.match(out, new RegExp(`opencode run --auto --dir "[^"]*[\\\\/]${path.basename(repo)}"`), out);
 });
 
-test("non-interactive run with a PRD queues forge-auto-build", async () => {
+test("non-interactive run with a PRD queues the separate team authoring stage", async () => {
   const parent = tmpDir();
   const prd = path.join(parent, "prd.md");
-  fs.writeFileSync(prd, "# PRD\n\nBuild a thing.\n");
+  fs.writeFileSync(prd, "# PRD\n\n## Phase 1: Foundation\n- Build a thing.\n");
 
   const { code, out } = await runCli(["--non-interactive"], {
     FORGE_HARNESS_CHOICE: "4",
@@ -379,15 +419,15 @@ test("non-interactive run with a PRD queues forge-auto-build", async () => {
   assert.equal(code, 0, out);
   const repo = path.join(parent, "with-prd-app");
   assert.ok(fs.existsSync(path.join(repo, "docs", "PRD.md")));
-  // No team generated (no auto-draft) -> forge-auto-build still does in-chat team-gen.
-  assert.ok(out.includes("/forge-auto-build Use docs/PRD.md as the project PRD"));
+  assert.ok(out.includes("/forge-build-agent-team Use docs/PRD.md to build the agent team."));
+  assert.ok(out.includes("do not create or modify skill packages"));
   assert.ok(!out.includes("/forge-auto-build-prd Use docs/IDEA.md"));
 });
 
 test("non-interactive run with a PRD and a generated team queues /forge-orchestrate-build", async () => {
   const parent = tmpDir();
   const prd = path.join(parent, "prd.md");
-  fs.writeFileSync(prd, "# PRD\n\nBuild a thing.\n");
+  fs.writeFileSync(prd, "# PRD\n\n## Phase 1: Foundation\n- Build a thing.\n");
 
   const { code, out } = await runCli(["--non-interactive"], {
     FORGE_HARNESS_CHOICE: "4",
@@ -465,10 +505,10 @@ test("auto-draft PRD succeeds via the stub skill runner", async () => {
   assert.ok(log.includes("feat: generate auto-drafted agent team"));
 });
 
-test("plan & validate step saves an execution plan after team creation", async () => {
+test("auto-draft compiles the native manifest after team and skills without authoring engine progress", async () => {
   const parent = tmpDir();
   const prd = path.join(parent, "prd.md");
-  fs.writeFileSync(prd, "# PRD\n\nBuild a thing.\n");
+  fs.writeFileSync(prd, "# PRD\n\n## Phase 1: Foundation\n- Build a thing.\n");
 
   const { code, out } = await runCli(["--non-interactive"], {
     FORGE_HARNESS_CHOICE: "4",
@@ -483,11 +523,9 @@ test("plan & validate step saves an execution plan after team creation", async (
 
   assert.equal(code, 0, out);
   const repo = path.join(parent, "plan-step-app");
-  assert.ok(fs.existsSync(path.join(repo, "docs", "PROGRESS.md")), "execution plan should exist");
-  assert.ok(out.includes("Execution plan saved to docs/PROGRESS.md"), out);
-  const log = execFileSync("git", ["-C", repo, "log", "--oneline"], { encoding: "utf8" });
-  assert.ok(log.includes("docs: add execution plan"), log);
-  // The engine decision still runs after the plan step.
+  assert.ok(fs.existsSync(path.join(repo, "docs", "EXECUTION-MANIFEST.json")), "native execution manifest should exist");
+  assert.ok(!fs.existsSync(path.join(repo, "docs", "PROGRESS.md")), "engine progress must not be authored by an LLM");
+  assert.ok(out.includes("Execution manifest compiled"), out);
   assert.ok(out.includes("engine-run --repo"), out);
 });
 
@@ -504,11 +542,11 @@ test("auto-draft PRD failure is diagnosed with log tail and no commit", async ()
     FORGE_STUB_NOOP: "1",
   });
 
-  assert.equal(code, 0, out);
+  assert.equal(code, 1, out);
   const repo = path.join(parent, "draft-fail-app");
   assert.ok(!fs.existsSync(path.join(repo, "docs", "PRD.md")), "no PRD should exist");
-  assert.ok(out.includes("did not produce the expected artifact"));
-  assert.ok(out.includes("Run it manually in the repo"));
+  assert.ok(out.includes("PRD authoring exited without a non-empty PRD"));
+  assert.ok(out.includes("forge-launcher draft-prd"));
   assert.ok(out.includes("[stub] invoking forge-auto-build-prd"));
   // nothing was committed beyond the bootstrap commit
   const log = execFileSync("git", ["-C", repo, "log", "--oneline"], { encoding: "utf8" });

@@ -1,14 +1,16 @@
 // ─── Overview: run header, progress, actions, pipeline guidance ─────────────
 
 import { api } from "../api.js";
-import { store } from "../state.js";
+import { Epoch, store } from "../state.js";
 import { el, fmtDuration, fmtTime, minutesToTimeoutMs, statusBadge, toast } from "../render/dom.js";
-import type { Actions, BackgroundJob, ControlAction, ExecutionMode, RunSummary, Summary, TaskRow } from "../types.js";
+import type { Actions, AuthoringStageState, BackgroundJob, ControlAction, ExecutionMode, RunSummary, Summary, TaskRow } from "../types.js";
 
-let gen = 0;
+const renderEpoch = new Epoch();
 let unsub: Array<() => void> = [];
 let pollTimer: number | undefined;
-let rerenderTimer: number | undefined;
+let refreshTimer: number | undefined;
+let overviewContainer: HTMLElement | null = null;
+let refreshInFlight = false;
 
 function stopPoll(): void {
   if (pollTimer !== undefined) {
@@ -18,24 +20,18 @@ function stopPoll(): void {
 }
 
 function stopScheduledRender(): void {
-  if (rerenderTimer !== undefined) {
-    window.clearTimeout(rerenderTimer);
-    rerenderTimer = undefined;
+  if (refreshTimer !== undefined) {
+    window.clearTimeout(refreshTimer);
+    refreshTimer = undefined;
   }
 }
 
 function scheduleRender(container: HTMLElement): void {
-  if (rerenderTimer !== undefined) return;
-  rerenderTimer = window.setTimeout(() => {
-    rerenderTimer = undefined;
-    void renderOverview(container);
+  if (refreshTimer !== undefined) return;
+  refreshTimer = window.setTimeout(() => {
+    refreshTimer = undefined;
+    void refreshOverviewData(container);
   }, 500);
-}
-
-function replaceContentPreserveScroll(container: HTMLElement, nodes: HTMLElement[]): void {
-  const { scrollX, scrollY } = window;
-  container.replaceChildren(...nodes);
-  window.scrollTo(scrollX, scrollY);
 }
 
 export function unmountOverview(): void {
@@ -43,14 +39,21 @@ export function unmountOverview(): void {
   unsub = [];
   stopPoll();
   stopScheduledRender();
+  overviewContainer = null;
 }
 
 export async function renderOverview(container: HTMLElement): Promise<void> {
-  // Clear the live-audit subscription before re-subscribing (not a full
-  // unmount — pending pipeline state + polling must survive re-renders).
+  if (overviewContainer === container) {
+    await refreshOverviewData(container);
+    return;
+  }
+  overviewContainer = container;
+  container.replaceChildren(el("div", { className: "panel", role: "status" }, [
+    el("div", { className: "spinner-row" }, [el("span", { className: "spinner", "aria-hidden": "true" }), "Loading project status…"]),
+  ]));
   for (const u of unsub) u();
   unsub = [];
-  const myGen = ++gen;
+  const myGen = renderEpoch.next();
   unsub.push(store.onAudit(() => scheduleRender(container)));
 
   // Re-fetch on every render (navigation, snapshot, or audit event) so counts
@@ -58,56 +61,172 @@ export async function renderOverview(container: HTMLElement): Promise<void> {
   let summary: Summary | null;
   let actions: Actions;
   let tasks: TaskRow[] = [];
+  let loadError = false;
   try {
     [summary, actions, tasks] = await Promise.all([api.summary(), api.actions(), api.tasks()]);
   } catch {
+    loadError = true;
     summary = store.summary;
     actions = { canRun: false, canResume: false, canPause: false, canStop: false, failedTasks: [] };
   }
-  if (myGen !== gen) return;
+  if (!renderEpoch.isCurrent(myGen)) return;
 
   if (!summary) {
-    replaceContentPreserveScroll(container, [
+    container.replaceChildren(
+      ...(loadError ? [el("div", { className: "panel error-text", role: "alert" }, "Live status is temporarily unavailable. Controls are disabled until it reconnects.")] : []),
       el("div", { className: "panel" }, [
         el("h2", null, "No project selected"),
         el("p", { className: "dim" }, "Pick a project from the list to open its console."),
         el("a", { href: "#/home", className: "btn btn-primary" }, "Choose project"),
       ]),
-    ]);
+    );
     return;
   }
 
-  replaceContentPreserveScroll(container, [
-    renderHeader(summary),
-    renderRun(summary.run),
-    renderManifest(summary),
-    renderGuidance(container, summary, actions),
-    renderActions(container, summary, actions, tasks),
-    summary.hasPrd && summary.hasTeam ? renderFeatureIncrement(container) : renderFeaturePrd(container),
-  ]);
+  container.replaceChildren(
+    region("overview-header", renderHeader(summary)),
+    region("overview-guidance", renderGuidance(container, summary, actions)),
+    ...(summary.authoring ? [region("overview-authoring", renderAuthoringStatus(summary))] : []),
+    region("overview-run", renderRun(summary.run)),
+    region("overview-manifest", renderManifest(summary)),
+    region("overview-actions", renderActions(container, summary, actions, tasks)),
+    region("overview-feature", summary.hasPrd && summary.hasTeam ? renderFeatureIncrement(container) : renderFeaturePrd(container)),
+  );
+  announce(`Opened ${summary.repoName}.`);
+}
+
+function region(name: string, content: HTMLElement): HTMLElement {
+  const host = el("section", { "data-overview-region": name });
+  host.appendChild(content);
+  return host;
+}
+
+function announce(message: string): void {
+  const node = document.querySelector<HTMLElement>("#live-announcements");
+  if (node) node.textContent = message;
+}
+
+export function refreshOverview(): void {
+  if (overviewContainer) void refreshOverviewData(overviewContainer);
+}
+
+async function refreshOverviewData(container: HTMLElement): Promise<void> {
+  if (refreshInFlight || overviewContainer !== container) return;
+  if (!container.querySelector("[data-overview-region]")) return;
+  refreshInFlight = true;
+  const myGen = renderEpoch.next();
+  try {
+    const [summary, actions, tasks] = await Promise.all([api.summary(), api.actions(), api.tasks()]);
+    if (!renderEpoch.isCurrent(myGen) || overviewContainer !== container || !summary) return;
+    const update = (name: string, content: HTMLElement): void => {
+      const host = container.querySelector<HTMLElement>(`[data-overview-region="${name}"]`);
+      if (!host) return;
+      const focused = document.activeElement;
+      const focusIndex = focused instanceof HTMLElement && host.contains(focused)
+        ? [...host.querySelectorAll<HTMLElement>("button, a, input, select, textarea, [tabindex]:not([tabindex='-1'])")].indexOf(focused)
+        : -1;
+      if (focused instanceof HTMLInputElement || focused instanceof HTMLTextAreaElement || focused instanceof HTMLSelectElement) {
+        if (host.contains(focused)) return;
+      }
+      host.replaceChildren(content);
+      if (focusIndex >= 0) {
+        [...host.querySelectorAll<HTMLElement>("button, a, input, select, textarea, [tabindex]:not([tabindex='-1'])")][focusIndex]?.focus();
+      }
+    };
+    update("overview-header", renderHeader(summary));
+    update("overview-guidance", renderGuidance(container, summary, actions));
+    if (summary.authoring) update("overview-authoring", renderAuthoringStatus(summary));
+    update("overview-run", renderRun(summary.run));
+    update("overview-manifest", renderManifest(summary));
+    update("overview-actions", renderActions(container, summary, actions, tasks));
+    const feature = summary.hasPrd && summary.hasTeam ? renderFeatureIncrement(container) : renderFeaturePrd(container);
+    update("overview-feature", feature);
+    announce(`Status updated: ${summary.run?.status ?? "pipeline ready"}.`);
+  } catch (error) {
+    const host = container.querySelector<HTMLElement>('[data-overview-region="overview-guidance"]');
+    if (host) host.replaceChildren(el("div", { className: "panel error-text", role: "alert" }, "Unable to refresh project status. Retrying…"));
+    if (error instanceof Error) console.error(error);
+  } finally {
+    refreshInFlight = false;
+  }
 }
 
 function renderFeatureIncrement(container: HTMLElement): HTMLElement {
-  const input = el("textarea", { rows: "3", placeholder: "Describe the feature to add…" });
-  const run = el("input", { type: "checkbox" }) as HTMLInputElement;
+  const project = store.projectKey();
+  const input = el("textarea", { rows: "3", placeholder: "Describe the feature to add…", "aria-label": "Feature description" });
+  input.textContent = store.getDraft(project, "featurePrompt", "");
+  const run = el("input", { type: "checkbox", "aria-label": "Run the workflow after preparing", checked: store.getDraft<string>(project, "featureRun", "false") === "true" }) as HTMLInputElement;
+  input.addEventListener("input", () => store.setDraft(project, "featurePrompt", (input as HTMLTextAreaElement).value));
+  run.addEventListener("change", () => store.setDraft(project, "featureRun", String(run.checked)));
   const button = el("button", { className: "btn btn-primary" }, "Run Feature Increment");
   button.addEventListener("click", () => {
     const prompt = (input as HTMLTextAreaElement).value.trim();
     if (!prompt) { toast("Describe the feature first."); return; }
     button.setAttribute("disabled", "true");
-    void api.featureIncrement(prompt, run.checked).then((r) => toast(r.message)).catch((e) => toast(e instanceof Error ? e.message : "feature increment failed"));
+    button.setAttribute("disabled", "");
+    void api.featureIncrement(prompt, run.checked)
+      .then((r) => toast(r.message))
+      .catch((e) => toast(e instanceof Error ? e.message : "feature increment failed"))
+      .finally(() => button.removeAttribute("disabled"));
   });
   return el("div", { className: "panel" }, [el("h4", null, "Increment the project"), el("p", { className: "dim small" }, "Authors the feature, updates affected agents, recompiles the manifest, and optionally runs it."), input, el("label", { className: "checkbox-row" }, [run, el("span", null, "Run the workflow after preparing")]), el("div", { className: "actions" }, [button])]);
 }
 
+function renderAuthoringStatus(summary: Summary): HTMLElement {
+  const stages: Array<["prd" | "team" | "skills", string]> = [
+    ["prd", "PRD"],
+    ["team", "Team"],
+    ["skills", "Skills"],
+  ];
+  return el("div", { className: "panel authoring-status" }, [
+    el("div", { className: "row between wrap" }, [
+      el("h3", null, "Authoring stages"),
+      el("a", { href: "#/documents", className: "btn btn-sm" }, "Configure models"),
+    ]),
+    el("div", { className: "authoring-stage-list" }, stages.map(([stage, label]) => {
+      const state = summary.authoring?.stages[stage];
+      const presentation = authoringStagePresentation(summary, stage, state);
+      return el("div", { className: "authoring-stage" }, [
+        el("strong", null, label),
+        el("span", { className: `badge badge-${presentation.className}` }, presentation.label),
+        el("span", { className: "dim small" }, state?.invocation?.effectiveModel ?? (presentation.untracked ? "existing project artifact" : "runner default")),
+        state?.error ? el("span", { className: "error-text small" }, state.error) : null,
+      ]);
+    })),
+    summary.authoringReady === false
+      ? el("p", { className: "error-text small", role: "alert" }, summary.authoringBlocker || "Active authoring is incomplete. Finish or retry the stages before building.")
+      : el("p", { className: "dim small" }, "Authoring models and execution controls are independent."),
+  ]);
+}
+
+function authoringStagePresentation(
+  summary: Summary,
+  stage: "prd" | "team" | "skills",
+  state: AuthoringStageState | undefined,
+): { label: string; className: string; untracked: boolean } {
+  if (state?.noSkillsRequired) return { label: "not required", className: "complete", untracked: false };
+  if (state?.status) return { label: state.status, className: state.status, untracked: false };
+  const exists = stage === "prd" ? summary.hasPrd : stage === "team" ? summary.hasTeam : summary.hasTeam && summary.authoringReady !== false;
+  return exists
+    ? { label: "Existing / untracked", className: "no-run", untracked: true }
+    : { label: "pending", className: "pending", untracked: false };
+}
+
 function renderFeaturePrd(container: HTMLElement): HTMLElement {
-  const input = el("textarea", { rows: "3", placeholder: "Describe the feature to add…" });
+  const project = store.projectKey();
+  const input = el("textarea", { rows: "3", placeholder: "Describe the feature to add…", "aria-label": "Feature description" });
+  input.textContent = store.getDraft(project, "featurePrompt", "");
+  input.addEventListener("input", () => store.setDraft(project, "featurePrompt", (input as HTMLTextAreaElement).value));
   const button = el("button", { className: "btn btn-primary" }, "Author Feature PRD");
   button.addEventListener("click", () => {
     const prompt = (input as HTMLTextAreaElement).value.trim();
     if (!prompt) { toast("Describe the feature first."); return; }
     button.setAttribute("disabled", "true");
-    void api.featurePrd(prompt).then((r) => toast(r.message)).catch((e) => toast(e instanceof Error ? e.message : "feature PRD failed"));
+    button.setAttribute("disabled", "");
+    void api.featurePrd(prompt)
+      .then((r) => toast(r.message))
+      .catch((e) => toast(e instanceof Error ? e.message : "feature PRD failed"))
+      .finally(() => button.removeAttribute("disabled"));
   });
   return el("div", { className: "panel" }, [el("h4", null, "Add a feature"), el("p", { className: "dim small" }, "Authoring writes a new document under docs/features/ and does not start the workflow engine."), input, el("div", { className: "actions" }, [button])]);
 }
@@ -252,6 +371,14 @@ function nextStep(summary: Summary, actions: Actions): PipelineStep | null {
       hint: "Generates the agent team from the PRD (headless). Review it, then come back to continue.",
     };
   }
+  const skillsStage = summary.authoring?.stages.skills;
+  if (summary.authoringReady === false && skillsStage && skillsStage.status !== "complete" && !skillsStage.noSkillsRequired) {
+    return {
+      label: "Generate project skills",
+      action: "draft-skills",
+      hint: "Completes the project-skill stage from the generated team. Review the candidates and outputs before building.",
+    };
+  }
   if (!summary.hasManifest && summary.executionMode === "manual" && actions.canRun) {
     return {
       label: "Create manifest",
@@ -379,10 +506,11 @@ function renderActions(container: HTMLElement, summary: Summary, actions: Action
     })();
   };
 
+  const authoringBlocked = summary.authoringReady === false;
   const manualNeedsSelection = summary.executionMode === "manual" && summary.selectedTaskCount === 0;
   const buttons = [
-    el("button", { className: "btn btn-primary", disabled: actions.canRun && !manualNeedsSelection ? null : true }, summary.executionMode === "manual" ? "Run selected" : "Run"),
-    el("button", { className: "btn", disabled: actions.canResume && !manualNeedsSelection ? null : true }, summary.executionMode === "manual" ? "Resume selected" : "Resume"),
+    el("button", { className: "btn btn-primary", disabled: !authoringBlocked && actions.canRun && !manualNeedsSelection ? null : true }, summary.executionMode === "manual" ? "Run selected" : "Run"),
+    el("button", { className: "btn", disabled: !authoringBlocked && actions.canResume && !manualNeedsSelection ? null : true }, summary.executionMode === "manual" ? "Resume selected" : "Resume"),
     el("button", { className: "btn", disabled: actions.canPause ? null : true }, "Pause"),
     el("button", { className: "btn btn-danger", disabled: actions.canStop ? null : true }, "Stop"),
   ];
@@ -415,6 +543,9 @@ function renderActions(container: HTMLElement, summary: Summary, actions: Action
     el("div", { className: "actions" }, buttons),
     manualNeedsSelection
       ? el("p", { className: "dim small" }, ["Manual mode needs at least one selected task. ", el("a", { href: "#/tasks" }, "Choose tasks")])
+      : null,
+    authoringBlocked
+      ? el("p", { className: "error-text small", role: "alert" }, [summary.authoringBlocker || "Authoring stages are incomplete.", " ", el("a", { href: "#/documents" }, "Review authoring settings and stages")])
       : null,
     replay,
     timeouts,

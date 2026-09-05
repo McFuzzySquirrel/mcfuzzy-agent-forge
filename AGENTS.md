@@ -6,9 +6,9 @@ Guidance for AI coding agents working in this repository (MyForge).
 
 - `templates/skills/` — the forge skills. Each is a small TypeScript/Node package
   (own `package.json`, `tsconfig.json`, `scripts/`) that gets bootstrapped into
-  target repos. Notable ones: `forge-workflow-engine` (autonomous execution),
-  `forge-execution-adapter` (manifest compiler), `forge-workforce-compiler`
-  (FlowForge kernel packaging). `templates/agents/` holds forge agent personas.
+  target repos. Notable ones: `forge-workflow-engine` (autonomous execution)
+  and `forge-execution-adapter` (manifest compiler). `templates/agents/` holds
+  forge agent personas.
 - `scripts/` — the `forge-launcher` npm package (`scripts/forge-launcher/`) plus
   thin bash/PowerShell wrapper scripts that delegate to it.
 - `docs/` — human documentation: `updates.md` (the versioned changelog),
@@ -26,7 +26,8 @@ Guidance for AI coding agents working in this repository (MyForge).
   `docs/adr/NNN-*.md` (increment the number; ADR-032 is the latest).
 - **Doc-as-you-build:** `SKILL.md`, deep-dives, and the README are updated in the
   same change as the code they describe — docs and changelog are part of the
-  feature, not a follow-up.
+  feature, not a follow-up. Retirement docs must distinguish active commands
+  from preserved historical records.
 - **Commit style:** short `feat:`, `fix:`, `docs:`, `refactor:` prefixes,
   imperative mood, matching the existing history. Only commit/push when asked.
 - **Never commit `node_modules/` or `dist/`** — they are gitignored in every
@@ -45,7 +46,7 @@ npm test             # node --test suite
 ```
 
 Package test globs: the workflow engine runs `scripts/**/*.test.ts`; the
-execution adapter, workforce compiler, and launcher run `scripts/*.test.ts`.
+execution adapter and launcher run `scripts/*.test.ts`.
 Each package also exposes its own entry script (e.g.
 `npm run workflow-engine -- run`).
 

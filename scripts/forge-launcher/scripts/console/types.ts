@@ -124,6 +124,10 @@ export interface ManifestSummary {
 }
 
 export interface Summary {
+  authoring: import("../authoring-state.ts").AuthoringState;
+  authoringReady: boolean;
+  authoringBlocker?: string;
+  authoringNextStage?: import("../authoring-config.ts").AuthoringStage;
   repoRoot: string;
   repoName: string;
   harness: string | null;
@@ -279,7 +283,7 @@ export interface FileContent {
   content: string;
 }
 
-export type ControlAction = "run" | "resume" | "pause" | "stop" | "replay" | "reset-changed" | "draft-prd" | "draft-existing-prd" | "draft-team" | "compile-manifest" | "feature-prd" | "feature-increment";
+export type ControlAction = "run" | "resume" | "pause" | "stop" | "replay" | "reset-changed" | "draft-prd" | "draft-existing-prd" | "draft-team" | "draft-skills" | "compile-manifest" | "feature-prd" | "feature-increment";
 
 export type ExecutionMode = "auto" | "manual";
 export type SelectionScope = "single" | "range" | "list";
@@ -292,6 +296,7 @@ export type BackgroundJobType =
   | "draft-prd"
   | "draft-existing-prd"
   | "draft-team"
+  | "draft-skills"
   | "compile-manifest"
   | "engine-run"
   | "engine-resume"
@@ -309,9 +314,11 @@ export interface BackgroundJob {
   startedAt: string;
   updatedAt: string;
   finishedAt?: string;
+  resultPath?: string;
   status: BackgroundJobStatus;
   message: string;
   run?: boolean;
+  autoDraft?: boolean;
 }
 
 export interface ControlResult {
@@ -329,6 +336,7 @@ export interface TimeoutUpdateResult {
 }
 
 export interface CreateProjectRequest {
+  authoringConfig?: import("../authoring-config.ts").AuthoringConfig;
   name: string;
   description?: string;
   harness?: string;

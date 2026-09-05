@@ -1,14 +1,17 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { execFileSync } from "node:child_process";
-import { mkdtempSync, mkdirSync, writeFileSync, readFileSync } from "node:fs";
+import { mkdtempSync, mkdirSync, writeFileSync, readFileSync, unlinkSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
 import { allDepsComplete, isComplete, isTaskDone, mapLimit, nextReadyTasks, ownerUniqueReady, replayTask, runEngine, validateManifestDependencies } from "./engine.ts";
 import { runCommand } from "./harness/run.ts";
+import { OpenAIAdapter } from "./harness/openai-adapter.ts";
+import { compileExecutionManifestDetailed } from "../../forge-execution-adapter/scripts/compiler.ts";
+import { discoverForgeRepo } from "../../forge-execution-adapter/scripts/discovery.ts";
 import { readControl, writeControl } from "./control.ts";
-import { reconcileState } from "./state.ts";
+import { reconcileState, loadState, saveState, initState } from "./state.ts";
 import type { EngineOptions, ExecutionManifest, HarnessAdapter, ManifestTask, TaskResult, TaskStatus, WorkflowState } from "./types.ts";
 
 type ManifestPhase = ExecutionManifest["phases"][number];
@@ -218,22 +221,15 @@ test("mapLimit handles an empty array", async () => {
 class RecordingHarness implements HarnessAdapter {
   readonly name = "recording";
   readonly supportsConcurrency = false;
+  readonly capabilities = ["text", "repository-tools"] as const;
   timeouts: number[] = [];
   retries: number[] = [];
   taskIds: string[] = [];
 
-  async invoke(
-    _agent: Parameters<HarnessAdapter["invoke"]>[0],
-    task: ManifestTask,
-    _context: WorkflowState,
-    _repoRoot: string,
-    _contextBlock?: string,
-    timeoutMs?: number,
-    maxRetries?: number,
-  ) {
+  async invoke({ task, budget, attempt }: Parameters<HarnessAdapter["invoke"]>[0]) {
     this.taskIds.push(task.id);
-    this.timeouts.push(timeoutMs ?? -1);
-    this.retries.push(maxRetries ?? -1);
+    this.timeouts.push(budget.timeoutMs);
+    this.retries.push(attempt.maxRetries);
     return {
       success: true,
       outputFiles: [],
@@ -248,6 +244,7 @@ class RecordingHarness implements HarnessAdapter {
 class GatedHarness implements HarnessAdapter {
   readonly name = "gated";
   readonly supportsConcurrency = false;
+  readonly capabilities = ["text", "repository-tools"] as const;
   private release: (() => void) | undefined;
 
   constructor(private readonly onInvoke: () => void) {}
@@ -276,6 +273,7 @@ class GatedHarness implements HarnessAdapter {
 class GatedConcurrentHarness implements HarnessAdapter {
   readonly name = "gated-concurrent";
   readonly supportsConcurrency = true;
+  readonly capabilities = ["text", "repository-tools"] as const;
   /** Task IDs currently executing (in-flight). */
   active = new Set<string>();
   /** Max number of concurrently executing tasks observed. */
@@ -285,7 +283,7 @@ class GatedConcurrentHarness implements HarnessAdapter {
   private releases = new Map<string, () => void>();
   private startedResolvers = new Map<string, () => void>();
 
-  async invoke(_agent: Parameters<HarnessAdapter["invoke"]>[0], task: ManifestTask): Promise<TaskResult> {
+  async invoke({ task }: Parameters<HarnessAdapter["invoke"]>[0]): Promise<TaskResult> {
     this.active.add(task.id);
     this.startedOrder.push(task.id);
     this.maxOverlap = Math.max(this.maxOverlap, this.active.size);
@@ -412,6 +410,324 @@ test("effective task timeout prefers the per-task manifest timeoutMs over the en
 
   assert.equal(state.status, "complete");
   assert.deepEqual(harness.timeouts, [25_000]);
+});
+
+test("serialized completion is durable before B starts and survives B throwing and replay", async () => {
+  const fixture = makeEngineFixture();
+  const manifest = JSON.parse(readFileSync(fixture.manifestPath, "utf8")) as ExecutionManifest;
+  const first = manifest.phases[0]!.tasks[0]!;
+  writeFileSync(join(fixture.root, ".agents", "agents", "second.md"), "---\nname: second\ndescription: Second worker\n---\nBuild things.");
+  manifest.phases[0]!.tasks.push({ ...first, id: "1.2", ownerAgent: "second" });
+  writeFileSync(fixture.manifestPath, JSON.stringify(manifest));
+  const calls: string[] = [];
+  const options = engineOptionsFor(fixture, {
+    name: "interrupting", supportsConcurrency: true, capabilities: ["text", "repository-tools"],
+    async invoke({ task }) {
+      calls.push(task.id);
+      if (task.id === "1.2") {
+        assert.equal(loadState(options.statePath)?.tasks["1.1"]?.status, "complete");
+        assert.match(readFileSync(options.progressPath, "utf8"), /1\.1/);
+        throw new Error("B interrupted");
+      }
+      return { success: true, outputFiles: [], stdout: "done", stderr: "", durationMs: 1 };
+    },
+  }, 1000, { maxRetries: 2, autoCommit: false });
+  const result = await runEngine(options);
+  assert.equal(result.status, "failed");
+  assert.equal(loadState(options.statePath)?.tasks["1.1"]?.status, "complete");
+  assert.equal(loadState(options.statePath)?.tasks["1.2"]?.status, "failed");
+  assert.deepEqual(calls, ["1.1", "1.2"], "unexpected exceptions are terminal, not blindly retried");
+  const resumed = new RecordingHarness();
+  const replayed = await replayTask("1.2", { ...options, harness: resumed });
+  assert.equal(replayed.status, "complete");
+  assert.deepEqual(resumed.taskIds, ["1.2"]);
+  await runEngine({ ...options, harness: resumed });
+  assert.deepEqual(resumed.taskIds, ["1.2"], "completed A is never reinvoked");
+});
+
+test("owner preflight rejects required missing owners before any dispatch", async () => {
+  const fixture = makeEngineFixture({ ownerAgent: "missing" });
+  const harness = new RecordingHarness();
+  const options = engineOptionsFor(fixture, harness, 1000);
+  await assert.rejects(runEngine(options), /Missing required owners.*1\.1 \(missing\)/);
+  assert.deepEqual(harness.taskIds, []);
+  assert.equal(loadState(options.statePath)?.status, "failed");
+  assert.equal(loadState(options.statePath)?.tasks["1.1"]?.status, "pending");
+});
+
+test("engine discovery honors the manifest harness root in a mixed-root repository", async () => {
+  const fixture = makeEngineFixture({ ownerAgent: "github-worker" });
+  mkdirSync(join(fixture.root, ".github", "agents"), { recursive: true });
+  writeFileSync(join(fixture.root, ".github", "agents", "worker.md"),
+    "---\nname: github-worker\ndescription: GitHub worker\n---\nBuild things.");
+  const manifest = JSON.parse(readFileSync(fixture.manifestPath, "utf8")) as ExecutionManifest;
+  manifest.harnessRoot = ".github";
+  writeFileSync(fixture.manifestPath, JSON.stringify(manifest));
+  const harness = new RecordingHarness();
+  const state = await runEngine(engineOptionsFor(fixture, harness, 1000));
+  assert.equal(state.status, "complete");
+  assert.deepEqual(harness.taskIds, ["1.1"]);
+});
+
+test("legacy manifests can still explicitly execute with a Forge coordinator owner", async () => {
+  const fixture = makeEngineFixture({ ownerAgent: "forge-team-builder" });
+  writeFileSync(join(fixture.root, ".agents", "agents", "forge-team-builder.md"),
+    "---\nname: forge-team-builder\ndescription: Legacy explicitly selected owner.\n---\n");
+  const harness = new RecordingHarness();
+  const state = await runEngine(engineOptionsFor(fixture, harness, 1000));
+  assert.equal(state.status, "complete");
+  assert.deepEqual(harness.taskIds, ["1.1"]);
+});
+
+test("invalid or missing explicit manifest roots never silently select another team", async () => {
+  for (const harnessRoot of [".github", ".unsupported"]) {
+    const fixture = makeEngineFixture();
+    const manifest = JSON.parse(readFileSync(fixture.manifestPath, "utf8")) as ExecutionManifest;
+    writeFileSync(fixture.manifestPath, JSON.stringify({ ...manifest, harnessRoot }));
+    const harness = new RecordingHarness();
+    const options = engineOptionsFor(fixture, harness, 1000);
+    await assert.rejects(runEngine(options), /Selected harness root does not exist|Unsupported harness root/);
+    assert.deepEqual(harness.taskIds, []);
+    assert.equal(loadState(options.statePath)?.status, "failed");
+  }
+});
+
+test("manual selection ignores unrelated missing owners but includes phase prerequisites", async () => {
+  const fixture = makeEngineFixture();
+  const manifest = JSON.parse(readFileSync(fixture.manifestPath, "utf8")) as ExecutionManifest;
+  const first = manifest.phases[0]!.tasks[0]!;
+  manifest.phases.push(makePhase("2", [{ ...first, id: "2.1" }], ["1"]));
+  manifest.phases.push(makePhase("3", [{ ...first, id: "3.1", ownerAgent: "missing" }]));
+  writeFileSync(fixture.manifestPath, JSON.stringify(manifest));
+  const harness = new RecordingHarness();
+  const state = await runEngine(engineOptionsFor(fixture, harness, 1000, {
+    executionMode: "manual", selectedTaskIds: ["2.1"],
+  }));
+  assert.equal(state.status, "complete");
+  assert.deepEqual(harness.taskIds, ["1.1", "2.1"]);
+  assert.equal(state.tasks["3.1"]?.status, "pending");
+});
+
+test("compiler declares repository capabilities without invalidating equivalent legacy tasks", () => {
+  const fixture = makeEngineFixture();
+  const repo = discoverForgeRepo(fixture.root, ".agents");
+  const compiled = compileExecutionManifestDetailed(repo).manifest;
+  for (const phase of compiled.phases) {
+    for (const task of phase.tasks) {
+      assert.deepEqual(task.requiredCapabilities, ["repository-tools"]);
+      delete task.requiredCapabilities;
+    }
+  }
+  writeFileSync(fixture.manifestPath, JSON.stringify(compiled));
+  const updated = compileExecutionManifestDetailed(repo).manifest;
+  assert.deepEqual(updated.reconciliation?.changedTaskIds, []);
+});
+
+test("OpenAI rejects legacy/repository work before fetch and verifies explicit text results", async () => {
+  const originalKey = process.env.OPENAI_API_KEY;
+  const originalFetch = globalThis.fetch;
+  process.env.OPENAI_API_KEY = "fixture-key";
+  let calls = 0;
+  let content = "Detailed analysis of the requested design. ".repeat(20);
+  globalThis.fetch = async () => {
+    calls += 1;
+    return new Response(JSON.stringify({ choices: [{ message: { content } }] }));
+  };
+  try {
+    for (const requirements of [undefined, [] as const, ["repository-tools"] as const]) {
+      const fixture = makeEngineFixture({ requiredCapabilities: requirements ? [...requirements] : undefined });
+      await assert.rejects(runEngine(engineOptionsFor(fixture, new OpenAIAdapter(), 1000)), /requires repository-tools/);
+      assert.equal(calls, 0);
+    }
+    const fixture = makeEngineFixture({ requiredCapabilities: ["text"] });
+    const result = await runEngine(engineOptionsFor(fixture, new OpenAIAdapter(), 1000, { allowNoop: false }));
+    assert.equal(result.status, "complete");
+    assert.equal(calls, 1);
+    content = "Ready for the task.";
+    const hollow = makeEngineFixture({ requiredCapabilities: ["text"] });
+    const rejected = await runEngine(engineOptionsFor(hollow, new OpenAIAdapter(), 1000, { allowNoop: false }));
+    assert.equal(rejected.status, "failed");
+    assert.match(rejected.tasks["1.1"]?.errorMessage ?? "", /no substantive output/);
+  } finally {
+    globalThis.fetch = originalFetch;
+    if (originalKey === undefined) delete process.env.OPENAI_API_KEY;
+    else process.env.OPENAI_API_KEY = originalKey;
+  }
+});
+
+test("lifecycle cleanup runs after success, invocation exceptions, and partial prepare failures", async () => {
+  for (const failure of ["none", "invoke", "prepare", "cleanup"] as const) {
+    const fixture = makeEngineFixture();
+    const events: string[] = [];
+    const harness: HarnessAdapter = {
+      name: "lifecycle", capabilities: ["repository-tools"], supportsConcurrency: true,
+      async prepare() { events.push("prepare"); if (failure === "prepare") throw new Error("prepare failed"); },
+      async cleanup() { events.push("cleanup"); if (failure === "cleanup") throw new Error("cleanup failed"); },
+      async invoke() {
+        events.push("invoke");
+        if (failure === "invoke") throw new Error("invoke failed");
+        return { success: true, outputFiles: [], stdout: "done", stderr: "", durationMs: 1 };
+      },
+    };
+    const options = engineOptionsFor(fixture, harness, 1000, { autoCommit: false });
+    if (failure === "prepare" || failure === "cleanup") {
+      await assert.rejects(runEngine(options), new RegExp(`${failure} failed`));
+      assert.equal(loadState(options.statePath)?.status, "failed");
+    } else {
+      const result = await runEngine(options);
+      assert.equal(result.status, failure === "invoke" ? "failed" : "complete");
+    }
+    assert.deepEqual(events, failure === "prepare" ? ["prepare", "cleanup"] : ["prepare", "invoke", "cleanup"]);
+  }
+});
+
+test("failure classification controls retries and persists actual attempt counts", async () => {
+  for (const kind of ["configuration", "exception", "cancelled", "timeout", "retryable"] as const) {
+    const fixture = makeEngineFixture();
+    let attempts = 0;
+    const options = engineOptionsFor(fixture, {
+      name: "classified", capabilities: ["repository-tools"], supportsConcurrency: false,
+      async invoke(request) {
+        attempts += 1;
+        assert.equal(request.attempt.number, attempts);
+        return { success: false, outputFiles: [], stdout: "", stderr: "", errorMessage: kind, failureKind: kind, durationMs: 1 };
+      },
+    }, 1000, { maxRetries: 2, autoCommit: false });
+    const state = await runEngine(options);
+    assert.equal(state.status, "failed");
+    assert.equal(attempts, kind === "timeout" || kind === "retryable" ? 3 : 1);
+    assert.equal(state.tasks["1.1"]?.attempt, attempts);
+  }
+});
+
+test("immediate cancellation leaves a durable pending attempt that can resume", async () => {
+  const fixture = makeEngineFixture();
+  const controller = new AbortController();
+  let cleaned = false;
+  const options = engineOptionsFor(fixture, {
+    name: "cancellable", capabilities: ["repository-tools"], supportsConcurrency: false,
+    async invoke(request) {
+      assert.equal(request.signal, controller.signal);
+      controller.abort();
+      throw new Error("operation aborted");
+    },
+    async cleanup() { cleaned = true; },
+  }, 1000, { signal: controller.signal, maxRetries: 2 });
+  const state = await runEngine(options);
+  assert.equal(state.status, "paused");
+  assert.equal(state.tasks["1.1"]?.status, "pending");
+  assert.equal(state.tasks["1.1"]?.failureKind, "cancelled");
+  assert.equal(loadState(options.statePath)?.status, "paused");
+  assert.equal(cleaned, true);
+  const resumed = new RecordingHarness();
+  const complete = await runEngine({ ...options, harness: resumed, signal: undefined });
+  assert.equal(complete.status, "complete");
+  assert.equal(complete.tasks["1.1"]?.failureKind, undefined);
+  assert.deepEqual(resumed.taskIds, ["1.1"]);
+});
+
+test("aborted replay persists paused status, pending task, progress and pause audit", async () => {
+  const fixture = makeEngineFixture();
+  const initialOptions = engineOptionsFor(fixture, new RecordingHarness(), 1000, { autoCommit: false });
+  await runEngine(initialOptions);
+  const controller = new AbortController();
+  let cleaned = false;
+  const replayOptions = {
+    ...initialOptions, signal: controller.signal,
+    harness: {
+      name: "cancel-replay", capabilities: ["repository-tools"] as const, supportsConcurrency: false,
+      async invoke() {
+        controller.abort();
+        throw new Error("replay interrupted");
+      },
+      async cleanup() { cleaned = true; },
+    },
+  };
+  const replayed = await replayTask("1.1", replayOptions);
+  assert.equal(replayed.status, "paused");
+  assert.equal(replayed.tasks["1.1"]?.status, "pending");
+  assert.equal(replayed.tasks["1.1"]?.failureKind, "cancelled");
+  assert.equal(loadState(initialOptions.statePath)?.status, "paused");
+  assert.match(readFileSync(initialOptions.progressPath, "utf8"), /Paused/);
+  const events = readFileSync(initialOptions.auditPath, "utf8").trim().split("\n").map((line) => JSON.parse(line));
+  assert.equal(events.at(-1)?.action, "run.paused");
+  assert.match(events.at(-1)?.note, /Replay cancelled/);
+  assert.equal(cleaned, true);
+  const resumed = new RecordingHarness();
+  const complete = await runEngine({ ...initialOptions, harness: resumed });
+  assert.equal(complete.status, "complete");
+  assert.deepEqual(resumed.taskIds, ["1.1"]);
+});
+
+test("already-aborted replay does not prepare or dispatch an adapter", async () => {
+  const fixture = makeEngineFixture();
+  const options = engineOptionsFor(fixture, new RecordingHarness(), 1000, { autoCommit: false });
+  await runEngine(options);
+  const controller = new AbortController();
+  controller.abort();
+  const state = await replayTask("1.1", {
+    ...options, signal: controller.signal,
+    harness: {
+      name: "never-dispatch", capabilities: ["repository-tools"], supportsConcurrency: false,
+      async prepare() { assert.fail("aborted replay must not prepare"); },
+      async invoke() { throw new Error("aborted replay must not invoke"); },
+    },
+  });
+  assert.equal(state.status, "paused");
+  assert.equal(state.tasks["1.1"]?.status, "pending");
+  assert.equal(loadState(options.statePath)?.status, "paused");
+});
+
+test("cancellation during replay preparation preserves the pending replay intent", async () => {
+  const fixture = makeEngineFixture();
+  const options = engineOptionsFor(fixture, new RecordingHarness(), 1000, { autoCommit: false });
+  await runEngine(options);
+  const controller = new AbortController();
+  let cleaned = false;
+  await assert.rejects(replayTask("1.1", {
+    ...options, signal: controller.signal,
+    harness: {
+      name: "cancel-prepare", capabilities: ["repository-tools"], supportsConcurrency: false,
+      async prepare() {
+        controller.abort();
+        throw new Error("replay preparation cancelled");
+      },
+      async invoke() { throw new Error("must not dispatch"); },
+      async cleanup() { cleaned = true; },
+    },
+  }), /replay preparation cancelled/);
+  const persisted = loadState(options.statePath);
+  assert.equal(persisted?.status, "paused");
+  assert.equal(persisted?.tasks["1.1"]?.status, "pending");
+  assert.equal(persisted?.tasks["1.1"]?.completedAt, undefined);
+  assert.equal(cleaned, true);
+  assert.match(readFileSync(options.progressPath, "utf8"), /Paused/);
+});
+
+test("discovery errors are persisted and propagated rather than treated as skips", async () => {
+  const fixture = makeEngineFixture();
+  unlinkSync(join(fixture.root, "docs", "PRD.md"));
+  const options = engineOptionsFor(fixture, new RecordingHarness(), 1000);
+  await assert.rejects(runEngine(options), /Owner preflight failed:.*PRD/);
+  assert.equal(loadState(options.statePath)?.status, "failed");
+});
+
+test("intentional persisted skips do not require an owner or block dependents", async () => {
+  const fixture = makeEngineFixture();
+  const manifest = JSON.parse(readFileSync(fixture.manifestPath, "utf8")) as ExecutionManifest;
+  const first = manifest.phases[0]!.tasks[0]!;
+  manifest.phases[0]!.tasks.push({ ...first, id: "1.2", dependencies: ["1.1"] });
+  first.ownerAgent = "intentionally-excluded";
+  writeFileSync(fixture.manifestPath, JSON.stringify(manifest));
+  const harness = new RecordingHarness();
+  const options = engineOptionsFor(fixture, harness, 1000);
+  const state = initState(manifest, fixture.manifestPath, harness.name);
+  state.tasks["1.1"] = { ...state.tasks["1.1"]!, status: "skipped", errorMessage: "Explicitly excluded by operator" };
+  saveState(options.statePath, state);
+  const result = await runEngine(options);
+  assert.equal(result.status, "complete");
+  assert.deepEqual(harness.taskIds, ["1.2"]);
+  assert.equal(result.tasks["1.1"]?.errorMessage, "Explicitly excluded by operator");
 });
 
 test("effective task timeout falls back to the engine taskTimeoutMs when a task declares none", async () => {
@@ -670,20 +986,14 @@ test("runCommand kills a child that exceeds a custom timeout and reports it", as
 class HollowHarness implements HarnessAdapter {
   readonly name = "hollow";
   readonly supportsConcurrency = false;
+  readonly capabilities = ["text", "repository-tools"] as const;
   readonly stdout: string;
 
   constructor(stdout = "Ready for the task.") {
     this.stdout = stdout;
   }
 
-  async invoke(
-    _agent: Parameters<HarnessAdapter["invoke"]>[0],
-    _task: ManifestTask,
-    _context: WorkflowState,
-    _repoRoot: string,
-    _contextBlock?: string,
-    _timeoutMs?: number,
-  ) {
+  async invoke() {
     return {
       success: true,
       outputFiles: [],
@@ -698,15 +1008,9 @@ class HollowHarness implements HarnessAdapter {
 class FileWritingHarness implements HarnessAdapter {
   readonly name = "file-writing";
   readonly supportsConcurrency = false;
+  readonly capabilities = ["text", "repository-tools"] as const;
 
-  async invoke(
-    _agent: Parameters<HarnessAdapter["invoke"]>[0],
-    _task: ManifestTask,
-    _context: WorkflowState,
-    repoRoot: string,
-    _contextBlock?: string,
-    _timeoutMs?: number,
-  ) {
+  async invoke({ repoRoot }: Parameters<HarnessAdapter["invoke"]>[0]) {
     mkdirSync(join(repoRoot, "src"), { recursive: true });
     writeFileSync(join(repoRoot, "src", "thing.ts"), "export const thing = 1;\n", "utf8");
     return {
@@ -723,13 +1027,9 @@ class FileWritingHarness implements HarnessAdapter {
 class TrackedFileEditingHarness implements HarnessAdapter {
   readonly name = "tracked-file-editing";
   readonly supportsConcurrency = false;
+  readonly capabilities = ["text", "repository-tools"] as const;
 
-  async invoke(
-    _agent: Parameters<HarnessAdapter["invoke"]>[0],
-    _task: ManifestTask,
-    _context: WorkflowState,
-    repoRoot: string,
-  ) {
+  async invoke({ repoRoot }: Parameters<HarnessAdapter["invoke"]>[0]) {
     writeFileSync(join(repoRoot, "src", "thing.ts"), "export const thing = 2;\n", "utf8");
     return {
       success: true,
@@ -943,6 +1243,7 @@ test("same-owner ready tasks run in separate waves (serialized) even with concur
 
 test("different-owner ready tasks are serialized while using repository-wide output attribution", async () => {
   const fixture = makeEngineFixture();
+  initGit(fixture.root);
   writeFileSync(join(fixture.root, ".agents", "agents", "designer.md"), `---
 name: designer
 description: Designs things.
@@ -977,10 +1278,22 @@ description: Designs things.
   await harness.whenStarted("1.2");
   assert.deepEqual(harness.startedOrder, ["1.1", "1.2"]);
   assert.ok(harness.maxOverlap <= 1, `tasks should not overlap (saw max ${harness.maxOverlap})`);
+  const persisted = loadState(join(fixture.root, "docs", "WORKFLOW-STATE.json"));
+  assert.equal(persisted?.tasks["1.1"]?.status, "complete", "A is durable while B is still gated");
+  assert.equal(persisted?.tasks["1.2"]?.status, "running");
+  const committed = JSON.parse(execFileSync("git", ["show", "HEAD:docs/WORKFLOW-STATE.json"], { cwd: fixture.root, encoding: "utf8" })) as WorkflowState;
+  assert.equal(committed.tasks["1.1"]?.status, "complete", "A's commit bookkeeping finishes before B");
+  assert.equal(committed.tasks["1.2"]?.status, "pending", "B cannot contaminate A's task commit");
   harness.release("1.2");
 
   const state = await runPromise;
   assert.equal(state.status, "complete");
   assert.equal(state.tasks["1.1"]?.status, "complete");
   assert.equal(state.tasks["1.2"]?.status, "complete");
+  assert.ok(persisted);
+  saveState(join(fixture.root, "docs", "WORKFLOW-STATE.json"), persisted);
+  const restarted = new RecordingHarness();
+  const recovered = await runEngine(engineOptionsFor(fixture, restarted, 1000, { autoCommit: false }));
+  assert.equal(recovered.status, "complete");
+  assert.deepEqual(restarted.taskIds, ["1.2"], "restart from B's running checkpoint never repeats completed A");
 });

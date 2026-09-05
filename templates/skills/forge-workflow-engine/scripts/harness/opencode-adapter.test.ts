@@ -5,7 +5,9 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 
 import { OpenCodeAdapter } from "./opencode-adapter.ts";
-import type { AgentDescriptor, ManifestTask, WorkflowState } from "../types.ts";
+import type { AgentDescriptor, ManifestTask } from "../types.ts";
+import { prepareTaskRequest } from "../request.ts";
+import { makeNodeShim } from "../test-support.ts";
 
 interface Shim {
   bin: string;
@@ -14,16 +16,12 @@ interface Shim {
 
 function makeShim(): Shim {
   const dir = mkdtempSync(join(tmpdir(), "forge-opencode-adapter-"));
-  const bin = join(dir, "fake-opencode");
   const argsFile = join(dir, "args.json");
-  writeFileSync(
-    bin,
-    `#!/usr/bin/env node
+  const bin = makeNodeShim(dir, "fake-opencode", `
 const fs = require("fs");
 fs.writeFileSync(${JSON.stringify(argsFile)}, JSON.stringify(process.argv.slice(2)));
 process.exit(0);
 `,
-    { mode: 0o755 },
   );
   return { bin, argsFile };
 }
@@ -58,7 +56,7 @@ async function invokeWith(shim: Shim, agent: AgentDescriptor, root: string): Pro
   process.env.OPENCODE_BIN = shim.bin;
   try {
     const adapter = new OpenCodeAdapter();
-    const result = await adapter.invoke(agent, makeTask(), {} as WorkflowState, root);
+    const result = await adapter.invoke(prepareTaskRequest({ agent, task: makeTask(), repoRoot: root, defaultModel: adapter.defaultModel }));
     assert.equal(result.success, true);
   } finally {
     if (original === undefined) delete process.env.OPENCODE_BIN;
@@ -124,7 +122,7 @@ test("prompt includes the execute-now directive so agents do not just acknowledg
   await invokeWith(shim, agent, root);
 
   const recorded = JSON.parse(readFileSync(shim.argsFile, "utf8")) as string[];
-  const prompt = recorded[recorded.length - 1] ?? "";
+  const prompt = recorded.join(" ");
   assert.ok(prompt.includes("Perform the task now"), prompt);
   assert.ok(prompt.includes("list the files you created or changed"), prompt);
 });
@@ -137,7 +135,7 @@ test("prompt surfaces the per-task timeout and retry budget when provided", asyn
   process.env.OPENCODE_BIN = shim.bin;
   try {
     const adapter = new OpenCodeAdapter();
-    const result = await adapter.invoke(agent, makeTask(), {} as WorkflowState, root, undefined, 60_000, 2);
+    const result = await adapter.invoke(prepareTaskRequest({ agent, task: makeTask(), repoRoot: root, timeoutMs: 60_000, maxRetries: 2 }));
     assert.equal(result.success, true);
   } finally {
     if (original === undefined) delete process.env.OPENCODE_BIN;
@@ -145,12 +143,12 @@ test("prompt surfaces the per-task timeout and retry budget when provided", asyn
   }
 
   const recorded = JSON.parse(readFileSync(shim.argsFile, "utf8")) as string[];
-  const prompt = recorded[recorded.length - 1] ?? "";
+  const prompt = recorded.join(" ");
   assert.ok(prompt.includes("Per-task timeout: 60s"), prompt);
   assert.ok(prompt.includes("retried up to 2 time(s)"), prompt);
 });
 
-test("prompt omits the budget hint when timeout and retries are not provided", async () => {
+test("prompt includes the normalized default budget when no overrides are provided", async () => {
   const root = mkdtempSync(join(tmpdir(), "forge-nobudget-repo-"));
   const agent = makeAgent(join(root, ".agents", "agents", "discovery-engineer.md"));
   const shim = makeShim();
@@ -158,8 +156,9 @@ test("prompt omits the budget hint when timeout and retries are not provided", a
   await invokeWith(shim, agent, root);
 
   const recorded = JSON.parse(readFileSync(shim.argsFile, "utf8")) as string[];
-  const prompt = recorded[recorded.length - 1] ?? "";
-  assert.ok(!prompt.includes("Execution budget"), prompt);
+  const prompt = recorded.join(" ");
+  assert.ok(prompt.includes("Per-task timeout: 600s"), prompt);
+  assert.ok(prompt.includes("retried up to 0 time(s)"), prompt);
 });
 
 test("FORGE_ENGINE_NATIVE_AGENT=0 forces the inline-persona fallback for .opencode agents", async () => {

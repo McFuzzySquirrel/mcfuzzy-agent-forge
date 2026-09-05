@@ -1,4 +1,6 @@
 import { basename, dirname } from "node:path";
+import { existsSync } from "node:fs";
+import { checkSkillStructure, scoreSkill } from "../../forge-build-agent-team/scripts/quality-rubric.mjs";
 
 export interface Score {
   axis: string;
@@ -308,43 +310,54 @@ export function auditSkill(input: AuditInput): SkillAudit {
     // gray-matter parsing failed - rawFm stays empty
   }
 
+  const quality = scoreSkill(skillMd, {
+    hasRefsDirOnDisk: hasRefsDir,
+    hasAssetsDirOnDisk: hasAssetsDir,
+    hasScriptsDirOnDisk: hasScriptsDir,
+  });
   const scores: Score[] = [
     {
       axis: "Context economy",
-      score: scoreContextEconomy(skillMd, hasRefsDir, hasAssetsDir),
-      reasoning: buildReasoning("context economy", scoreContextEconomy(skillMd, hasRefsDir, hasAssetsDir)),
+      score: quality.contextEconomy!,
+      reasoning: buildReasoning("context economy", quality.contextEconomy!),
     },
     {
       axis: "Gotchas coverage",
-      score: scoreGotchasCoverage(skillMd),
-      reasoning: buildReasoning("gotchas coverage", scoreGotchasCoverage(skillMd)),
+      score: quality.gotchasCoverage!,
+      reasoning: buildReasoning("gotchas coverage", quality.gotchasCoverage!),
     },
     {
       axis: "Procedural clarity",
-      score: scoreProceduralClarity(skillMd),
-      reasoning: buildReasoning("procedural clarity", scoreProceduralClarity(skillMd)),
+      score: quality.proceduralClarity!,
+      reasoning: buildReasoning("procedural clarity", quality.proceduralClarity!),
     },
     {
       axis: "Progressive disclosure",
-      score: scoreProgressiveDisclosure(skillMd, hasRefsDir, hasAssetsDir),
+      score: quality.progressiveDisclosure!,
       reasoning: buildReasoning(
         "progressive disclosure",
-        scoreProgressiveDisclosure(skillMd, hasRefsDir, hasAssetsDir),
+        quality.progressiveDisclosure!,
       ),
     },
     {
       axis: "Calibration",
-      score: scoreCalibration(skillMd),
-      reasoning: buildReasoning("calibration", scoreCalibration(skillMd)),
+      score: quality.calibration!,
+      reasoning: buildReasoning("calibration", quality.calibration!),
     },
     {
       axis: "Validation",
-      score: scoreValidation(skillMd, hasScriptsDir),
-      reasoning: buildReasoning("validation", scoreValidation(skillMd, hasScriptsDir)),
+      score: quality.validation!,
+      reasoning: buildReasoning("validation", quality.validation!),
     },
   ];
 
-  const structuralIssues = checkStructural(skillName, parentDir, rawFm, skillMd);
+  const structuralIssues = checkSkillStructure({
+    name: skillName,
+    parentDir,
+    rawFrontmatter: rawFm,
+    text: skillMd,
+    resolveReference: (reference) => existsSync(`${dirname(skillPath)}/${reference}`),
+  });
   const overall =
     Math.round(
       (scores.reduce((sum, s) => sum + s.score, 0) / scores.length) * 10,

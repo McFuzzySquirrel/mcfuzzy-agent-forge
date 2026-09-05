@@ -1,10 +1,10 @@
 {
   "name": "forge-launcher",
-  "version": "1.0.0-beta.4",
+  "version": "1.0.0-beta.5",
   "type": "module",
   "description": "One command from zero to auto-build: creates a repo, bootstraps MyForge, captures your idea, and launches the full pipeline. Cross-platform replacement for the forge-launcher/bootstrap/forge-engine-run shell scripts.",
   "bin": {
-    "forge-launcher": "./dist/cli.js"
+    "forge-launcher": "dist/cli.js"
   },
   "files": [
     "dist",
@@ -12,7 +12,7 @@
   ],
   "scripts": {
     "build": "tsc && tsc -p tsconfig.client.json && node scripts/copy-client-assets.mjs",
-    "test": "node --import tsx --test scripts/*.test.ts",
+    "test": "node --import tsx --test --test-concurrency=1 scripts/*.test.ts",
     "typecheck": "tsc --noEmit && tsc -p tsconfig.client.json --noEmit",
     "check:version": "tsx scripts/version-consistency.ts",
     "prepack": "npm run build && node scripts/stage-resources.mjs"
@@ -23,6 +23,7 @@
   "dependencies": {
     "@clack/prompts": "^1.7.0",
     "cross-spawn": "^7.0.6",
+    "gray-matter": "^4.0.3",
     "semver": "^7.8.5"
   },
   "devDependencies": {
@@ -34,5 +35,9 @@
   },
   "allowScripts": {
     "esbuild@0.28.2": true
-  }
+  },
+  "main": "index.js",
+  "keywords": [],
+  "author": "",
+  "license": "ISC"
 }

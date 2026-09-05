@@ -2,10 +2,23 @@ import { confirm, isCancel, multiline, select, text } from "@clack/prompts";
 import fs from "node:fs";
 import path from "node:path";
 import readline from "node:readline";
+import { AsyncLocalStorage } from "node:async_hooks";
 import { expandPath } from "./paths.ts";
 
-/** Module-level interactive flag; set by the CLI entry point. */
-export const prompts = { nonInteractive: false };
+const promptSessions = new AsyncLocalStorage<{ nonInteractive: boolean }>();
+let defaultNonInteractive = false;
+export const prompts = {
+  get nonInteractive(): boolean { return promptSessions.getStore()?.nonInteractive ?? defaultNonInteractive; },
+  set nonInteractive(value: boolean) {
+    const session = promptSessions.getStore();
+    if (session) session.nonInteractive = value;
+    else defaultNonInteractive = value;
+  },
+};
+
+export function withPromptSession<T>(nonInteractive: boolean, operation: () => T): T {
+  return promptSessions.run({ nonInteractive }, operation);
+}
 
 /** Thrown when the user cancels an interactive prompt (Ctrl+C). */
 export class PromptCancelled extends Error {

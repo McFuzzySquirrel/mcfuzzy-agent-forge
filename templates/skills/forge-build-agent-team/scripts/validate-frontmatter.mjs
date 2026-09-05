@@ -35,6 +35,9 @@ const valueFor = (flag) => {
 };
 const repoRoot = valueFor("--repo") ? resolve(valueFor("--repo")) : undefined;
 const explicitHarness = valueFor("--harness-root");
+const explicitSkillFiles = args.flatMap((value, index) => value === "--skill-file" ? [args[index + 1]] : []).filter(Boolean);
+const skillsOnly = args.includes("--skills-only");
+const agentsOnly = args.includes("--agents-only");
 
 function walk(dir, out = []) {
   if (!existsSync(dir)) return out;
@@ -126,8 +129,10 @@ const agentDir = join(harness, "agents");
 const skillDir = join(harness, "skills");
 
 const files = [
-  ...walk(agentDir).filter((f) => f.endsWith(".md") && !f.endsWith("SKILL.md")),
-  ...walk(skillDir).filter((f) => f.endsWith("SKILL.md")),
+  ...(skillsOnly ? [] : walk(agentDir).filter((f) => f.endsWith(".md") && !f.endsWith("SKILL.md"))),
+  ...(agentsOnly ? [] : (explicitSkillFiles.length > 0
+    ? explicitSkillFiles.map((file) => resolve(repoRoot ?? process.cwd(), file))
+    : walk(skillDir).filter((f) => f.endsWith("SKILL.md")))),
 ];
 
 let problems = 0;

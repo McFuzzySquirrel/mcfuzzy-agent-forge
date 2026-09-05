@@ -1,8 +1,10 @@
 import { existsSync, readFileSync } from "node:fs";
-import { relative } from "node:path";
+import { relative, resolve } from "node:path";
 
-import { runCommand } from "./run.ts";
-import { DEFAULT_TASK_TIMEOUT_MS, type AgentDescriptor, type HarnessAdapter, type ManifestTask, type TaskResult, type WorkflowState } from "../types.ts";
+import { runCommand, extractModelFlags } from "./run.ts";
+import type { AgentDescriptor, HarnessAdapter, HarnessRunContext, TaskAttemptRequest, TaskResult } from "../types.ts";
+import { inlinePersona } from "../request.ts";
+import { startAttachServer, type AttachServer } from "./opencode-server.ts";
 
 /**
  * OpenCode CLI harness adapter.
@@ -36,40 +38,58 @@ import { DEFAULT_TASK_TIMEOUT_MS, type AgentDescriptor, type HarnessAdapter, typ
 export interface OpenCodeAdapterOptions {
   /** URL of a running `opencode serve` instance to attach to. */
   attachUrl?: string;
+  startServer?: boolean;
+  port?: number;
 }
 
 export class OpenCodeAdapter implements HarnessAdapter {
   readonly name = "opencode";
   readonly supportsConcurrency = true;
+  readonly capabilities = ["text", "repository-tools"] as const;
+  readonly defaultModel?: string;
 
   private readonly bin: string;
   private readonly extraFlags: string[];
-  private readonly attachUrl?: string;
+  private attachUrl?: string;
+  private server?: AttachServer;
 
-  constructor(options: OpenCodeAdapterOptions = {}) {
+  constructor(private readonly options: OpenCodeAdapterOptions = {}) {
     this.bin = process.env["OPENCODE_BIN"] ?? "opencode";
     const extra = (process.env["OPENCODE_EXTRA_FLAGS"] ?? "").split(/\s+/).filter(Boolean);
-    this.extraFlags = ["--auto", ...extra];
+    const parsed = extractModelFlags(extra);
+    this.extraFlags = ["--auto", ...parsed.flags];
+    this.defaultModel = parsed.model;
     this.attachUrl = options.attachUrl;
   }
 
-  async invoke(
-    agent: AgentDescriptor,
-    task: ManifestTask,
-    _context: WorkflowState,
-    repoRoot: string,
-    contextBlock?: string,
-    timeoutMs?: number,
-    maxRetries?: number,
-  ): Promise<TaskResult> {
+  async prepare(context: HarnessRunContext): Promise<void> {
+    context.signal?.throwIfAborted();
+    if (!this.options.startServer || this.attachUrl) return;
+    this.server = await startAttachServer({ bin: this.bin, repoRoot: context.repoRoot, port: this.options.port, signal: context.signal });
+    this.attachUrl = this.server.url;
+    console.log(`[engine] opencode attach server ready at ${this.server.url}`);
+  }
+
+  async cleanup(): Promise<void> {
+    if (!this.server) return;
+    try {
+      await this.server.stop();
+    } finally {
+      this.server = undefined;
+      this.attachUrl = this.options.attachUrl;
+    }
+  }
+
+  async invoke(request: TaskAttemptRequest): Promise<TaskResult> {
     const start = Date.now();
+    const { agent, task, repoRoot } = request;
 
     // OpenCode model IDs are provider-qualified (for example,
     // `github-copilot/gpt-5.6-luna`); unlike Copilot, do not strip the prefix.
-    const modelFlag = (task.model ?? agent.model) ? ["--model", task.model ?? agent.model!] : [];
-    const agentFlag = this.canSelectAgent(agent, repoRoot) ? ["--agent", agent.name] : [];
+    const modelFlag = request.effectiveModel ? ["--model", request.effectiveModel] : [];
+    const agentFlag = this.canSelectAgent(request) ? ["--agent", agent.name] : [];
 
-    const prompt = this.buildPrompt(agent, task, contextBlock, agentFlag.length === 0, timeoutMs, maxRetries);
+    const prompt = [agentFlag.length === 0 ? inlinePersona(request) : "", request.instructions].filter(Boolean).join("\n\n");
     // `--dir` pins the project directory explicitly: `opencode run` resolves its
     // working directory from its parent process, not the child's spawn `cwd`, so
     // relying on `cwd: repoRoot` alone runs tasks in the wrong project when the
@@ -80,7 +100,8 @@ export class OpenCodeAdapter implements HarnessAdapter {
 
     const result = await runCommand(this.bin, args, {
       cwd: repoRoot,
-      timeoutMs: timeoutMs ?? DEFAULT_TASK_TIMEOUT_MS,
+      timeoutMs: request.budget.timeoutMs,
+      signal: request.signal,
       maxBufferBytes: 10 * 1024 * 1024,
     });
     const durationMs = Date.now() - start;
@@ -104,6 +125,7 @@ export class OpenCodeAdapter implements HarnessAdapter {
         stderr,
         durationMs,
         errorMessage: result.error,
+        failureKind: result.failureKind,
       };
     }
 
@@ -115,11 +137,12 @@ export class OpenCodeAdapter implements HarnessAdapter {
         stderr,
         durationMs,
         errorMessage: stderr || `${this.bin} exited with status ${result.status}`,
+        failureKind: "retryable",
       };
     }
 
     const outputFiles = task.expectedOutputs.filter((path) =>
-      existsSync(path.startsWith("/") ? path : `${repoRoot}/${path}`),
+      existsSync(resolve(repoRoot, path)),
     );
 
     return {
@@ -136,63 +159,14 @@ export class OpenCodeAdapter implements HarnessAdapter {
    * its file must live under the project's `.opencode/agents/` directory - the
    * only harness root opencode scans for agent definitions. For `.agents`,
    * `.claude`, and `.github` roots the adapter falls back to inlining the
-   * persona into the prompt (see `buildPrompt`). Set FORGE_ENGINE_NATIVE_AGENT=0
+   * persona into the prompt. Set FORGE_ENGINE_NATIVE_AGENT=0
    * to force the inline-persona fallback even for `.opencode` agents.
    */
-  private canSelectAgent(agent: AgentDescriptor, repoRoot: string): boolean {
+  private canSelectAgent({ agent, repoRoot }: TaskAttemptRequest): boolean {
     if (process.env["FORGE_ENGINE_NATIVE_AGENT"] === "0") return false;
     if (!agent.name) return false;
-    return relative(repoRoot, agent.path).split(/[\\/]/).includes(".opencode");
-  }
-
-  private buildPrompt(
-    agent: AgentDescriptor,
-    task: ManifestTask,
-    contextBlock?: string,
-    inlinePersona = true,
-    timeoutMs?: number,
-    maxRetries?: number,
-  ): string {
-    const personaBlock = inlinePersona ? agent.rawBody : null;
-
-    const contextHints = task.expectedOutputs.length > 0
-      ? `\n\nExpected output files: ${task.expectedOutputs.join(", ")}`
-      : "";
-
-    const validationHint = task.validationCommands.length > 0
-      ? `\n\nValidation commands to run after completion: ${task.validationCommands.join("; ")}`
-      : "";
-
-    const budgetHints: string[] = [];
-    if (timeoutMs !== undefined) {
-      budgetHints.push(`Per-task timeout: ${Math.round(timeoutMs / 1000)}s`);
-    }
-    if (maxRetries !== undefined) {
-      budgetHints.push(`results failing verification are retried up to ${maxRetries} time(s)`);
-    }
-    const budgetHint = budgetHints.length > 0
-      ? `\n\nExecution budget: ${budgetHints.join("; ")}.` +
-        (maxRetries !== undefined
-          ? " Do not rely on retries to fix hollow output - deliver complete results first."
-          : "")
-      : "";
-
-    const executeDirective =
-      "\n\nPerform the task now. Do not merely acknowledge it or say you are ready - " +
-      "create or modify the files required, then list the files you created or changed.";
-
-    return [
-      personaBlock,
-      "",
-      contextBlock ?? "",
-      `Task: ${task.title}`,
-      "",
-      task.description,
-      contextHints,
-      validationHint,
-      budgetHint,
-      executeDirective,
-    ].filter(Boolean).join("\n").trim();
+    const parts = relative(repoRoot, agent.path).split(/[\\/]/);
+    return parts[0] === ".opencode" && parts[1] === "agents" && parts.length > 2;
   }
 }
 

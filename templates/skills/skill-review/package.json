@@ -5,7 +5,7 @@
   "description": "Skill review - audit skills against best practices and post PR guidance",
   "scripts": {
     "skill-review": "tsx scripts/skill-review.ts",
-    "test": "node --import tsx --test scripts/rubric.test.ts",
+    "test": "node --import tsx --test scripts/*.test.ts",
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {

@@ -1,4 +1,4 @@
-import { appendFileSync, existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { appendFileSync, existsSync, mkdirSync, readFileSync, writeFileSync, renameSync, rmSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { randomUUID } from "node:crypto";
 
@@ -15,7 +15,13 @@ export function loadState(statePath: string): WorkflowState | null {
 
 export function saveState(statePath: string, state: WorkflowState): void {
   mkdirSync(dirname(statePath), { recursive: true });
-  writeFileSync(statePath, `${JSON.stringify(state, null, 2)}\n`, "utf8");
+  const temporaryPath = `${statePath}.${randomUUID()}.tmp`;
+  try {
+    writeFileSync(temporaryPath, `${JSON.stringify(state, null, 2)}\n`, { encoding: "utf8", flag: "wx", flush: true });
+    renameSync(temporaryPath, statePath);
+  } finally {
+    rmSync(temporaryPath, { force: true });
+  }
 }
 
 export function initState(
@@ -121,6 +127,8 @@ export function markTaskComplete(
         completedAt: new Date().toISOString(),
         outputFiles,
         agentOutput,
+        errorMessage: undefined,
+        failureKind: undefined,
         ...(artifactId !== undefined ? { artifactId } : {}),
         ...(inputArtifactIds !== undefined ? { inputArtifactIds } : {}),
       },

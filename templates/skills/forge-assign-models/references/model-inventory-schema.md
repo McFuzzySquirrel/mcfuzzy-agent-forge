@@ -47,7 +47,7 @@ The canonical shape for `docs/research/model-inventory.json`:
   },
   "copilot_cli": {
     "available": true,
-    "command": "copilot -p /model list",
+    "command": "copilot --help",
     "models": [],
     "diagnostics": { "raw_output": "", "error": null }
   },

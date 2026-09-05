@@ -5,6 +5,9 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 
 import { startAttachServer } from "./opencode-server.ts";
+import { makeNodeShim } from "../test-support.ts";
+import { OpenCodeAdapter } from "./opencode-adapter.ts";
+import { prepareTaskRequest } from "../request.ts";
 
 interface Fixture {
   bin: string;
@@ -14,9 +17,7 @@ interface Fixture {
 /** Builds an executable fake `opencode` shim implementing `serve`. */
 function makeShim(body: string): string {
   const dir = mkdtempSync(join(tmpdir(), "forge-opencode-server-"));
-  const bin = join(dir, "fake-opencode");
-  writeFileSync(bin, `#!/usr/bin/env node\n${body}`, { mode: 0o755 });
-  return bin;
+  return makeNodeShim(dir, "fake-opencode", body);
 }
 
 const HEALTHY = `
@@ -88,4 +89,65 @@ test("startAttachServer aborts hung health attempts and fails when the server ne
     /did not become healthy within/,
   );
   assert.ok(Date.now() - started < 10_000, "should give up promptly, not hang on a stalled connect");
+});
+
+test("OpenCode lifecycle reuses one owned server and never stops an external server", async () => {
+  const root = mkdtempSync(join(tmpdir(), "forge-attach-lifecycle-"));
+  const callsFile = join(root, "serve-calls.txt");
+  const argsFile = join(root, "run-args.json");
+  const bin = makeNodeShim(root, "opencode", `
+const fs = require("fs");
+if (process.argv[2] === "run") {
+  fs.writeFileSync(${JSON.stringify(argsFile)}, JSON.stringify(process.argv.slice(2)));
+  process.exit(0);
+}
+fs.appendFileSync(${JSON.stringify(callsFile)}, "serve\\n");
+${HEALTHY}
+`);
+  const original = process.env.OPENCODE_BIN;
+  process.env.OPENCODE_BIN = bin;
+  const adapter = new OpenCodeAdapter({ startServer: true });
+  const context = { repoRoot: root, runId: "test" };
+  try {
+    await adapter.prepare(context);
+    await adapter.prepare(context);
+    const request = prepareTaskRequest({
+      agent: { name: "worker", path: join(root, "worker.md"), rawBody: "Worker", description: "", constraints: [], collaboration: [], expertise: [] },
+      task: { id: "one", title: "One", description: "One", dependencies: [], expectedOutputs: [], validationCommands: [], approvalRequired: false, sourceLines: [] },
+      repoRoot: root,
+    });
+    assert.equal((await adapter.invoke(request)).success, true);
+    assert.equal((await adapter.invoke(request)).success, true);
+    assert.equal(readFileSync(callsFile, "utf8"), "serve\n");
+    const args = JSON.parse(readFileSync(argsFile, "utf8")) as string[];
+    const url = args[args.indexOf("--attach") + 1]!;
+    const external = new OpenCodeAdapter({ attachUrl: url, startServer: true });
+    await external.prepare(context);
+    await external.cleanup();
+    assert.equal((await fetch(`${url}/global/health`)).status, 200, "external server stays alive");
+    await adapter.cleanup();
+    await adapter.cleanup();
+    await assert.rejects(fetch(`${url}/global/health`, { signal: AbortSignal.timeout(1000) }));
+  } finally {
+    await adapter.cleanup();
+    if (original === undefined) delete process.env.OPENCODE_BIN;
+    else process.env.OPENCODE_BIN = original;
+  }
+});
+
+test("attach startup cancellation tears down the partially prepared server", async () => {
+  const root = mkdtempSync(join(tmpdir(), "forge-attach-cancel-"));
+  const pidFile = join(root, "pid.txt");
+  const bin = makeNodeShim(root, "opencode", `require("fs").writeFileSync(${JSON.stringify(pidFile)}, String(process.pid));\n${HANGS}`);
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), 400);
+  try {
+    await assert.rejects(startAttachServer({ bin, repoRoot: root, signal: controller.signal, timeoutMs: 5000, pollIntervalMs: 20 }));
+    if (existsSync(pidFile)) {
+      const pid = Number(readFileSync(pidFile, "utf8"));
+      assert.throws(() => process.kill(pid, 0), "cancelled server must not remain running");
+    }
+  } finally {
+    clearTimeout(timer);
+  }
 });

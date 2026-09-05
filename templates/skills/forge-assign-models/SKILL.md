@@ -65,17 +65,19 @@ command response.
 
 #### 1b. Copilot CLI
 
-Run this command exactly when the `copilot` executable is available:
+Run the non-generative metadata command when the `copilot` executable is
+available:
 
 ```bash
-copilot -p "/model list"
+copilot --help
 ```
 
 Capture its exit status, stdout, and stderr under `copilot_cli.diagnostics`.
-Parse the command output into normalized IDs and store them under
-`copilot_cli.models`. Do not replace this step with the static catalog in the
-schema reference and do not ask the user to manually transcribe the model
-picker unless the command is unavailable or fails.
+Parse only an explicitly labeled model metadata section, if the installed
+version exposes one, into normalized IDs under `copilot_cli.models`. Never
+submit `/model list` or another generative prompt for inventory discovery.
+If no authoritative IDs are exposed, preserve the diagnostics and fail closed
+for explicit model selections; inherited runner defaults remain valid.
 
 #### 1c. Local Ollama
 
@@ -219,7 +221,9 @@ For each `HARNESS_AGENTS_DIR/*.md`:
 ## Gotchas
 
 - **`ollama show` failures.** Some models (especially quantized or custom) don't return metadata reliably. If `ollama show` fails, check capability via `ollama run <model> "list your tools"` as a fallback, and mark `tool_calling: "unverified"` in the inventory.
-- **Copilot model names change frequently.** Treat the current `copilot -p "/model list"` result as authoritative for availability; BenchLM data is only capability evidence and may lag or omit a model.
+- **Copilot metadata may be unavailable.** Treat only IDs exposed by the
+  non-generative `copilot --help` metadata contract as authoritative.
+  BenchLM data is capability evidence only and may lag or omit a model.
 - **CLI output is presentation text.** Never write a whole `opencode models` or Copilot response into `model:`; only write normalized IDs from the inventory.
 - **Empty inventory is a hard stop.** If no models are discoverable (Ollama unreachable, no subscription confirmation), stop and tell the user. Never fabricate.
 - **Don't touch the forge meta-agents.** `project-orchestrator` and `forge-team-builder` are tooling, not domain agents. Skip them unless explicitly asked.

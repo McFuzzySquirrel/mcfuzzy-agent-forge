@@ -1,23 +1,25 @@
-import { DEFAULT_TASK_TIMEOUT_MS, type AgentDescriptor, type HarnessAdapter, type ManifestTask, type TaskResult, type WorkflowState } from "../types.ts";
+import type { HarnessAdapter, TaskAttemptRequest, TaskResult } from "../types.ts";
+import { inlinePersona } from "../request.ts";
 
 /**
  * OpenAI API harness adapter.
  *
- * Sends the agent's rawBody as the system prompt and the task description as
- * the user message, then returns the assistant reply as agentOutput.
+ * Sends the normalized persona and task instructions as system/user messages,
+ * then returns the assistant reply as agentOutput. No repository tools exist.
  *
  * Required env vars:
  *   OPENAI_API_KEY    - API key
  *   OPENAI_BASE_URL   - optional override (default: https://api.openai.com/v1)
- *   OPENAI_MODEL      - optional model override (default: gpt-4o)
+ *   OPENAI_MODEL      - transport default below task/agent models (default: gpt-4o)
  */
 export class OpenAIAdapter implements HarnessAdapter {
   readonly name = "openai";
   readonly supportsConcurrency = true;
+  readonly capabilities = ["text"] as const;
 
   private readonly apiKey: string;
   private readonly baseUrl: string;
-  private readonly defaultModel: string;
+  readonly defaultModel: string;
 
   constructor() {
     const key = process.env["OPENAI_API_KEY"];
@@ -27,24 +29,17 @@ export class OpenAIAdapter implements HarnessAdapter {
     this.defaultModel = process.env["OPENAI_MODEL"] ?? "gpt-4o";
   }
 
-  async invoke(
-    agent: AgentDescriptor,
-    task: ManifestTask,
-    _context: WorkflowState,
-    _repoRoot: string,
-    contextBlock?: string,
-    timeoutMs?: number,
-    _maxRetries?: number,
-  ): Promise<TaskResult> {
+  async invoke(request: TaskAttemptRequest): Promise<TaskResult> {
     const start = Date.now();
-    const model = agent.model ?? this.defaultModel;
-    const systemPrompt = this.buildSystemPrompt(agent);
-    const userPrompt = this.buildUserPrompt(task, contextBlock);
-    const effectiveTimeoutMs = timeoutMs ?? DEFAULT_TASK_TIMEOUT_MS;
+    const model = request.effectiveModel;
+    const systemPrompt = inlinePersona(request);
+    const userPrompt = request.instructions;
+    const effectiveTimeoutMs = request.budget.timeoutMs;
 
     const controller = new AbortController();
     const timer = setTimeout(() => controller.abort(), effectiveTimeoutMs);
     timer.unref?.();
+    const signal = request.signal ? AbortSignal.any([controller.signal, request.signal]) : controller.signal;
 
     try {
       const response = await fetch(`${this.baseUrl}/chat/completions`, {
@@ -60,7 +55,7 @@ export class OpenAIAdapter implements HarnessAdapter {
             { role: "user", content: userPrompt },
           ],
         }),
-        signal: controller.signal,
+        signal,
       });
 
       if (!response.ok) {
@@ -72,6 +67,7 @@ export class OpenAIAdapter implements HarnessAdapter {
           stderr: body,
           durationMs: Date.now() - start,
           errorMessage: `OpenAI API error ${response.status}: ${body}`,
+          failureKind: response.status === 408 || response.status === 429 || response.status >= 500 ? "retryable" : "configuration",
         };
       }
 
@@ -88,14 +84,15 @@ export class OpenAIAdapter implements HarnessAdapter {
         durationMs: Date.now() - start,
       };
     } catch (error) {
-      const aborted = error instanceof Error && error.name === "AbortError";
+      const aborted = controller.signal.aborted;
       return {
         success: false,
         outputFiles: [],
         stdout: "",
         stderr: String(error),
         durationMs: Date.now() - start,
-        errorMessage: aborted
+        failureKind: request.signal?.aborted ? "cancelled" : aborted ? "timeout" : error instanceof TypeError ? "retryable" : "exception",
+        errorMessage: request.signal?.aborted ? "Task cancelled" : aborted
           ? `timed out after ${effectiveTimeoutMs}ms`
           : String(error),
       };
@@ -104,32 +101,4 @@ export class OpenAIAdapter implements HarnessAdapter {
     }
   }
 
-  private buildSystemPrompt(agent: AgentDescriptor): string {
-    return [
-      agent.rawBody,
-      "",
-      "## Constraints (injected by forge-workflow-engine)",
-      ...agent.constraints.map((c) => `- ${c}`),
-    ].join("\n").trim();
-  }
-
-  private buildUserPrompt(task: ManifestTask, contextBlock?: string): string {
-    const lines: string[] = [];
-
-    if (contextBlock) {
-      lines.push(contextBlock, "");
-    }
-
-    lines.push(`## Task: ${task.title}`, "", task.description);
-
-    if (task.expectedOutputs.length > 0) {
-      lines.push("", `**Expected outputs:** ${task.expectedOutputs.join(", ")}`);
-    }
-
-    if (task.validationCommands.length > 0) {
-      lines.push("", `**Validation commands:** ${task.validationCommands.join("; ")}`);
-    }
-
-    return lines.join("\n");
-  }
 }

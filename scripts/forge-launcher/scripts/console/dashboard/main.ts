@@ -5,10 +5,10 @@ import { store, type Snapshot } from "./state.js";
 import type { AuditEvent } from "./types.js";
 import { renderBoard, unmountBoard } from "./views/board.js";
 import { renderHome, unmountHome } from "./views/home.js";
-import { renderOverview, unmountOverview } from "./views/overview.js";
+import { refreshOverview, renderOverview, unmountOverview } from "./views/overview.js";
 import { renderTasks, unmountTasks } from "./views/tasks.js";
 import { renderLogs, unmountLogs } from "./views/logs.js";
-import { renderDocuments, unmountDocuments } from "./views/documents.js";
+import { refreshDocuments, renderDocuments, unmountDocuments } from "./views/documents.js";
 import { renderArtifacts, unmountArtifacts } from "./views/artifacts.js";
 import { renderTimeline, unmountTimeline } from "./views/timeline.js";
 import { renderProjects, unmountProjects } from "./views/projects.js";
@@ -20,15 +20,16 @@ interface View {
   label: string;
   render: (container: HTMLElement) => void;
   unmount: () => void;
+  refresh?: () => void;
 }
 
 const views: View[] = [
   { id: "home", label: "Home", render: renderHome, unmount: unmountHome },
-  { id: "overview", label: "Overview", render: renderOverview, unmount: unmountOverview },
+  { id: "overview", label: "Overview", render: renderOverview, unmount: unmountOverview, refresh: refreshOverview },
   { id: "board", label: "Board", render: renderBoard, unmount: unmountBoard },
   { id: "tasks", label: "Tasks", render: renderTasks, unmount: unmountTasks },
   { id: "logs", label: "Logs", render: renderLogs, unmount: unmountLogs },
-  { id: "documents", label: "Plan & Team", render: renderDocuments, unmount: unmountDocuments },
+  { id: "documents", label: "Plan & Team", render: renderDocuments, unmount: unmountDocuments, refresh: refreshDocuments },
   { id: "artifacts", label: "Artifacts", render: renderArtifacts, unmount: unmountArtifacts },
   { id: "timeline", label: "Timeline", render: renderTimeline, unmount: unmountTimeline },
   { id: "projects", label: "Projects", render: renderProjects, unmount: unmountProjects },
@@ -39,6 +40,8 @@ const views: View[] = [
 const NO_REPO_ROUTES = new Set(["home", "new", "projects"]);
 
 let active: View | null = null;
+let activeProject = "none";
+let unsubscribeStore: (() => void) | undefined;
 
 function currentRouteId(): string {
   const raw = location.hash.replace(/^#\/?/, "").split("?")[0]!;
@@ -70,10 +73,12 @@ function render(): void {
   if (!container) return;
   container.textContent = "";
   view.render(container);
+  activeProject = store.projectKey();
 }
 
 function connectEvents(): void {
   const es = new EventSource("/api/events");
+  es.addEventListener("open", () => setConnectionState("connected"));
   es.addEventListener("snapshot", (event: Event) => {
     const data = JSON.parse((event as MessageEvent).data as string) as Snapshot;
     store.applySnapshot(data);
@@ -91,18 +96,29 @@ function connectEvents(): void {
     store.emitAuthoring(data);
   });
   es.onerror = () => {
-    // EventSource auto-reconnects; nothing to do here.
+    setConnectionState("reconnecting");
   };
 }
 
+function setConnectionState(state: "connected" | "reconnecting"): void {
+  const node = document.querySelector<HTMLElement>("#connection-status");
+  if (!node) return;
+  node.dataset.state = state;
+  node.textContent = state === "connected" ? "Connected" : "Reconnecting…";
+}
+
 async function init(): Promise<void> {
-  store.subscribe(() => {
+  unsubscribeStore = store.subscribe(() => {
     const route = currentRouteId();
     if (!store.summary && !NO_REPO_ROUTES.has(route)) {
       location.hash = "#/home";
       return;
     }
-    render();
+    if (store.projectKey() !== activeProject) {
+      render();
+      return;
+    }
+    active?.refresh?.();
   });
 
   try {
@@ -121,6 +137,17 @@ async function init(): Promise<void> {
     helpBtn.textContent = "Help";
     helpBtn.addEventListener("click", openHelp);
     topbar.appendChild(helpBtn);
+    topbar.appendChild(elConnectionStatus());
+  }
+
+  function elConnectionStatus(): HTMLElement {
+    const node = document.createElement("span");
+    node.id = "connection-status";
+    node.className = "connection-status";
+    node.setAttribute("role", "status");
+    node.setAttribute("aria-live", "polite");
+    node.textContent = "Connecting…";
+    return node;
   }
 
   // Initial landing: explicit hash wins; otherwise overview when a repo is

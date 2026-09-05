@@ -1,6 +1,7 @@
 import { existsSync } from "node:fs";
+import { resolve } from "node:path";
 
-import type { AgentDescriptor, HarnessAdapter, ManifestTask, TaskResult, WorkflowState } from "../types.ts";
+import type { HarnessAdapter, TaskAttemptRequest, TaskResult } from "../types.ts";
 
 /**
  * Stub harness adapter for dry-run, testing, and CI scenarios.
@@ -17,6 +18,7 @@ import type { AgentDescriptor, HarnessAdapter, ManifestTask, TaskResult, Workflo
 export class StubAdapter implements HarnessAdapter {
   readonly name = "stub";
   readonly supportsConcurrency = true;
+  readonly capabilities = ["text", "repository-tools"] as const;
 
   private readonly failIds: Set<string>;
   private readonly delayMs: number;
@@ -27,16 +29,10 @@ export class StubAdapter implements HarnessAdapter {
     this.delayMs = Number(process.env["STUB_DELAY_MS"] ?? "0");
   }
 
-  async invoke(
-    agent: AgentDescriptor,
-    task: ManifestTask,
-    _context: WorkflowState,
-    repoRoot: string,
-    _contextBlock?: string,
-    _timeoutMs?: number,
-    _maxRetries?: number,
-  ): Promise<TaskResult> {
+  async invoke(request: TaskAttemptRequest): Promise<TaskResult> {
     const start = Date.now();
+    const { agent, task, repoRoot } = request;
+    request.signal?.throwIfAborted();
 
     if (this.delayMs > 0) {
       await new Promise((resolve) => setTimeout(resolve, this.delayMs));
@@ -50,14 +46,15 @@ export class StubAdapter implements HarnessAdapter {
         stderr: `[stub] synthetic failure for task ${task.id}`,
         durationMs: Date.now() - start,
         errorMessage: `[stub] synthetic failure for task ${task.id}`,
+        failureKind: "retryable",
       };
     }
 
     const outputFiles = task.expectedOutputs.filter((path) =>
-      existsSync(path.startsWith("/") ? path : `${repoRoot}/${path}`),
+      existsSync(resolve(repoRoot, path)),
     );
 
-    const agentLabel = agent.model ? `${agent.name} (${agent.model})` : agent.name;
+    const agentLabel = request.effectiveModel ? `${agent.name} (${request.effectiveModel})` : agent.name;
 
     return {
       success: true,

@@ -7,9 +7,11 @@ import { renderMarkdown } from "../render/md.js";
 let overlay: HTMLElement | null = null;
 let onKeydown: ((e: KeyboardEvent) => void) | null = null;
 let guideReady: Promise<string> | null = null;
+let returnFocus: HTMLElement | null = null;
 
 export function openHelp(): void {
   closeHelp();
+  returnFocus = document.activeElement instanceof HTMLElement ? document.activeElement : null;
   overlay = el("div", { className: "help-overlay" });
 
   const closeBtn = el("button", { className: "help-close", "aria-label": "Close help" }, "✕");
@@ -51,8 +53,22 @@ export function openHelp(): void {
 
   onKeydown = (e) => {
     if (e.key === "Escape") closeHelp();
+    if (e.key === "Tab" && dialog) {
+      const focusable = [...dialog.querySelectorAll<HTMLElement>("button, a, input, select, textarea, [tabindex]:not([tabindex='-1'])")].filter((node) => !node.hasAttribute("disabled"));
+      if (focusable.length === 0) return;
+      const first = focusable[0]!;
+      const last = focusable[focusable.length - 1]!;
+      if (e.shiftKey && document.activeElement === first) {
+        e.preventDefault();
+        last.focus();
+      } else if (!e.shiftKey && document.activeElement === last) {
+        e.preventDefault();
+        first.focus();
+      }
+    }
   };
   window.addEventListener("keydown", onKeydown);
+  window.setTimeout(() => closeBtn.focus(), 0);
 }
 
 export function closeHelp(): void {
@@ -62,6 +78,8 @@ export function closeHelp(): void {
     overlay.remove();
     overlay = null;
   }
+  returnFocus?.focus();
+  returnFocus = null;
 }
 
 function tabButton(label: string): HTMLElement {

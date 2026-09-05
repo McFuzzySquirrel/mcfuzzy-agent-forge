@@ -1,7 +1,7 @@
 # ADR-016: Forge Workforce Compiler and Optional FlowForge Kernel Handoff
 
 **Date:** 2026-08-13
-**Status:** Accepted
+**Status:** Superseded by [ADR-038](038-flowforge-retirement.md)
 
 ---
 

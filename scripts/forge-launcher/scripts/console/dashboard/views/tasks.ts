@@ -21,6 +21,9 @@ let tableHost: HTMLElement | null = null;
 let countLine: HTMLElement | null = null;
 let selectedIds = new Set<string>();
 let selectionScope: SelectionScope | null = null;
+let refreshGeneration = 0;
+let rangeStartControl: HTMLSelectElement | null = null;
+let rangeEndControl: HTMLSelectElement | null = null;
 
 export function unmountTasks(): void {
   for (const u of unsub) u();
@@ -35,6 +38,9 @@ export function unmountTasks(): void {
   countLine = null;
   selectedIds = new Set<string>();
   selectionScope = null;
+  rangeStartControl = null;
+  rangeEndControl = null;
+  refreshGeneration += 1;
 }
 
 function taskFilterFromHash(): string | null {
@@ -46,6 +52,9 @@ export async function renderTasks(container: HTMLElement): Promise<void> {
   unmountTasks();
   container.textContent = "";
   const myGen = ++gen;
+  unsub.push(store.subscribe(() => {
+    void refresh();
+  }));
 
   const fromHash = taskFilterFromHash();
   if (fromHash) {
@@ -107,6 +116,8 @@ export async function renderTasks(container: HTMLElement): Promise<void> {
 
   const rangeStart = el("select", { className: "replay-select" });
   const rangeEnd = el("select", { className: "replay-select" });
+  rangeStartControl = rangeStart as HTMLSelectElement;
+  rangeEndControl = rangeEnd as HTMLSelectElement;
   const addRange = el("button", { className: "btn btn-sm" }, "Add range");
   const saveSelection = el("button", { className: "btn btn-sm" }, "Save selection");
   const clearSelection = el("button", { className: "btn btn-sm" }, "Clear");
@@ -143,15 +154,6 @@ export async function renderTasks(container: HTMLElement): Promise<void> {
     ]),
   );
 
-  try {
-    allTasks = await api.tasks();
-  } catch {
-    allTasks = [];
-  }
-  for (const task of allTasks) {
-    rangeStart.appendChild(el("option", { value: task.id }, `${task.id} — ${task.title}`));
-    rangeEnd.appendChild(el("option", { value: task.id }, `${task.id} — ${task.title}`));
-  }
   addRange.addEventListener("click", () => {
     const ordered = allTasks.map((task) => task.id);
     const from = ordered.indexOf((rangeStart as HTMLSelectElement).value);
@@ -176,12 +178,21 @@ export async function renderTasks(container: HTMLElement): Promise<void> {
   resumeSelection.addEventListener("click", () => {
     void runSelectionAction("resume");
   });
+
+  const request = ++refreshGeneration;
+  try {
+    allTasks = await api.tasks();
+  } catch {
+    allTasks = [];
+  }
+  if (request !== refreshGeneration || myGen !== gen) return;
+  syncRangeOptions();
   if (myGen !== gen) return;
   renderTable();
 }
 
 function chip(label: string, active: boolean, onClick: () => void): HTMLElement {
-  const node = el("span", { className: active ? "chip active" : "chip" }, label);
+  const node = el("button", { className: active ? "chip active" : "chip", type: "button", "aria-pressed": String(active) }, label);
   node.addEventListener("click", onClick);
   return node;
 }
@@ -197,12 +208,27 @@ async function launchCli(): Promise<void> {
 }
 
 async function refresh(): Promise<void> {
+  const request = ++refreshGeneration;
   try {
-    allTasks = await api.tasks();
+    const tasks = await api.tasks();
+    if (request !== refreshGeneration) return;
+    allTasks = tasks;
   } catch {
     // keep the existing rows on failure
   }
+  syncRangeOptions();
   renderTable();
+}
+
+function syncRangeOptions(): void {
+  if (!rangeStartControl || !rangeEndControl) return;
+  const previousStart = rangeStartControl.value;
+  const previousEnd = rangeEndControl.value;
+  const options = allTasks.map((task) => el("option", { value: task.id }, `${task.id} — ${task.title}`));
+  rangeStartControl.replaceChildren(...options.map((option) => option.cloneNode(true)));
+  rangeEndControl.replaceChildren(...options);
+  if (allTasks.some((task) => task.id === previousStart)) rangeStartControl.value = previousStart;
+  if (allTasks.some((task) => task.id === previousEnd)) rangeEndControl.value = previousEnd;
 }
 
 function visibleTasks(): TaskRow[] {
@@ -281,7 +307,7 @@ function renderTable(): void {
   }
 
   tableHost.appendChild(
-    el("table", null, [
+    el("div", { className: "table-scroll" }, [el("table", null, [
       el("thead", null, [
         el("tr", null, [
           plainTh("Pick"),
@@ -296,12 +322,13 @@ function renderTable(): void {
         ]),
       ]),
       tbody,
-    ]),
+    ])]),
   );
 }
 
 function checkboxCell(taskId: string): HTMLElement {
   const input = el("input", { type: "checkbox", checked: selectedIds.has(taskId) ? true : null }) as HTMLInputElement;
+  input.setAttribute("aria-label", `Select task ${taskId}`);
   input.addEventListener("click", (event) => event.stopPropagation());
   input.addEventListener("change", () => {
     if (input.checked) selectedIds.add(taskId);
@@ -369,13 +396,22 @@ function plainTh(label: string): HTMLElement {
 
 function th(label: string, key: SortKey): HTMLElement {
   const node = el("th", { className: "sortable" }, sortKey === key ? `${label} ${sortDir === 1 ? "▲" : "▼"}` : label);
-  node.addEventListener("click", () => {
+  const sort = (): void => {
     if (sortKey === key) sortDir = sortDir === 1 ? -1 : 1;
     else {
       sortKey = key;
       sortDir = 1;
     }
     renderTable();
+  };
+  node.addEventListener("click", sort);
+  node.setAttribute("tabindex", "0");
+  node.setAttribute("role", "button");
+  node.addEventListener("keydown", (event) => {
+    if (event.key === "Enter" || event.key === " ") {
+      event.preventDefault();
+      sort();
+    }
   });
   return node;
 }

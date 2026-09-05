@@ -71,7 +71,7 @@ test("resume with an idea queues PRD drafting", async () => {
   assert.equal(code, 0, out);
   assert.ok(out.includes("No PRD yet"), out);
   assert.ok(out.includes("forge-auto-build-prd"), out);
-  assert.ok(out.includes(`opencode run --auto --dir "${repo}"`), out);
+  assert.match(out, new RegExp(`opencode run --auto --dir "[^"]*[\\\\/]${path.basename(repo)}"`), out);
 });
 
 test("resume with a PRD but no team queues team generation", async () => {
@@ -81,7 +81,7 @@ test("resume with a PRD but no team queues team generation", async () => {
   assert.equal(code, 0, out);
   assert.ok(out.includes("No agent team yet"), out);
   assert.ok(out.includes("forge-build-agent-team"), out);
-  assert.ok(out.includes(`opencode run --auto --dir "${repo}"`), out);
+  assert.match(out, new RegExp(`opencode run --auto --dir "[^"]*[\\\\/]${path.basename(repo)}"`), out);
 });
 
 test("resume with a team but no manifest queues an engine-run", async () => {

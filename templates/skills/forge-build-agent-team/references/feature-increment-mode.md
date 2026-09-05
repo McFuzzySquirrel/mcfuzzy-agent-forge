@@ -63,13 +63,19 @@ For each change category:
 
 - Are there new repeatable patterns introduced by this feature?
 - Can existing skills be reused for the feature's tasks?
-- Only create new skills if the pattern will be invoked multiple times within or beyond this feature
+- Record new or extended skill candidates in the exact `docs/SKILL-CANDIDATES.json`
+  handoff; do not invoke `skill-creator` or write packages in team generation.
+- Preserve unaffected existing skills; the independent skills stage handles
+  headless authorization and model routing.
 
-### Step 5i: Write Only Changed or New Files
+### Step 5i: Write Only Changed or New Agents and Candidates
 
 - **For modified agents:** Present the specific additions (what's being added to Responsibilities, Collaboration, and Key Reference sections) as a clear diff or addendum. If the agent was created before the Process and Workflow section was added to the template, add this section as well to bring it up to current standards. Present changes for user review and confirmation before applying them to the existing agent files.
 - **For new agents:** Write complete agent files at `HARNESS_AGENTS_DIR/{agent-name}.md` following the standard template from Step 5.
-- **For new skills:** Write complete skill files at `.agents/skills/{skill-name}/SKILL.md` following the standard template from Step 6.
+- **For new skills:** Add or update a candidate in the immutable
+  `docs/SKILL-CANDIDATES.json`; the independent `forge-build-project-skills`
+  stage writes `.agents/skills/{skill-name}/SKILL.md` after `skill-creator` and
+  `skill-review`.
 - **CRITICAL:** Do NOT regenerate or overwrite agents that aren't affected by the feature.
 
 ### Step 6i: Validate Incrementally

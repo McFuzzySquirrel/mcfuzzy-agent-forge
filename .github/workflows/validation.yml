@@ -1,0 +1,46 @@
+name: Validate native packages
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  packages:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+        package:
+          - scripts/forge-launcher
+          - templates/skills/forge-execution-adapter
+          - templates/skills/forge-workflow-engine
+          - templates/skills/skill-review
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Install shared metadata and adapter dependencies
+        run: npm ci --prefix templates/skills/forge-execution-adapter
+      - name: Install package dependencies
+        if: matrix.package != 'templates/skills/forge-execution-adapter'
+        run: npm ci --prefix ${{ matrix.package }}
+      - name: Typecheck
+        run: npm run typecheck --prefix ${{ matrix.package }}
+      - name: Test
+        run: npm test --prefix ${{ matrix.package }}
+      - name: Validate team quality gates
+        if: matrix.package == 'templates/skills/skill-review'
+        run: node --test templates/skills/forge-build-agent-team/scripts/validate-team.test.mjs
+      - name: Build launcher and check release version
+        if: matrix.package == 'scripts/forge-launcher'
+        run: |
+          npm run build --prefix scripts/forge-launcher
+          npm run check:version --prefix scripts/forge-launcher

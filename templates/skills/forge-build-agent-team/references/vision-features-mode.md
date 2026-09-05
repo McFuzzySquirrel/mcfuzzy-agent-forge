@@ -51,13 +51,19 @@ Follow the same process as Step 3 (in Full Build Mode), with these additional co
 - When an agent owns requirements from multiple features, list all feature document references in their Key Reference section.
 - Foundation feature tasks (project setup, scaffolding) typically map to the Project Architect agent.
 
-### Step 5v: Identify Reusable Skills
+### Step 5v: Identify Skill Candidates
 
-Follow the same process as Step 4 (in Full Build Mode). Look for patterns that repeat across features -these are strong skill candidates since the pattern appears in multiple independent units of work.
+Follow the same process as Step 4 (in Full Build Mode). Look for patterns that
+repeat across features and record candidates in the exact
+`docs/SKILL-CANDIDATES.json` handoff. Do not invoke `skill-creator` or write
+skill packages during team generation.
 
-### Step 6v: Write the Agent and Skill Files
+### Step 6v: Write Agents and the Candidate Handoff
 
-Follow the same process as Steps 5–6 (in Full Build Mode), with these adaptations:
+Follow the same process as Step 5 (in Full Build Mode), then persist the
+candidate handoff. The independent `forge-build-project-skills` stage owns
+skill creation and review, including headless authorization and model routing.
+Preserve unaffected existing skills.
 
 - **Key Reference sections** should list both the product vision and the specific feature documents relevant to each agent:
   ```markdown

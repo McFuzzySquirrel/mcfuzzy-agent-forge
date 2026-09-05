@@ -70,11 +70,22 @@ function fallbackOwner(agents: AgentDescriptor[]): string | undefined {
   return orchestrator?.name ?? agents[0]?.name;
 }
 
+const FORGE_COORDINATOR_NAMES = new Set(["forge-team-builder", "project-orchestrator", "workflow-orchestrator"]);
+
+function isForgeCoordinator(agent: AgentDescriptor): boolean {
+  return FORGE_COORDINATOR_NAMES.has(agent.name.toLowerCase()) ||
+    FORGE_COORDINATOR_NAMES.has(basename(agent.path, ".md").toLowerCase());
+}
+
 function chooseOwner(taskText: string, agents: AgentDescriptor[]): { owner?: string; warning?: string } {
+  const candidates = agents.filter((agent) => !isForgeCoordinator(agent));
+  if (candidates.length === 0) {
+    return { warning: `No implementation agent available for task '${taskText}'. Generate a project-specific team; Forge coordinator personas are not implementation task owners.` };
+  }
   let best: { agent?: AgentDescriptor; score: number } = { score: 0 };
   let second = 0;
 
-  for (const agent of agents) {
+  for (const agent of candidates) {
     const score = overlapScore(taskText, agent);
     if (score > best.score) {
       second = best.score;
@@ -85,7 +96,7 @@ function chooseOwner(taskText: string, agents: AgentDescriptor[]): { owner?: str
   }
 
   if (!best.agent || best.score === 0) {
-    const fallback = fallbackOwner(agents);
+    const fallback = fallbackOwner(candidates);
     if (fallback) {
       return { owner: fallback, warning: `No confident owner match for task '${taskText}' → defaulting to '${fallback}'` };
     }
@@ -246,6 +257,7 @@ function pushTask(
     title: text.split(/[:.]/)[0]!.trim(),
     description: text,
     ownerAgent: owner.owner,
+    requiredCapabilities: ["repository-tools"],
     dependencies: previous ? [previous.id] : [],
     expectedOutputs: extractPaths(text),
     validationCommands,
@@ -702,9 +714,6 @@ export interface TeamValidation {
   orphanAgents: string[];
 }
 
-/** Generic forge template agents are not expected to own feature tasks. */
-const GENERIC_AGENT_RE = /forge-|orchestrator/i;
-
 /** Deterministic team-validation gate mirroring forge-build-agent-team Step 7. */
 export function validateTeam(manifest: ExecutionManifest, agents: AgentDescriptor[]): TeamValidation {
   const unassignedTasks = manifest.phases
@@ -728,7 +737,7 @@ export function validateTeam(manifest: ExecutionManifest, agents: AgentDescripto
 
   const owned = new Set(manifest.phases.flatMap((phase) => phase.tasks.map((task) => task.ownerAgent).filter((value): value is string => Boolean(value))));
   const orphanAgents = agents
-    .filter((agent) => !GENERIC_AGENT_RE.test(agent.name) && !owned.has(agent.name))
+    .filter((agent) => !isForgeCoordinator(agent) && !owned.has(agent.name))
     .map((agent) => agent.name);
 
   return { unassignedTasks, duplicateFileOwners, orphanAgents };
@@ -824,7 +833,12 @@ export function compileExecutionManifestDetailed(
       const changedTaskIds = preservedTaskIds.filter((id) => {
         const before = oldTasks.get(id);
         const after = newTasks.get(id);
-        return before && after && JSON.stringify({ ...before, ownerAgent: before.ownerAgent ?? null }) !== JSON.stringify({ ...after, ownerAgent: after.ownerAgent ?? null });
+        if (!before || !after) return false;
+        // Adding an explicit conservative default does not change a legacy task's contract.
+        const { requiredCapabilities: beforeCapabilities, ...beforeTask } = before;
+        const { requiredCapabilities: afterCapabilities, ...afterTask } = after;
+        return JSON.stringify({ ...beforeTask, ownerAgent: before.ownerAgent ?? null, requiredCapabilities: beforeCapabilities?.length ? beforeCapabilities : ["repository-tools"] }) !==
+          JSON.stringify({ ...afterTask, ownerAgent: after.ownerAgent ?? null, requiredCapabilities: afterCapabilities?.length ? afterCapabilities : ["repository-tools"] });
       });
       manifest.reconciliation = { previousGeneratedAt: previous.generatedAt, preservedTaskIds, newTaskIds, removedTaskIds, changedTaskIds };
       if (newTaskIds.length > 0) manifest.warnings.push(`Manifest reconciliation: ${newTaskIds.length} new task(s) start pending.`);

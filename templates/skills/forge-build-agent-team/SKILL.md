@@ -1,353 +1,119 @@
 ---
 name: forge-build-agent-team
-description: "Analyze a Product Requirements Document (PRD), Product Vision with Feature documents, or Feature PRD and generate a complete team of custom agents and reusable skills tailored to the project. Use this skill when asked to create, scaffold, or design a development team from requirements documents."
+description: "Analyze a Product Requirements Document (PRD), Product Vision with Feature documents, or Feature PRD and generate a complete team of custom agents plus a persisted skill-candidate handoff. Use this skill when asked to create, scaffold, or design a development team from requirements documents."
 ---
 
 # Skill: Build a Custom Agent Team from a PRD
 
-You are building a team of custom agents and reusable skills from a PRD, Product Vision with Feature documents, or a Feature PRD. The goal is to produce specialist `.md` agent files committed to a repository so the agent harness can act as each team member.
-
----
+Build specialist agent files from a PRD, product vision, or feature PRD. This
+stage writes agents and `docs/SKILL-CANDIDATES.json`; it does not create skill
+packages or an execution manifest.
 
 ## Process
 
-### Step 0: Detect Mode
+### Step 0: Detect mode
 
-Load `references/detect-harness.md` to determine `HARNESS_AGENTS_DIR` and `HARNESS_SKILLS_DIR` for this repository. Use these variables wherever agent or skill file paths are referenced below.
+Load `references/detect-harness.md` and resolve
+`HARNESS_AGENTS_DIR`/`HARNESS_SKILLS_DIR`. Select:
 
-| Mode | Signals | Action |
-|------|---------|--------|
-| **Full Build** | Complete PRD with Overview, Technical Architecture, Implementation Phases. No `.md` agent files in `HARNESS_AGENTS_DIR` beyond forge templates. | Continue with Steps 1–8 below. |
-| **Vision + Features** | `docs/product-vision.md` exists with feature documents in `docs/features/`. No `.md` agent files beyond forge templates. | Load `references/vision-features-mode.md` and follow its process. |
-| **Feature Increment** | Document is a Feature PRD (has "Feature Overview", "Agent Impact Assessment"). Existing `.md` agent files in `HARNESS_AGENTS_DIR`. | Load `references/feature-increment-mode.md` and follow its process. |
+- **Full build:** a complete PRD and no existing project team.
+- **Vision + features:** `docs/product-vision.md` plus `docs/features/`.
+- **Feature increment:** a Feature PRD plus an existing team.
 
-### Step 1: Locate and Analyze the PRD
+Treat `.github/agents`, `.github/skills`, `.agents`, `.opencode`, and `.claude`
+as supported layouts. Never assume `.agents` when `.github` is explicit.
 
-Find the PRD at `docs/PRD.md`, `docs/spec.md`, or `README.md`. Read the entire document and extract:
+### Step 1: Analyze requirements
 
-1. **Technology stack** - languages, frameworks, engines, build tools.
-2. **Project structure** - file layout, module boundaries, entry points.
-3. **Functional requirement groups** - distinct feature areas.
-4. **Non-functional requirements** - performance, security, accessibility.
-5. **Implementation phases** - ordered stages of work.
-6. **Testing strategy** - frameworks, coverage expectations, test scenarios.
-7. **Cross-cutting concerns** - deployment, CI/CD, observability.
+Read the complete source documents. Extract technology, structure, functional
+requirements, non-functional requirements, phases, testing, deployment, and
+cross-cutting concerns. In feature mode, read all affected existing agents and
+preserve unaffected files byte-for-byte.
 
-### Step 2: Identify Specialist Roles
+### Step 2: Define non-overlapping agents
 
-Map PRD domains to specialist agents. Each agent owns a distinct, non-overlapping area.
+Map every requirement to exactly one owner. Required coverage includes
+architecture/build and QA; add domain agents only when the source requires
+them. For each agent define expertise, references, responsibilities by path or
+requirement, constraints, output standards, validation, gotchas, and
+collaboration. Agent `name` must match its filename and every description must
+be single-line, double-quoted YAML.
 
-**Required agents (always):** Project Architect (scaffolding, build config, dependencies, folder structure), QA / Test Engineer (test framework, unit/integration tests).
+### Step 3: Write the team
 
-**Domain agents** (based on tech stack): Framework Specialist, Backend Engineer, Frontend Engineer, DevOps/Infra Engineer, PWA/Offline Specialist.
+Write only new or affected files under the resolved harness agents directory.
+Do not create a permanent persona for skill generation. Generated agents must
+use stable names and qualified ownership references. Preserve existing
+manifest IDs and downstream artifacts in incremental work.
 
-**Feature agents** (based on requirement groups): Core Logic Engineer, UI/HUD Developer, VFX/Animation, Audio Engineer, Data/Analytics Engineer, Security Engineer.
+### Step 4: Identify skill candidates
 
-**When the PRD names an agent framework** (LangGraph, CrewAI, AutoGen, Semantic Kernel, etc.): create a dedicated `[framework]-specialist` that owns the framework surface (wiring, state schema, tool registry) and pair it with node-level engineers that own individual nodes. This keeps framework upgrades and feature work separate.
+Record a candidate only when a reusable process repeats or has fragile,
+project-specific steps. Choose `reuse`, `extend`, `create`, or `omit`; one-off
+work remains an agent responsibility. The team stage must not write
+`SKILL.md` packages.
 
-**Naming:** lowercase-hyphenated, role-descriptive. `checkout-engineer`, `notifications-specialist`.
+The independent `forge-build-project-skills` stage reuses `skill-creator` for
+interview/template/preflight work and `skill-review` for the six-axis review.
+Record planned responsibilities and references, not generated package content.
 
-### Step 3: Define Agent Boundaries
+### Step 5: Persist the handoff
 
-For each agent: Expertise (4–8 bullets), Key Reference (cited PRD sections), Responsibilities (grouped by component/file, referencing PRD requirement IDs), Constraints, Output Standards, Collaboration.
+Write `docs/SKILL-CANDIDATES.json` atomically using
+[`references/skill-candidates.md`](./references/skill-candidates.md).
 
-**Boundary rules:** No two agents own the same file/responsibility. Every PRD requirement maps to exactly one agent. Reference PRD section numbers - don't copy requirement tables. If responsibilities exceed ~15 items, consider splitting.
+The handoff must contain exactly `version: 1` and `candidates`. Each candidate
+must contain exactly `name`, `description`, `consumers`, `action`, and `reason`.
+`action` is one of `reuse`, `extend`, `create`, or `omit`. Missing or empty
+`candidates` explicitly completes the stage with no skills required.
 
-### Step 4: Identify Reusable Skills
+### Step 6: Validate the team
 
-Skills are reusable process templates. Create a skill only when a pattern repeats across the project. One-off tasks belong in agent responsibilities.
+Run the standalone validator from this package:
 
-**When to create a skill (not an agent responsibility):**
-- A pattern repeats across multiple components or features
-- The process is complex enough that agents benefit from explicit step-by-step guidance
-- The task has non-obvious edge cases or project-specific conventions the agent wouldn't know
-
-**When to put it in `scripts/` instead:** If the logic is deterministic and doesn't need agent judgment (format conversion, validation, scaffolding), write a script and bundle it in the skill's `scripts/` directory. Agents invoke the script rather than reinventing the logic each run.
-
-**Skill scoping:** Don't create overly narrow skills (one per entity type) or overly broad ones (one catch-all). A skill for "create a data model + run migration + update API schema" is a coherent unit. A skill that also covers database administration is too broad.
-
-**Naming:** lowercase-hyphenated, verb-noun: `create-data-model`, `setup-database`.
-
-**Progressive disclosure:** If a skill's template code exceeds ~50 lines, put it in `assets/` and reference it from `SKILL.md`. If a skill has detailed reference material (schemas, API docs, error codes), put it in `references/` with explicit load triggers ("Load `references/api-errors.md` if the API returns a non-200 status").
-
-**Quality from the start (required):** For each new skill, run `skill-creator` using the structured five-step creation workflow: interview → template selection → scaffold → pre-flight check → `skill-review` validation. Do not hand generated skills to agents until `skill-review` passes with every axis ≥2.0.
-
-### Step 5: Write the Agent Files
-
-Create each agent file at `HARNESS_AGENTS_DIR/{agent-name}.md`:
-
-> **Always double-quote `description:`.** The value is prose and routinely
-> contains `: ` (colon-space); unquoted, YAML treats that as a nested mapping
-> and `forge-execution-adapter compile` (gray-matter) fails the whole build.
-> Wrap every description in double quotes, never a bare scalar. Keep it on a
-> **single line** — never a YAML block scalar (`>` / `|`) or multi-line value;
-> several harnesses' frontmatter readers cannot parse them.
-
-````markdown
----
-name: {agent-name}
-description: "{One-sentence summary of expertise and when to use this agent. Reference the project name and specific technology domains.}"
----
-
-You are a **{Role Title}** responsible for {one-sentence scope description}.
-
----
-
----
-
-## Expertise
-
-- {Technical specialization - 4–8 bullets}
-- {Focus on what the agent wouldn't know without this file}
-
----
-
-## Key Reference
-
-Always consult [{PRD path}]({relative path}) for authoritative project requirements:
-
-- **Section {N} - {Title}**: {What it covers for this agent}
-
----
-
-## Responsibilities
-
-### {Component/Area} (`{file path}`)
-
-1. {Specific deliverable referencing PRD requirement IDs}
-2. {Next deliverable}
-
----
-
-## Workflow
-
-{Describe the project-specific workflow for this agent - what to do, in what order, and how to validate. Replace generic "understand/implement/verify/commit/report" steps with concrete guidance.}
-
-{For destructive or batch operations, use plan-validate-execute:
-1. Create an intermediate plan
-2. Validate the plan against a source of truth
-3. Execute only after validation passes}
-
----
-
-## Validation
-
-After completing a deliverable:
-- [ ] Run {project-specific linter/validator}
-- [ ] Run {build command}
-- [ ] Run {test command} for affected tests
-- [ ] Check that {project-specific quality gate}
-
-If validation fails, fix and re-run before committing.
-
----
-
-## Gotchas
-
-- {Project-specific gotcha the agent would get wrong without being told}
-- {API inconsistency, naming mismatch, environment quirk}
-
----
-
-## Constraints
-
-- {Rule referencing PRD requirement IDs}
-- Verify current stable APIs for {tech stack} before implementing - search official docs when uncertain
-- Commit with descriptive messages referencing the task/requirement
-- Follow orchestrator instructions for progress tracking when working in orchestrated execution
-
----
-
-## Output Standards
-
-- {Where files go}
-- {Coding conventions}
-- {API patterns}
-
----
-
-## Collaboration
-
-- **project-orchestrator** - Coordinates your work, provides task context, tracks progress
-- **{other-agent}** - {What they provide or need from this agent}
-````
-
-### Step 6: Write the Skill Files
-
-Create each skill file at `HARNESS_SKILLS_DIR/{skill-name}/SKILL.md`.
-
-**Required approach: use `skill-creator`** for each new skill. It guides through a structured interview, selects the correct template (flat or modular), and validates the output with `skill-review` before the skill is finalized. Every generated skill must score ≥2.0 across all six quality axes.
-
-If `skill-creator` or `skill-review` is not available in the environment, stop and report the missing dependency to the user instead of silently skipping this quality gate.
-
-Only after explicit user approval to proceed without these dependencies, scaffold directly using this template:
-
-> **Always double-quote `description:`** for the same reason as agents: an
-> unquoted colon-space breaks YAML frontmatter parsing at compile time. Single
-> line only — never a YAML block scalar (`>` / `|`) or multi-line value.
-
-````markdown
----
-name: {skill-name}
-description: "{One-sentence summary of what this skill does and when to use it. Include specific keywords to help the agent recognize relevant tasks.}"
----
-
-# Skill: {Human-Readable Title}
-
-{One-sentence context about what this skill produces. Trim what the agent already knows.}
-
----
-
-## Process
-
-### Step 1: {First Step Title}
-
-{Instructions - be prescriptive for fragile operations (exact commands, fixed sequences).
-Be flexible for tasks where multiple approaches are valid.}
-
-### Step 2: {Second Step Title}
-
-{Include code templates, examples, or scaffolding patterns.}
-
-### Step 3: {Additional Steps}
-
-{As many steps as needed.}
-
----
-
-## Output Format
-
-{Template for the expected output. Keep short templates inline; move longer ones to `assets/`.
-For templates only needed in certain cases, store in `assets/` and reference with a load trigger.}
-
----
-
-## Validation
-
-After completing the task:
-- [ ] Run {validator/check}
-- [ ] Verify {specific quality gate}
-- [ ] If validation fails: review error, fix issues, re-validate
-
----
-
-## Gotchas
-
-- {Environment-specific fact that defies reasonable assumptions}
-- {Correction to a mistake agents make without being told}
-- {When an agent makes a mistake that needs correction, add it here}
-
----
-
-## Reference
-
-See [{PRD path}]({relative path}) for the full specification:
-- **Section {N}** - {What it covers}
-
-For detailed reference material: load `references/{file}.md` when {trigger condition}.
-For output templates: load `assets/{template}.md` when generating {specific output type}.
-````
-
-**Progressive disclosure for generated skills:**
-- If the skill needs detailed schemas, API docs, or error codes → create `references/` and add load triggers
-- If the skill has reusable template/output formats → create `assets/` and reference them
-- If the skill has deterministic, repeatable logic → create `scripts/` and invoke from SKILL.md
-- Keep `SKILL.md` under 500 lines / 5000 tokens - move everything else to subdirectories
-
-### Step 7: Validate the Team
-
-Before finalizing:
-
-- [ ] Every PRD functional requirement maps to exactly one agent
-- [ ] Every agent has `## Collaboration` listing agents it depends on
-- [ ] No two agents own the same file or responsibility
-- [ ] Agent files end with `.md`; `name:` matches the filename (without extension); every `description:` is single-line, double-quoted YAML (never a block scalar)
-- [ ] Skill directory names match the skill `name` field; every `description:` is single-line, double-quoted YAML (never a block scalar)
-- [ ] **Frontmatter gate passed:** run `node scripts/validate-frontmatter.mjs` (from this skill's directory) and it exits `0` — it flags block scalars (`>`/`|`), multi-line values, unquoted `: ` values, missing `name`/`description`, and unterminated frontmatter across the harness agents and skills
-- [ ] All PRD section references are accurate
-- [ ] Agent names are lowercase-hyphenated
-- [ ] Team covers: foundation/scaffolding, core logic, testing, and all major feature areas
-- [ ] Every agent has a `## Gotchas` section populated with project-specific edge cases
-- [ ] Every skill has a `## Validation` section with concrete checks
-- [ ] Generated skills use progressive disclosure for content exceeding ~50 lines of templates
-- [ ] All agent files have been written to `HARNESS_AGENTS_DIR`, not to `.agents/agents/` unless that is the detected harness directory
-
-After the validation passes, **write `docs/agent-responsibility-matrix.md`** so the
-responsibility map is a durable, reviewable artifact (the workflow-engine compile
-gate writes the same file; see the execution-adapter's deterministic matrix).
-Mirror its structure:
-
-```markdown
-# Agent Responsibility Matrix
-
-- **Source layout:** monolithic | features
-- **Source:** docs/PRD.md (or docs/product-vision.md + docs/features/*)
-
-## Team Validation
-- Unassigned tasks: **N**   (list any)
-- Duplicate file owners: **N**   (list any)
-- Orphan agents: **N**   (list any)
-
-## Ownership by Agent
-
-### <agent-name>
-| Phase | Feature | Task | Outputs |
-|---|---|---|---|
-| 1 | - | 1.1 | src/api/routes.ts |
-
-## Phase Execution Order
-1. **<phase-id>** — <title> — owned by <agents>
+```bash
+node scripts/validate-frontmatter.mjs --repo <repo-root>
+node scripts/validate-team.mjs --repo <repo-root> --fail-structural \
+  --agents-only --min-axis 2 --fail-axis-below
 ```
 
-Fill the tables from the PRD's implementation phases and each agent's ownership
-mapping; this file becomes the source of truth for who owns what.
+The team-stage gate validates agents and the candidate handoff without
+requiring project skill packages that do not exist until the next stage. The
+independent `forge-build-project-skills` stage runs the same validator with
+`--skills-only --fail-structural --min-axis 2 --fail-axis-below` against only
+the affected non-omit candidate files. Both gates reject invalid structure and
+block any failing axis rather than relying on an average.
 
-### Step 8: Present the Team
+## Handoff ownership
 
-Summarize with tables: Custom Agents (name/role/sections/phase), Skills (name/purpose/used by), Collaboration Map.
-
-### Step 9: Recommend Model Assignment
-
-Recommend (don't auto-run) `forge-assign-models` so the user can match each agent to an appropriately sized model. Suggest:
-- `/forge-assign-models Discover what models are available and cache the inventory.`
-- `/forge-assign-models Recommend a per-agent model and write docs/MODEL-PLAN.md.`
-- `/forge-assign-models Apply the recommended models to the agent files.`
-
-After Feature Increment Mode runs, suggest Re-tune mode for targeted refresh.
-
----
-
-## Collaboration
-
-- **forge-build-prd / forge-build-feature-prd** - Produce the PRD this skill consumes.
-- **skill-creator** - Use when creating project-specific skills; runs structured interview → scaffold → `skill-review` validation to ensure quality before agents use the skill.
-- **skill-review** - Audit generated skills against the six-axis quality rubric; invoke after skill-creator or run standalone to validate quality.
-- **forge-assign-models** - Run after team generation for per-agent model assignment.
-- **project-orchestrator** - Coordinates agent implementation phases.
-
----
+- **Team stage:** agents, ownership, candidate IDs, references, and handoff.
+- **Skills stage:** package creation, reuse/extension decisions, review, and
+  candidate outcome.
+- **Manifest/compiler:** execution artifacts and task IDs; this skill never
+  creates or replaces them.
 
 ## Gotchas
 
-- **Agent `name:` must match the filename (without extension).** `my-agent.md` → `name: my-agent`. A mismatch silently breaks agent detection.
-- **Unquoted `description:` with `: ` breaks the build.** `description: Owns the Discovery: recursive scanning…` fails YAML parsing in `forge-execution-adapter compile`, which aborts before the manifest is written. Always double-quote `description:` — every generated agent and skill — and run `scripts/validate-frontmatter.mjs` before finalizing (Step 7).
-- **Never write `description:` as a YAML block scalar.** `description: >` (folded) or `description: |` (literal) renders as just `>`/`|` in harnesses with simple frontmatter readers (agents/skills look undecorated), and the `validate-frontmatter.mjs` gate rejects them. Always a single-line, double-quoted value.
-- **Never generate agents for areas the PRD doesn't cover.** If in doubt, ask the user rather than speculating.
-- **Code block templates must escape nested fenced blocks.** If a generated skill's output template contains markdown code blocks, use ` ``` `` ` syntax or indent differently to avoid breaking the parent template.
-- **Feature Increment Mode must never regenerate untouched agents.** It's the most common source of regressions. Always diff before writing.
-- **Progressive disclosure requires explicit load triggers.** Don't just say "see references/ for details." Say: "Load `references/api-errors.md` if the API returns a non-200 status code." The agent needs to know WHEN to load.
+- **Team/package boundary.** Creating a skill package here bypasses the
+  independent skills model and makes retries regenerate valid teams.
+- **Candidate names are stable.** Preserve the existing candidate name and
+  action when reconciling; do not derive a new name from generated package
+  paths.
+- **No-skills is success.** Missing or empty candidates are explicit completion;
+  do not treat them as failed discovery.
+- **`.github` is active.** Discovery must include `.github/skills` and
+  `.github/agents`, not only `.agents`.
+- **Whole Markdown is not YAML.** Parse only the initial fenced frontmatter
+  block; headings, lists, and code samples after the closing delimiter are
+  Markdown and must not be interpreted as metadata.
 
----
+## Validation
 
-## Guidelines
-
-- **Scale to the project.** 3–4 agents for a weekend prototype, 8–12 for a large application.
-- **Agents are specialists.** If you can't articulate unique expertise in one sentence, merge.
-- **Skills are reusable processes.** Only create if the pattern repeats. One-off tasks → agent responsibilities.
-- **Reference, don't duplicate.** Cite PRD section numbers; don't copy requirement tables.
-- **Test the mapping.** Every PRD requirement → exactly one owner agent.
-- **Add what the agent lacks, omit what it knows.** If the agent would handle a task correctly without the instruction, cut it.
-- **Favor procedures over declarations.** Teach *how to approach* a class of problems, not *what to produce* for a specific instance.
-- **Calibrate control per section.** Be prescriptive for fragile operations (exact commands, fixed sequences). Give freedom for flexible tasks where multiple approaches work.
-- **Encourage currency verification.** Agents should search latest docs when uncertain.
-- **If an agent makes a mistake you have to correct, add the correction to its gotchas.**
+- [ ] Every requirement maps to exactly one agent.
+- [ ] No agent ownership overlaps or orphan required roles exist.
+- [ ] Existing unaffected files and manifest IDs are unchanged.
+- [ ] `docs/SKILL-CANDIDATES.json` validates against the versioned handoff.
+- [ ] Every non-omit candidate consumer resolves to a generated agent name.
+- [ ] `validate-frontmatter.mjs` and `validate-team.mjs` pass with structural
+      and per-axis blocking enabled.
+- [ ] No skill package or execution manifest was created by this stage.

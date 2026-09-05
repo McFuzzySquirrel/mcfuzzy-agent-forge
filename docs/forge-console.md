@@ -1,6 +1,12 @@
 # Forge Console
 
-> A local web UI that fronts `forge-launcher` (authoring) and `forge-launcher engine-run` → `workflow-engine` (build). Create a project, draft the PRD and agent team, run the build, and monitor/control it - all from your browser.
+> A local web UI that fronts `forge-launcher` (authoring) and `forge-launcher engine-run` → `workflow-engine` (build). Create a project, draft the PRD, generate the agent team, generate project skills, compile the manifest, and monitor/control the build - all from your browser.
+
+> [!WARNING]
+> The Visual Tour uses current-browser captures from a deterministic local
+> fixture. Desktop and responsive media were collected from the current
+> Console build; screenshots are evidence of layout and fixture state, not a
+> substitute for interactive accessibility testing.
 
 > **Screenshots:** see the [Visual Tour](forge-console-screenshots.md) for a walkthrough of every view.
 >
@@ -17,6 +23,12 @@ terminal tools already write (`docs/WORKFLOW-STATE.json`, `EXECUTION-AUDIT.jsonl
 a thin supervisor over the launcher and engine processes. It does not reimplement
 authoring or execution - the terminal commands remain first-class and produce
 identical results.
+
+For a compiled project, Console build and team operations use the manifest's
+`harnessRoot` before automatic discovery. An explicit authoring CLI selection
+still takes priority. If the recorded root is stale, update the selection and
+recompile the manifest; Console will not silently switch to another harness
+root.
 
 It is TypeScript, compiled with `tsc` (no framework or bundler), and embeds the
 existing PixiJS **Forge Board** as one of its views.
@@ -35,7 +47,8 @@ From there:
 
 1. **Create a project** (New Project wizard) or **open an existing one**.
 2. On the **Overview**, click **Continue** to advance the pipeline one stage at a
-   time - draft the PRD, generate the agent team, then start the build.
+   time - draft the PRD, generate the agent team, generate project skills,
+   compile the manifest, then start the build.
 3. Watch it live on the **Board** / **Tasks** / **Logs** views, and use
    **Pause / Stop / Resume / Replay** to control a running build.
 
@@ -85,20 +98,22 @@ The **Projects** tab has the same dropdown + add-folder flow.
 
 ## The pipeline (the Continue button)
 
-Projects flow through four stages. The **Continue** button on the Overview
+Projects flow through five stages. The **Continue** button on the Overview
 advances one stage at a time, running the same steps the terminal launcher runs,
 so you can review each result and come back later:
 
 | Stage | Continue does | Produces |
 |---|---|---|
 | Idea (no PRD) | **Draft PRD** (headless `forge-auto-build-prd`) | `docs/PRD.md` (or `product-vision.md` + `features/`) |
-| PRD (no team) | **Generate team** (headless `forge-build-agent-team`) | agent + skill files under the harness root |
-| Team (no run) | **Start build** (`forge-launcher engine-run`) | compiles the manifest, then runs the engine |
+| PRD (no team) | **Generate team** (headless `forge-build-agent-team`) | agent files and ownership metadata |
+| Team (skills incomplete) | **Generate project skills** | project skill candidates and review result |
+| Skills ready (no manifest) | **Compile manifest** (`forge-execution-adapter`) | `docs/EXECUTION-MANIFEST.json` |
+| Manifest ready | **Start build** (`forge-launcher engine-run`) | durable workflow-engine run |
 | Paused/incomplete run | **Resume build** | engine resumes from `WORKFLOW-STATE.json` |
 
 Each step runs detached in the background (output is appended to
-`docs/engine-run.log`, visible in the **Logs** view). This includes bootstrap,
-PRD, team, and manifest-authoring jobs as well as engine output. The console now tracks
+`docs/engine-run.log`, visible in the **Logs** view). This includes bootstrap, PRD, team, skills, manifest-authoring jobs, and engine
+output. The console now tracks
 those detached jobs directly, so the Overview can show whether work is actively
 creating the project, drafting the PRD, generating the team, running the build,
 paused, complete, or failed. Nothing runs until you click it, and the generated
