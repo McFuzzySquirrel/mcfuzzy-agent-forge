@@ -1,11 +1,11 @@
 # Forge Console - Visual Tour
 
-A screenshot walkthrough of the Forge Console. The Overview, Tasks table,
-Plan & Team, New Project, and Help images show the current beta-5 Console with
-a local fixture project; no external authoring or paid model execution was used
-to create them. The other images retain the earlier **TaskFlow** demo and
-illustrate corresponding views that are not represented in the supplied beta-5
-capture set. Start with `forge-launcher console`.
+A screenshot walkthrough of the Forge Console. These images were captured from
+the current Console build in Chrome against a deterministic local fixture;
+no external authoring or paid model execution was used. Desktop captures use
+the stable numbered filenames below. The complete desktop and responsive
+capture set is archived under `images/forge-console/current/`. Start with
+`forge-launcher console`.
 
 > See [forge-console.md](forge-console.md) for the full reference.
 
@@ -26,7 +26,7 @@ first. PRD, team, and project-skill authoring have separate status and model
 summaries. Authoring retries are distinct from native execution controls;
 legacy projects do not need to regenerate a team just to resume a build.
 
-![Overview - run status + pipeline + controls](images/forge-console/beta-5/console-overview-desktop.png)
+![Overview - run status + pipeline + controls](images/forge-console/02-overview.png)
 
 ## 3. Board
 
@@ -42,7 +42,7 @@ and explicit manual selection. Selections and focused controls survive live
 updates. On narrow screens, the labelled table region scrolls horizontally
 instead of widening the whole page.
 
-![Tasks - table](images/forge-console/beta-5/console-tasks-desktop.png)
+![Tasks - table](images/forge-console/04-tasks.png)
 
 ## 5. Task detail
 
@@ -73,14 +73,14 @@ Inventory refresh and unavailable saved selections remain explicit. The
 **Documents**, **Agents**, and **Skills** sections keep execution-model
 overrides separate from authoring settings.
 
-![Plan & Team - authoring settings and project sections](images/forge-console/beta-5/console-documents-desktop.png)
+![Plan & Team - authoring settings and project sections](images/forge-console/08-plan-team.png)
 
 ## 9. Plan & Team - a document
 
 Expanding **Documents** and selecting the PRD renders it as Markdown, with an
 **Open externally** button to edit it in your editor.
 
-![Plan & Team - documents section](images/forge-console/beta-5/console-documents-desktop.png)
+![Plan & Team - PRD rendered](images/forge-console/09-plan-team-doc.png)
 
 ## 10. Artifacts
 
@@ -108,24 +108,29 @@ Auto-draft runs PRD, team, and project-skill generation as separate stages.
 Selecting an existing PRD skips drafting it. Failed uploads or saves keep
 the draft available rather than silently starting with missing inputs.
 
-![New project - wizard](images/forge-console/beta-5/console-new-desktop.png)
+![New project - wizard](images/forge-console/13-new-project.png)
 
 ## 14. Help
 
 The **Help** dialog explains the pipeline, views, and key terms. Opening it moves
 keyboard focus into the dialog; Escape closes it and returns focus to Help.
 
-![Help - modal](images/forge-console/beta-5/console-help-desktop.png)
+![Help - modal](images/forge-console/14-help.png)
 
-## Responsive beta-5 captures
+## Responsive current captures
 
-The supplied beta-5 set also includes 1024px, 720px, 390px, and 320px
-responsive captures for Overview, Tasks, Plan & Team/Documents, and New Project.
-The Help view is supplied as a desktop capture.
+The current build was captured at 1024px, 720px, 390px, and 320px for every
+route. Detail-state captures (expanded task, rendered PRD, artifact detail,
+and audit log) are also included in `images/forge-console/current/`.
 
 | View | 1024px | 720px | 390px | 320px |
 | --- | --- | --- | --- | --- |
-| Overview | [image](images/forge-console/beta-5/console-overview-1024.png) | [image](images/forge-console/beta-5/console-overview-720.png) | [image](images/forge-console/beta-5/console-overview-390.png) | [image](images/forge-console/beta-5/console-overview-320.png) |
-| Tasks | [image](images/forge-console/beta-5/console-tasks-1024.png) | [image](images/forge-console/beta-5/console-tasks-720.png) | [image](images/forge-console/beta-5/console-tasks-390.png) | [image](images/forge-console/beta-5/console-tasks-320.png) |
-| Plan & Team | [image](images/forge-console/beta-5/console-documents-1024.png) | [image](images/forge-console/beta-5/console-documents-720.png) | [image](images/forge-console/beta-5/console-documents-390.png) | [image](images/forge-console/beta-5/console-documents-320.png) |
-| New project | [image](images/forge-console/beta-5/console-new-1024.png) | [image](images/forge-console/beta-5/console-new-720.png) | [image](images/forge-console/beta-5/console-new-390.png) | [image](images/forge-console/beta-5/console-new-320.png) |
+| Overview | [image](images/forge-console/current/overview-1024.png) | [image](images/forge-console/current/overview-720.png) | [image](images/forge-console/current/overview-390.png) | [image](images/forge-console/current/overview-320.png) |
+| Board | [image](images/forge-console/current/board-1024.png) | [image](images/forge-console/current/board-720.png) | [image](images/forge-console/current/board-390.png) | [image](images/forge-console/current/board-320.png) |
+| Tasks | [image](images/forge-console/current/tasks-1024.png) | [image](images/forge-console/current/tasks-720.png) | [image](images/forge-console/current/tasks-390.png) | [image](images/forge-console/current/tasks-320.png) |
+| Logs | [image](images/forge-console/current/logs-1024.png) | [image](images/forge-console/current/logs-720.png) | [image](images/forge-console/current/logs-390.png) | [image](images/forge-console/current/logs-320.png) |
+| Plan & Team | [image](images/forge-console/current/documents-1024.png) | [image](images/forge-console/current/documents-720.png) | [image](images/forge-console/current/documents-390.png) | [image](images/forge-console/current/documents-320.png) |
+| Artifacts | [image](images/forge-console/current/artifacts-1024.png) | [image](images/forge-console/current/artifacts-720.png) | [image](images/forge-console/current/artifacts-390.png) | [image](images/forge-console/current/artifacts-320.png) |
+| Timeline | [image](images/forge-console/current/timeline-1024.png) | [image](images/forge-console/current/timeline-720.png) | [image](images/forge-console/current/timeline-390.png) | [image](images/forge-console/current/timeline-320.png) |
+| Projects | [image](images/forge-console/current/projects-1024.png) | [image](images/forge-console/current/projects-720.png) | [image](images/forge-console/current/projects-390.png) | [image](images/forge-console/current/projects-320.png) |
+| New project | [image](images/forge-console/current/new-1024.png) | [image](images/forge-console/current/new-720.png) | [image](images/forge-console/current/new-390.png) | [image](images/forge-console/current/new-320.png) |

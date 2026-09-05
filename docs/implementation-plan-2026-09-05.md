@@ -365,12 +365,9 @@ Completion requires regression-covered retained review fixes, retired integratio
 
 ## Console media refresh closeout
 
-The supplied beta-5 Console captures are now committed under
-`docs/images/forge-console/beta-5`. The Visual Tour and Console reference use
-the current desktop captures for Overview, Tasks, Plan & Team/Documents, New
-Project, and Help, and include responsive links for the available widths.
-The README's old GitHub attachment was replaced with
-`console-walkthrough.gif`, generated from the beta-5 desktop captures.
-
-The older TaskFlow images remain only for Board, task detail, logs, artifacts,
-and timeline because no corresponding beta-5 replacements were supplied.
+The supplied beta-5 Console captures have been replaced with verified
+live-browser captures under `docs/images/forge-console/current`. The complete
+set covers every current route at desktop and responsive widths, plus expanded
+task, PRD, artifact, audit-log, and Help states. Stable numbered Visual Tour
+filenames were refreshed from the same live captures, and the README now uses
+`current/console-walkthrough.gif`.

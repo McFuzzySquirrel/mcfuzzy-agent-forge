@@ -21,10 +21,10 @@ MyForge is a PRD-first workflow for turning product requirements into working so
 
 
 
-![Forge Console beta-5 walkthrough](docs/images/forge-console/beta-5/console-walkthrough.gif)
+![Forge Console live walkthrough](docs/images/forge-console/current/console-walkthrough.gif)
 
 See the [Forge Console visual tour](docs/forge-console-screenshots.md) for
-the full screenshot walkthrough, including responsive beta-5 captures.
+the full screenshot walkthrough, including current responsive captures.
 
 
 

@@ -26,8 +26,9 @@ Detailed release and change notes for MyForge.
 - Synchronized launcher help and Console user guides, including supported
   text-upload formats, Copilot planning flags, and targeted engine options.
 - Added ADR-041 documenting the shared authoring-quality and Console contracts.
-- Refreshed the Console visual tour with the supplied beta-5 screenshots and
-  added a committed README walkthrough GIF.
+- Replaced the supplied beta-5 Console media with verified live-browser
+  captures from the current Console build, including desktop, responsive,
+  and detail-state views, and refreshed the README walkthrough GIF.
 
 ---
 

@@ -3,9 +3,10 @@
 This walkthrough covers the everyday flow for opening the Forge Console, creating or switching projects, and monitoring a build without leaving the browser. It is kept in step with the console UI — see [updates.md](updates.md) for what changed in each release.
 
 > [!WARNING]
-> The committed screenshots are historical and may predate current controls.
-> They are orientation only, not evidence of current browser behavior, layout,
-> or accessibility. Refresh them before making current-browser claims.
+> The committed screenshots were captured from the current Console build
+> against a deterministic local fixture. They document current layout and
+> representative fixture state, but do not replace interactive accessibility
+> testing.
 
 ---
 
