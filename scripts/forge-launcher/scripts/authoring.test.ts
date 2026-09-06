@@ -8,7 +8,7 @@ import { fileURLToPath } from "node:url";
 import { loadAuthoringConfig, saveAuthoringConfig, selectAuthoringModel, writeAuthoringJson } from "./authoring-config.ts";
 import { authoringArgv, parseModelInventoryOutput, refreshAuthoringInventory, resolveAuthoringModel } from "./authoring-inventory.ts";
 import { authoringReadiness, authoringStageIsCurrent, fingerprintFiles, readAuthoringState, readSkillCandidates } from "./authoring-state.ts";
-import { runDraftPrd, runDraftSkills, runDraftTeam, runFeatureIncrement, runLauncher, runResume, type LauncherOptions } from "./launcher.ts";
+import { runDraftPrd, runDraftExistingPrd, runDraftSkills, runDraftTeam, runFeaturePrd, runFeatureIncrement, runLauncher, runResume, type LauncherOptions } from "./launcher.ts";
 import { createSessionScope } from "./launcher-session.ts";
 import { prompts, withPromptSession } from "./prompts.ts";
 
@@ -43,6 +43,66 @@ const candidates = {
   candidates: [{ name: "project-fixture", description: "Use when validating project fixture work.", consumers: ["project-agent"], action: "create", reason: "Project fixture behavior needs a dedicated reusable procedure." }],
 };
 const stub: LauncherOptions = { env: { FORGE_RUN_WITH: "stub" } };
+
+function validPrd(id = "BUILD-1"): string {
+  return '# PRD\n## Phase 1: Build\n```forge-task\n' + JSON.stringify({ id, title: "Build behavior", description: "Implement one behavior", ownerAgent: "project-agent", dependencies: [], expectedOutputs: ["src/behavior.ts"], validationCommands: ["npm test"], contract: { version: 1, kind: "implementation", requirements: ["FR-1: Behavior"], acceptanceCriteria: ["Behavior verified"], constraints: [], references: ["docs/PRD.md"] } }) + '\n```\n';
+}
+
+test("existing project authoring enforces decomposition and records feature fingerprints", async (t) => {
+  const repo = fixture(t);
+  let repaired = false;
+  const options: LauncherOptions = { env: { FORGE_RUN_WITH: "copilot" }, dependencies: { runLogged: async (_cmd, args) => {
+    assert.match(args[1]!, /Decomposition is part of PRD authoring/);
+    write(repo, "docs/PRD.md", validPrd() + "## Phase 2: Next\n## Phase 3: Last\n");
+    if (repaired) {
+      write(repo, "docs/product-vision.md", "# Vision\n## 14. Features\n| # | Feature | File | Dependencies |\n| 1 | Behavior | features/behavior.md | None |\n");
+      write(repo, "docs/features/behavior.md", validPrd());
+    }
+    return { code: 0, stdout: "", stderr: "" };
+  } } };
+  await assert.rejects(runDraftExistingPrd(repo, options), /PRD authoring validation failed/);
+  assert.equal(readAuthoringState(repo).stages.prd?.status, "failed");
+  repaired = true;
+  assert.equal(await runDraftExistingPrd(repo, options), 0);
+  assert.ok(readAuthoringState(repo).stages.prd?.outputs.includes("docs/features/behavior.md"));
+  write(repo, "docs/features/behavior.md", "");
+  assert.equal(await runResume({ repo, nonInteractive: true, ...stub }), 1);
+  assert.equal(readAuthoringState(repo).stages.prd?.status, "failed");
+});
+
+test("existing complete markers cannot bypass missing decomposition through team generation or draft reuse", async (t) => {
+  const repo = fixture(t);
+  write(repo, "docs/PRD.md", validPrd() + "## Phase 2: Next\n## Phase 3: Last\n");
+  writeAuthoringJson(path.join(repo, "docs/authoring-state.json"), { version: 1, stages: { prd: { status: "complete", inputFingerprint: "old", outputs: ["docs/PRD.md"] } } });
+  assert.equal(await runDraftTeam(repo, false, stub), 1);
+  let invoked = false;
+  assert.equal(await runDraftExistingPrd(repo, { env: { FORGE_RUN_WITH: "copilot" }, dependencies: { runLogged: async () => {
+    invoked = true;
+    write(repo, "docs/product-vision.md", "# Vision\n## 14. Features\n| # | Feature | File | Dependencies |\n| 1 | Behavior | features/behavior.md | None |\n");
+    write(repo, "docs/features/behavior.md", validPrd());
+    return { code: 0, stdout: "", stderr: "" };
+  } } }), 0);
+  assert.equal(invoked, true);
+});
+
+test("failed feature contracts can be repaired in place without rewriting the original PRD", async (t) => {
+  const repo = fixture(t);
+  const original = validPrd();
+  write(repo, "docs/PRD.md", original);
+  let repair = false;
+  const options: LauncherOptions = { env: { FORGE_RUN_WITH: "copilot" }, dependencies: { runLogged: async (_cmd, args) => {
+    assert.doesNotMatch(args[1]!, /repair its task contracts/);
+    if (repair) assert.match(args[1]!, /Repair the failed feature documents in place: docs\/features\/new.md/);
+    write(repo, "docs/features/new.md", repair ? validPrd("NEW-1") : "# Incomplete feature\n");
+    return { code: 0, stdout: "", stderr: "" };
+  } } };
+  await assert.rejects(runFeaturePrd(repo, "new behavior", options), /No valid structured tasks/);
+  assert.deepEqual(readAuthoringState(repo).stages.prd?.outputs, ["docs/features/new.md"]);
+  repair = true;
+  assert.equal(await runFeaturePrd(repo, "new behavior", options), 0);
+  assert.equal(readAuthoringState(repo).stages.prd?.status, "complete");
+  assert.equal(fs.readFileSync(path.join(repo, "docs/PRD.md"), "utf8"), original);
+});
 
 test("authoring config persists independent models and clearing restores inheritance", (t) => {
   const repo = fixture(t);
@@ -278,7 +338,7 @@ test("PRD sessions use independent model argv and repo paths concurrently", asyn
       await new Promise((resolve) => setTimeout(resolve, repo === a ? 5 : 1));
       assert.equal(opts.cwd, repo);
       calls.push({ repo, model: args[args.indexOf("--model") + 1] });
-      write(repo, "docs/PRD.md", `# ${model}`);
+      write(repo, "docs/PRD.md", validPrd(model));
       return { code: 0, stdout: "", stderr: "" };
     } },
   });
@@ -319,7 +379,7 @@ test("feature increment dispatches PRD, team and skills with distinct models bef
       }
       const message = args[1]!;
       calls.push({ command: message.split(" ")[0]!, model: args[args.indexOf("--model") + 1] });
-      if (message.startsWith("/forge-build-feature-prd")) write(repo, "docs/features/new-feature.md", "# New Feature\n\n## Functional Requirements\n- FR-1: New behavior.\n");
+      if (message.startsWith("/forge-build-feature-prd")) write(repo, "docs/features/new-feature.md", validPrd("FEATURE-1"));
       else if (message.startsWith("/forge-build-agent-team")) {
         write(repo, ".github/agents/project-agent.md", '---\nname: project-agent\ndescription: "Project agent"\n---\n');
         writeAuthoringJson(path.join(repo, "docs/SKILL-CANDIDATES.json"), candidates);

@@ -146,6 +146,15 @@ Run immediately after the user confirms the PRD is ready and it has been saved t
 3. If the PRD does not qualify, retain the monolithic `docs/PRD.md` and report that decomposition was not required.
 4. Report the outcome either way so the user knows which layout downstream stages will consume.
 
+Decomposition is part of PRD authoring, including existing-repository and headless
+invocations. "Authoring only" or "do not start the workflow engine" excludes team
+generation and implementation, not this step. Existing vision/architecture/roadmap
+documents are authoritative inputs, not an exemption from the canonical layout.
+Do not invent an Open Questions assumption that waives this mandatory threshold.
+Run the read-only `validate-prd` command described in `references/task-contract.md`
+after decomposition (or after saving a small monolithic plan). Fix errors before
+reporting success; a non-empty PRD or parseable JSON is not sufficient.
+
 The qualification threshold is unchanged (15+ functional requirements or 3+ implementation phases). `forge-decompose-prd` remains independently invokable for older PRDs, PRDs modified after generation, or documents the user explicitly wants to decompose below the automatic threshold.
 
 ---
@@ -159,6 +168,9 @@ After writing the PRD, run this self-check before presenting it to the user:
 - [ ] Security & Privacy section addresses data handling even if no sensitive data is involved
 - [ ] Non-functional requirements include performance, security, and accessibility
 - [ ] Implementation phases are ordered and each phase is independently shippable
+- [ ] Each phase contains execution-sized tasks, with acceptance-to-check mappings and concrete output/test files; it is not one task per roadmap increment
+- [ ] UI, domain, infrastructure and documentation checks cover their respective deliverables; human judgments are separate review tasks
+- [ ] The deterministic `validate-prd` gate passes without `--allow-legacy`
 - [ ] Open Questions are populated with every unresolved decision, each with a default assumption
 - [ ] The document references any existing project docs rather than duplicating them
 - [ ] The decomposition check ran after confirmation: qualifying PRDs produced `docs/product-vision.md` + `docs/features/*.md`; non-qualifying PRDs remain monolithic and the outcome was reported

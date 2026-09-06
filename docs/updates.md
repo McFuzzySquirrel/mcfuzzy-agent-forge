@@ -4,6 +4,33 @@ Detailed release and change notes for MyForge.
 
 ---
 
+## September 2026 - v3.55
+
+### Enforced PRD readiness and execution-sized task authoring
+
+- New and existing-repository PRD authoring share the mandatory decomposition
+  threshold: 15+ functional requirements or 3+ phases. Existing domain documents
+  and "authoring only" instructions do not waive the canonical vision/features
+  layout. Headless decomposition does not require a second opt-in.
+- A read-only adapter validator checks task contracts before team generation:
+  planned owners, concrete output files, reference existence/limits, duplicate
+  IDs, unknown dependencies, empty phases and task/feature cycles. The launcher
+  uses its bundled validator and records the resulting document fingerprints.
+- Draft reuse, resume and team generation revalidate existing artifacts; stale
+  completion markers cannot bypass missing decomposition. Invalid output leaves
+  authoring failed with repair guidance. Additive feature validation preserves
+  the original PRD and resolves prerequisites from existing structured tasks.
+- Task guidance now includes work-package split examples, a task/check review
+  table, surface-specific tests, zero-test safeguards, explicit prerequisites,
+  separate broad evaluation tasks and human-review gates. Granularity and test
+  relevance remain author/reviewer judgments, not claimed machine guarantees.
+- The launcher ships `tsx` as a runtime dependency for bundled validation;
+  target projects do not need adapter dependencies installed for this gate.
+- Added ADR-043. Existing target projects are not rewritten automatically;
+  legacy checkbox inspection remains available with `--allow-legacy`.
+
+---
+
 ## September 2026 - v3.54
 
 ### Structured task contracts and evidence-based execution

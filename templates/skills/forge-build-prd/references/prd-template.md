@@ -140,6 +140,12 @@ Break the work into ordered phases using `forge-task` JSON blocks from
 dependencies, requirement meaning, criteria, constraints, references, outputs,
 and validation commands. No checkbox-only tasks in new plans.
 
+Keep phases as delivery milestones, with multiple execution-sized tasks where
+needed. Include a planning table before the phase headings mapping each task's
+outcome, owner, prerequisites, output/test files, acceptance checks and exclusions.
+Separate expensive integration/evaluation and human acceptance gates from local
+implementation tests. See the shared contract's split examples.
+
 ### Phase 1: [Name]
 [One structured block per bounded outcome.]
 

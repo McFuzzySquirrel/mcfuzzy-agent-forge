@@ -16,6 +16,7 @@ import { authoringArgv, inventoryForRunner, readAuthoringInventory, refreshAutho
 import { authoringReadiness, authoringStageIsCurrent, fingerprintFiles, readAuthoringState, readSkillCandidates, saveAuthoringStage, stageInputFingerprint, type AuthoringStageState } from "./authoring-state.ts";
 import { selectHarnessRoot, selectProjectHarnessRoot, type HarnessRoot } from "./repo-metadata.ts";
 import { resolveResources } from "./resources.ts";
+import { validateAuthoredPrd } from "./prd-validation.ts";
 
 const nodeRequire = createRequire(import.meta.url);
 
@@ -460,7 +461,9 @@ const PRD_HEADLESS_MSG =
   "Use docs/IDEA.md as the project idea. Headless mode: auto-proceed with default assumptions and approve the PRD. After drafting, run a PRD gap check: every major component must have clear acceptance criteria, a defined tech stack, non-functional requirements (performance, security, privacy), and implementation phases; fill any gaps before approving. Then evaluate the automatic decomposition threshold: 15 or more functional requirements or 3 or more implementation phases. If the PRD qualifies, automatically invoke forge-decompose-prd and verify docs/product-vision.md plus docs/features/*.md; otherwise keep the monolithic docs/PRD.md and report that decomposition was not required. Do not generate agents or project skills, compile a manifest, or start execution; the launcher invokes those later stages separately.";
 
 const EXISTING_PROJECT_PRD_MSG =
-  "Author the project's PRD using forge-build-prd authoring semantics, not an auto-build or implementation workflow. This is an existing repository: inspect source code, documentation, tests, package manifests, configuration, and git history as context; infer the product purpose and current capabilities. Produce docs/PRD.md as a project PRD. Headless mode: ask no questions and use explicit assumptions. Include functional requirements with acceptance criteria, technology stack, non-functional requirements (performance, security, privacy), constraints, and implementation phases. Do not implement code, generate agents, compile a manifest, or run the workflow.";
+  "Author the project's PRD using forge-build-prd authoring semantics. This is an existing repository: inspect source code, documentation, tests, package manifests, configuration, and git history as context; infer the product purpose and current capabilities. Produce docs/PRD.md as a project PRD. Headless mode: ask no questions and use explicit assumptions. Include functional requirements with acceptance criteria, technology stack, non-functional requirements (performance, security, privacy), constraints, and implementation phases. Evaluate the automatic decomposition threshold: 15 or more functional requirements or 3 or more implementation phases. If qualified, automatically invoke forge-decompose-prd and verify docs/product-vision.md plus docs/features/*.md. Decomposition is part of PRD authoring, not implementation; existing domain documentation is source material, not an exemption or substitute for the canonical layout. Do not implement code, generate agents or skills, compile a manifest, or start the workflow engine.";
+
+const TASK_AUTHORING_CHECK = " Author bounded executable tasks inside Phase N headings, not one task per roadmap increment. Separate independently testable behaviors and ownership boundaries; retain atomic safety invariants together. Name concrete output files and validation commands covering every touched surface, including UI and infrastructure. Separate human rubric scores and sign-off into dependent human-review tasks. References and outputs must not overlap. Review each task against forge-build-prd/references/task-contract.md.";
 
 /**
  * In-harness command to queue when the launcher opens the CLI (or prints
@@ -543,12 +546,9 @@ async function validateAuthoringOutputs(stage: AuthoringStage, skill: string, be
       if (!added.length || added.some((file) => !fs.readFileSync(path.join(dir, file), "utf8").trim())) {
         throw new Error("Feature PRD authoring exited without creating a new non-empty docs/features/*.md file.");
       }
-      return added.map((file) => `docs/features/${file}`);
+      return validateAuthoredPrd(state.repoDir, { featureFiles: added.map((file) => `docs/features/${file}`) });
     }
-    const outputs = ["docs/PRD.md", "docs/product-vision.md"].filter((file) =>
-      fs.existsSync(path.join(state.repoDir, file)) && fs.readFileSync(path.join(state.repoDir, file), "utf8").trim());
-    if (!outputs.length) throw new Error("PRD authoring exited without a non-empty PRD.");
-    return outputs;
+    return validateAuthoredPrd(state.repoDir);
   }
   if (stage === "team") {
     if (!hasGeneratedTeam()) throw new Error("Team authoring exited without generated agents.");
@@ -588,6 +588,9 @@ async function runSkillHeadless(msg: string, opts: LauncherOptions): Promise<boo
   opts = { ...state.options, ...opts };
   const skillName = skillNameFromMsg(msg);
   const stage = authoringStageForSkill(skillName);
+  if (stage === "prd" && !msg.includes(TASK_AUTHORING_CHECK)) msg += TASK_AUTHORING_CHECK;
+  if (stage === "prd" && skillName !== "forge-build-feature-prd") msg += " If a PRD already exists, repair its task contracts and missing decomposition without discarding accepted requirements or renumbering completed work; preserve the original PRD during decomposition.";
+  if (stage === "team" && hasPrd() && !await existingPrdIsValid()) return false;
   const runner = headlessRunner();
   if (stage && !state.options.nonInteractive && !opts.dryRun && runner !== "stub") {
     const existing = selectAuthoringModel(state.repoDir, stage, state.options.models, state.env);
@@ -635,6 +638,7 @@ async function runSkillHeadless(msg: string, opts: LauncherOptions): Promise<boo
 
   const features = path.join(state.repoDir, "docs", "features");
   const beforeFeatures = new Set(fs.existsSync(features) ? fs.readdirSync(features) : []);
+  if (skillName === "forge-build-feature-prd") for (const file of failedFeatureOutputs()) beforeFeatures.delete(path.basename(file));
   const beforeSkills = stage === "team" ? fingerprintFiles(state.repoDir, [path.join(harnessRootDir(), "skills")]) : undefined;
   const compilerOutputs = ["docs/EXECUTION-MANIFEST.json", "docs/agent-responsibility-matrix.md", "docs/ENGINE-STATE.json", "docs/PROGRESS.md"];
   const beforeCompilerOutputs = stage ? fingerprintFiles(state.repoDir, compilerOutputs) : undefined;
@@ -676,6 +680,9 @@ async function runSkillHeadless(msg: string, opts: LauncherOptions): Promise<boo
     if (debugMode()) printLogTail(runLogFile(), 40);
     return true;
   } catch (error) {
+    if (outcome && skillName === "forge-build-feature-prd" && fs.existsSync(features)) {
+      outcome.outputs = fs.readdirSync(features).filter((file) => file.endsWith(".md") && !beforeFeatures.has(file)).map((file) => `docs/features/${file}`);
+    }
     if (stage && outcome) saveAuthoringStage(state.repoDir, stage, {
       ...outcome, status: "failed", completedAt: new Date().toISOString(), error: error instanceof Error ? error.message : String(error),
     });
@@ -708,6 +715,8 @@ async function runStubSkill(msg: string, opts: LauncherOptions): Promise<boolean
 
   if (noop) return true;
 
+  const stubTask = (id: string, reference = "docs/PRD.md") => ["```forge-task", JSON.stringify({ id, title: "Implement stub behavior", description: "Write a stub result for the test harness", ownerAgent: "stub-project-agent", dependencies: [], expectedOutputs: ["src/stub.txt"], validationCommands: ['node -e "process.exit(0)"'], contract: { version: 1, kind: "implementation", requirements: ["FR-1: Stub behavior"], acceptanceCriteria: ["Stub result exists"], constraints: [], references: [reference] } }), "```"].join("\n");
+
   if (skillName.includes("forge-auto-build-prd") || skillName.includes("forge-build-prd")) {
     const prd = path.join(state.repoDir, "docs", "PRD.md");
     fs.mkdirSync(path.dirname(prd), { recursive: true });
@@ -723,7 +732,7 @@ async function runStubSkill(msg: string, opts: LauncherOptions): Promise<boolean
       "- FR-1: stub requirement",
       "",
       "## Phase 1: Stub",
-      "- Implement the stub requirement.",
+      stubTask("STUB-1"),
       "",
       "## Acceptance Criteria",
       "- AC-1: stub",
@@ -797,7 +806,7 @@ async function runStubSkill(msg: string, opts: LauncherOptions): Promise<boolean
   if (skillName.includes("forge-build-feature-prd")) {
     const feature = path.join(state.repoDir, "docs", "features", "stub-feature.md");
     fs.mkdirSync(path.dirname(feature), { recursive: true });
-    fs.writeFileSync(feature, "# Stub Feature\n\n## Functional Requirements\n- FR-1: implement the stub feature.\n");
+    fs.writeFileSync(feature, "# Stub Feature\n\n## Phase 1: Stub feature\n" + stubTask("STUB-FEATURE-1", "docs/features/stub-feature.md") + "\n");
     fs.appendFileSync(logFile, `[stub] wrote ${feature}\n`);
     return true;
   }
@@ -1957,7 +1966,7 @@ async function resumeTeamStep(opts: ResumeOptions): Promise<boolean> {
 async function runDraftPrdInternal(repoDir: string): Promise<number> {
   setupStateForRepo(repoDir);
   const prior = readAuthoringState(repoDir).stages.prd;
-  if (hasPrd() && (!prior || prior.status === "complete")) {
+  if (hasPrd() && (!prior || prior.status === "complete") && await existingPrdIsValid()) {
     out("PRD already exists.");
     return 0;
   }
@@ -1966,7 +1975,7 @@ async function runDraftPrdInternal(repoDir: string): Promise<number> {
     ? "Use docs/IDEA.md as the project idea."
     : "This is an existing repository with no IDEA.md. Inspect the existing source code, docs, tests, package manifests, and git history as the project context; infer the product purpose and ask no questions.";
   out(fs.existsSync(ideaPath) ? "Auto-drafting the PRD from docs/IDEA.md (headless) …" : "Auto-drafting a context-aware PRD from the existing repository (headless) …");
-  const ran = await runSkillHeadless(`/forge-auto-build-prd ${context} ${PRD_HEADLESS_MSG}`, { nonInteractive: true });
+  const ran = await runSkillHeadless(`/forge-auto-build-prd ${context} ${PRD_HEADLESS_MSG.replace("Use docs/IDEA.md as the project idea. ", "")}`, { nonInteractive: true });
   if (!ran) return 1;
   if (state.options.dryRun) return 0;
   await draftCommit("docs: add auto-drafted PRD");
@@ -1979,11 +1988,25 @@ async function runDraftPrdInternal(repoDir: string): Promise<number> {
   return 1;
 }
 
+async function existingPrdIsValid(): Promise<boolean> {
+  const prior = readAuthoringState(state.repoDir).stages.prd;
+  const featureFiles = prior?.outputs.length && prior.outputs.every((file) => file.startsWith("docs/features/")) ? prior.outputs : undefined;
+  try {
+    await validateAuthoredPrd(state.repoDir, { allowLegacy: !prior, featureFiles });
+    return true;
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    warn(message);
+    saveAuthoringStage(state.repoDir, "prd", { ...prior, status: "failed", inputFingerprint: stageInputFingerprint(state.repoDir, "prd", harnessRootDir()), outputs: prior?.outputs ?? [], error: message });
+    return false;
+  }
+}
+
 /** Authors a project PRD from an existing repository without an IDEA.md. */
 async function runDraftExistingPrdInternal(repoDir: string): Promise<number> {
   setupStateForRepo(repoDir);
   const prior = readAuthoringState(repoDir).stages.prd;
-  if (hasPrd() && (!prior || prior.status === "complete")) { out("PRD already exists."); return 0; }
+  if (hasPrd() && (!prior || prior.status === "complete") && await existingPrdIsValid()) { out("PRD already exists."); return 0; }
   out("Authoring a project PRD from the existing repository (headless) …");
   const skill = "forge-build-prd";
   const ran = await runSkillHeadless(`/${skill} ${EXISTING_PROJECT_PRD_MSG}`, { nonInteractive: true });
@@ -1999,6 +2022,11 @@ async function runDraftExistingPrdInternal(repoDir: string): Promise<number> {
   return 1;
 }
 
+function failedFeatureOutputs(): string[] {
+  const prior = readAuthoringState(state.repoDir).stages.prd;
+  return prior?.status === "failed" && prior.outputs.every((file) => /^docs\/features\/[^/]+\.md$/.test(file)) ? prior.outputs : [];
+}
+
 /** Authors a Feature PRD through the authoring skill; workflow execution is intentionally separate. */
 async function runFeaturePrdInternal(repoDir: string, featurePrompt?: string): Promise<number> {
   setupStateForRepo(repoDir);
@@ -2007,12 +2035,14 @@ async function runFeaturePrdInternal(repoDir: string, featurePrompt?: string): P
   const before = new Set(fs.existsSync(featuresDir)
     ? fs.readdirSync(featuresDir).filter((name) => name.endsWith(".md"))
     : []);
+  const retryFiles = failedFeatureOutputs();
+  for (const file of retryFiles) before.delete(path.basename(file));
   if (!featurePrompt?.trim()) {
     if (prompts.nonInteractive) throw new Error("feature-prd requires --prompt in non-interactive mode");
     featurePrompt = await prompt("What feature should be added?", "");
   }
   if (!featurePrompt.trim()) return 1;
-  const message = `/forge-build-feature-prd I want to add ${featurePrompt.trim()} to this project. Analyze the existing codebase and agent team, then produce a self-contained Feature PRD and save it under docs/features/. Do not modify the original PRD, generate agents or skills, compile a manifest, or start the workflow engine.`;
+  const message = `/forge-build-feature-prd I want to add ${featurePrompt.trim()} to this project. Analyze the existing codebase and agent team, then produce a self-contained Feature PRD and save it under docs/features/. Do not modify the original PRD, generate agents or skills, compile a manifest, or start the workflow engine.` + (retryFiles.length ? ` Repair the failed feature documents in place: ${retryFiles.join(", ")}. Preserve unrelated existing features.` : "");
   const ran = await runSkillHeadless(message, { nonInteractive: true });
   if (state.options.dryRun) return 0;
   if (!ran) {
@@ -2041,12 +2071,9 @@ async function runFeaturePrdInternal(repoDir: string, featurePrompt?: string): P
 async function runFeatureIncrementInternal(repoDir: string, featurePrompt: string | undefined, run = false): Promise<number> {
   setupStateForRepo(repoDir);
   authoringEvent("authoring.started", { operation: "feature-increment", run });
-  const featuresDir = path.join(repoDir, "docs", "features");
-  const beforeFeatures = new Set(fs.existsSync(featuresDir)
-    ? fs.readdirSync(featuresDir).filter((name) => name.endsWith(".md"))
-    : []);
   const featureCode = await runFeaturePrdInternal(repoDir, featurePrompt);
   if (featureCode !== 0) { authoringEvent("authoring.failed", { operation: "feature-increment", stage: "feature-prd", code: featureCode }); return featureCode; }
+  const featureOutputs = readAuthoringState(repoDir).stages.prd?.outputs ?? [];
   authoringEvent("authoring.stage.completed", { operation: "feature-increment", stage: "feature-prd" });
   const teamCode = await runDraftTeamInternal(repoDir, true);
   if (teamCode !== 0) { authoringEvent("authoring.failed", { operation: "feature-increment", stage: "team", code: teamCode }); return teamCode; }
@@ -2062,10 +2089,7 @@ async function runFeatureIncrementInternal(repoDir: string, featurePrompt: strin
     authoringEvent("authoring.completed", { operation: "feature-increment", run: false });
     return 0;
   }
-  const newFeatures = fs.existsSync(featuresDir)
-    ? fs.readdirSync(featuresDir).filter((name) => name.endsWith(".md") && !beforeFeatures.has(name))
-    : [];
-  const code = await engineRunCliForIncrement(repoDir, newFeatures.map((name) => path.basename(name, ".md")));
+  const code = await engineRunCliForIncrement(repoDir, featureOutputs.map((file) => path.basename(file, ".md")));
   authoringEvent(code === 0 ? "authoring.completed" : "authoring.failed", { operation: "feature-increment", run: true, code });
   return code;
 }
@@ -2115,6 +2139,7 @@ export function featureTaskIds(
  */
 async function runDraftTeamInternal(repoDir: string, featureIncrement = false): Promise<number> {
   setupStateForRepo(repoDir);
+  if (hasPrd() && !await existingPrdIsValid()) return 1;
   const legacyTeam = hasGeneratedTeam() && !readAuthoringState(repoDir).stages.team;
   if (hasGeneratedTeam() && !featureIncrement && authoringStageIsCurrent(repoDir, "team", harnessRootDir())) {
     out("Agent team already exists.");
@@ -2393,6 +2418,8 @@ async function runResumeInternal(opts: ResumeOptions = {}): Promise<number> {
   setupStateForRepo(repoDir);
 
   printResumeWhere();
+
+  if (hasPrd() && !await existingPrdIsValid()) return 1;
 
   let go = await resumeIdeaStep(opts);
   if (!go) { resumeSummary(); return 0; }

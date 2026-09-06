@@ -30,7 +30,59 @@ renumber completed work without the user's authorization.
   must create matching specialists and verify ownership against requirements;
   a coordinator is not an implementation owner. Do not guess owners by keywords.
 
-## Format
+## Execution-sized tasks
+
+A delivery phase or feature is a work package, not automatically one executable
+task. Decompose it until every task can be completed, tested, reviewed, and retried
+without reopening the whole feature. Do not target a fixed task count or split
+sentences mechanically. A few related files and one observable behavior are a
+useful default, not a hard cap.
+
+Before writing blocks, make a task table with: ID, observable outcome, owner,
+prerequisite interface, concrete output/test files, acceptance-to-check mapping,
+and exclusions. Keep this review table in the planning document outside phase
+task blocks. It is authoring evidence, not a replacement for the JSON contracts.
+
+Split whenever a task contains independently testable outcomes or unrelated
+ownership boundaries. Examples:
+
+| Work package (too large for one task) | Candidate execution units |
+|---|---|
+| Hosted walking skeleton | Runnable scaffold; balanced posting plus idempotency/concurrency tests; outbox dispatch; revision reconciliation; hosted access/network boundary; CI; telemetry |
+| Invoice processing | Upload quarantine/validation; extraction normalization; field-correction UI and audit; beneficiary mismatch blocking; retention cleanup |
+| Banking capabilities | Registry contract; each supported capability; atomic confirmation and deduplication; stale handling; review UI |
+| Presenter console | Presenter controls; read-only playback; replay capture; reset/deletion; dashboards; fault recovery |
+| Locale parity | Each locale profile; Arabic resources/RTL flows; isolation checks; cost evaluation; separate human review |
+
+Keep atomic safety guarantees together: posting, authorization, revision checks,
+and duplicate-confirmation protection must not be split into unsafe intermediate
+implementations. Extract unrelated infrastructure or presentation work instead.
+Shared foundation interfaces should be explicit prerequisites; do not chain every
+task to the previous task merely because it appears earlier in the document.
+
+Every changed surface needs a check: domain tests for invariants, UI interaction
+tests for views and confirmation flows, configuration/IaC validation for hosting,
+and documentation/evidence checks for release materials. A .NET category filter
+does not validate a React view. Name exact test files in outputs where tests are
+created or modified; directories such as `src/web` are not deliverables.
+
+Commands are planned before code exists, so the prerequisite task must establish
+the test runner and its filtering convention. Require test discovery to find the
+intended tests and fail on zero selected/executed tests. Do not use `echo passed`,
+an unconditional exit-zero command, or a build alone to prove behavioral acceptance.
+During execution use the runner's fail-on-no-tests option or inspect its structured
+test report with a repository validation script; do not assume exit zero proves
+any tests ran. Acceptance criteria must map to named checks, not generic categories.
+
+Keep focused tests with implementation. Put expensive statistical simulations,
+hosted integration, performance matrices, and release-wide evaluation in explicit
+integration/evaluation tasks after their prerequisites, with report files and
+threshold-checking commands. Do not make an early task pass the entire release suite.
+Human rubric scores, native-language approval, and stakeholder judgments belong
+only to dependent human-review tasks. Implementation produces reviewable evidence;
+it cannot claim "native-reviewed" or human-approved before that gate runs.
+
+## JSON format
 
 Place this inside a `### Phase 1: ...` section. Use ordinary JSON, no comments.
 Every field below is required except `timeoutMs`; empty constraints/dependencies
@@ -84,3 +136,22 @@ fields and IDs during decomposition, review, and incremental changes.
 The compiler validates structure, owners, dependencies and required evidence
 fields; it cannot prove that a model chose good boundaries or meaningful tests.
 Human review remains necessary for those judgments.
+
+## Deterministic authoring gate
+
+From the installed `forge-execution-adapter` skill directory, install its tooling
+dependencies if necessary, then run:
+
+```bash
+npm run validate-prd -- /absolute/path/to/project
+```
+
+For an additive feature use `--feature docs/features/new-feature.md` (repeat for
+multiple files). Existing structured source tasks supply external dependency IDs.
+The read-only command needs no generated agents and never runs task commands or
+compiles a manifest. It checks canonical decomposition, task JSON/contracts,
+planned owners, concrete output paths, local reference limits, and dependency IDs
+and cycles. Correct every reported error before declaring authoring complete.
+JSON parsing alone is not this gate. The launcher runs its bundled validator too.
+For legacy inspection only, `--allow-legacy` permits checkbox plans; new authoring
+must not use that flag to bypass contracts or required decomposition.

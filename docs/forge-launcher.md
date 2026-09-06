@@ -985,6 +985,26 @@ decisions still stand - harness selection is step 2, `IDEA.md` is the hand-off
 artifact, and bootstrap is delegated rather than reimplemented.
 ### Existing-repository and feature increment authoring
 
+### PRD readiness gate
+
+New and existing-project authoring use the same decomposition rule: 15+ functional
+requirements or 3+ implementation phases require `docs/product-vision.md` and
+`docs/features/*.md`. Existing domain documents are inputs, not a substitute.
+"Do not start implementation" still permits the required decomposition.
+
+The launcher runs its bundled read-only task validator before recording PRD
+completion, and revalidates before draft reuse, resume and team generation.
+Malformed contracts, reference/output overlap, missing commands or references,
+directory outputs, empty phases and invalid dependency graphs stop the stage.
+The recorded output fingerprint covers the vision and feature files as well as
+the original PRD. Exit zero from the authoring model alone does not mean success.
+
+Repair errors using `draft-prd` or `draft-existing-prd`; use `feature-prd` for an
+additive feature retry. Existing small legacy checkbox plans remain readable,
+but new authoring uses structured contracts. Nothing silently rewrites completed
+tasks or target-project files. See [Task Contracts](task-contracts.md) for the
+standalone validator, migration rules and semantic review limits.
+
 `forge-launcher draft-prd --repo <path>` can author a PRD directly from an
 existing repository; `docs/IDEA.md` is optional. It inspects the repository
 context through the selected harness. For additive work use:

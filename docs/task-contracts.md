@@ -87,6 +87,38 @@ agent files, or state.
 
 ## Authoring and packaging
 
+The launcher validates authored PRDs before marking the stage complete and
+revalidates on draft reuse, resume and team generation. A qualifying project PRD
+must have `docs/product-vision.md` and non-empty `docs/features/*.md` with an exact
+feature dependency table. The threshold is 15+ unique numeric `FR` IDs (including
+ranges) in prose or 3+ `Phase N` headings. Authors must also assess unnumbered
+requirements; the structural counter cannot infer their meaning. Decomposition
+is authoring, even when implementation is prohibited.
+
+Run the same read-only check from the installed adapter directory:
+
+```bash
+npm run validate-prd -- /absolute/path/to/project
+npm run validate-prd -- /absolute/path/to/project --feature docs/features/new.md
+```
+
+It runs no authored validation commands and needs no generated team. Planned
+owner names are checked structurally and against the coordinator denylist; the
+compiler later checks that actual generated specialists exist. The gate rejects
+invalid contracts, empty phases, missing/oversized references, duplicate IDs,
+unknown dependencies and cycles. Output paths must name files (with an extension,
+or `Dockerfile`, `Makefile`, `LICENSE`), not directories. References are limited to
+128 KiB each and 256 KiB total per task. In feature-only mode external dependency
+IDs come from existing structured source blocks, not a potentially stale manifest;
+legacy prerequisites require deliberate migration or a documented interface.
+
+Errors leave the PRD stage failed and block team generation. Repair the documents
+and retry `draft-prd`, `draft-existing-prd`, or `feature-prd` as applicable. Existing
+completion flags are not sufficient evidence. `--allow-legacy` supports inspection
+of existing checkbox plans, but does not waive required decomposition; new
+authoring must use contracts. Installation alone changes no target documents or
+completed task state.
+
 PRD authoring plans specialist names before team generation. Team generation
 creates matching owners and checks their domain fit; it reports a required plan
 correction rather than silently rewriting the plan. PRD/decomposition/feature
@@ -94,7 +126,18 @@ skills share the contract reference. Human quality checks remain necessary for
 task size, requirement coverage, and meaningful tests; structural compilation
 does not replace these judgments.
 
+Use the shared authoring reference's task/check table to review one observable
+outcome per task, actual prerequisites, concrete test files and acceptance-to-check
+mapping. A phase is not one task by default. Keep atomic invariants together;
+split unrelated UI, infrastructure and domain work. Broad statistical/hosted
+evaluation belongs in explicit integration tasks, while rubric scores and native
+language approval belong in human-review tasks. The validator does not prove
+test discovery, semantic requirement coverage or that the chosen boundary is
+small enough; authors and reviewers must assess these explicitly.
+
 The launcher stages the live templates through its existing `prepack` process.
+It includes a runtime `tsx` loader so the bundled validator works before target
+tooling installation, including from paths with spaces on Windows.
 Bootstrap/install the updated templates into target repositories through the
 normal workflow before using contracts; source updates do not patch an already
 bootstrapped engine automatically.

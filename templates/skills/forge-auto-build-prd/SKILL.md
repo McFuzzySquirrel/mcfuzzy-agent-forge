@@ -67,9 +67,9 @@ any of the following is true:
 1. **Echo the idea back** in one or two sentences so the user can confirm you
    understood it.
 2. **Check the repo state:**
-   - Does `docs/PRD.md` already exist? If yes, tell the user the PRD is already
-     there and offer to proceed to team generation (via `forge-launcher resume`
-     or `/forge-build-agent-team`) instead.
+   - Does `docs/PRD.md` already exist? Evaluate its decomposition threshold and
+     validate its applicable task contracts before offering team generation.
+     A prior completion marker or non-empty file is not proof of readiness.
    - Does `docs/product-vision.md` with `docs/features/*.md` exist? If yes,
      tell the user a decomposed PRD is already present and offer to proceed to
      team generation instead.
@@ -87,8 +87,11 @@ any of the following is true:
 
 1. **Echo the idea** (from `docs/IDEA.md` if the invocation references it, or
    from the invocation text).
-2. **Check the repo state** as above; if a PRD already exists, stop and report
-   that team generation is the correct next step instead.
+2. **Check the repo state** as above. If an existing PRD passes validation, report
+  team generation as the next step. If this is an authorized retry, delegate
+  targeted contract repair or missing decomposition without discarding accepted
+  requirements. Preserve completed task IDs and request explicit migration when
+  changing completed work; never silently replace a legacy plan.
 3. **Skip the confirmation pause and the clarifying-question interview.** Do
    not stop for answers. Build the PRD from `docs/IDEA.md` plus anything in
    `docs/research/`, stating a default assumption for every unknown and listing
@@ -127,6 +130,12 @@ explicit migration decision, not silent conversion. Headless PRD approval never
 satisfies an implementation-time human-review gate.
 
 When `forge-build-prd` finishes, verify the state:
+
+Run the sibling adapter's read-only `validate-prd` command as described in
+`forge-build-prd/references/task-contract.md`. Do not substitute JSON parsing or
+file existence for this gate. Review the task table for bounded outcomes, actual
+prerequisites, acceptance-to-check coverage and separate human gates. A failed
+check is an incomplete PRD stage, not permission to continue to team generation.
 
 - **Always:** `docs/PRD.md` exists and contains at minimum Overview, Goals,
   Functional Requirements, Implementation Phases, and Acceptance Criteria.

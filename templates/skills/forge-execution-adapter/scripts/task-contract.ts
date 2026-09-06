@@ -41,7 +41,7 @@ export function validateTaskContract(task: ManifestTask): void {
   }
 }
 
-export function parseTaskBlocks(body: string, agents: AgentDescriptor[]): ManifestTask[] | undefined {
+export function parseTaskBlocks(body: string, agents: AgentDescriptor[], options: { plannedOwners?: boolean } = {}): ManifestTask[] | undefined {
   if (!body.includes("```forge-task")) return undefined;
   const tasks: ManifestTask[] = [];
   const remainder = body.replace(/```forge-task\s*\r?\n([\s\S]*?)```/g, (_block, json: string) => {
@@ -64,7 +64,7 @@ export function parseTaskBlocks(body: string, agents: AgentDescriptor[]): Manife
       ...(value.timeoutMs !== undefined ? { timeoutMs: value.timeoutMs as number } : {}),
     };
     validateTaskContract(task);
-    if (task.contract!.kind === "implementation" && !agents.some((agent) => agent.name === task.ownerAgent && !["forge-team-builder", "project-orchestrator", "workflow-orchestrator"].includes(agent.name))) {
+    if (task.contract!.kind === "implementation" && (["forge-team-builder", "project-orchestrator", "workflow-orchestrator"].includes(task.ownerAgent!.toLowerCase()) || (!options.plannedOwners && !agents.some((agent) => agent.name === task.ownerAgent)))) {
       throw new Error(`Task '${task.id}' requires generated implementation owner '${task.ownerAgent}'.`);
     }
     tasks.push(task);

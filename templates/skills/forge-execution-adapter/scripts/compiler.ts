@@ -443,7 +443,7 @@ export interface FeatureNode {
  * Parse the feature dependency table from the product vision (## 14. Features).
  * Falls back to the sorted feature file list when no table is found.
  */
-function parseFeatureGraph(vision: string, featurePaths: string[], repoRoot: string, docsDir: string, warnings: string[]): FeatureNode[] {
+export function parseFeatureGraph(vision: string, featurePaths: string[], repoRoot: string, docsDir: string, warnings: string[]): FeatureNode[] {
   const sections = parseHeadings(vision);
   const featuresSection = sections.find((section) => /^14\.\s*features/i.test(section.title));
 

@@ -39,6 +39,13 @@ The CLI auto-detects the repository root, so it can be run from inside the skill
 
 ### Task granularity
 
+Before team generation, run `npm run validate-prd -- /absolute/path/to/project`
+from this skill directory. This read-only authoring gate validates decomposition,
+planned task contracts, concrete outputs, references and dependencies without
+requiring generated agents or running implementation commands. For additive
+features append `--feature docs/features/<name>.md`. Compilation still validates
+actual generated owners. See the shared contract for task-size and test reviews.
+
 New plans use fenced `forge-task` JSON objects inside phase headings. Follow
 [the shared authoring contract](../forge-build-prd/references/task-contract.md).
 Compilation preserves these tasks without heuristic splitting, requires explicit

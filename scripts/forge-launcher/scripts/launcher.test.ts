@@ -545,7 +545,8 @@ test("auto-draft PRD failure is diagnosed with log tail and no commit", async ()
   assert.equal(code, 1, out);
   const repo = path.join(parent, "draft-fail-app");
   assert.ok(!fs.existsSync(path.join(repo, "docs", "PRD.md")), "no PRD should exist");
-  assert.ok(out.includes("PRD authoring exited without a non-empty PRD"));
+  assert.ok(out.includes("PRD authoring validation failed"), out);
+  assert.ok(out.includes("Missing docs/PRD.md"), out);
   assert.ok(out.includes("forge-launcher draft-prd"));
   assert.ok(out.includes("[stub] invoking forge-auto-build-prd"));
   // nothing was committed beyond the bootstrap commit

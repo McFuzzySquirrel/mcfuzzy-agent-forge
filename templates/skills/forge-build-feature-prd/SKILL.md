@@ -75,6 +75,13 @@ requirements, acceptance criteria, constraints, references, outputs and real
 test commands; separate human review from agent preparation. Do not infer task
 ownership from wording alone.
 
+Apply the shared execution-sized-task review and include its task/check table.
+Features can contain many tasks: split independent behaviors and ownership
+boundaries, not atomic safety invariants. Validate UI work with UI checks and
+keep human rubric scores out of implementation completion. Run the adapter's
+`validate-prd -- <repo-root> --feature docs/features/<name>.md` npm command
+before handoff; unknown prerequisite IDs and invalid contracts must be repaired.
+
 Load `references/feature-prd-template.md` for the full structure. Use information from Steps 0–3. Where unspecified, state a reasonable default and mark it in Open Questions.
 
 > Adapt depth to the feature - a small enhancement needs less detail than a major new subsystem. Keep all section headings.

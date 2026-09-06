@@ -83,6 +83,11 @@ Feature 2 + Feature 3 → Feature 4
 
 Ask: "Does this grouping make sense? Should features be merged or split? Are dependencies correct?"
 
+When invoked by `forge-build-prd` after the automatic threshold check, or in
+headless mode, present the plan but do not wait for another opt-in. Decomposition
+has already been authorized as part of PRD authoring. Record assumptions and
+continue; existing domain documents do not substitute for the canonical files.
+
 ### Step 4: Write the Product Vision Document
 
 Create `docs/product-vision.md`. Load `references/product-vision-template.md` for the full structure. Extract content from the original PRD's cross-cutting sections.
@@ -96,6 +101,13 @@ gates. Do not compress a complete task back to a topic bullet. Update explicit
 dependency IDs when a task is deliberately split, and verify every source
 requirement remains covered. Feature dependency names must match complete
 feature-table names exactly; enumerate dependencies instead of "all features".
+
+Do not copy a roadmap-sized task unchanged merely to preserve its shape. Apply
+the execution-sized-task review: split independent outcomes in the feature docs,
+record parent-to-child traceability, and retain the original PRD unchanged.
+Do not renumber completed work; report the migration required when it is involved.
+Keep tests with each behavior, put broad evaluation in phase gates, and place
+human acceptance only in dependent human-review tasks.
 
 For each feature, create `docs/features/{feature-name}.md`. Load `references/feature-document-template.md` for the full structure. Map original PRD content:
 - User stories → re-ID with feature prefix (`AUTH-US-01`)
@@ -117,6 +129,11 @@ Run this checklist before finalizing:
 - [ ] Each feature is independently implementable given declared dependencies
 
 If any checkbox fails, fix the issue before proceeding.
+
+Run the read-only `validate-prd` gate from the sibling execution adapter before
+reporting completion. Feature tables must list every emitted feature file and
+use exact dependency names. A collection of files without valid task contracts
+and dependency wiring is not a completed decomposition.
 
 ### Step 7: Present the Result
 

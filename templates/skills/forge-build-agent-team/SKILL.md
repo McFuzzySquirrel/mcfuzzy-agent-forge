@@ -30,6 +30,13 @@ requirements, non-functional requirements, phases, testing, deployment, and
 cross-cutting concerns. In feature mode, read all affected existing agents and
 preserve unaffected files byte-for-byte.
 
+Before generating agents, require the PRD's canonical decomposition when it
+qualifies and run the adapter's read-only authoring validator. Review the task
+table from `forge-build-prd/references/task-contract.md`; report authoring repairs
+when a task bundles a roadmap increment, crosses unrelated ownership boundaries,
+omits tests for a changed surface, or embeds human acceptance. Do not compensate
+by inventing an all-purpose specialist for an oversized task.
+
 ### Step 2: Define non-overlapping agents
 
 Read the structured `forge-task` blocks in the planning documents. Generate
