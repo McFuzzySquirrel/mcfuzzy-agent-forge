@@ -16,6 +16,7 @@ import {
 } from "./types.ts";
 import { OpenCodeAdapter } from "./harness/opencode-adapter.ts";
 import { CopilotAdapter } from "./harness/copilot-adapter.ts";
+import { ClaudeAdapter } from "./harness/claude-adapter.ts";
 import { OpenAIAdapter } from "./harness/openai-adapter.ts";
 import { StubAdapter } from "./harness/stub-adapter.ts";
 
@@ -25,7 +26,7 @@ function usage(): never {
   console.log(`forge-workflow-engine
 
 Usage:
-  npm run workflow-engine -- run     [--repo <path>] [--harness opencode|copilot|openai|stub]
+  npm run workflow-engine -- run     [--repo <path>] [--harness opencode|copilot|claude|openai|stub]
                                      [--max-retries <n>] [--retry-delay-ms <ms>] [--heartbeat-ms <ms>] [--concurrency <n>] [--task-timeout-ms <ms>] [--yes]
                                      [--allow-noop] [--run-validation]
                                      [--auto-commit|--no-auto-commit] [--commit-message-template <tmpl>]
@@ -33,7 +34,7 @@ Usage:
                                      [--viz [port]] [--no-open]
                                      [--keep-alive] [--keep-alive-port <port>] [--attach <url>] [--no-keep-alive]
   npm run workflow-engine -- status  [--repo <path>]
-  npm run workflow-engine -- replay  <task-id> [--repo <path>] [--harness opencode|copilot|openai|stub]
+  npm run workflow-engine -- replay  <task-id> [--repo <path>] [--harness opencode|copilot|claude|openai|stub]
   npm run workflow-engine -- pause   [--repo <path>]
   npm run workflow-engine -- stop    [--repo <path>]
   npm run workflow-engine -- viz     [--repo <path>] [--port <port>] [--no-open]
@@ -65,6 +66,8 @@ Pause & stop:
   OPENCODE_EXTRA_FLAGS   Extra flags passed to opencode run
   COPILOT_BIN            Path to copilot binary (default: copilot)
   COPILOT_EXTRA_FLAGS    Extra flags passed to copilot -p (e.g. "--model gpt-4o")
+  CLAUDE_BIN             Path to claude binary (default: claude)
+  CLAUDE_EXTRA_FLAGS     Extra flags passed to claude -p (e.g. "--model opus")
   OPENAI_API_KEY         Required for --harness openai
   OPENAI_BASE_URL        OpenAI API base URL (default: https://api.openai.com/v1)
   OPENAI_MODEL           Transport default below task/agent models (default: gpt-4o)
@@ -139,7 +142,7 @@ function harnessNameFor(args: string[], repoRoot: string): string {
   }
   if (!("harness" in config)) return "opencode";
   if (typeof config.harness !== "string" || !config.harness.trim()) {
-    throw new Error(`Invalid engine harness in ${configPath}. Select opencode, copilot, openai, or stub.`);
+    throw new Error(`Invalid engine harness in ${configPath}. Select opencode, copilot, claude, openai, or stub.`);
   }
   return config.harness;
 }
@@ -148,12 +151,13 @@ function resolveHarness(name: string | undefined, attachUrl?: string): HarnessAd
   switch (name ?? "opencode") {
     case "opencode": return new OpenCodeAdapter({ attachUrl });
     case "copilot": return new CopilotAdapter();
+    case "claude": return new ClaudeAdapter();
     case "openai": return new OpenAIAdapter();
     case "stub": return new StubAdapter();
     case "flowforge-kernel":
-      throw new Error("The flowforge-kernel harness is retired. Select opencode or copilot for native repository execution (openai supports explicit text tasks only), and update docs/engine-config.json or FORGE_ENGINE_HARNESS. Existing .workforce artifacts are preserved.");
+      throw new Error("The flowforge-kernel harness is retired. Select opencode, copilot, or claude for native repository execution (openai supports explicit text tasks only), and update docs/engine-config.json or FORGE_ENGINE_HARNESS. Existing .workforce artifacts are preserved.");
     default:
-      console.error(`Unknown harness: '${name}'. Choose opencode, copilot, openai, or stub.`);
+      console.error(`Unknown harness: '${name}'. Choose opencode, copilot, claude, openai, or stub.`);
       process.exit(1);
   }
 }

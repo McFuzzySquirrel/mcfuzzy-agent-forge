@@ -5,6 +5,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import type { AgentDescriptor, HarnessAdapter, ManifestTask } from "./types.ts";
 import { assertTaskCapabilities, prepareTaskRequest } from "./request.ts";
+import { ClaudeAdapter } from "./harness/claude-adapter.ts";
 import { CopilotAdapter } from "./harness/copilot-adapter.ts";
 import { OpenCodeAdapter } from "./harness/opencode-adapter.ts";
 import { OpenAIAdapter } from "./harness/openai-adapter.ts";
@@ -23,7 +24,7 @@ const task: ManifestTask = {
   approvalRequired: false, sourceLines: [], requiredCapabilities: ["text"],
 };
 
-for (const transport of ["copilot", "opencode", "openai", "stub"] as const) {
+for (const transport of ["copilot", "opencode", "claude", "openai", "stub"] as const) {
   test(`${transport} preserves normalized model precedence and task semantics`, async () => {
     const root = mkdtempSync(join(tmpdir(), "forge-conformance "));
     const originalEnv = { ...process.env };
@@ -31,11 +32,17 @@ for (const transport of ["copilot", "opencode", "openai", "stub"] as const) {
     const argsFile = join(root, "args.json");
     let wire: { model: string; messages: Array<{ content: string }> } | undefined;
     try {
-      const bin = makeNodeShim(root, "record", `require("fs").writeFileSync(${JSON.stringify(argsFile)}, JSON.stringify(process.argv.slice(2)));`);
+      const successEnvelope = JSON.stringify({
+        type: "result", subtype: "success", is_error: false,
+        result: "Substantive completed text response.", permission_denials: [],
+      });
+      const bin = makeNodeShim(root, "record", `require("fs").writeFileSync(${JSON.stringify(argsFile)}, JSON.stringify(process.argv.slice(2)));\nprocess.stdout.write(${JSON.stringify(successEnvelope)});`);
       process.env.COPILOT_BIN = bin;
       process.env.OPENCODE_BIN = bin;
+      process.env.CLAUDE_BIN = bin;
       process.env.COPILOT_EXTRA_FLAGS = "--model provider/transport-model";
       process.env.OPENCODE_EXTRA_FLAGS = "--model provider/transport-model";
+      process.env.CLAUDE_EXTRA_FLAGS = "--model provider/transport-model";
       process.env.OPENAI_API_KEY = "fixture-key";
       process.env.OPENAI_MODEL = "provider/transport-model";
       delete process.env.STUB_FAIL_TASK_IDS;
@@ -46,7 +53,8 @@ for (const transport of ["copilot", "opencode", "openai", "stub"] as const) {
       };
       const adapter: HarnessAdapter = transport === "copilot" ? new CopilotAdapter()
         : transport === "opencode" ? new OpenCodeAdapter()
-          : transport === "openai" ? new OpenAIAdapter() : new StubAdapter();
+          : transport === "claude" ? new ClaudeAdapter()
+            : transport === "openai" ? new OpenAIAdapter() : new StubAdapter();
       writeFileSync(join(root, "answer.txt"), "result");
       for (const selection of [
         { taskModel: "provider/task-model", agentModel: "provider/agent-model", expected: "provider/task-model" },
@@ -72,10 +80,13 @@ for (const transport of ["copilot", "opencode", "openai", "stub"] as const) {
           prompt = wire!.messages.map((message) => message.content).join("\n");
         } else {
           const argv = JSON.parse(readFileSync(argsFile, "utf8")) as string[];
-          const expected = transport === "copilot" ? selection.expected?.split("/").at(-1) : selection.expected;
+          const stripsPrefix = transport === "copilot" || transport === "claude";
+          const expected = stripsPrefix ? selection.expected?.split("/").at(-1) : selection.expected;
           assert.equal(argv.filter((arg) => arg === "--model").length, 1);
           assert.equal(argv[argv.indexOf("--model") + 1], expected);
-          prompt = transport === "copilot" ? argv[argv.indexOf("-p") + 1]! : argv.at(-1)!;
+          // The fixture agent file is not under `.claude/agents/`, so claude inlines the
+          // persona and passes the prompt after `-p`, exactly like copilot.
+          prompt = stripsPrefix ? argv[argv.indexOf("-p") + 1]! : argv.at(-1)!;
         }
         for (const semantic of [agent.rawBody, "Unique constraint", task.title, task.description,
           "Unique projected context", "answer.txt", "node --version", "Per-task timeout: 123s",

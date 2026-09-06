@@ -11,21 +11,21 @@ MyForge lets you describe a software project as a Product Requirements Document 
 The engine is organised into three cleanly separated layers:
 
 ```
-┌──────────────────────────────────────────────────────────┐
-│  Layer 3 - DAG Engine  (scripts/engine.ts)               │
-│   • Reads the manifest                                   │
-│   • Decides what to run next (dependency ordering)       │
-│   • Drives the main while-loop                           │
-├──────────────────────────────────────────────────────────┤
-│  Layer 2 - Harness Adapters  (scripts/harness/*.ts)      │
-│   • Translates "invoke this task" into a real call       │
-│   • opencode CLI | copilot CLI | OpenAI API | Stub (dry) │
-├──────────────────────────────────────────────────────────┤
-│  Layer 1 - State Manager  (scripts/state.ts)             │
-│   • Reads/writes docs/WORKFLOW-STATE.json                │
-│   • Syncs docs/PROGRESS.md (human-readable view)         │
-│   • Appends docs/EXECUTION-AUDIT.jsonl                   │
-└──────────────────────────────────────────────────────────┘
+┌───────────────────────────────────────────────────────────────────────┐
+│  Layer 3 - DAG Engine  (scripts/engine.ts)                            │
+│   • Reads the manifest                                                │
+│   • Decides what to run next (dependency ordering)                    │
+│   • Drives the main while-loop                                        │
+├───────────────────────────────────────────────────────────────────────┤
+│  Layer 2 - Harness Adapters  (scripts/harness/*.ts)                   │
+│   • Translates "invoke this task" into a real call                    │
+│   • opencode CLI | copilot CLI | claude CLI | OpenAI API | Stub (dry) │
+├───────────────────────────────────────────────────────────────────────┤
+│  Layer 1 - State Manager  (scripts/state.ts)                          │
+│   • Reads/writes docs/WORKFLOW-STATE.json                             │
+│   • Syncs docs/PROGRESS.md (human-readable view)                      │
+│   • Appends docs/EXECUTION-AUDIT.jsonl                                │
+└───────────────────────────────────────────────────────────────────────┘
 ```
 
 Each layer has a single job. The DAG engine never touches the filesystem directly - it calls state functions. The harness adapters never mutate state - they return a `TaskResult`. This is a classic *separation of concerns* pattern and it's worth internalising because it's what makes the system replaceable and testable.
@@ -173,13 +173,13 @@ pause/stop path, which allows the in-flight task to finish before persisting
 
 ### Heartbeat
 
-A long harness call (e.g. a multi-minute `opencode run` or `copilot -p`) is silent, which can look like a hang. While `harness.invoke` is in flight, the engine prints a heartbeat line at a fixed interval:
+A long harness call (e.g. a multi-minute `opencode run`, `copilot -p`, or `claude -p`) is silent, which can look like a hang. While `harness.invoke` is in flight, the engine prints a heartbeat line at a fixed interval:
 
 ```
 [engine] …still working on task 1.1 (@project-architect, 45s elapsed)
 ```
 
-The interval defaults to 60 seconds and is controlled with `--heartbeat-ms <ms>` (or `FORGE_ENGINE_HEARTBEAT_MS`); `0` disables it. This only works because the CLI adapters (`opencode`, `copilot`) spawn their child process **asynchronously** (`spawn`, not the blocking `spawnSync`) - the event loop stays free for the heartbeat timer to fire. The OpenAI adapter is already async, so it benefits automatically.
+The interval defaults to 60 seconds and is controlled with `--heartbeat-ms <ms>` (or `FORGE_ENGINE_HEARTBEAT_MS`); `0` disables it. This only works because the CLI adapters (`opencode`, `copilot`, `claude`) spawn their child process **asynchronously** (`spawn`, not the blocking `spawnSync`) - the event loop stays free for the heartbeat timer to fire. The OpenAI adapter is already async, so it benefits automatically.
 
 ### Per-task timeout
 
@@ -270,6 +270,25 @@ otherwise it falls back to inlining the agent file contents into the prompt.
 `--auto`, and provider prefixes are stripped from model IDs before they are
 passed to the Copilot CLI. Select it with `--harness copilot` (or
 `FORGE_ENGINE_HARNESS=copilot`).
+
+### `ClaudeAdapter`
+
+Shells out to the Claude Code CLI per task:
+
+```
+claude -p "<task prompt>" --output-format json --agent <name> --permission-mode bypassPermissions
+```
+
+When the owning agent's file lives under `.claude/agents/`, the adapter passes
+`--agent <name>` so the CLI loads the persona natively; for every other harness
+root it inlines the agent file body into the prompt. `--permission-mode
+bypassPermissions` auto-approves tool calls for the non-interactive run, and
+provider prefixes are stripped from model IDs as they are for Copilot. The
+`--output-format json` result envelope drives failure classification: a
+not-logged-in result, a 4xx API status, an exhausted turn or budget limit, and a
+tool denial under bypassPermissions are `configuration` failures the operator
+must fix, while 429s, 5xx statuses, and everything else are `retryable`. Select
+it with `--harness claude` (or `FORGE_ENGINE_HARNESS=claude`).
 
 ### `OpenAIAdapter`
 
@@ -410,25 +429,25 @@ workflow-engine run --harness opencode
         ├─ loadState() / initState()
         ├─ normalize stale running → pending
         ├─ resolve manual selection (optional)
-        └─ MAIN LOOP ────────────────────────────────────────────────┐
-              │                                                     │
-              ├─ ownerUniqueReady(nextReadyTasks())                 │
-              │     check phase deps, task deps, manual scope       │
-              │                                                     │
-              ├─ for each ready task in the wave                    │
-              │     markTaskStarted() → save running snapshot       │
-              │     capture worktree baseline                       │
-              │     prepare readonly TaskAttemptRequest             │
-              │     harness.invoke(request)                          │
-              │       ↳ opencode run / copilot -p / API              │
-              │     verify outputs + enrich changed files           │
-              │     markTaskComplete/Failed/Skipped                 │
-              │                                                     │
-              ├─ merge task result(s) back into state               │
-              ├─ saveState() + syncProgressMd()                     │
-              ├─ auto-commit completed task work                    │
-              │                                                     │
-              └─────────────────────────────────────────────────────┘
+        └─ MAIN LOOP ───────────────────────────────────────────────────────────┐
+              │                                                                 │
+              ├─ ownerUniqueReady(nextReadyTasks())                             │
+              │     check phase deps, task deps, manual scope                   │
+              │                                                                 │
+              ├─ for each ready task in the wave                                │
+              │     markTaskStarted() → save running snapshot                   │
+              │     capture worktree baseline                                   │
+              │     prepare readonly TaskAttemptRequest                         │
+              │     harness.invoke(request)                                     │
+              │       ↳ opencode run / copilot -p / claude -p / API             │
+              │     verify outputs + enrich changed files                       │
+              │     markTaskComplete/Failed/Skipped                             │
+              │                                                                 │
+              ├─ merge task result(s) back into state                           │
+              ├─ saveState() + syncProgressMd()                                 │
+              ├─ auto-commit completed task work                                │
+              │                                                                 │
+              └─────────────────────────────────────────────────────────────────┘
                          │
              ┌───────────┴─────────────────┐
         stop requested?                complete / failed?
@@ -502,6 +521,7 @@ The engine is essentially a **file-backed, resumable task scheduler with pluggab
 | `templates/skills/forge-workflow-engine/scripts/cli.ts` | CLI entry point: `run`, `status`, `replay`, `pause` |
 | `templates/skills/forge-workflow-engine/scripts/harness/opencode-adapter.ts` | Shells out to `opencode run` |
 | `templates/skills/forge-workflow-engine/scripts/harness/copilot-adapter.ts` | Shells out to `copilot -p --yolo` |
+| `templates/skills/forge-workflow-engine/scripts/harness/claude-adapter.ts` | Shells out to `claude -p --output-format json` |
 | `templates/skills/forge-workflow-engine/scripts/harness/openai-adapter.ts` | Calls OpenAI (or compatible) API directly |
 | `templates/skills/forge-workflow-engine/scripts/harness/stub-adapter.ts` | Synthetic results for testing |
 | `docs/EXECUTION-MANIFEST.json` | Compiled build contract (produced by `forge-execution-adapter`) |

@@ -10,7 +10,7 @@
 
 1. Reads `docs/EXECUTION-MANIFEST.json` (the compiled build contract).
 2. Builds a task DAG and walks it phase-by-phase, task-by-task.
-3. Dispatches each task to a **native harness adapter** (`opencode`, `copilot`, `openai`, or `stub`).
+3. Dispatches each task to a **native harness adapter** (`opencode`, `copilot`, `claude`, `openai`, or `stub`).
 4. Persists state after every transition, so a run can be resumed, replayed, or audited at any time.
 
 It can now run in two execution modes:
@@ -28,7 +28,7 @@ It is the execution alternative to the prompt-driven flows: start it from the te
 
 - A compiled manifest at `docs/EXECUTION-MANIFEST.json` (produced by `forge-execution-adapter`).
 - Agent `.md` files under the harness agents directory (`.opencode/agents/`, `.claude/agents/`, `.github/agents/`, or `.agents/agents/`).
-- A configured harness - the `opencode` CLI in `$PATH` (default), `copilot`, an `OPENAI_API_KEY`, or the `stub` adapter for local checks.
+- A configured harness - the `opencode` CLI in `$PATH` (default), `copilot`, the `claude` CLI, an `OPENAI_API_KEY`, or the `stub` adapter for local checks.
 - `node >= 18` and `npm` at *build time* (the engine's `node_modules/` is installed on first run, not committed).
 
 If the manifest does not exist yet, compile it first:
@@ -116,11 +116,11 @@ verifies every successful call before marking the task complete:
   requires exit 0 before completion.
 
 The final run summary and `workflow-engine status` flag tasks completed with no
-recorded output files, so a hollow "complete" run is visible. Both the opencode
-(`--agent <name>`) and copilot (`/agent <name>`) harnesses select forge agents
-natively when their files live under the harness's agents directory;
-`FORGE_ENGINE_NATIVE_AGENT=0` forces the inline-persona prompt (the pre-v3.21
-behavior) on either harness.
+recorded output files, so a hollow "complete" run is visible. The opencode
+(`--agent <name>`), copilot (`/agent <name>`), and claude (`--agent <name>` flag)
+harnesses select forge agents natively when their files live under the harness's
+agents directory; `FORGE_ENGINE_NATIVE_AGENT=0` forces the inline-persona prompt
+(the pre-v3.21 behavior) on any of them.
 
 ---
 
@@ -176,7 +176,7 @@ rm -rf docs/artifacts && rm -f docs/EXECUTION-AUDIT.jsonl   # optional cleanup
 
 # 4. Re-run with the strict output gate (default on).
 cd ~/forge-fixed/scripts/forge-launcher
-node dist/cli.js engine-run --repo ~/path/to/project --harness <copilot|opencode> --yes
+node dist/cli.js engine-run --repo ~/path/to/project --harness <copilot|opencode|claude> --yes
 ```
 
 A hollow task (no expected outputs produced, no file changes, only trivial
@@ -194,6 +194,7 @@ The engine is harness-agnostic. Select the backend with `--harness`:
 |---|---|---|
 | **OpenCode CLI** (default) | `--harness opencode` | `opencode run --auto [--agent <name>] --dir <repo> "<task prompt>"` |
 | **GitHub Copilot CLI** | `--harness copilot` | `copilot -p "<agent body + task prompt>" --yolo` |
+| **Claude Code CLI** | `--harness claude` | `claude -p "<task prompt>" --output-format json --agent <name> --permission-mode bypassPermissions` (native for `.claude/agents/`; inline-persona fallback otherwise) |
 | **OpenAI API** | `--harness openai` | `POST /v1/chat/completions` with the agent `rawBody` as the system prompt |
 | **Stub** | `--harness stub` | Returns synthetic success; no real calls (for testing) |
 
@@ -202,8 +203,12 @@ The `copilot` adapter inlines the agent persona into the prompt (there is no
 agent natively when its file lives under the project's `.opencode/agents/`
 directory (`--agent <name>`), so sessions show the forge agent rather than the
 default build agent; for other harness roots it inlines the persona the same way
-the copilot adapter does. Both run the child process asynchronously, so the
-engine's heartbeat stays responsive.
+the copilot adapter does. The `claude` adapter selects the forge agent natively
+when its file lives under the project's `.claude/agents/` directory (`--agent
+<name>`), inlines the persona for every other harness root, and parses the
+`--output-format json` result envelope to classify a failure as `configuration`
+or `retryable`. All three run the child process asynchronously, so the engine's
+heartbeat stays responsive.
 
 ---
 
@@ -229,7 +234,7 @@ npm run workflow-engine -- viz     [--repo <path>] [--port <n>] [--no-open]
 | Flag | Default | Purpose |
 |---|---|---|
 | `--repo <path>` | detected (walks up for `.git`) | Repository root |
-| `--harness <name>` | `opencode` | Backend: `opencode`, `copilot`, `openai`, or `stub` |
+| `--harness <name>` | `opencode` | Backend: `opencode`, `copilot`, `claude`, `openai`, or `stub` |
 | `--max-retries <n>` | `2` | Attempts per task before it is marked `failed` |
 | `--retry-delay-ms <ms>` | `5000` | Delay between retries |
 | `--heartbeat-ms <ms>` | `60000` | Heartbeat interval while a task runs; `0` disables |
@@ -361,7 +366,7 @@ FORGE_ENGINE_TASK_TIMEOUT_MS=1500000 npm run workflow-engine -- run
 
 Precedence: a task's `timeoutMs` field in `docs/EXECUTION-MANIFEST.json`
 overrides the engine-wide value, so one heavy task can get a longer budget
-without affecting the rest. Adapters that shell out (`opencode`, `copilot`) enforce it on an owned process
+without affecting the rest. Adapters that shell out (`opencode`, `copilot`, `claude`) enforce it on an owned process
 group/tree (POSIX process groups, Windows recursive `taskkill`); `openai`
 enforces it on the API call via `AbortController`. Cleanup and inherited-pipe
 settlement are bounded, and incomplete cleanup is surfaced as an exception
@@ -565,6 +570,8 @@ To start fresh (e.g. after recompiling the manifest), delete `docs/WORKFLOW-STAT
 | `OPENCODE_EXTRA_FLAGS` | *(empty)* | Extra flags appended to every `opencode run` |
 | `COPILOT_BIN` | `copilot` | Path to the copilot binary |
 | `COPILOT_EXTRA_FLAGS` | *(empty)* | Extra flags appended to every `copilot -p` (e.g. `--model gpt-4o`) |
+| `CLAUDE_BIN` | `claude` | Path to the claude binary |
+| `CLAUDE_EXTRA_FLAGS` | *(empty)* | Extra flags appended to every `claude -p` (e.g. `--model opus`) |
 | `OPENAI_API_KEY` | *(required)* | API key for the OpenAI adapter |
 | `OPENAI_BASE_URL` | `https://api.openai.com/v1` | Override for compatible APIs |
 | `OPENAI_MODEL` | `gpt-4o` | Default model (overridden by agent `model:` frontmatter) |
