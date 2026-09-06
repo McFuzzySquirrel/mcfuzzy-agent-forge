@@ -1,7 +1,7 @@
 import { existsSync } from "node:fs";
 import { relative, resolve } from "node:path";
 
-import { runCommand, extractModelFlags } from "./run.ts";
+import { runCommand, extractModelFlags, stripProviderPrefix } from "./run.ts";
 import type { HarnessAdapter, TaskAttemptRequest, TaskResult } from "../types.ts";
 import { inlinePersona } from "../request.ts";
 
@@ -114,8 +114,4 @@ export class CopilotAdapter implements HarnessAdapter {
     const parts = relative(repoRoot, agent.path).split(/[\\/]/);
     return parts[0] === ".github" && parts[1] === "agents" && parts.length > 2;
   }
-}
-
-function stripProviderPrefix(model: string): string {
-  return model.includes("/") ? model.slice(model.lastIndexOf("/") + 1) : model;
 }
