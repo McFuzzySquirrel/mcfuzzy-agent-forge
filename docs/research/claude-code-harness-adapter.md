@@ -38,7 +38,7 @@ real capability hole.
 
 | Concern | Copilot | Claude Code |
 |---|---|---|
-| Non-interactive invoke | `copilot -p "<prompt>"` | `claude -p "<prompt>"` |
+| Non-interactive invoke | `copilot -p "<prompt>"` | `claude -p "<prompt>" --output-format json` |
 | Auto-approve tools | `--yolo` | `--permission-mode bypassPermissions` |
 | Native agent selection | `/agent <name>` prepended to the prompt text | `--agent <name>` as a real flag |
 | Native root | `.github/agents/` | `.claude/agents/` |
@@ -72,12 +72,14 @@ export class ClaudeAdapter implements HarnessAdapter {
 }
 ```
 
-`invoke(request)` follows the Copilot body almost line for line: build args, `runCommand` with
+`invoke(request)` follows the Copilot body for the front half: build args, `runCommand` with
 `cwd: repoRoot`, `timeoutMs: request.budget.timeoutMs`, `signal: request.signal`,
-`maxBufferBytes: 10 * 1024 * 1024`, then the same three-branch result mapping (transport error,
-non-zero status, success with `expectedOutputs` existence filtering).
+`maxBufferBytes: 10 * 1024 * 1024`. The transport-error branch (`result.error`) is identical.
+The back half diverges: instead of mapping the exit status, the adapter parses the JSON result
+envelope on stdout and classifies from its fields. See "Result envelope and failure
+classification" below.
 
-Argument construction is where it diverges:
+Argument construction:
 
 ```ts
 const native = this.canSelectAgent(request);
@@ -88,8 +90,11 @@ const agentFlag = native ? ["--agent", agent.name] : [];
 const modelFlag = request.effectiveModel
   ? ["--model", stripProviderPrefix(request.effectiveModel)]
   : [];
-const args = ["-p", prompt, ...agentFlag, ...modelFlag, ...this.extraFlags];
+const args = ["-p", prompt, "--output-format", "json", ...agentFlag, ...modelFlag, ...this.extraFlags];
 ```
+
+`this.extraFlags` is `["--permission-mode", "bypassPermissions", ...parsed.flags]`, the
+counterpart of Copilot's `["--yolo", ...parsed.flags]`.
 
 `canSelectAgent` mirrors Copilot's, with the root swapped:
 
@@ -107,6 +112,66 @@ private canSelectAgent({ agent, repoRoot }: TaskAttemptRequest): boolean {
 The constructor reuses `extractModelFlags` so `CLAUDE_EXTRA_FLAGS="--model opus"` becomes the
 transport `defaultModel` rather than a duplicated flag, matching Copilot and OpenCode.
 
+## Result envelope and failure classification
+
+Decided 2026-09-07 after probing `claude` v2.1.263 directly. The probes and their raw results
+are in the handoff document, section 5.
+
+**Why JSON from the start.** Every failure probed exits with status 1: not logged in, unknown
+`--agent`, invalid `--session-id`, invalid `--permission-mode`, max turns exhausted. An exit
+code cannot separate a configuration fault from a transient one, so text-mode parity would give
+the engine a classifier worse than Copilot's. In text mode the "Not logged in" message is even
+printed to stdout, where the verifier would read it as trivial output. `--output-format json`
+costs one flag and a small parse function, and the verifier's view of stdout does not change,
+because the adapter unwraps the envelope and returns only the `result` text as
+`TaskResult.stdout`. That is the same content text mode prints: the final assistant message.
+
+**The envelope.** One JSON object on stdout. Fields the adapter reads:
+
+| Field | Observed values | Used for |
+|---|---|---|
+| `type` | `"result"` | sanity check |
+| `is_error` | boolean | the primary success signal |
+| `subtype` | `success`, `error_during_execution`, `error_max_turns`, `error_max_budget_usd`, `error_max_structured_output_retries` | classification |
+| `terminal_reason` | `completed`, `max_turns`, `api_error` | classification |
+| `api_error_status` | HTTP status or `null` | configuration vs retryable |
+| `result` | final assistant text, or the error message | `TaskResult.stdout` on success, `errorMessage` on failure |
+| `permission_denials` | array of `{tool_name, tool_use_id, tool_input}` | detecting a refused bypass |
+| `session_id` | UUID | logged for traceability |
+
+A trap: `subtype` is `"success"` even when `is_error` is `true` (observed for the not-logged-in
+case). Classify on `is_error` first and only then consult `subtype` and `terminal_reason`.
+
+**Classification table.** Covers every condition observed, plus the two documented ones that
+could not be reproduced locally.
+
+| Condition | Signal | `failureKind` |
+|---|---|---|
+| Binary missing or not executable | `runCommand` spawn error | `configuration` (already, `run.ts:153`) |
+| Timeout or cancellation | `runCommand` | `timeout` / `cancelled` (already) |
+| CLI rejects an argument: unknown `--agent`, invalid `--session-id`, invalid `--permission-mode`, unknown flag | exit 1, **empty stdout**, message on stderr | `configuration` |
+| Bypass refused (running as root, or `disableBypassPermissionsMode` policy) | exit non-zero before any JSON is emitted | `configuration`, via the same empty-stdout rule |
+| Not logged in, expired credentials | `is_error: true`, `terminal_reason: "api_error"`, `api_error_status: null`, `result` matches `/not logged in/i` | `configuration` |
+| API 4xx other than 429 (bad model name, forbidden) | `is_error: true`, `api_error_status` 400 to 499 | `configuration` |
+| API 429, 5xx, or `api_error` with no other signal | `is_error: true`, `terminal_reason: "api_error"` | `retryable` |
+| Model errored mid-run | `subtype: "error_during_execution"` | `retryable` |
+| `--max-turns` or `--max-budget-usd` exhausted | `subtype: "error_max_turns"` / `"error_max_budget_usd"` | `configuration`: both caps can only come from `CLAUDE_EXTRA_FLAGS`, so the operator set them; the engine's own timeout budget is the intended limiter |
+| Completed, but tools were denied | `is_error: false`, `permission_denials` non-empty | `configuration`: under `bypassPermissions` the list must be empty, so a non-empty list means a policy blocked the bypass and every retry would fail the same way |
+| Stdout is not parseable JSON, exit 0 | malformed envelope | `exception`, with the raw stdout preserved in `errorMessage` |
+| Stdout is not parseable JSON, exit non-zero | crash or rejection before the envelope | `configuration`, with stderr as the message |
+| `is_error: false`, no denials | normal completion | success; `stdout` = `result`, `outputFiles` filtered as Copilot does |
+
+The "not parseable JSON, exit non-zero" row is the one judgement call. A mid-run crash that
+leaves no envelope is classified as `configuration` and not retried. That is deliberate: every non-envelope exit
+observed was an operator fault, and the stderr text reaches the operator through
+`errorMessage`. If a transient no-envelope exit is ever observed, revisit.
+
+**Session traceability.** The envelope returns `session_id`, and Claude Code persists the
+session under `~/.claude/projects/`, so `claude --resume <id>` reaches the transcript. The
+adapter logs the session ID on one line per invocation. `--session-id` is not passed: it must
+be a valid UUID (verified, the CLI rejects anything else), a fixed ID would collide across
+retries of the same task, and the returned ID gives the same traceability for free.
+
 ## Deliberate non-goals for v1
 
 - **No `--fallback-model`.** ADR-040 states `modelFallback` is metadata and does not trigger an
@@ -114,21 +179,24 @@ transport `defaultModel` rather than a duplicated flag, matching Copilot and Ope
 - **No attach or keep-alive mode.** `cli.ts:307` gates `--keep-alive` to opencode, backed by
   `opencode-server.ts`. Claude Code has `--bg` plus `claude attach` and could support an
   equivalent later, but that is a second body of work with its own state handling.
-- **No `--resume` or `--continue`.** Each task stays an isolated invocation, as with Copilot.
-  `--session-id <uuid>` derived from `runId` and task id is a cheap traceability win and can
-  follow.
-- **Text output, not JSON.** `--output-format json` would give structured `is_error` and
-  `subtype` fields, which map far better onto `TaskFailureKind` than an exit code does. It is
-  the right eventual answer and the wrong first step: it changes what `stdout` means to the
-  verifier. Ship text parity first, then propose JSON as its own change.
+- **No `--resume`, `--continue`, or `--session-id`.** Each task stays an isolated invocation, as
+  with Copilot. Traceability comes from the `session_id` the envelope returns, see above.
+- **No `--bare`.** See the CLAUDE.md wrinkle below.
+- **No `stream-json`.** The single `json` envelope is enough for classification. Streaming
+  would only matter for progress reporting, which the engine does not consume.
 
 ## Known behavioral wrinkles
 
 - **CLAUDE.md auto-discovery.** `claude -p` at `repoRoot` loads the project CLAUDE.md on top of
-  the injected persona. Copilot and OpenCode have comparable ambient context, so this is not
-  novel, but it does mean the persona is not the only instruction source. `--bare` would
-  suppress it at the cost of hooks, skills resolution, and plugin sync. Document, do not
-  suppress.
+  the injected persona, so the persona is not the only instruction source. Decided: document,
+  do not suppress. Three reasons. First, Copilot and OpenCode load their own repo-level
+  instruction files under the same conditions, so this is ambient context every transport
+  already has. Second, a repo bootstrapped with `--harness claude` has its
+  CLAUDE.md authored as part of the forge scaffold, so it is intended context, not noise.
+  Third, `--bare` skips hooks, LSP, plugin sync, attribution and auto-memory, and the forge's
+  own skills and plugins live in `.claude/`, which is exactly what the adapter exists to use.
+  An operator who wants isolation can pass `CLAUDE_EXTRA_FLAGS="--bare"`; the adapter does not
+  need to know.
 - **Trust dialog.** The `-p` help text states the workspace trust dialog is skipped in
   non-interactive mode, so no first-run stall.
 - **Cancellation.** `runCommand` already spawns into a dedicated POSIX process group and
@@ -165,7 +233,13 @@ carries a full duplicate of the engine, harness directory included. A change tha
 ## Test plan
 
 `copilot-adapter.test.ts` provides the pattern: a shim binary recording its argv, with
-`COPILOT_BIN` pointed at it. The Claude cases, with `CLAUDE_BIN`:
+`COPILOT_BIN` pointed at it. The Claude shim differs in one way: it must print a JSON result
+envelope on stdout, and the tests need to control which envelope it prints and its exit code.
+Drive that through an environment variable the shim reads, for instance `CLAUDE_SHIM_RESULT`
+holding a JSON string and `CLAUDE_SHIM_EXIT` holding the status. Default to a minimal success
+envelope so the argv cases stay short.
+
+Argv cases, with `CLAUDE_BIN`:
 
 1. `--agent <name>` is passed and the persona is absent from the prompt for a `.claude/agents/`
    rooted agent.
@@ -177,8 +251,27 @@ carries a full duplicate of the engine, harness directory included. A change tha
    matching the existing assertions at lines 126-156.
 6. Provider prefix stripping: `anthropic/claude-sonnet-5` reaches the CLI as
    `claude-sonnet-5`.
-7. Non-zero exit maps to `failureKind: "retryable"`; a spawn failure maps through
-   `result.failureKind` unchanged.
+7. `--output-format json` and `--permission-mode bypassPermissions` are always present, and
+   `CLAUDE_EXTRA_FLAGS="--model opus --bare"` yields `defaultModel: "opus"` with `--bare` in
+   argv and no duplicated `--model`.
+
+Envelope cases, one per row of the classification table:
+
+8. Success envelope: `success: true`, `stdout` equals the `result` text, `outputFiles` filtered
+   by existence.
+9. `is_error: true` with `result: "Not logged in · Please run /login"` maps to `configuration`.
+10. `is_error: true` with `api_error_status: 429` maps to `retryable`; with `403` to
+    `configuration`.
+11. `subtype: "error_during_execution"` maps to `retryable`.
+12. `subtype: "error_max_turns"` maps to `configuration`.
+13. `is_error: false` with a non-empty `permission_denials` maps to `configuration` and names
+    the denied tools in `errorMessage`.
+14. Empty stdout with exit 1 and a stderr message maps to `configuration` with the stderr text
+    as `errorMessage`. This is the unknown-agent and bypass-refused shape.
+15. Non-JSON stdout with exit 0 maps to `exception`.
+16. A spawn failure maps through `result.failureKind` unchanged.
+17. `subtype: "success"` with `is_error: true` is treated as a failure, guarding the trap noted
+    above.
 
 ## Estimate
 

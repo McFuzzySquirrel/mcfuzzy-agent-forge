@@ -19,8 +19,9 @@ repository or running the tool, not inferred. File and line references are again
 | Fork | `lithiumriver/mcfuzzy-agent-forge`, public, parent `McFuzzySquirrel/mcfuzzy-agent-forge` |
 | Remotes | `origin` upstream (read-only), `fork` the lithiumriver fork |
 | Pushed | Yes, to `fork` |
-| Upstream PR | **Blocked**, see below |
-| Implementation | **Not started.** Scope only. |
+| Upstream PR | **Blocked**, see below. Cross-fork PRs cannot be opened from this account. |
+| Fork PR | Opened against `lithiumriver:main` instead, so the work is reviewable in the fork. |
+| Implementation | **Not started.** Scope only. Open questions resolved 2026-09-07, see section 5. |
 
 ### The upstream PR is blocked
 
@@ -149,7 +150,7 @@ Run `claude --help` to re-check. What matters here:
 | `--model <model>` | Alias (`opus`, `sonnet`, `fable`) or a full model name. |
 | `--fallback-model <model>` | Automatic fallback when the default is overloaded. **Deliberately unused, see ADR-040.** |
 | `--output-format <format>` | `text` (default), `json`, `stream-json`. Only with `--print`. |
-| `--session-id <uuid>` | Fixed session ID. Candidate for run traceability. |
+| `--session-id <uuid>` | Fixed session ID. Must be a valid UUID. Not passed, the envelope's `session_id` is logged instead, see section 5. |
 | `--bg, --background` | Background session, with `claude attach`/`logs`/`stop`. Possible future attach mode. |
 | `--add-dir`, `--bare`, `--settings`, `--setting-sources`, `--plugin-dir` | Context and config control. `--bare` disables CLAUDE.md auto-discovery, hooks, LSP and plugin sync. |
 
@@ -211,26 +212,71 @@ Detail lives in the scope document. Summary so a reviewer can argue with them:
    `retryable`.
 4. **Strip the provider prefix**, following Copilot rather than OpenCode.
 5. **`CLAUDE_BIN` and `CLAUDE_EXTRA_FLAGS`**, through the existing `extractModelFlags`.
-6. **Four non-goals for v1:** no `--fallback-model` (ADR-040), no attach or keep-alive mode
-   (that is `opencode-server.ts`-shaped work), no `--resume`/`--continue`, and text output
-   before JSON.
+6. **`--output-format json` from the start**, with the adapter unwrapping the envelope so the
+   verifier still sees plain final-message text. Superseded the earlier "text first" leaning
+   once the probes showed every failure exits with status 1. See section 5.
+7. **Non-goals for v1:** no `--fallback-model` (ADR-040), no attach or keep-alive mode (that is
+   `opencode-server.ts`-shaped work), no `--resume`/`--continue`/`--session-id`, no `--bare`,
+   no `stream-json`.
 
 ---
 
-## 5. Open questions for the next session
+## 5. Open questions, resolved 2026-09-07
 
-1. **JSON output.** `--output-format json` yields structured `is_error` and `subtype` fields
-   that map onto `TaskFailureKind` far better than an exit code does. It also changes what
-   `stdout` means to the verifier. Ship text parity first, or go straight to JSON?
-2. **Ambient CLAUDE.md.** `claude -p` at `repoRoot` loads the project CLAUDE.md on top of the
-   injected persona, so the persona is not the only instruction source. Copilot and OpenCode
-   have comparable ambient context. Document it, or suppress with `--bare` and lose hooks,
-   skills resolution and plugin sync?
-3. **Failure classification.** Which Claude Code exit conditions deserve `configuration` rather
-   than `retryable`? Permission-bypass refusal is one. Others need an inventory.
-4. **`--session-id`.** Worth deriving from `runId` plus task id for traceability in v1, or defer?
-5. **Contribution path.** The upstream PR is blocked. Browser, maintainer intervention, or the
-   patch file?
+All five were resolved by probing `claude` v2.1.263 directly. The decisions are recorded in the
+scope document under "Result envelope and failure classification", the non-goals, and the
+wrinkles. Summary and the raw evidence:
+
+1. **JSON output: go straight to JSON.** Every failure probed exits with status 1 (not logged
+   in, unknown `--agent`, invalid `--session-id`, invalid `--permission-mode`, max turns), so
+   text-mode parity would classify worse than Copilot. The adapter unwraps the envelope and
+   returns `result` as `TaskResult.stdout`, so the verifier sees the same final-message text it
+   would in text mode. Nothing downstream changes.
+2. **Ambient CLAUDE.md: document, do not suppress.** `--bare` skips hooks, LSP, plugin sync,
+   attribution and auto-memory, and the forge's own skills and plugins live in `.claude/`.
+   Operators who want isolation can pass `CLAUDE_EXTRA_FLAGS="--bare"`.
+3. **Failure classification: inventoried.** The table in the scope document covers every
+   observed condition. The rule that does most of the work: a non-zero exit with **no JSON on
+   stdout** is a CLI-level rejection and classifies as `configuration`. That single rule
+   catches unknown agent, bad session ID, bad permission mode, and the bypass refusal, without
+   pattern-matching stderr.
+4. **`--session-id`: not passed.** The CLI rejects anything but a valid UUID, a fixed ID would
+   collide across retries, and the envelope already returns `session_id`, which the adapter
+   logs. `claude --resume <id>` then reaches the persisted transcript.
+5. **Contribution path: a PR inside the fork.** The cause turned out to be that this account
+   cannot open cross-fork PRs against upstream at all. The branch is reviewed through a PR
+   against `lithiumriver:main`. Push the implementation to the same branch so scope and code
+   review together. Upstream contribution, if wanted, is the maintainer's call and can be
+   done from the merged fork branch later.
+
+### Probe evidence
+
+Run from a scratch directory with `CLAUDECODE` unset, model `haiku`. Only the fields that
+matter are shown.
+
+| Probe | Exit | Stdout | Stderr |
+|---|---|---|---|
+| `-p "Reply with exactly the word OK" --output-format json` | 0 | `{"type":"result","subtype":"success","is_error":false,"terminal_reason":"completed","stop_reason":"end_turn","num_turns":1,"result":"OK","session_id":"<uuid>","api_error_status":null,"permission_denials":[]}` | empty |
+| Same, but not logged in (sandbox without keychain access) | 1 | `{"subtype":"success","is_error":true,"terminal_reason":"api_error","api_error_status":null,"result":"Not logged in · Please run /login"}` | empty |
+| Same, text mode, not logged in | 1 | `Not logged in · Please run /login` | empty |
+| `--agent no-such-agent-xyz` (either output format) | 1 | empty | `--agent 'no-such-agent-xyz' not found. Available agents: ...` |
+| `--session-id not-a-uuid` | 1 | empty | `Error: Invalid session ID. Must be a valid UUID.` |
+| `--permission-mode nonsense` | 1 | empty | `error: option '--permission-mode <mode>' argument 'nonsense' is invalid. Allowed choices are acceptEdits, auto, bypassPermissions, manual, dontAsk, plan.` |
+| `--model not-a-real-model-xyz` | continues | proceeds to the API | warning `[claude-code:unrecognized_model]`; the API decides |
+| Write a file, `--max-turns 1 --output-format json` | 1 | `{"subtype":"error_max_turns","is_error":true,"terminal_reason":"max_turns","num_turns":2,"result":"","permission_denials":[{"tool_name":"Write",...}]}` | empty |
+| Write a file, `--permission-mode dontAsk --output-format json` | 0 | `{"subtype":"success","is_error":false,"terminal_reason":"completed","num_turns":5,"result":"I'm unable to complete this task because all file creation tools are currently denied...","permission_denials":[Write, Bash, ...]}` | empty |
+
+Subtype values found in the binary: `success`, `error_during_execution`, `error_max_turns`,
+`error_max_budget_usd`, `error_max_structured_output_retries`.
+
+Two conditions are documented but were not reproduced: bypass refused when running as root,
+and bypass disabled by the `disableBypassPermissionsMode` policy. Both exit before emitting an
+envelope, so the empty-stdout rule covers them. Worth a quick confirmation on a root shell if
+one is to hand.
+
+Note the `dontAsk` row: the CLI reports success while the model reports it could not do the
+work. That is why a non-empty `permission_denials` list under bypass mode classifies as
+`configuration` rather than trusting `is_error`.
 
 ---
 
@@ -247,7 +293,7 @@ Then, in order:
 2. Read `scripts/harness/copilot-adapter.ts` and its test in full. The new adapter is
    structurally the same file.
 3. Skim `docs/adr/040-native-adapter-contracts.md` for the contract boundary.
-4. Resolve the open questions above, at least 1 and 3, before writing code.
+4. Read section 5 for the resolved decisions and the probe evidence behind them.
 5. Implement against the wiring checklist in the scope document, and mirror into
    `scripts/forge-launcher/resources/templates/skills/forge-workflow-engine/`.
 6. `npm test` and `npm run typecheck` in `templates/skills/forge-workflow-engine`.
@@ -290,8 +336,12 @@ The gap is sharper than missing parity. Native agent selection is keyed to each 
 
 - **No `--fallback-model`.** ADR-040 states `modelFallback` is metadata and does not trigger an execution fallback.
 - **No attach or keep-alive mode.** `cli.ts:307` gates `--keep-alive` to opencode, backed by `opencode-server.ts`. Claude Code has `--bg` plus `claude attach` and could support an equivalent later.
-- **No `--resume`/`--continue`.** Tasks stay isolated invocations, as with Copilot. `--session-id` derived from `runId` plus task id is a cheap traceability follow-up.
-- **Text output before JSON.** `--output-format json` maps onto `TaskFailureKind` far better than an exit code does, but it changes what `stdout` means to the verifier.
+- **No `--resume`/`--continue`/`--session-id`.** Tasks stay isolated invocations, as with Copilot. The JSON envelope returns `session_id`, which the adapter logs, so `claude --resume <id>` gives traceability without a flag.
+- **No `--bare`.** Ambient CLAUDE.md is intended context on a Claude-bootstrapped repo, and `--bare` would also drop the `.claude/` skills and plugins the adapter exists to use. Operators can opt in through `CLAUDE_EXTRA_FLAGS`.
+
+## JSON from the start
+
+Probing `claude` v2.1.263 showed every failure exits with status 1: not logged in, unknown `--agent`, invalid `--session-id`, max turns. An exit code cannot separate configuration faults from transient ones, so the adapter passes `--output-format json` and classifies on `is_error`, `subtype`, `terminal_reason`, `api_error_status` and `permission_denials`. It unwraps the envelope and returns `result` as `stdout`, so the verifier sees the same final-message text it would in text mode. The full classification table and the raw probe results are in the two documents.
 
 ## One trap
 
