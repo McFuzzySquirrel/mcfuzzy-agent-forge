@@ -195,7 +195,7 @@ test("new-project model options persist while inherit clears saved choices and b
 test("GitHub projects default to the copilot engine harness", () => {
   assert.equal(defaultEngineHarness("github"), "copilot");
   assert.equal(defaultEngineHarness("opencode"), "opencode");
-  assert.equal(defaultEngineHarness("claude"), "opencode");
+  assert.equal(defaultEngineHarness("claude"), "claude");
   assert.equal(defaultEngineHarness("agents"), "opencode");
 });
 

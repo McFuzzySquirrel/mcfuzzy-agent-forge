@@ -34,7 +34,7 @@ export type SelectionScope = "single" | "range" | "list";
 
 export function assertEngineHarnessAvailable(harness: string): void {
   if (harness === "flowforge-kernel") {
-    throw new Error("The flowforge-kernel harness has been retired. Select opencode or copilot for repository tasks (or openai for explicit text tasks), and update docs/engine-config.json or FORGE_ENGINE_HARNESS. Existing workforce artifacts are not deleted.");
+    throw new Error("The flowforge-kernel harness has been retired. Select opencode, copilot, or claude for repository tasks (or openai for explicit text tasks), and update docs/engine-config.json or FORGE_ENGINE_HARNESS. Existing workforce artifacts are not deleted.");
   }
 }
 
