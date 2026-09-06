@@ -68,6 +68,13 @@ Ask only what's needed. Group by category, skip what's already answered:
 
 ### Step 4: Draft the Feature PRD
 
+Load the sibling skill's `forge-build-prd/references/task-contract.md` and use
+its bounded `forge-task` JSON blocks for implementation phases. Preserve
+existing IDs and specialist names for incremental work. Include task-local
+requirements, acceptance criteria, constraints, references, outputs and real
+test commands; separate human review from agent preparation. Do not infer task
+ownership from wording alone.
+
 Load `references/feature-prd-template.md` for the full structure. Use information from Steps 0–3. Where unspecified, state a reasonable default and mark it in Open Questions.
 
 > Adapt depth to the feature - a small enhancement needs less detail than a major new subsystem. Keep all section headings.

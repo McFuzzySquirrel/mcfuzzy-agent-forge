@@ -32,6 +32,16 @@ preserve unaffected files byte-for-byte.
 
 ### Step 2: Define non-overlapping agents
 
+Read the structured `forge-task` blocks in the planning documents. Generate
+specialists matching every implementation task's planned `ownerAgent` exactly
+and confirm each assignment against its requirements and deliverables, not
+keyword similarity. Do not use Forge coordinators as implementation owners.
+If a planned assignment is unsuitable, report the required authoring correction
+and stop rather than silently reassigning or rewriting the plan. Human-review
+tasks have no model owner. Require specialists to preserve task scope, run the
+declared checks, return the runtime's `forge-result` report, and never fabricate
+test outcomes or human attestations.
+
 Map every requirement to exactly one owner. Required coverage includes
 architecture/build and QA; add domain agents only when the source requires
 them. For each agent define expertise, references, responsibilities by path or

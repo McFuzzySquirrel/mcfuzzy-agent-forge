@@ -149,11 +149,9 @@ export async function runTaskValidation(
 ): Promise<VerifyResult> {
   if (task.validationCommands.length === 0) return { ok: true };
 
-  const isWin = process.platform === "win32";
   for (const command of task.validationCommands) {
-    const bin = isWin ? "cmd" : "sh";
-    const args = isWin ? ["/c", command] : ["-c", command];
-    const result = await runCommand(bin, args, {
+    const result = await runCommand(command, [], {
+      shell: true,
       cwd: repoRoot,
       timeoutMs,
       maxBufferBytes: 10 * 1024 * 1024,

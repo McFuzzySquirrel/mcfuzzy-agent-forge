@@ -38,6 +38,8 @@ import { commitTaskWork } from "./commit.ts";
 import { captureWorktree, diffWorktree, runTaskValidation, verifyTaskResult } from "./verify.ts";
 import { clearControl, readControl } from "./control.ts";
 import { assertTaskCapabilities, prepareTaskRequest } from "./request.ts";
+import { humanTaskApproved, taskReferenceContext } from "./task-context.ts";
+import { parseTaskHandoff } from "./task-result.ts";
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -267,6 +269,18 @@ async function executeTask(
   shouldStop: () => boolean,
 ): Promise<WorkflowState> {
   const { task } = entry;
+  if (task.contract?.kind === "human-review") {
+    if (shouldStop()) return state;
+    taskReferenceContext(opts.repoRoot, task);
+    if (!humanTaskApproved(opts.repoRoot, task)) {
+      const note = `Human review required for '${task.id}'. Record operator evidence with workflow-engine approve-task, then resume. --yes does not approve human work.`;
+      console.log(`[engine] ${note}`);
+      return { ...state, status: "paused", tasks: { ...state.tasks, [task.id]: { ...state.tasks[task.id]!, errorMessage: note } } };
+    }
+    const artifact = task.produces ? store.write({ type: task.produces, category: "work", taskId: task.id, producedBy: "human-reviewer", status: "complete", summary: `Operator evidence verified for ${task.title}`, filesChanged: [task.contract.reviewFile!], inputs: [], payload: { reviewFile: task.contract.reviewFile }, nextActions: [] }) : undefined;
+    writeAuditEvent(opts.auditPath, { timestamp: new Date().toISOString(), action: "task.complete", runId: state.runId, taskId: task.id, note: `Human attestation: ${task.contract.reviewFile}` });
+    return markTaskComplete(markTaskStarted(state, task.id), task.id, [task.contract.reviewFile!], "Human review approved with evidence.", artifact?.artifactId);
+  }
   const agent = findAgentForTask(agents, task.ownerAgent);
 
   // A stop/pause was requested while this task was queued in the current wave.
@@ -438,13 +452,20 @@ async function executeTask(
       const verified = await verifyTaskResult(task, result, baseline, {
         repoRoot: opts.repoRoot,
         allowNoop: opts.allowNoop,
-        runValidation: opts.runValidation,
+        runValidation: Boolean(task.contract) || opts.runValidation,
       });
       let failReason = verified.ok ? undefined : verified.reason;
+      let validationEvidence: string[] | undefined;
+      if (!failReason && task.contract) {
+        const handoff = parseTaskHandoff(result.stdout);
+        if (!handoff) failReason = "Structured task requires a valid forge-result handoff with observed test results (maximum 16000 characters).";
+        else if (handoff.unresolved.length) failReason = `Unresolved task requirements: ${handoff.unresolved.join("; ")}`;
+      }
 
-      if (!failReason && opts.runValidation) {
+      if (!failReason && (task.contract || opts.runValidation)) {
         const validation = await runTaskValidation(task, opts.repoRoot, task.timeoutMs ?? opts.taskTimeoutMs);
         if (!validation.ok) failReason = validation.reason;
+        else validationEvidence = task.validationCommands.map((command) => `${command}: exit 0 (engine-verified)`);
       }
 
       if (failReason) {
@@ -478,6 +499,7 @@ async function executeTask(
           producedBy: agent.name,
           outputFiles: result.outputFiles,
           agentOutput: result.stdout,
+          validationEvidence,
           inputArtifactIds,
         });
         artifactId = artifact.artifactId;
@@ -534,12 +556,17 @@ async function preflightOwners(
     const selected = scopedTaskSet(state.selection);
     const unresolved = flattenManifest(manifest).filter(({ task }) =>
       (!selected || selected.has(task.id)) && !isTaskDone(state.tasks[task.id]?.status) &&
+      task.contract?.kind !== "human-review" &&
       !findAgentForTask(agents, task.ownerAgent));
     if (unresolved.length > 0) {
       throw new Error(`Missing required owners: ${unresolved.map(({ task }) => `${task.id} (${task.ownerAgent ?? "unassigned"})`).join(", ")}. Restore agent files or correct ownerAgent and recompile.`);
     }
     for (const { task } of flattenManifest(manifest)) {
       if ((selected && !selected.has(task.id)) || isTaskDone(state.tasks[task.id]?.status)) continue;
+      if (task.contract?.kind === "human-review") {
+        taskReferenceContext(opts.repoRoot, task);
+        continue;
+      }
       assertTaskCapabilities(task, opts.harness);
       prepareTaskRequest({ agent: findAgentForTask(agents, task.ownerAgent)!, task,
         repoRoot: opts.repoRoot, defaultModel: opts.harness.defaultModel, timeoutMs: opts.taskTimeoutMs,
@@ -577,6 +604,23 @@ async function runEngineSession(opts: EngineOptions): Promise<WorkflowState> {
   }
   const selection = resolveSelection(manifest, state, opts);
   state = setSelection(state, selection);
+
+  const invalidated = new Set(flattenManifest(manifest).filter(({ task }) =>
+    task.contract?.kind === "human-review" && isTaskDone(state.tasks[task.id]?.status) && !humanTaskApproved(opts.repoRoot, task),
+  ).map(({ task }) => task.id));
+  let previousSize = -1;
+  while (previousSize !== invalidated.size) {
+    previousSize = invalidated.size;
+    for (const { task, phaseIndex } of flattenManifest(manifest)) {
+      const dependencies = [...task.dependencies, ...manifest.phases[phaseIndex]!.dependencies.flatMap((id) => manifest.phases.find((phase) => phase.id === id)?.tasks.map((entry) => entry.id) ?? [])];
+      if (dependencies.some((id) => invalidated.has(id))) invalidated.add(task.id);
+    }
+  }
+  if (invalidated.size) {
+    state = { ...state, status: "paused", tasks: { ...state.tasks } };
+    for (const id of invalidated) state.tasks[id] = { ...state.tasks[id]!, status: "pending", completedAt: undefined, errorMessage: "Human review evidence changed; review and dependent work must be revalidated." };
+    saveState(opts.statePath, state);
+  }
 
   // A previous run that died mid-task may have left tasks marked "running".
   // Reset those to "pending" so they are picked up again instead of deadlocking.
@@ -632,7 +676,7 @@ async function runEngineSession(opts: EngineOptions): Promise<WorkflowState> {
   // written to the control file by `workflow-engine pause|stop`. Checked at the
   // top of each wave so a running task finishes before the run pauses.
   const shouldStop = (): boolean =>
-    Boolean(opts.pauseRequested || opts.stopRequested?.() || opts.signal?.aborted || readControl(opts.controlPath) !== null);
+    Boolean(state.status === "paused" || opts.pauseRequested || opts.stopRequested?.() || opts.signal?.aborted || readControl(opts.controlPath) !== null);
 
   while (!isComplete(manifest, state) && !shouldStop()) {
     if (hasFailed(state)) {
@@ -765,7 +809,10 @@ async function replayTaskSession(taskId: string, opts: EngineOptions): Promise<W
   if (!task || !phaseId) throw new Error(`Task '${taskId}' not found in manifest.`);
   const dependencyIds = expandSelectedTaskIds(manifest, [taskId]).filter((id) => id !== taskId);
   const replayRecords = state.tasks;
-  const incomplete = dependencyIds.filter((id) => !isTaskDone(replayRecords[id]?.status));
+  const incomplete = dependencyIds.filter((id) => {
+    const dependency = findTask(manifest, id);
+    return !isTaskDone(replayRecords[id]?.status) || (dependency?.contract?.kind === "human-review" && !humanTaskApproved(opts.repoRoot, dependency));
+  });
   if (incomplete.length > 0) throw new Error(`Cannot replay '${taskId}': incomplete dependencies ${incomplete.join(", ")}. Run them first.`);
   const agents = await preflightOwners(manifest, {
     ...state, selection: { mode: "manual", taskIds: [taskId] },
@@ -777,7 +824,7 @@ async function replayTaskSession(taskId: string, opts: EngineOptions): Promise<W
 
   const entry = { phaseId, phaseIndex: manifest.phases.findIndex((p) => p.id === phaseId), task };
   state = await executeTask(entry, agents, state, opts, store, () => Boolean(opts.signal?.aborted));
-  if (opts.signal?.aborted && !isComplete(manifest, state)) {
+  if ((state.status === "paused" || opts.signal?.aborted) && !isComplete(manifest, state)) {
     state = { ...state, status: "paused" };
     writeAuditEvent(opts.auditPath, {
       timestamp: new Date().toISOString(), action: "run.paused", runId: state.runId,

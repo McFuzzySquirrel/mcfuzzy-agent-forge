@@ -9,7 +9,9 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
-    "cross-spawn": "^7.0.6"
+    "cross-spawn": "^7.0.6",
+    "read-cmd-shim": "^5.0.0",
+    "which": "^5.0.0"
   },
   "devDependencies": {
     "@types/cross-spawn": "^6.0.6",

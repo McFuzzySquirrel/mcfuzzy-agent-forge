@@ -67,6 +67,31 @@ test("discoverForgeRepo resolves canonical harness root", () => {
   assert.equal(repo.skills.length, 1);
 });
 
+test("legacy version numbers and explicit source references are not outputs", () => {
+  const root = createFixture();
+  writeFileSync(join(root, "docs", "PRD.md"), '# PRD\n## Phase 1: Checks\n- Automated WCAG 2.2 AA scanning\n- Compile evaluation report from `docs/EVALUATION.md`\n- Calibrate per `docs/SCENARIO-PROFILES.md`\n');
+  const tasks = compileExecutionManifest(discoverForgeRepo(root)).phases[0]!.tasks;
+  assert.ok(tasks.every((task) => task.expectedOutputs.length === 0));
+  assert.equal(tasks[0]!.title, "Automated WCAG 2.2 AA scanning");
+});
+
+test("phase-opening tasks consume prerequisite phase artifacts", () => {
+  const manifest = compileExecutionManifest(discoverForgeRepo(createFixture()));
+  assert.deepEqual(manifest.phases[1]!.tasks[0]!.inputs, ["work.1.1", "work.1.2"]);
+});
+
+test("structured tasks preserve atomic scope and reject unknown or cyclic dependencies", () => {
+  const root = createFixture();
+  const task = { id: "api-one", title: "API 2.2: Upload", description: "Implement upload; verify all boundaries. Preserve valid existing behavior.", ownerAgent: "api-engineer", dependencies: [] as string[], expectedOutputs: ["src/upload.ts"], validationCommands: ["npm test"], contract: { version: 1, kind: "implementation", references: ["docs/PRD.md"], requirements: ["FR-1: Upload"], acceptanceCriteria: ["Oversize upload rejected"], constraints: [] } };
+  const write = () => writeFileSync(join(root, "docs", "PRD.md"), '# PRD\n## Phase 1: Upload\n```forge-task\n' + JSON.stringify(task) + '\n```\n');
+  write();
+  assert.equal(compileExecutionManifest(discoverForgeRepo(root)).phases[0]!.tasks.length, 1);
+  task.dependencies = ["missing"]; write();
+  assert.throws(() => compileExecutionManifest(discoverForgeRepo(root)), /unknown dependency/);
+  task.dependencies = [task.id]; write();
+  assert.throws(() => compileExecutionManifest(discoverForgeRepo(root)), /cycle/);
+});
+
 test("detailed compilation reports stable task reconciliation", () => {
   const root = createFixture();
   const repo = discoverForgeRepo(root);
@@ -153,15 +178,12 @@ test("compileExecutionManifest auto-declares artifact produces/inputs", () => {
     assert.ok(task.produces, `task ${task.id} should declare a produces type`);
     assert.ok(Array.isArray(task.inputs), `task ${task.id} should declare inputs`);
   }
-  // Linear dependency chain within a phase: each task consumes the previous
-  // task's artifact type. Cross-phase ordering is handled by phase dependencies,
-  // so the first task of a phase starts with no in-phase input artifacts.
   assert.equal(manifest.phases[0]?.tasks[0]?.produces, "work.1.1");
   assert.deepEqual(manifest.phases[0]?.tasks[0]?.inputs, []);
   assert.equal(manifest.phases[0]?.tasks[1]?.produces, "work.1.2");
   assert.deepEqual(manifest.phases[0]?.tasks[1]?.inputs, ["work.1.1"]);
   assert.equal(manifest.phases[1]?.tasks[0]?.produces, "work.2.1");
-  assert.deepEqual(manifest.phases[1]?.tasks[0]?.inputs, []);
+  assert.deepEqual(manifest.phases[1]?.tasks[0]?.inputs, ["work.1.1", "work.1.2"]);
 });
 
 test("compileExecutionManifest falls back to first agent when no owner matches", () => {
@@ -428,6 +450,18 @@ function createFeatureFixture() {
 
   return root;
 }
+
+test("structured feature tasks preserve contracts and reject unresolved feature dependencies", () => {
+  const root = createFeatureFixture();
+  const task = { id: "foundation-task", title: "Foundation", description: "Build the foundation", ownerAgent: "api-engineer", dependencies: [], expectedOutputs: ["src/main.ts"], validationCommands: ["npm test"], contract: { version: 1, kind: "implementation", references: ["docs/PRD.md"], requirements: ["Foundation"], acceptanceCriteria: ["Tests pass"], constraints: [] } };
+  writeFileSync(join(root, "docs/features/foundation.md"), '# Feature: Foundation\n## 5. Implementation Tasks\n### Phase 1: Foundation\n```forge-task\n' + JSON.stringify(task) + '\n```\n');
+  const manifest = compileExecutionManifest(discoverForgeRepo(root));
+  assert.equal(manifest.phases[0]!.tasks[0]!.id, task.id);
+  assert.deepEqual(manifest.phases[1]!.tasks[0]!.inputs, ["work.foundation-task"]);
+  const vision = join(root, "docs/product-vision.md");
+  writeFileSync(vision, readFileSync(vision, "utf8").replace("| Foundation | Must |", "| Missing | Must |"));
+  assert.throws(() => compileExecutionManifest(discoverForgeRepo(root)), /unknown dependency 'Missing'/);
+});
 
 test("discoverForgeRepo detects the decomposed feature layout", () => {
   const root = createFeatureFixture();

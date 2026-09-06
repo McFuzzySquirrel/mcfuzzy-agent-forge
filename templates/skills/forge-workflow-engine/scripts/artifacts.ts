@@ -27,6 +27,7 @@ import {
 import { dirname, join } from "node:path";
 
 import type { Artifact, ArtifactProjection } from "../../forge-execution-adapter/scripts/types.ts";
+import { parseTaskHandoff } from "./task-result.ts";
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -189,7 +190,7 @@ export class ArtifactStore {
     inputTypes: string[];
     fields?: string[];
   }): ArtifactProjection {
-    const defaultFields = ["summary", "confidence", "filesChanged", "agentOutputExcerpt"];
+    const defaultFields = ["summary", "confidence", "filesChanged", "agentOutputExcerpt", "decisions", "interfaces", "tests", "unresolved"];
     const fieldSet = opts.fields ?? defaultFields;
 
     let sourceTokenEstimate = 0;
@@ -296,18 +297,11 @@ export class ArtifactStore {
     producedBy: string;
     outputFiles: string[];
     agentOutput: string;
+    validationEvidence?: string[];
     inputArtifactIds: string[];
   }): Artifact {
-    // Prefer the task description as the summary — it is always meaningful
-    // and unambiguous.  Fall back to the first substantive stdout line if no
-    // description was provided (shouldn't happen in practice).
-    const summary =
-      opts.taskDescription && opts.taskTitle
-        ? `${opts.taskTitle}: ${opts.taskDescription}`.slice(0, 200)
-        : opts.taskDescription
-        ? opts.taskDescription.slice(0, 200)
-        : opts.agentOutput.split("\n").find((l) => l.trim().length > 20)?.trim().slice(0, 200) ??
-          `Task ${opts.taskId} completed successfully.`;
+    const handoff = parseTaskHandoff(opts.agentOutput);
+    const summary = handoff?.summary ?? `Legacy task ${opts.taskId}: no structured outcome report; inspect changed files and logs before relying on completion.`;
 
     return this.write({
       type: opts.type,
@@ -316,13 +310,11 @@ export class ArtifactStore {
       producedBy: opts.producedBy,
       status: "complete",
       summary,
-      // 0.9 is a sensible default for a completed synthesis artifact.
-      // Agents that write structured artifacts can override this.
-      confidence: 0.9,
       inputs: opts.inputArtifactIds,
       filesChanged: opts.outputFiles,
       payload: {
-        agentOutputExcerpt: opts.agentOutput.slice(0, 500),
+        agentOutputExcerpt: handoff?.summary ?? opts.agentOutput.slice(-2000),
+        ...(handoff ? { decisions: handoff.decisions, interfaces: handoff.interfaces, tests: opts.validationEvidence ?? handoff.tests, agentReportedTests: handoff.tests, unresolved: handoff.unresolved } : {}),
         taskDescription: opts.taskDescription,
       },
       nextActions: [],

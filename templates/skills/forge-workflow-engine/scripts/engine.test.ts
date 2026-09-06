@@ -11,6 +11,8 @@ import { OpenAIAdapter } from "./harness/openai-adapter.ts";
 import { compileExecutionManifestDetailed } from "../../forge-execution-adapter/scripts/compiler.ts";
 import { discoverForgeRepo } from "../../forge-execution-adapter/scripts/discovery.ts";
 import { readControl, writeControl } from "./control.ts";
+import { approveHumanTask } from "./task-context.ts";
+import { ArtifactStore } from "./artifacts.ts";
 import { reconcileState, loadState, saveState, initState } from "./state.ts";
 import type { EngineOptions, ExecutionManifest, HarnessAdapter, ManifestTask, TaskResult, TaskStatus, WorkflowState } from "./types.ts";
 
@@ -410,6 +412,63 @@ test("effective task timeout prefers the per-task manifest timeoutMs over the en
 
   assert.equal(state.status, "complete");
   assert.deepEqual(harness.timeouts, [25_000]);
+});
+
+test("human review pauses without dispatch and resumes only with task-bound evidence", async () => {
+  const fixture = makeEngineFixture({ ownerAgent: undefined, contract: { version: 1, kind: "human-review", requirements: ["Human checks keyboard flow"], acceptanceCriteria: ["Named reviewer confirms keyboard usability"], constraints: [], references: ["docs/PRD.md"], reviewFile: "docs/reviews/keyboard.json" } });
+  const harness = new RecordingHarness();
+  const options = engineOptionsFor(fixture, harness, 1000, { autoCommit: false });
+  const pending = await runEngine(options);
+  assert.equal(pending.status, "paused");
+  assert.deepEqual(harness.timeouts, []);
+  assert.equal(pending.tasks["1.1"]!.status, "pending");
+  const task = (JSON.parse(readFileSync(fixture.manifestPath, "utf8")) as ExecutionManifest).phases[0]!.tasks[0]!;
+  writeFileSync(join(fixture.root, "review.md"), "Operator reviewed keyboard flow and recorded evidence.");
+  approveHumanTask(fixture.root, task, "Reviewer", ["review.md"]);
+  const resumed = await runEngine(options);
+  assert.equal(resumed.tasks["1.1"]!.status, "complete");
+  assert.deepEqual(harness.timeouts, []);
+  writeFileSync(join(fixture.root, "review.md"), "Changed evidence requires renewed review.");
+  const stale = await runEngine(options);
+  assert.equal(stale.status, "paused");
+  assert.equal(stale.tasks["1.1"]!.status, "pending");
+});
+
+test("structured tasks require passing validation even when legacy validation is disabled", async () => {
+  const fixture = makeEngineFixture({ expectedOutputs: ["result.txt"], validationCommands: ['node -e "process.exit(1)"'], contract: { version: 1, kind: "implementation", requirements: ["Build a result"], acceptanceCriteria: ["Result passes the test"], constraints: [], references: ["docs/PRD.md"] } });
+  const harness: HarnessAdapter = {
+    name: "contract-test", supportsConcurrency: true, capabilities: ["repository-tools"],
+    async invoke() {
+      writeFileSync(join(fixture.root, "result.txt"), "result");
+      return { success: true, outputFiles: ["result.txt"], stderr: "", durationMs: 1, stdout: '```forge-result\n{"summary":"Built result","decisions":[],"interfaces":[],"tests":["Claimed passed"],"unresolved":[]}\n```' };
+    },
+  };
+  const state = await runEngine(engineOptionsFor(fixture, harness, 10000, { autoCommit: false, runValidation: false }));
+  assert.equal(state.tasks["1.1"]!.status, "failed");
+  assert.match(state.tasks["1.1"]!.errorMessage!, /validation command failed/);
+});
+
+test("structured completion requires a report and projects engine-verified evidence", async () => {
+  for (const reported of [false, true]) {
+    const fixture = makeEngineFixture({ produces: "work.result", expectedOutputs: ["result.txt"], validationCommands: ['node -e "process.exit(0)"'], contract: { version: 1, kind: "implementation", requirements: ["Build a result"], acceptanceCriteria: ["Result passes the test"], constraints: [], references: ["docs/PRD.md"] } });
+    const harness: HarnessAdapter = {
+      name: "contract-test", supportsConcurrency: true, capabilities: ["repository-tools"],
+      async invoke() {
+        writeFileSync(join(fixture.root, "result.txt"), "result");
+        return { success: true, outputFiles: ["result.txt"], stderr: "", durationMs: 1, stdout: reported ? '```forge-result\n{"summary":"Built result","decisions":["Atomic update"],"interfaces":[],"tests":["Agent claim"],"unresolved":[]}\n```' : "Done" };
+      },
+    };
+    const options = engineOptionsFor(fixture, harness, 10000, { autoCommit: false });
+    const state = await runEngine(options);
+    assert.equal(state.tasks["1.1"]!.status, reported ? "complete" : "failed");
+    if (reported) {
+      const store = new ArtifactStore({ artifactsPath: options.artifactsPath });
+      const projection = store.renderProjection(store.project({ taskId: "next", inputTypes: ["work.result"] }));
+      assert.match(projection, /Atomic update/);
+      assert.match(projection, /exit 0 \(engine-verified\)/);
+      assert.doesNotMatch(projection, /Agent claim/);
+    } else assert.match(state.tasks["1.1"]!.errorMessage!, /forge-result/);
+  }
 });
 
 test("serialized completion is durable before B starts and survives B throwing and replay", async () => {
@@ -1195,7 +1254,7 @@ test("output gate: a failing manifest validation command marks the task failed",
 });
 
 test("output gate: a passing manifest validation command allows completion", async () => {
-  const fixture = makeEngineFixture({ validationCommands: ["true"] });
+  const fixture = makeEngineFixture({ validationCommands: ['node -e "process.exit(0)"'] });
   const harness = new HollowHarness();
   const state = await runEngine(engineOptionsFor(fixture, harness, 1_000, { allowNoop: false, runValidation: true }));
 

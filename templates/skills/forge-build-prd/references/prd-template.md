@@ -135,15 +135,16 @@ Describe states and transitions the system goes through (e.g., loading, active, 
 
 ## 14. Implementation Phases
 
-Break the work into ordered phases with checkboxes:
+Break the work into ordered phases using `forge-task` JSON blocks from
+`references/task-contract.md`. Each block contains an explicit owner, task
+dependencies, requirement meaning, criteria, constraints, references, outputs,
+and validation commands. No checkbox-only tasks in new plans.
 
 ### Phase 1: [Name]
-- [ ] Task 1
-- [ ] Task 2
+[One structured block per bounded outcome.]
 
 ### Phase 2: [Name]
-- [ ] Task 1
-- [ ] Task 2
+[Structured blocks with explicit dependency IDs.]
 
 ---
 

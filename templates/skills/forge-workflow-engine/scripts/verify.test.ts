@@ -158,7 +158,7 @@ test("verifyTaskResult passes a substantive response even without file changes",
 test("verifyTaskResult skips the no-op heuristic when validation is enabled and declared", async () => {
   const root = mkdtempSync(join(tmpdir(), "verify-validation-"));
   const result = await verifyTaskResult(
-    makeTask({ validationCommands: ["true"] }),
+    makeTask({ validationCommands: ['node -e "process.exit(0)"'] }),
     makeResult({ stdout: "Ready for the task." }),
     null,
     { repoRoot: root, allowNoop: false, runValidation: true },
@@ -168,10 +168,10 @@ test("verifyTaskResult skips the no-op heuristic when validation is enabled and 
 
 test("runTaskValidation requires every command to pass", async () => {
   const root = mkdtempSync(join(tmpdir(), "verify-runval-"));
-  const pass = await runTaskValidation(makeTask({ validationCommands: ["true"] }), root, 10_000);
+  const pass = await runTaskValidation(makeTask({ validationCommands: ['node -e "process.exit(0)"'] }), root, 10_000);
   assert.equal(pass.ok, true);
 
-  const fail = await runTaskValidation(makeTask({ validationCommands: ["false"] }), root, 10_000);
+  const fail = await runTaskValidation(makeTask({ validationCommands: ['node -e "process.exit(1)"'] }), root, 10_000);
   assert.equal(fail.ok, false);
   assert.match(fail.reason ?? "", /validation command failed/);
 

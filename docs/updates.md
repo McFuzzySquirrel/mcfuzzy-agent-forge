@@ -4,6 +4,31 @@ Detailed release and change notes for MyForge.
 
 ---
 
+## September 2026 - v3.54
+
+### Structured task contracts and evidence-based execution
+
+- New planning guidance uses explicit `forge-task` JSON blocks with bounded
+  outcomes, specialist ownership, requirements, criteria, references, outputs,
+  dependency IDs and validation commands. Legacy plans remain supported with
+  migration warnings; existing target projects are not rewritten automatically.
+- Structured compilation preserves task text, rejects unresolved owners and
+  dependencies/cycles, and carries prerequisite-phase artifacts into prompts.
+- Runtime prompts include bounded local reference contents and acceptance
+  criteria. Structured tasks require passing validation and a `forge-result`
+  outcome report, independent of the legacy opt-in validation flag.
+- Human-review tasks pause without model dispatch and require operator evidence
+  via `approve-task`; changed task/reference/evidence fingerprints invalidate
+  approval. Attestations are local audit records, not authenticated identities.
+- Artifact handoffs now preserve outcome reports, decisions, interfaces and
+  engine-verified commands without invented confidence scores.
+- Legacy path inference excludes numeric versions and explicit source references.
+  Validation shell commands preserve quoted arguments on Windows; standard npm
+  Node CLI shims are resolved directly to preserve multiline task prompts.
+- Added ADR-042 and the task-contract authoring/migration guide.
+
+---
+
 ## September 2026 - v3.53
 
 ### Complete authoring quality and Console modernization

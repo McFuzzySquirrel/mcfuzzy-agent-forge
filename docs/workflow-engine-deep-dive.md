@@ -278,7 +278,7 @@ repository tools before making a request. A valid text task sends a
 `POST /v1/chat/completions` with:
 
 - System message: the agent's `rawBody` (the content of the `.agent.md` file) plus injected constraints
-- User message: the task title, description, expected outputs, and validation commands
+- User message: the task title, description, expected outputs, and validation commands; contract tasks also carry requirements, acceptance criteria, constraints, bounded source-reference contents, and the required outcome-report format
 
 This enables fully API-driven builds without any local tooling installed, but
 only for tasks explicitly requiring `text`.
@@ -286,6 +286,9 @@ only for tasks explicitly requiring `text`.
 ### Common task request and capabilities
 
 The engine prepares a read-only `TaskAttemptRequest` before each adapter call.
+Structured implementation contracts require repository tooling, passing validation,
+and an outcome report; human-review contracts pause for operator attestation and
+never reach a harness. See [task contracts](task-contracts.md).
 It contains the agent and task descriptors, effective model, projected context,
 repository root, attempt metadata, and budget. Effective model precedence is:
 

@@ -117,6 +117,15 @@ any opt-in question.
 
 ### Step 2: Verify the Outputs
 
+Verify the per-task contract from the sibling skill's
+`forge-build-prd/references/task-contract.md`: new plans contain structured
+`forge-task` blocks, bounded outcomes, explicit planned owners, requirements,
+criteria, references, outputs, and meaningful validation. Human reviews are
+separate gated tasks. If deficient, delegate repair to the owning authoring
+skill; do not rewrite its output yourself. Existing legacy plans require an
+explicit migration decision, not silent conversion. Headless PRD approval never
+satisfies an implementation-time human-review gate.
+
 When `forge-build-prd` finishes, verify the state:
 
 - **Always:** `docs/PRD.md` exists and contains at minimum Overview, Goals,

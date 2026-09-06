@@ -89,6 +89,14 @@ Create `docs/product-vision.md`. Load `references/product-vision-template.md` fo
 
 ### Step 5: Write the Feature Documents
 
+Load the sibling skill's `forge-build-prd/references/task-contract.md`.
+Preserve structured task IDs, requirement meanings, criteria, constraints,
+reference paths, planned owners, output files, validation commands, and human
+gates. Do not compress a complete task back to a topic bullet. Update explicit
+dependency IDs when a task is deliberately split, and verify every source
+requirement remains covered. Feature dependency names must match complete
+feature-table names exactly; enumerate dependencies instead of "all features".
+
 For each feature, create `docs/features/{feature-name}.md`. Load `references/feature-document-template.md` for the full structure. Map original PRD content:
 - User stories → re-ID with feature prefix (`AUTH-US-01`)
 - Functional requirements → re-ID with feature prefix (`AUTH-FR-01`)

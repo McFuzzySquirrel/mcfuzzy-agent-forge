@@ -2,6 +2,7 @@ import { existsSync, readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 
 import type { AgentDescriptor, ExecutionManifest, ForgeRepo, ManifestPhase, ManifestTask } from "./types.ts";
+import { parseTaskBlocks } from "./task-contract.ts";
 
 interface HeadingBlock {
   level: number;
@@ -143,13 +144,15 @@ function extractPaths(text: string): string[] {
   const push = (value: string) => {
     if (value.includes(" ")) return;
     const token = value.replace(/^`|`$/g, "");
+    if (/^\d+(?:\.\d+)+$/.test(token)) return;
     if (NON_PATH_DOTTED_TOKENS.has(token.toLowerCase())) return;
     if (!/[./]/.test(token) && !/\.[A-Za-z0-9_-]+$/.test(token)) return;
     seen.add(token);
   };
 
-  for (const match of text.matchAll(/`([^`]+\.[A-Za-z0-9_-]+)`/g)) push(match[1]!);
-  for (const match of text.matchAll(/(?:^|\s)([A-Za-z0-9_./-]+\.[A-Za-z0-9_-]+)(?=$|[\s,;])/g)) push(match[1]!);
+  const outputsOnly = text.replace(/\b(?:per|from|see|consult|read|reference|references)\s+`[^`]+`/gi, "");
+  for (const match of outputsOnly.matchAll(/`([^`]+\.[A-Za-z0-9_-]+)`/g)) push(match[1]!);
+  for (const match of outputsOnly.matchAll(/(?:^|\s)([A-Za-z0-9_./-]+\.[A-Za-z0-9_-]+)(?=$|[\s,;])/g)) push(match[1]!);
   return [...seen];
 }
 
@@ -254,7 +257,7 @@ function pushTask(
   const previous = tasks[tasks.length - 1];
   tasks.push({
     id: taskId,
-    title: text.split(/[:.]/)[0]!.trim(),
+    title: stripTaskLabel(text.replace(/^\[[ xX]\]\s*/, "")).trim(),
     description: text,
     ownerAgent: owner.owner,
     requiredCapabilities: ["repository-tools"],
@@ -290,6 +293,8 @@ function extractTasks(
   warnings: string[],
   granularity: "coarse" | "fine",
 ): ManifestTask[] {
+  const structured = parseTaskBlocks(phaseBody, agents);
+  if (structured) return structured;
   const tasks: ManifestTask[] = [];
 
   if (granularity === "coarse") {
@@ -643,6 +648,7 @@ function compileFeatureManifest(repo: ForgeRepo, options: CompileOptions = {}): 
     const dependencies = feature.dependencies.flatMap((name) => {
       const depPhases = phaseIdsByFeature.get(name);
       if (!depPhases) {
+        if (phases.some((phase) => phase.tasks.some((task) => task.contract))) throw new Error(`Feature '${feature.name}' has unknown dependency '${name}' in a structured plan.`);
         warnings.push(`Feature '${feature.name}' depends on '${name}', but no phases were emitted for it.`);
         return [];
       }
@@ -682,6 +688,35 @@ function compileFeatureManifest(repo: ForgeRepo, options: CompileOptions = {}): 
 
 /** Compile a runnable execution manifest from the repo's PRD representation. */
 export function compileExecutionManifest(repo: ForgeRepo, options: CompileOptions = {}): ExecutionManifest {
+  const manifest = compileRawManifest(repo, options);
+  const tasks = manifest.phases.flatMap((phase) => phase.tasks);
+  const byId = new Map(tasks.map((task) => [task.id, task]));
+  const visiting = new Set<string>();
+  const visited = new Set<string>();
+  const visit = (task: ManifestTask): void => {
+    if (visiting.has(task.id)) throw new Error(`Task dependency cycle at '${task.id}'.`);
+    if (visited.has(task.id)) return;
+    visiting.add(task.id);
+    const phase = manifest.phases.find((entry) => entry.tasks.includes(task))!;
+    const dependencies = [...task.dependencies, ...phase.dependencies.flatMap((id) => manifest.phases.find((entry) => entry.id === id)?.tasks.map((entry) => entry.id) ?? [])];
+    for (const id of dependencies) {
+      const dependency = byId.get(id);
+      if (!dependency) {
+        if (task.contract) throw new Error(`Task '${task.id}' has unknown dependency '${id}'.`);
+        continue;
+      }
+      visit(dependency);
+    }
+    task.inputs = [...new Set([...task.inputs ?? [], ...dependencies.flatMap((id) => byId.get(id)?.produces ? [byId.get(id)!.produces!] : [])])];
+    visiting.delete(task.id);
+    visited.add(task.id);
+    if (!task.contract) manifest.warnings.push(`Legacy task '${task.id}' has inferred ownership/outputs and no structured acceptance contract; migrate before unattended execution.`);
+  };
+  for (const task of tasks) visit(task);
+  return manifest;
+}
+
+function compileRawManifest(repo: ForgeRepo, options: CompileOptions = {}): ExecutionManifest {
   if (repo.sourceLayout === "features") return compileFeatureManifest(repo, options);
   const manifest = compileMonolithicManifest(repo, options);
   // A monolithic PRD may gain additive feature documents before a full
@@ -693,6 +728,17 @@ export function compileExecutionManifest(repo: ForgeRepo, options: CompileOption
       const name = basename(file, ".md");
       const doc = readFileSync(file, "utf8");
       const phaseId = `${featureCode(name)}-1`;
+      const blocks = parseHeadings(doc).filter((block) => /^phase\s+[a-z]?\d+/i.test(block.title));
+      if (blocks.length) {
+        let previous: string | undefined;
+        for (const block of blocks) {
+          const id = `${featureCode(name)}-${phaseIdFromTitle(block.title, 0)}`;
+          const tasks = extractTasks(block.title, block.body, id, repo.agents, manifest.validationCommands, warnings, options.granularity ?? "fine");
+          pushPhase(manifest.phases, id, block.title, name, block.title, tasks, previous ? [previous] : []);
+          previous = id;
+        }
+        continue;
+      }
       const tasks = synthesizeTasksFromFr(name, doc, phaseId, repo.agents, manifest.validationCommands, warnings, options.granularity ?? "fine");
       // Additive documents have no feature graph in monolithic mode. Keep
       // them independent rather than making every new feature wait for the
@@ -717,7 +763,7 @@ export interface TeamValidation {
 /** Deterministic team-validation gate mirroring forge-build-agent-team Step 7. */
 export function validateTeam(manifest: ExecutionManifest, agents: AgentDescriptor[]): TeamValidation {
   const unassignedTasks = manifest.phases
-    .flatMap((phase) => phase.tasks.filter((task) => !task.ownerAgent))
+    .flatMap((phase) => phase.tasks.filter((task) => !task.ownerAgent && task.contract?.kind !== "human-review"))
     .map((task) => task.id);
 
   const fileOwners = new Map<string, { owners: Set<string>; tasks: string[] }>();
@@ -782,7 +828,7 @@ export function buildResponsibilityMatrix(manifest: ExecutionManifest, validatio
   const byOwner = new Map<string, { phase: string; feature: string; taskId: string; outputs: string[] }[]>();
   for (const phase of manifest.phases) {
     for (const task of phase.tasks) {
-      const owner = task.ownerAgent ?? "unassigned";
+      const owner = task.contract?.kind === "human-review" ? "human-reviewer" : task.ownerAgent ?? "unassigned";
       const list = byOwner.get(owner) ?? [];
       list.push({ phase: phase.id, feature: phase.feature ?? "", taskId: task.id, outputs: task.expectedOutputs });
       byOwner.set(owner, list);

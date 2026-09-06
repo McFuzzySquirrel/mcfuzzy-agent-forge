@@ -13,6 +13,14 @@ This skill is the autonomous execution alternative to the prompt-driven flows. T
 
 ## Prerequisites
 
+Structured `forge-task` contracts require explicit output files, passing
+validation commands and a final `forge-result` outcome report. Their reference
+files and acceptance criteria are included in the prompt. `human-review` tasks
+pause without model dispatch: an operator must run `approve-task <id> --repo
+<path> --reviewer <name> --evidence <file> --confirm-human-review`, then resume.
+Agents must not invoke this command or fabricate review evidence. `--yes` never
+approves human work. Legacy tasks retain opt-in command validation.
+
 Before running this skill, the following must exist in the repository:
 
 - `docs/EXECUTION-MANIFEST.json` - compiled by `forge-execution-adapter`

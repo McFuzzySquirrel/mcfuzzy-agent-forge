@@ -7,6 +7,6 @@ export function makeNodeShim(directory: string, name: string, body: string): str
   writeFileSync(script, `#!/usr/bin/env node\n${body}`, { mode: 0o755 });
   if (process.platform !== "win32") return script;
   const command = join(directory, `${name}.cmd`);
-  writeFileSync(command, `@echo off\r\n"${process.execPath}" "${script}" %*\r\n`);
+  writeFileSync(command, `@echo off\r\n"${process.execPath}" "%~dp0\\${name}.cjs" %*\r\n`);
   return command;
 }

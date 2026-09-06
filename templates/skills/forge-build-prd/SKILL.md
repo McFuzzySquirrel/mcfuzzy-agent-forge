@@ -69,6 +69,14 @@ Wait for the user to respond. Ask follow-up questions if answers reveal new unkn
 
 ### Step 3: Draft the Document
 
+Load `references/task-contract.md` before writing implementation phases. Author
+one bounded `forge-task` JSON block per task, carrying requirement meaning,
+acceptance criteria, constraints, source references, explicit planned specialist
+names, dependencies, deliverable paths, and executable validation commands.
+Separate human sign-off from agent preparation. Apply its per-task review in
+both interactive and headless gap checks; document-level completeness alone is
+not sufficient. The compiler does not repair vague instructions.
+
 Produce a structured PRD using the template in `references/prd-template.md`. Load that file now and follow its structure. Use information gathered in Steps 1–2. Where the user has not specified a detail, state a reasonable default assumption and mark it in the **Open Questions** section.
 
 > Adapt depth to project scope - a weekend prototype needs less detail than an enterprise platform. Keep all section headings for consistency.

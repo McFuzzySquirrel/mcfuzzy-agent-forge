@@ -104,12 +104,10 @@ Any new technologies, libraries, or tools required. For each:
 ## 9. Implementation Phases
 
 ### Phase F1: [Name]
-- [ ] Task 1
-- [ ] Task 2
+[One forge-task JSON block per bounded outcome; follow forge-build-prd/references/task-contract.md.]
 
 ### Phase F2: [Name]
-- [ ] Task 1
-- [ ] Task 2
+[Preserve requirements, criteria, explicit owners/dependencies, references, outputs, validation and human gates.]
 
 ---
 

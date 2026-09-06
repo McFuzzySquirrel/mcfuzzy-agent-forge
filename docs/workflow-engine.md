@@ -112,8 +112,11 @@ verifies every successful call before marking the task complete:
 - **Relax** with `--allow-noop` / `FORGE_ENGINE_ALLOW_NOOP=1` (expected-output
   check stays).
 - **Validation commands** - `--run-validation` / `FORGE_ENGINE_RUN_VALIDATION=1`
-  executes each task's manifest `validationCommands` (cwd = repo root) and
-  requires exit 0 before completion.
+  enables legacy task validation. Structured implementation contracts always
+  execute `validationCommands` (cwd = repo root) and require exit 0, regardless
+  of these flags. They also require a valid `forge-result` outcome report with
+  no unresolved items. See [task contracts](task-contracts.md) for authoring,
+  reference limits, migration, and operator-only human-review gates.
 
 The final run summary and `workflow-engine status` flag tasks completed with no
 recorded output files, so a hollow "complete" run is visible. Both the opencode
@@ -243,7 +246,7 @@ npm run workflow-engine -- viz     [--repo <path>] [--port <n>] [--no-open]
 | `--viz [port]` | *(off)* | Launch the live Forge Board dashboard (default port `4299`, next free port if busy) |
 | `--no-open` | *(off)* | Do not auto-open the browser (the URL is still printed) |
 | `--allow-noop` | *(off)* | Relax the output-verification no-op gate (missing/trivial output still fails) |
-| `--run-validation` | *(off)* | Execute each task's manifest `validationCommands` and require them to pass |
+| `--run-validation` | *(off for legacy tasks)* | Execute legacy manifest `validationCommands`; structured implementation tasks always require passing validation |
 | `--auto-commit` | **on** | Commit the working tree after each completed task (one commit per task; see *Auto-commit* below) |
 | `--no-auto-commit` | *(off)* | Disable per-task auto-commit (e.g. mid-rebase or with a dirty working tree) |
 | `--commit-message-template <tmpl>` | *(built-in)* | Commit message with `{taskId}` / `{taskTitle}` placeholders; default `feat(forge-engine): complete task {taskId} - {taskTitle}` |
@@ -486,8 +489,9 @@ artifact payloads or previous conversations.
 
 When a task declares `inputs`, the engine (`ArtifactStore.project`) takes the
 latest **completed** artifact of each input type and keeps only a few fields:
-`artifactId`, `type`, `summary`, `confidence`, `filesChanged`, and
-`agentOutputExcerpt` (plus any task-requested `fields`). `renderProjection`
+`artifactId`, `type`, `summary`, optional `confidence`, `filesChanged`,
+`agentOutputExcerpt`, `decisions`, `interfaces`, `tests`, and `unresolved`
+(plus any task-requested `fields`). `renderProjection`
 turns that into a compact markdown block
 (`## Context from previous tasks`), and the harness adapter prepends only that
 block to the agent's prompt - the full `WorkflowState` and the artifact JSONs
@@ -507,9 +511,9 @@ What the percentage does *not* mean:
 - It is relative to the artifact payloads, not the entire prompt.
 - It is a character-count proxy, not the model's real tokenizer.
 - It only trims input tokens; output tokens are unaffected.
-- The default projection stays compact (`summary`, `confidence`,
-  `filesChanged`, and `agentOutputExcerpt`), so the larger the artifacts, the
-  larger the real saving.
+- Default projection keeps outcome summaries, decisions, interfaces, tests,
+  unresolved items, changed files, an output excerpt, and optional confidence.
+  Savings depend on the size of those fields relative to the full artifact.
 
 Plainly: each task hands off a short typed summary of what it produced, not its
 full output; the engine estimates the reduction (~4 chars/token) from the full
@@ -558,7 +562,7 @@ To start fresh (e.g. after recompiling the manifest), delete `docs/WORKFLOW-STAT
 | `FORGE_ENGINE_ATTACH` | *(unset)* | `1` forces the `opencode serve` keep-alive (same as `--keep-alive`); `0` forces cold start per task (same as `--no-keep-alive`); unset = adaptive |
 | `FORGE_ENGINE_ATTACH_URL` | *(unset)* | Attach tasks to an existing `opencode serve` URL (same as `--attach`) |
 | `FORGE_ENGINE_ALLOW_NOOP` | *(unset)* | `1` relaxes the no-op output gate (same as `--allow-noop`) |
-| `FORGE_ENGINE_RUN_VALIDATION` | *(unset)* | `1` runs manifest `validationCommands` per task (same as `--run-validation`) |
+| `FORGE_ENGINE_RUN_VALIDATION` | *(unset)* | `1` enables legacy validation; structured implementation validation is always required |
 | `FORGE_ENGINE_AUTO_COMMIT` | `1` | `0` disables auto-commit after each completed task (same as `--no-auto-commit`); default on |
 | `FORGE_ENGINE_COMMIT_MESSAGE_TEMPLATE` | *(built-in)* | Commit message template with `{taskId}` / `{taskTitle}` placeholders |
 | `OPENCODE_BIN` | `opencode` | Path to the opencode binary |

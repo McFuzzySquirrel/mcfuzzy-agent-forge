@@ -52,11 +52,10 @@ Load this when writing a feature document.
 ## 5. Implementation Tasks
 
 ### Phase 1: [Name]
-- [ ] Task 1
-- [ ] Task 2
+[Preserve forge-task JSON blocks from the PRD, using the task-contract reference.]
 
 ### Phase 2: [Name]
-- [ ] Task 1
+[Include explicit dependency IDs, verification and separate human-review gates.]
 
 ---
 

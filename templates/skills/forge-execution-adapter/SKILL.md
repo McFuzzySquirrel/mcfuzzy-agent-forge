@@ -39,7 +39,15 @@ The CLI auto-detects the repository root, so it can be run from inside the skill
 
 ### Task granularity
 
-`compile` decomposes each PRD phase into tasks at a configurable granularity:
+New plans use fenced `forge-task` JSON objects inside phase headings. Follow
+[the shared authoring contract](../forge-build-prd/references/task-contract.md).
+Compilation preserves these tasks without heuristic splitting, requires explicit
+generated specialist owners, rejects unresolved task dependencies and cycles,
+and wires prerequisite task/phase artifacts into inputs. Human-review contracts
+have no agent owner and are excluded from unassigned-agent warnings.
+
+Legacy checkbox plans remain supported with per-task migration warnings.
+`compile` decomposes legacy PRD phases at a configurable granularity:
 
 ```bash
 npm run forge-execution-adapter -- compile                       # fine (default)

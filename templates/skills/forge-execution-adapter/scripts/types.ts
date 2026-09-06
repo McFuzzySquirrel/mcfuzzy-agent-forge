@@ -43,8 +43,19 @@ export interface ForgeRepo {
 
 export type TaskCapability = "text" | "repository-tools";
 
+export interface TaskContract {
+  version: 1;
+  kind: "implementation" | "human-review";
+  requirements: string[];
+  acceptanceCriteria: string[];
+  constraints: string[];
+  references: string[];
+  reviewFile?: string;
+}
+
 export interface ManifestTask {
   id: string;
+  contract?: TaskContract;
   title: string;
   description: string;
   ownerAgent?: string;
