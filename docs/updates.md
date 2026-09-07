@@ -198,12 +198,10 @@ Detailed release and change notes for MyForge.
   native `--agent` selection on `.claude/agents/`, `--permission-mode bypassPermissions`,
   and JSON-envelope failure classification (ADR-042).
 - The launcher defaults a Claude-bootstrapped repo to the `claude` engine harness.
-- Added the `claude` authoring runner (`FORGE_RUN_WITH=claude`, default for Claude repos)
-  with model inventory from `claude -p "/model" --bare --output-format json` (ADR-043).
-- The Console defaults `.claude` repos to the Claude runner and harness and offers Claude
-  Code in the model-planning terminal.
-- Existing Claude repos with a persisted OpenCode-shaped stage model must re-pick it against
-  `claude_cli` or set inherit; `FORGE_RUN_WITH=opencode` restores the previous runner.
+- Added the `claude` authoring runner, selected with `FORGE_RUN_WITH=claude`, with model
+  inventory from `claude -p "/model" --bare --output-format json` (ADR-043).
+- The Console defaults `.claude` repos to the Claude engine harness and offers Claude Code
+  in the model-planning terminal.
 
 ---
 

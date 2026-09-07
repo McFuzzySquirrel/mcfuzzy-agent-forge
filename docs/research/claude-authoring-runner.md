@@ -2,6 +2,8 @@
 
 **Date:** 2026-09-07
 **Status:** Implemented on this branch (ADR-043)
+**Amended 2026-09-07:** the runner default for Claude repos was restored to `opencode`
+after the Console's per-runner inventory hid OpenCode's models; see ADR-043.
 **Branch:** `feat/claude-authoring-runner`, cut from `feat/claude-harness-adapter` at `53ef2b6`
 **Companion:** [`claude-code-harness-adapter.md`](./claude-code-harness-adapter.md) covers the
 execution side. This document covers the authoring side. Everything below was verified by
