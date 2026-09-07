@@ -1,7 +1,7 @@
 # Scoping: a Claude Code harness adapter for the workflow engine
 
 **Date:** 2026-09-07
-**Status:** Proposal, not yet implemented
+**Status:** Implemented on this branch (ADR-042)
 **Baseline:** `templates/skills/forge-workflow-engine/scripts/harness/copilot-adapter.ts`
 
 ## Problem

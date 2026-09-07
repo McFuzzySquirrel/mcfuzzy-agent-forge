@@ -21,7 +21,7 @@ repository or running the tool, not inferred. File and line references are again
 | Pushed | Yes, to `fork` |
 | Upstream PR | **Blocked**, see below. Cross-fork PRs cannot be opened from this account. |
 | Fork PR | Opened against `lithiumriver:main` instead, so the work is reviewable in the fork. |
-| Implementation | **Not started.** Scope only. Open questions resolved 2026-09-07, see section 5. |
+| Implementation | **Done**, same branch: adapter, wiring, docs, ADR-042, launcher default. Open questions resolved 2026-09-07, see section 5. |
 
 ### The upstream PR is blocked
 
