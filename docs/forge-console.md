@@ -132,8 +132,9 @@ forge-launcher draft-prd  --repo <path>   # idea → PRD (headless)
 forge-launcher draft-team --repo <path>   # PRD → agent team (headless)
 ```
 
-They honor `FORGE_RUN_WITH` (`opencode`/`copilot`/`stub`) and derive the runner
-from the project's harness (`github` → copilot, otherwise opencode).
+They honor `FORGE_RUN_WITH` (`opencode`/`copilot`/`claude`/`stub`) first, then
+the `runner` saved in `docs/authoring-config.json`, and otherwise derive the
+runner from the project's harness (`github` → copilot, otherwise opencode).
 
 ---
 

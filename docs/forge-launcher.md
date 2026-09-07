@@ -98,6 +98,7 @@ manual opening. Headless and CI workflows do not require it.
 
 ```bash
 npx forge-launcher@beta [--non-interactive] [--headless] [--draft] [--dry-run] [--debug]
+                              [--runner <copilot|opencode|claude|inherit>]
 npx forge-launcher@beta bootstrap [TARGET_DIR] [--harness agents|github|claude|opencode] [--force]
 npx forge-launcher@beta bootstrap [TARGET_DIR] ... [--init-git]
 npx forge-launcher@beta engine-run [--repo <path>] [--harness <h>] [--concurrency <n>]
@@ -117,6 +118,7 @@ npx forge-launcher@beta draft-skills [--repo <path>] [--prd-model <id|inherit>]
                               [--team-model <id|inherit>] [--skills-model <id|inherit>]
 npx forge-launcher@beta authoring-config [--repo <path>] [--prd-model <id|inherit>]
                               [--team-model <id|inherit>] [--skills-model <id|inherit>]
+                              [--runner <copilot|opencode|claude|inherit>]
 npx forge-launcher@beta authoring-models --repo <path>
                               --runner <copilot|opencode|claude> [--refresh]
 ```
@@ -184,6 +186,7 @@ The authoring pipeline has three model-selectable stages: `prd`, `team`, and
 ```json
 {
   "version": 1,
+  "runner": "claude",
   "models": {
     "prd": "provider/model-id",
     "team": "provider/model-id",
@@ -191,6 +194,12 @@ The authoring pipeline has three model-selectable stages: `prd`, `team`, and
   }
 }
 ```
+
+The top-level `runner` is optional and pins the authoring runner for the
+project: `copilot`, `opencode`, or `claude`. Omit it, or set it to
+`"inherit"`, to keep the harness rule: `copilot` for a GitHub harness and
+`opencode` otherwise, including for the Claude harness. `version` stays `1`,
+so older readers simply ignore the key.
 
 Each model is optional. Omit a key, or set it to `"inherit"`, to use the
 runner's default without inventing a model ID. Saving validates this schema but
@@ -200,6 +209,13 @@ preserved until a stage is invoked. Environment overrides are
 is invocation override, stage environment variable, saved project setting, then
 runner inheritance. Explicit unavailable or incompatible selections fail
 clearly; they are not silently substituted.
+
+The runner follows the same ladder, first match wins: the `--runner` flag on
+the main `forge-launcher` invocation, then `FORGE_RUN_WITH` in the
+environment, then the saved project `runner`, then harness inheritance.
+Invocation provenance in `docs/authoring-state.json` records which of those
+sources decided it. Only `FORGE_RUN_WITH` may name the offline `stub` runner;
+`stub` is never a persisted or flag-selectable choice.
 
 The separate project-skill stage consumes `docs/SKILL-CANDIDATES.json` and
 records its result in `docs/authoring-state.json`. Each stage records status,
@@ -222,6 +238,12 @@ All authoring entry points accept the three stage model overrides:
 override and resume runner inheritance. `authoring-models` refreshes or reads
 the runner inventory; explicit selections are checked against that inventory
 and fail clearly when unavailable or incompatible.
+The main `forge-launcher` invocation accepts
+`--runner <copilot|opencode|claude|inherit>` for that run, and
+`forge-launcher authoring-config --runner <copilot|opencode|claude|inherit>`
+saves the choice, where `inherit` removes the key. `authoring-models --runner`
+is unchanged and per-invocation: it names the runner whose inventory to read
+or refresh for that call only.
 Copilot refresh submits `copilot -p "/model list names only"` and extracts the
 model names from the response. Output is collected from both stdout and stderr
 because CLI versions differ in which stream they use. If the installed Copilot
@@ -320,9 +342,12 @@ default assumption in the PRD). `FORGE_RUN_WITH` selects the authoring runner
 and its command shape: `opencode` emits `opencode run --auto`, `copilot` emits
 `copilot -p "<message>" --yolo`, and `claude` emits
 `claude -p "<message>" --permission-mode bypassPermissions [--model <alias>]`.
-The default is `copilot` for the GitHub Copilot harness and `opencode`
-otherwise, including for the Claude harness; `claude` is selected with
-`FORGE_RUN_WITH=claude`. Selecting it requires stage models from the
+It outranks the `runner` saved in `docs/authoring-config.json`, and is itself
+outranked only by the `--runner` flag. With none of the three set, the default
+is `copilot` for the GitHub Copilot harness and `opencode` otherwise,
+including for the Claude harness; `claude` is selected with
+`FORGE_RUN_WITH=claude`, a saved `runner`, or `--runner claude`. Selecting it
+requires stage models from the
 `claude_cli` inventory or `inherit`, since an OpenCode-shaped ID like
 `anthropic/claude-sonnet-4` fails closed, and a logged-in `claude` binary. When
 nothing selects a runner and the inherited runner's CLI is not installed while
@@ -538,7 +563,8 @@ as a checkbox on the Overview, and `resume`/monitor commands honour it. See
 [ADR-035](adr/035-auto-commit-after-task.md).
 
 > Auto-draft drives the harness CLI directly, so it needs `opencode` (or
-> `copilot` or `claude` via `FORGE_RUN_WITH`). It commits each generated
+> `copilot` or `claude` via `--runner`, `FORGE_RUN_WITH`, or the saved
+> `runner`). It commits each generated
 > artifact so your repo stays reviewable at every boundary.
 >
 > Long-running steps (bootstrap, headless/auto-draft skill runs, GitHub repo
@@ -892,7 +918,7 @@ reflect the running build (monitor + resume) rather than the manual
 | `FORGE_RESEARCH_FILES` | 6 | Comma-separated list of paths to research/seed documents copied to `docs/research/`. Each path accepts relative, `~`/`~/...`, and `$VAR`/`${VAR}` forms |
 | `FORGE_YN_DEFAULT` | 3, 7 | Default answer for yes/no prompts (`y` or `n`) |
 | `FORGE_AUTO_DRAFT` | 8 | `1` to run PRD → team → project skills → native manifest compilation non-interactively |
-| `FORGE_RUN_WITH` | 8 | Authoring runner: `opencode`, `copilot`, `claude`, or `stub` (default: `copilot` for the GitHub harness, `opencode` otherwise, including for the Claude harness; set `FORGE_RUN_WITH=claude` to select the Claude runner). When nothing selects a runner and the inherited CLI is not installed while the harness's own CLI is, the harness's CLI is used instead; explicit selections are never substituted. `stub` runs offline fixtures - combine with `FORGE_STUB_NOOP=1` to test failure diagnostics |
+| `FORGE_RUN_WITH` | 8 | Authoring runner: `opencode`, `copilot`, `claude`, or `stub`. Outranks the `runner` saved in `docs/authoring-config.json`; only the `--runner` flag outranks it. With none of those set, the default is `copilot` for the GitHub harness, `opencode` otherwise, including for the Claude harness, except that when the inherited runner's CLI is not installed and the harness's own CLI is, the harness's CLI is used; explicit selections are never substituted. `stub` is environment-only and runs offline fixtures - combine with `FORGE_STUB_NOOP=1` to test failure diagnostics |
 | `FORGE_STUB_NOOP` | 8 | `1` makes the stub skill runner (`FORGE_RUN_WITH=stub`) write nothing, exercising the auto-draft failure diagnostics |
 | `FORGE_LAUNCHER_DEBUG` | 8 | `1` (or the `--debug` flag) prints the skill-run log tail after every headless skill run; also passes `--print-logs` to `opencode` |
  | `FORGE_ENGINE_CONCURRENCY` | 8 | Persisted engine concurrency preference (default `1`); shown in summaries and config even though current repo-task execution remains serialized |

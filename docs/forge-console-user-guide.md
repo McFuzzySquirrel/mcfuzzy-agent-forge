@@ -179,6 +179,16 @@ errors, and model provenance in versioned `docs/authoring-state.json`; the
 Console should project those states rather than infer readiness from whether a
 skill directory happens to exist.
 
+An **Authoring runner** select sits above the stage model selects in both the
+New Project wizard and a project's authoring settings panel. It offers
+**Inherit from harness**, **OpenCode**, **Copilot**, and **Claude Code**.
+Inherit means Copilot for a GitHub repository and OpenCode for every other
+harness, including a Claude one. The stage model dropdowns follow the selected
+runner: changing it reloads that runner's saved inventory without probing, and
+**Refresh** probes the effective runner. **Save** persists the choice as
+`runner` in `docs/authoring-config.json`, and the wizard passes it to the
+launcher that creates the project, so the new repository starts with it saved.
+
 ### Assign models to agents
 
 Run the `forge-assign-models` skill after the team has been generated. It builds

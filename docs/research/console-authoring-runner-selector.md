@@ -1,7 +1,7 @@
 # Scoping: an explicit authoring runner selector for the Console and launcher
 
 **Date:** 2026-09-07
-**Status:** Proposal, not yet implemented
+**Status:** Implemented on this branch (ADR-044)
 **Trigger:** a maintainer reported that model discovery "only looks for Claude" after the
 `claude` authoring runner landed (ADR-043). Root cause: the runner is derived from the harness
 root, the Console's inventory is per runner, and the Console has no way to choose a runner. The
