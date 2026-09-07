@@ -22,19 +22,23 @@ export function harnessKey(nameOrRoot: string | null | undefined): HarnessKey {
   return HARNESS_KEYS.includes(name as HarnessKey) ? (name as HarnessKey) : "";
 }
 
-/** Authoring runner for a harness: github gives copilot, claude gives claude, else opencode. */
+/**
+ * Authoring runner for a harness: github gives copilot, everything else gives
+ * opencode. Claude repos author through OpenCode by default because the
+ * Console's inventory is per runner and OpenCode's covers every provider;
+ * `claude` is selected explicitly with `FORGE_RUN_WITH=claude`.
+ */
 export function authoringRunnerForHarness(nameOrRoot: string | null | undefined): AuthoringRunnerName {
   const key = harnessKey(nameOrRoot);
   if (key === "github") return "copilot";
-  if (key === "claude") return "claude";
   return "opencode";
 }
 
 /**
- * Engine harness for a harness. Coincides with the runner rule today; kept
- * separate because the engine axis also admits openai and stub, which are never
- * runners, so the two maps are free to diverge without one silently dragging
- * the other along.
+ * Engine harness for a harness. Diverges from the runner rule at `claude`,
+ * which is exactly the divergence the two maps were kept separate for: the
+ * engine axis also admits openai and stub, which are never runners, so neither
+ * map silently drags the other along.
  */
 export function engineHarnessForHarness(nameOrRoot: string | null | undefined): EngineHarnessName {
   const key = harnessKey(nameOrRoot);

@@ -632,21 +632,23 @@ test("headless draft builds the claude command from the runner, the harness, and
       encoding: "utf8", env: base,
     });
   };
-  const claudeCommand = (output: string) => output.split(/\r?\n/).map((line) => line.trim()).find((line) => line.startsWith("claude ")) ?? "";
+  const commandLine = (output: string, binary: string) => output.split(/\r?\n/).map((line) => line.trim()).find((line) => line.startsWith(`${binary} `)) ?? "";
 
   const explicit = fixture(t);
-  const chosen = claudeCommand(invoke(explicit, { FORGE_RUN_WITH: "claude" }));
+  const chosen = commandLine(invoke(explicit, { FORGE_RUN_WITH: "claude" }), "claude");
   assert.match(chosen, /^claude -p /);
   assert.match(chosen, /--permission-mode bypassPermissions/);
   assert.equal(chosen.endsWith("--debug"), false);
 
   const debug = fixture(t);
-  const debugged = claudeCommand(invoke(debug, { FORGE_RUN_WITH: "claude", FORGE_LAUNCHER_DEBUG: "1" }));
+  const debugged = commandLine(invoke(debug, { FORGE_RUN_WITH: "claude", FORGE_LAUNCHER_DEBUG: "1" }), "claude");
   assert.match(debugged, /^claude -p /);
   assert.equal(debugged.endsWith("--debug"), true);
 
+  // A .claude harness with FORGE_RUN_WITH unset authors through OpenCode: the
+  // claude runner is opt-in, so the harness alone does not select it.
   const harnessDefault = fixture(t, ".claude");
-  assert.match(claudeCommand(invoke(harnessDefault)), /^claude -p /);
+  assert.match(commandLine(invoke(harnessDefault), "opencode"), /^opencode run /);
 });
 
 test("candidate validation rejects unsafe paths and malformed handoff rather than assuming no skills", (t) => {
