@@ -148,6 +148,14 @@ test("Claude model discovery mines the /model envelope and refuses error envelop
   assert.deepEqual(parseClaudeModelOutput(wrapped), CLAUDE_MODEL_IDS);
 });
 
+test("Claude model discovery skips an earlier Available: that yields no aliases", () => {
+  const decoy = JSON.stringify({
+    type: "result", is_error: false,
+    result: "Note: Available: none of these apply.\nUsage: /model <name>. Available: sonnet, opus, haiku, fable, best, sonnet[1m], opus[1m], fable[1m], opusplan, default, or a full model ID.",
+  });
+  assert.deepEqual(parseClaudeModelOutput(decoy), CLAUDE_MODEL_IDS);
+});
+
 test("Claude inventory probes the built-in model command and retains other providers", async (t) => {
   const repo = fixture(t);
   const old = "2020-01-01T00:00:00Z";
