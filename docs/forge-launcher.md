@@ -320,7 +320,13 @@ and its command shape: `opencode` emits `opencode run --auto`, `copilot` emits
 `copilot -p "<message>" --yolo`, and `claude` emits
 `claude -p "<message>" --permission-mode bypassPermissions [--model <alias>]`.
 The default is `copilot` for the GitHub Copilot harness, `claude` for the Claude
-harness, and `opencode` otherwise. Set `FORGE_WORKFLOW_ENGINE=1` to append
+harness, and `opencode` otherwise. Existing Claude-harness repositories must
+re-pick their stage models against the `claude_cli` inventory or set them to
+`inherit`, since an OpenCode-shaped ID like `anthropic/claude-sonnet-4` now fails
+closed, and they need a logged-in `claude` binary; `FORGE_RUN_WITH=opencode`
+restores the previous runner. Note that `bypassPermissions` can be disabled by a
+managed Claude Code policy, in which case the runner exits non-zero before
+authoring starts. Set `FORGE_WORKFLOW_ENGINE=1` to append
 `GO --workflow-engine` so the build executes through the workflow engine. On that path the engine runs **detached** (not as a
 blocking child of the session) and the per-task harness is selected with
 `FORGE_ENGINE_HARNESS=claude|opencode|copilot|openai|stub`.
