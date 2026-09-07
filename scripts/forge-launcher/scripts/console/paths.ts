@@ -2,6 +2,7 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { HARNESS_ROOTS, selectProjectHarnessRoot, type HarnessRoot } from "../repo-metadata.ts";
+import { authoringRunnerForHarness, engineHarnessForHarness } from "./dashboard/harness-rules.ts";
 
 // ─── Project registry ─────────────────────────────────────────────────────────
 //
@@ -128,14 +129,17 @@ export function detectHarnessRoot(repoRoot: string): HarnessRoot | null {
 
 /** Maps a detected harness root to the runner that drives it. */
 export function runnerForHarnessRoot(root: HarnessRoot | null): "copilot" | "opencode" | "claude" {
-  if (root === ".github") return "copilot";
-  if (root === ".claude") return "claude";
-  return "opencode";
+  return authoringRunnerForHarness(root);
 }
 
-/** Engine harness to use when a repo has no persisted engine-config.json. */
+/**
+ * Engine harness to use when a repo has no persisted engine-config.json. The
+ * engine axis has its own map: it also admits openai and stub, which are never
+ * authoring runners, so it is resolved separately even though the two maps
+ * agree on every harness today.
+ */
 export function inferEngineHarness(repoRoot: string): string {
-  return runnerForHarnessRoot(detectHarnessRoot(repoRoot));
+  return engineHarnessForHarness(detectHarnessRoot(repoRoot));
 }
 
 /** Locates the bootstrapped forge-workflow-engine skill dir (any harness root). */
