@@ -2183,7 +2183,8 @@ async function runDraftSkillsInternal(repoDir: string): Promise<number> {
   }
   if (authoringStageIsCurrent(repoDir, "skills", harnessRootDir())) { out("Project skills already complete."); return 0; }
   if (!candidates.candidates.some((candidate) => candidate.action !== "omit")) {
-    const invocation: AuthoringInvocation = { runner: headlessRunner(), source: "inherit" };
+    const { runner, source: runnerSource } = headlessRunnerSelection();
+    const invocation: AuthoringInvocation = { runner, source: "inherit", runnerSource };
     if (!state.options.dryRun) saveAuthoringStage(repoDir, "skills", {
       status: "complete", inputFingerprint: stageInputFingerprint(repoDir, "skills", harnessRootDir()),
       outputs: [], outputFingerprint: fingerprintFiles(repoDir, []), noSkillsRequired: true, completedAt: new Date().toISOString(), invocation,

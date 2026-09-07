@@ -2,7 +2,7 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { HARNESS_ROOTS, selectProjectHarnessRoot, type HarnessRoot } from "../repo-metadata.ts";
-import { authoringRunnerForHarness, engineHarnessForHarness } from "./dashboard/harness-rules.ts";
+import { engineHarnessForHarness } from "./dashboard/harness-rules.ts";
 
 // ─── Project registry ─────────────────────────────────────────────────────────
 //
@@ -125,11 +125,6 @@ export type { HarnessRoot };
 /** Uses the same agent-root preference as compilation and authoring. */
 export function detectHarnessRoot(repoRoot: string): HarnessRoot | null {
   return selectProjectHarnessRoot(repoRoot).root;
-}
-
-/** Maps a detected harness root to the runner that drives it. */
-export function runnerForHarnessRoot(root: HarnessRoot | null): "copilot" | "opencode" | "claude" {
-  return authoringRunnerForHarness(root);
 }
 
 /**

@@ -5,7 +5,7 @@ import { consoleCli } from "./console/cli.ts";
 import { engineRunCli } from "./engine-run.ts";
 import { fail } from "./format.ts";
 import { runCompileManifest, runDraftExistingPrd, runDraftPrd, runDraftTeam, runDraftSkills, runFeaturePrd, runLauncher, runResume } from "./launcher.ts";
-import { AUTHORING_RUNNER_CHOICES, AUTHORING_STAGES, loadAuthoringConfig, saveAuthoringConfig, type AuthoringModels, type AuthoringOptions, type AuthoringRunnerChoice } from "./authoring-config.ts";
+import { AUTHORING_STAGES, isRunnerChoice, loadAuthoringConfig, saveAuthoringConfig, type AuthoringModels, type AuthoringOptions, type AuthoringRunnerChoice } from "./authoring-config.ts";
 import { readAuthoringInventory, refreshAuthoringInventory } from "./authoring-inventory.ts";
 import { detectRepoRoot } from "./paths.ts";
 import { PromptCancelled, prompts } from "./prompts.ts";
@@ -78,10 +78,6 @@ deterministically. Set FORGE_RUN_WITH=stub (plus FORGE_STUB_NOOP=1) to run the
 auto-draft stages offline against canned artifacts.
 `;
 
-function isRunnerChoice(value: string): value is AuthoringRunnerChoice {
-  return (AUTHORING_RUNNER_CHOICES as readonly string[]).includes(value);
-}
-
 async function main(): Promise<number> {
   const input = process.argv.slice(2);
   const args: string[] = [];
@@ -92,6 +88,11 @@ async function main(): Promise<number> {
     if (argument === "--runner") {
       const value = input[++i];
       if (!value || value.startsWith("--")) throw new Error("--runner requires copilot, opencode, claude, or inherit.");
+      // Rejected here so an unusable runner fails before any repo is created.
+      const trimmed = value.trim();
+      if (trimmed !== "inherit" && !isRunnerChoice(trimmed)) {
+        throw new Error(`Unsupported authoring runner: ${value}. Use copilot, opencode, claude, or inherit.`);
+      }
       requestedRunner = value;
       continue;
     }

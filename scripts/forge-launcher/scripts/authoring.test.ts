@@ -167,6 +167,44 @@ test("authoring runner precedence is invocation then environment then project th
   assert.throws(() => selectAuthoringRunner(repo, ".github", { runner: "stub" }, {}), /Unsupported authoring runner/);
 });
 
+test("FORGE_RUN_WITH=stub is an offline lock that the invocation runner cannot override", async (t) => {
+  const repo = fixture(t);
+  saveAuthoringConfig(repo, { version: 1, models: {}, runner: "claude" });
+  assert.deepEqual(
+    selectAuthoringRunner(repo, ".github", { runner: "claude" }, { FORGE_RUN_WITH: "stub" }),
+    { runner: "stub", source: "environment" },
+  );
+  // Through the launcher seam, with the team stage actually executing: the
+  // stub writes its canned agent and no real runner is ever spawned.
+  write(repo, "docs/PRD.md", "# Fixture PRD");
+  assert.equal(await runDraftTeam(repo, false, {
+    env: { FORGE_RUN_WITH: "stub" }, runner: "claude",
+    dependencies: { runLogged: async () => { throw new Error("stub lock must not spawn a runner"); } },
+  }), 0);
+  assert.equal(fs.existsSync(path.join(repo, ".github/agents/stub-project-agent.md")), true);
+  const invocation = readAuthoringState(repo).stages.team?.invocation;
+  assert.equal(invocation?.runner, "stub");
+  assert.equal(invocation?.runnerSource, "environment");
+});
+
+test("the saved runner's provenance reaches the authoring state file", async (t) => {
+  const repo = fixture(t);
+  saveAuthoringConfig(repo, { version: 1, models: {}, runner: "claude" });
+  const spawned: string[] = [];
+  assert.equal(await runDraftPrd(repo, {
+    env: { FORGE_RUN_WITH: undefined },
+    dependencies: { runLogged: async (cmd) => {
+      spawned.push(cmd);
+      write(repo, "docs/PRD.md", "# Saved runner PRD");
+      return { code: 0, stdout: "", stderr: "" };
+    } },
+  }), 0);
+  assert.deepEqual(spawned, ["claude"]);
+  const invocation = readAuthoringState(repo).stages.prd?.invocation;
+  assert.equal(invocation?.runner, "claude");
+  assert.equal(invocation?.runnerSource, "project");
+});
+
 test("invalid settings and future schemas fail instead of resetting choices", (t) => {
   const repo = fixture(t);
   write(repo, "docs/authoring-config.json", '{"version":2,"models":{}}');
@@ -671,6 +709,32 @@ function draftPrdDryRun(repo: string, env: NodeJS.ProcessEnv = {}): string {
     encoding: "utf8", env: base,
   });
 }
+
+test("an unsupported --runner fails at parse time, before any project work", (t) => {
+  const repo = fixture(t);
+  const cli = fileURLToPath(new URL("./cli.ts", import.meta.url));
+  let failure: { status?: number; stdout?: string; stderr?: string } | undefined;
+  try {
+    execFileSync(process.execPath, ["--import", "tsx", cli, "--runner", "gpt", "--non-interactive", "--no-update-check"], {
+      encoding: "utf8", timeout: 60_000, env: {
+        ...process.env,
+        FORGE_RUN_WITH: "stub", FORGE_HARNESS_CHOICE: "1", FORGE_REPO_NAME: "unsupported-runner",
+        FORGE_REPO_PARENT_DIR: repo, FORGE_HOME: path.join(repo, "home"), FORGE_IDEA: "A thing",
+        FORGE_YN_DEFAULT: "n", FORGE_AUTO_DRAFT: "0",
+      },
+    });
+  } catch (error) {
+    failure = error as { status?: number; stdout?: string; stderr?: string };
+  }
+  assert.ok(failure, "expected a non-zero exit");
+  assert.notEqual(failure.status, 0);
+  assert.match(
+    `${failure.stdout ?? ""}${failure.stderr ?? ""}`,
+    /Unsupported authoring runner: gpt\. Use copilot, opencode, claude, or inherit\./,
+  );
+  // Nothing ran: the flag is rejected before the repository is created.
+  assert.equal(fs.existsSync(path.join(repo, "unsupported-runner")), false);
+});
 
 function commandLine(output: string, binary: string): string {
   return output.split(/\r?\n/).map((line) => line.trim()).find((line) => line.startsWith(`${binary} `)) ?? "";

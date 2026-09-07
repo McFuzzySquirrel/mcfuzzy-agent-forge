@@ -1,13 +1,14 @@
 import fs from "node:fs";
 import path from "node:path";
 import { randomUUID } from "node:crypto";
-import { authoringRunnerForHarness, harnessCliForHarness } from "./console/dashboard/harness-rules.ts";
+import { authoringRunnerForHarness, harnessCliForHarness, type AuthoringRunnerName } from "./console/dashboard/harness-rules.ts";
 
 export const AUTHORING_STAGES = ["prd", "team", "skills"] as const;
 export type AuthoringStage = typeof AUTHORING_STAGES[number];
 export type AuthoringModels = Partial<Record<AuthoringStage, string>>;
-export const AUTHORING_RUNNER_CHOICES = ["copilot", "opencode", "claude"] as const;
-export type AuthoringRunnerChoice = typeof AUTHORING_RUNNER_CHOICES[number];
+export const AUTHORING_RUNNER_CHOICES = ["copilot", "opencode", "claude"] as const satisfies readonly AuthoringRunnerName[];
+/** One spelling of the runner union: `harness-rules.ts` owns it. */
+export type AuthoringRunnerChoice = AuthoringRunnerName;
 export interface AuthoringConfig { version: 1; models: AuthoringModels; runner?: AuthoringRunnerChoice }
 export interface AuthoringOptions { models?: AuthoringModels; runner?: string }
 export type ModelSource = "invocation" | "environment" | "project" | "inherit";
@@ -16,7 +17,7 @@ export interface AuthoringModelSelection { requestedModel?: string; source: Mode
 /** `stub` is the test-only offline runner; it is reachable from FORGE_RUN_WITH alone. */
 export interface AuthoringRunnerSelection { runner: AuthoringRunnerChoice | "stub"; source: RunnerSource }
 
-function isRunnerChoice(value: string): value is AuthoringRunnerChoice {
+export function isRunnerChoice(value: string): value is AuthoringRunnerChoice {
   return (AUTHORING_RUNNER_CHOICES as readonly string[]).includes(value);
 }
 
@@ -98,6 +99,9 @@ export function selectAuthoringModel(
  * FORGE_RUN_WITH, then the persisted project choice, then the harness rule. An
  * empty or "inherit" value at any level falls straight through to the harness
  * rule, exactly as `selectAuthoringModel` does for a stage model.
+ *
+ * FORGE_RUN_WITH=stub is the one exception: it is an offline lock, not a
+ * preference, so no other source may override it and spawn a real runner.
  */
 /**
  * True when `cmd` is reachable on the PATH carried by `env`. The launcher has an
@@ -128,17 +132,17 @@ export function selectAuthoringRunner(
   overrides: AuthoringOptions = {},
   env: NodeJS.ProcessEnv = process.env,
 ): AuthoringRunnerSelection {
+  if (env.FORGE_RUN_WITH?.trim() === "stub") return { runner: "stub", source: "environment" };
   const saved = repo ? loadAuthoringConfig(repo) : { version: 1 as const, models: {} };
-  const candidates: Array<[string | undefined, RunnerSource, boolean]> = [
-    [overrides.runner, "invocation", false],
-    [env.FORGE_RUN_WITH, "environment", true],
-    [saved.runner, "project", false],
+  const candidates: Array<[string | undefined, RunnerSource]> = [
+    [overrides.runner, "invocation"],
+    [env.FORGE_RUN_WITH, "environment"],
+    [saved.runner, "project"],
   ];
-  for (const [value, source, allowStub] of candidates) {
+  for (const [value, source] of candidates) {
     if (value === undefined) continue;
     const runner = value.trim();
     if (!runner || runner === "inherit") break;
-    if (allowStub && runner === "stub") return { runner: "stub", source };
     if (!isRunnerChoice(runner)) {
       throw new Error(`Unsupported authoring runner: ${runner}. Use copilot, opencode, claude, or inherit.`);
     }
