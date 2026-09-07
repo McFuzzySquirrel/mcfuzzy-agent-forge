@@ -309,6 +309,21 @@ test("permission denials under bypassPermissions are a configuration failure nam
   assert.equal(result.errorMessage, "claude denied tool calls under bypassPermissions: Write, Bash");
 });
 
+test("a denial with no tool_name is still a configuration failure", async () => {
+  const root = makeRepo();
+  const shim = makeShim();
+  stubEnvelope({
+    type: "result", subtype: "success", is_error: false, result: "done",
+    permission_denials: [{}], session_id: "s3",
+  });
+
+  const result = await invoke(shim, agentIn(root, ".claude"), root);
+
+  assert.equal(result.success, false);
+  assert.equal(result.failureKind, "configuration");
+  assert.equal(result.errorMessage, "claude denied tool calls under bypassPermissions: unnamed tool");
+});
+
 test("a nonzero exit with no envelope is a configuration failure carrying stderr", async () => {
   const root = makeRepo();
   const shim = makeShim();
@@ -347,6 +362,41 @@ test("a spawn failure passes the runCommand failure kind through unchanged", asy
   assert.equal(result.success, false);
   assert.equal(result.failureKind, "configuration");
   assert.ok(result.errorMessage);
+});
+
+test("a JSON object that is not a result envelope counts as no envelope", async () => {
+  const root = makeRepo();
+  const shim = makeShim();
+  process.env.CLAUDE_SHIM_STDOUT = '{"type":"system","subtype":"init"}';
+
+  const result = await invoke(shim, agentIn(root, ".claude"), root);
+
+  assert.equal(result.success, false);
+  assert.equal(result.failureKind, "exception");
+  assert.ok(result.errorMessage?.startsWith("claude returned no JSON result envelope"), result.errorMessage);
+});
+
+test("a banner ahead of the envelope does not lose it", async () => {
+  const root = makeRepo();
+  const shim = makeShim();
+  process.env.CLAUDE_SHIM_STDOUT = `Warning: config\n${SUCCESS_ENVELOPE}`;
+
+  const result = await invoke(shim, agentIn(root, ".claude"), root);
+
+  assert.equal(result.success, true);
+  assert.equal(result.stdout, "Substantive completed text response.");
+});
+
+test("a nonzero exit alongside a success envelope is retryable", async () => {
+  const root = makeRepo();
+  const shim = makeShim();
+  process.env.CLAUDE_SHIM_EXIT = "2";
+
+  const result = await invoke(shim, agentIn(root, ".claude"), root);
+
+  assert.equal(result.success, false);
+  assert.equal(result.failureKind, "retryable");
+  assert.ok(result.errorMessage?.includes("exited with status 2 despite a success envelope"), result.errorMessage);
 });
 
 test("is_error wins over a success subtype", async () => {

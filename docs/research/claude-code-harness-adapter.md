@@ -157,6 +157,7 @@ could not be reproduced locally.
 | Model errored mid-run | `subtype: "error_during_execution"` | `retryable` |
 | `--max-turns` or `--max-budget-usd` exhausted | `subtype: "error_max_turns"` / `"error_max_budget_usd"` | `configuration`: both caps can only come from `CLAUDE_EXTRA_FLAGS`, so the operator set them; the engine's own timeout budget is the intended limiter |
 | Completed, but tools were denied | `is_error: false`, `permission_denials` non-empty | `configuration`: under `bypassPermissions` the list must be empty, so a non-empty list means a policy blocked the bypass and every retry would fail the same way |
+| Completed, but the process exited non-zero | `is_error: false`, no denials, exit status non-zero | `retryable`: the envelope and the exit code disagree, so the run is treated as an unexplained transport fault rather than an operator fault |
 | Stdout is not parseable JSON, exit 0 | malformed envelope | `exception`, with the raw stdout preserved in `errorMessage` |
 | Stdout is not parseable JSON, exit non-zero | crash or rejection before the envelope | `configuration`, with stderr as the message |
 | `is_error: false`, no denials | normal completion | success; `stdout` = `result`, `outputFiles` filtered as Copilot does |

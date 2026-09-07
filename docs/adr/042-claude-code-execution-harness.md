@@ -34,7 +34,9 @@ failure classification. A not-logged-in result, a 4xx API status, an exhausted
 `error_max_turns` or `error_max_budget_usd` limit, and any tool denial are
 `configuration` failures the operator must fix; 429s, 5xx statuses, and
 unclassified errors are `retryable`. A missing or unparseable envelope on a
-non-zero exit is `configuration`; on a zero exit it is an exception.
+non-zero exit is `configuration`; on a zero exit it is an exception. A success
+envelope alongside a non-zero exit is `retryable`, since the two signals
+disagree and nothing identifies an operator fault to fix.
 
 Provider prefixes are stripped from model IDs before they reach the CLI, as the
 Copilot adapter already does. `CLAUDE_BIN` overrides the binary path and

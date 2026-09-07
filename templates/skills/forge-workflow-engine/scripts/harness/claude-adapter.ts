@@ -105,9 +105,11 @@ export class ClaudeAdapter implements HarnessAdapter {
       return failure(envelopeErrorMessage(envelope, stderr), classifyEnvelopeFailure(envelope));
     }
 
-    const deniedTools = uniqueDeniedTools(envelope);
-    if (deniedTools.length > 0) {
-      return failure(`claude denied tool calls under bypassPermissions: ${deniedTools.join(", ")}`, "configuration");
+    const denials = envelope.permission_denials ?? [];
+    if (denials.length > 0) {
+      const named = uniqueDeniedTools(envelope);
+      const listed = named.length > 0 ? named.join(", ") : "unnamed tool";
+      return failure(`claude denied tool calls under bypassPermissions: ${listed}`, "configuration");
     }
 
     if (result.status !== 0) {
@@ -147,7 +149,10 @@ export class ClaudeAdapter implements HarnessAdapter {
 /**
  * Reads the single JSON object `claude -p --output-format json` prints. Falls
  * back to the last non-empty line so a banner or warning ahead of the envelope
- * does not lose it. Anything that is not a JSON object counts as no envelope.
+ * does not lose it. Anything that is not a JSON object counts as no envelope,
+ * and so does a JSON object carrying a `type` other than "result" (a streamed
+ * `system` or `assistant` message, say). An object with no `type` at all is
+ * still accepted, since the field is optional in the shapes we have seen.
  */
 function parseResultEnvelope(stdout: string): ClaudeResultEnvelope | undefined {
   const text = stdout.trim();
@@ -162,7 +167,10 @@ function parseResultEnvelope(stdout: string): ClaudeResultEnvelope | undefined {
     } catch {
       continue;
     }
-    if (parsed && typeof parsed === "object" && !Array.isArray(parsed)) return parsed as ClaudeResultEnvelope;
+    if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) continue;
+    const envelope = parsed as ClaudeResultEnvelope;
+    if (envelope.type !== undefined && envelope.type !== "result") continue;
+    return envelope;
   }
   return undefined;
 }
