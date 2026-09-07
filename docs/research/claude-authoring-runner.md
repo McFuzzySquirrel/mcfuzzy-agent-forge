@@ -1,7 +1,7 @@
 # Scoping: a Claude Code authoring runner for the forge launcher
 
 **Date:** 2026-09-07
-**Status:** Proposal, not yet implemented
+**Status:** Implemented on this branch (ADR-043)
 **Branch:** `feat/claude-authoring-runner`, cut from `feat/claude-harness-adapter` at `53ef2b6`
 **Companion:** [`claude-code-harness-adapter.md`](./claude-code-harness-adapter.md) covers the
 execution side. This document covers the authoring side. Everything below was verified by
