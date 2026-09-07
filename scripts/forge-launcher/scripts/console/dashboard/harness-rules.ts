@@ -7,6 +7,7 @@
 export type HarnessKey = "github" | "claude" | "opencode" | "agents" | "";
 export type AuthoringRunnerName = "copilot" | "opencode" | "claude";
 export type EngineHarnessName = "copilot" | "opencode" | "claude";
+export type HarnessCliName = "copilot" | "claude" | "opencode";
 
 const HARNESS_KEYS: readonly HarnessKey[] = ["github", "claude", "opencode", "agents"];
 
@@ -40,4 +41,16 @@ export function engineHarnessForHarness(nameOrRoot: string | null | undefined): 
   if (key === "github") return "copilot";
   if (key === "claude") return "claude";
   return "opencode";
+}
+
+/**
+ * Interactive CLI a human drives for a harness, and the args that open the repo
+ * in it: github gives copilot with no args; claude and everything else open
+ * with ".".
+ */
+export function harnessCliForHarness(nameOrRoot: string | null | undefined): { cli: HarnessCliName; args: string[] } {
+  const key = harnessKey(nameOrRoot);
+  if (key === "github") return { cli: "copilot", args: [] };
+  if (key === "claude") return { cli: "claude", args: ["."] };
+  return { cli: "opencode", args: ["."] };
 }
