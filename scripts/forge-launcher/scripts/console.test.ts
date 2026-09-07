@@ -7,6 +7,7 @@ import { get as httpGet, request as httpRequest } from "node:http";
 
 import { startConsoleServer, type ConsoleServer } from "./console/server.ts";
 import type { SpawnOptions } from "./console/control.ts";
+import { writeFeatureFixture } from "./feature-fixture.ts";
 
 const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
@@ -33,13 +34,14 @@ function makeRepo(): string {
   mkdirSync(join(root, ".agents", "agents"), { recursive: true });
 
   writeFileSync(join(docs, "IDEA.md"), "# Idea\n\nBuild a thing.\n", "utf8");
-  writeFileSync(join(docs, "PRD.md"), "# PRD\n\nRequirements.\n", "utf8");
+  writeFeatureFixture(root);
 
   const manifest = {
     version: "1.0",
     generatedAt: new Date().toISOString(),
     repoRoot: root,
     harnessRoot: ".agents",
+    sourceLayout: "features",
     prdPath: join(docs, "PRD.md"),
     progressPath: join(docs, "PROGRESS.md"),
     auditPath: join(docs, "EXECUTION-AUDIT.jsonl"),
@@ -264,7 +266,8 @@ test("serves summary, tasks, docs, team, and actions", async () => {
     assert.equal(tasks[0]!.durationMs, 120000);
 
     const docs = await getJson(`${server.url}/api/docs`) as { entries: Array<{ kind: string }> };
-    assert.ok(docs.entries.some((e) => e.kind === "prd"));
+    assert.ok(docs.entries.some((e) => e.kind === "vision"));
+    assert.ok(!docs.entries.some((e) => e.kind === "prd"));
     assert.ok(docs.entries.some((e) => e.kind === "idea"));
 
     const team = await getJson(`${server.url}/api/team`) as { agents: Array<{ name: string; description: string; model: string }>; skills: Array<{ name: string; description: string; category: string }> };

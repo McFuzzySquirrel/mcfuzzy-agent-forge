@@ -83,7 +83,7 @@ Every artifact is a JSON file stored in `docs/artifacts/<subdir>/<id>.json`.
 
 ### Key design choices
 
-**`summary` is the primary field.** Most downstream agents receive only `summary`, `confidence`, `filesChanged`, and `agentOutputExcerpt` - not the full payload. For synthesised completion artifacts, the summary is derived from the task title + description rather than the first stdout line, so downstream context describes the intended work instead of an agent's self-talk.
+**`summary` is the primary field.** Default projection includes summary, optional confidence, changed files, output excerpt, decisions, interfaces, tests, and unresolved items, not the full payload. Structured completion artifacts use the required `forge-result` outcome report. Legacy fallback summaries explicitly state that no structured outcome was reported; they do not present the task specification as an accomplishment.
 
 **`inputs` traces the knowledge graph.** Every artifact records which other artifact IDs it was built from. This allows the audit log to reconstruct the complete knowledge-flow chain:
 
@@ -97,7 +97,13 @@ implementation-001
 review-001
 ```
 
-**Storage is files, not a database.** Artifacts live in `docs/artifacts/` as plain JSON files. They can be inspected, diffed, versioned in Git, and replayed without any additional infrastructure. The store also reserves sequential IDs in memory after seeding from disk, so concurrent write attempts cannot accidentally reuse an existing `<type>-NNN` identifier. A future `SqliteArtifactStore` or `BlobArtifactStore` can implement the same interface without changing the engine.
+**Storage is files, not a database.** Artifacts live in `docs/artifacts/` as plain JSON files. They can be inspected, diffed and replayed without additional infrastructure. Bootstrap ignores this generated directory and engine auto-commit excludes it; these potentially sensitive records are local diagnostics by default, not versioned sources ([ADR-046](adr/046-task-execution-files.md)). The store also reserves sequential IDs in memory after seeding from disk, so concurrent write attempts cannot accidentally reuse an existing `<type>-NNN` identifier. A future `SqliteArtifactStore` or `BlobArtifactStore` can implement the same interface without changing the engine.
+
+Task execution inputs (`<task-id>.md`), latest results (`<task-id>.result.json`)
+and timestamped attempt archives share the root. Typed handoffs keep their own
+subdirectories and IDs. Existing tracked artifacts are not untracked automatically;
+legacy execution records and audit links remain intact. See
+[Task Contracts](task-contracts.md#execution-files-and-reference-reading).
 
 ---
 
@@ -160,7 +166,7 @@ Add `inputs` and `produces` fields to tasks in `docs/EXECUTION-MANIFEST.json`:
 ```
 
 - **`inputs`** - list of artifact *types* (not IDs) the engine loads before running this task. The engine resolves the most recently completed artifact of each listed type.
-- **`produces`** - the artifact *type* this task must create. If the agent does not produce one explicitly, the engine auto-synthesises a minimal `work` artifact from the task's output files, a task-derived summary, a default `confidence: 0.9`, and an agent-output excerpt for diagnostics.
+- **`produces`** - the artifact *type* this task must create. The engine synthesises a `work` artifact from observed changed files and the structured outcome report. Engine-verified command results populate `tests`; model-reported tests remain separately labeled. Legacy fallback uses an honest missing-report summary and the final 2000 output characters for diagnostics. No confidence score is invented.
 
 Tasks without `inputs` or `produces` behave exactly as before - the artifact layer is strictly additive.
 
@@ -174,7 +180,8 @@ Tasks without `inputs` or `produces` behave exactly as before - the artifact lay
 1. Read task.inputs from the manifest
 2. For each input type:
      load the most recent complete artifact of that type
-3. Select only: summary + confidence + filesChanged + agentOutputExcerpt + any task-declared fields
+3. Select summary, optional confidence, filesChanged, agentOutputExcerpt,
+   decisions, interfaces, tests, unresolved, and any task-declared fields
 4. Render a compact markdown block:
 
    ## Context from previous tasks
@@ -290,7 +297,7 @@ The research document describes a concrete example. Consider a typical review ta
 |---|---|
 | Dump full workflow state + previous agent stdout | ~12 000–15 000 |
 | Dump full architecture + implementation artifacts | ~8 000–10 000 |
-| **Projected context (summary + confidence + filesChanged + agentOutputExcerpt)** | **~500–900** |
+| **Projected context (summary, optional confidence, files, outcomes, tests)** | **~500–900 (illustrative)** |
 
 At 75–95% reduction, a 4K-context local model can now handle review tasks that previously required a 16K+ cloud model. The pattern makes local-model workflows viable for multi-step builds.
 
@@ -322,7 +329,7 @@ For very large builds, consider a two-layer artifact model:
 ```json
 {
   "summary": "...",           ← always sent
-  "confidence": 0.91,        ← always sent
+  "confidence": 0.91,        ← sent only when explicitly supplied
   "payload": { ... }         ← fetched only when task declares specific fields
 }
 ```

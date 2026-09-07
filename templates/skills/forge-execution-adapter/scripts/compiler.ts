@@ -1,7 +1,9 @@
 import { existsSync, readFileSync } from "node:fs";
-import { dirname, join } from "node:path";
+import { dirname, join, relative } from "node:path";
 
 import type { AgentDescriptor, ExecutionManifest, ForgeRepo, ManifestPhase, ManifestTask } from "./types.ts";
+import { parseTaskBlocks } from "./task-contract.ts";
+import { documentIntegrity } from "./document-integrity.ts";
 
 interface HeadingBlock {
   level: number;
@@ -143,13 +145,15 @@ function extractPaths(text: string): string[] {
   const push = (value: string) => {
     if (value.includes(" ")) return;
     const token = value.replace(/^`|`$/g, "");
+    if (/^\d+(?:\.\d+)+$/.test(token)) return;
     if (NON_PATH_DOTTED_TOKENS.has(token.toLowerCase())) return;
     if (!/[./]/.test(token) && !/\.[A-Za-z0-9_-]+$/.test(token)) return;
     seen.add(token);
   };
 
-  for (const match of text.matchAll(/`([^`]+\.[A-Za-z0-9_-]+)`/g)) push(match[1]!);
-  for (const match of text.matchAll(/(?:^|\s)([A-Za-z0-9_./-]+\.[A-Za-z0-9_-]+)(?=$|[\s,;])/g)) push(match[1]!);
+  const outputsOnly = text.replace(/\b(?:per|from|see|consult|read|reference|references)\s+`[^`]+`/gi, "");
+  for (const match of outputsOnly.matchAll(/`([^`]+\.[A-Za-z0-9_-]+)`/g)) push(match[1]!);
+  for (const match of outputsOnly.matchAll(/(?:^|\s)([A-Za-z0-9_./-]+\.[A-Za-z0-9_-]+)(?=$|[\s,;])/g)) push(match[1]!);
   return [...seen];
 }
 
@@ -254,7 +258,7 @@ function pushTask(
   const previous = tasks[tasks.length - 1];
   tasks.push({
     id: taskId,
-    title: text.split(/[:.]/)[0]!.trim(),
+    title: stripTaskLabel(text.replace(/^\[[ xX]\]\s*/, "")).trim(),
     description: text,
     ownerAgent: owner.owner,
     requiredCapabilities: ["repository-tools"],
@@ -270,8 +274,7 @@ function pushTask(
 
 /**
  * Resolve a task id for a phase. A label parsed from the task text (e.g.
- * "Task 1.1:") is honored only when it belongs to this phase (monolithic mode,
- * where the phase id is the leading number). Feature-mode phase ids are
+ * "Task 1.1:") is honored only when it belongs to this phase. Phase ids are
  * feature-prefixed (e.g. "BUDGETS-2"), so the leading number of a repeated
  * label is ignored and the task is auto-numbered under the phase id - keeping
  * task ids globally unique across features.
@@ -289,7 +292,10 @@ function extractTasks(
   validationCommands: string[],
   warnings: string[],
   granularity: "coarse" | "fine",
+  repoRoot?: string,
 ): ManifestTask[] {
+  const structured = parseTaskBlocks(phaseBody, agents, { repoRoot });
+  if (structured) return structured;
   const tasks: ManifestTask[] = [];
 
   if (granularity === "coarse") {
@@ -379,55 +385,6 @@ export interface CompileOptions {
   granularity?: "coarse" | "fine";
 }
 
-/** Monolithic mode: compile `## Phase N` headings from a single PRD document. */
-function compileMonolithicManifest(repo: ForgeRepo, options: CompileOptions = {}): ExecutionManifest {
-  const granularity = options.granularity ?? "fine";
-  const prd = readFileSync(repo.prdPath, "utf8");
-  const validationCommands = extractCommands(prd);
-  const warnings = [...repo.warnings];
-  const headings = parseHeadings(prd);
-  const phaseBlocks = headings.filter((block) => /^phase\s+[a-z]?\d+/i.test(block.title));
-
-  if (phaseBlocks.length === 0) {
-    throw new Error(`No phase headings found in ${repo.prdPath}. Expected headings such as '## Phase 1: Foundation'.`);
-  }
-
-  const phases: ManifestPhase[] = phaseBlocks.map((block, index) => {
-    const phaseId = phaseIdFromTitle(block.title, index);
-    const tasks = extractTasks(block.title, block.body, phaseId, repo.agents, validationCommands, warnings, granularity);
-    const ownerAgents = [...new Set(tasks.map((task) => task.ownerAgent).filter((value): value is string => Boolean(value)))];
-
-    return {
-      id: phaseId,
-      title: block.title,
-      description: block.body.split(/\r?\n/).slice(0, 3).join(" ").trim(),
-      ownerAgents,
-      dependencies: index > 0 ? [phaseIdFromTitle(phaseBlocks[index - 1]!.title, index - 1)] : [],
-      approvalRequired: index > 0,
-      tasks,
-    };
-  });
-
-  return {
-    version: "1.0",
-    generatedAt: new Date().toISOString(),
-    granularity,
-    sourceLayout: "monolithic",
-    repoRoot: repo.repoRoot,
-    harnessRoot: repo.harnessRoot,
-    prdPath: repo.prdPath,
-    progressPath: repo.progressPath,
-    auditPath: repo.auditPath,
-    validationCommands,
-    approvalGates: {
-      preflight: true,
-      betweenPhases: true,
-    },
-    phases,
-    warnings,
-  };
-}
-
 export interface FeatureNode {
   name: string;
   file: string;
@@ -438,7 +395,7 @@ export interface FeatureNode {
  * Parse the feature dependency table from the product vision (## 14. Features).
  * Falls back to the sorted feature file list when no table is found.
  */
-function parseFeatureGraph(vision: string, featurePaths: string[], repoRoot: string, docsDir: string, warnings: string[]): FeatureNode[] {
+export function parseFeatureGraph(vision: string, featurePaths: string[], repoRoot: string, docsDir: string, warnings: string[]): FeatureNode[] {
   const sections = parseHeadings(vision);
   const featuresSection = sections.find((section) => /^14\.\s*features/i.test(section.title));
 
@@ -592,11 +549,6 @@ function compileFeatureManifest(repo: ForgeRepo, options: CompileOptions = {}): 
   const warnings = [...repo.warnings];
   const vision = readFileSync(repo.visionPath, "utf8");
   const validationCommands = extractCommands(vision);
-  if (existsSync(repo.prdPath)) {
-    for (const command of extractCommands(readFileSync(repo.prdPath, "utf8"))) {
-      if (!validationCommands.includes(command)) validationCommands.push(command);
-    }
-  }
 
   const nodes = parseFeatureGraph(vision, repo.featurePaths, repo.repoRoot, dirname(repo.visionPath), warnings);
   const ordered = orderFeatures(nodes, warnings);
@@ -627,7 +579,7 @@ function compileFeatureManifest(repo: ForgeRepo, options: CompileOptions = {}): 
 
     for (const block of phaseBlocks) {
       const phaseId = `${code}-${phaseIdFromTitle(block.title, 0)}`;
-      const tasks = extractTasks(block.title, block.body, phaseId, repo.agents, validationCommands, warnings, granularity);
+      const tasks = extractTasks(block.title, block.body, phaseId, repo.agents, validationCommands, warnings, granularity, repo.repoRoot);
       const featurePhases = phaseIdsByFeature.get(feature.name) ?? [];
       pushPhase(phases, phaseId, block.title, feature.name, block.body.split(/\r?\n/).slice(0, 3).join(" ").trim(), tasks, featurePhases.length > 0 ? [featurePhases[featurePhases.length - 1]!] : []);
       featurePhases.push(phaseId);
@@ -643,6 +595,7 @@ function compileFeatureManifest(repo: ForgeRepo, options: CompileOptions = {}): 
     const dependencies = feature.dependencies.flatMap((name) => {
       const depPhases = phaseIdsByFeature.get(name);
       if (!depPhases) {
+        if (phases.some((phase) => phase.tasks.some((task) => task.contract))) throw new Error(`Feature '${feature.name}' has unknown dependency '${name}' in a structured plan.`);
         warnings.push(`Feature '${feature.name}' depends on '${name}', but no phases were emitted for it.`);
         return [];
       }
@@ -682,29 +635,36 @@ function compileFeatureManifest(repo: ForgeRepo, options: CompileOptions = {}): 
 
 /** Compile a runnable execution manifest from the repo's PRD representation. */
 export function compileExecutionManifest(repo: ForgeRepo, options: CompileOptions = {}): ExecutionManifest {
-  if (repo.sourceLayout === "features") return compileFeatureManifest(repo, options);
-  const manifest = compileMonolithicManifest(repo, options);
-  // A monolithic PRD may gain additive feature documents before a full
-  // decomposition. Keep the original phases and append feature work rather
-  // than silently ignoring docs/features or replacing the source PRD.
-  if (repo.featurePaths.length > 0) {
-    const warnings = manifest.warnings;
-    for (const file of repo.featurePaths) {
-      const name = basename(file, ".md");
-      const doc = readFileSync(file, "utf8");
-      const phaseId = `${featureCode(name)}-1`;
-      const tasks = synthesizeTasksFromFr(name, doc, phaseId, repo.agents, manifest.validationCommands, warnings, options.granularity ?? "fine");
-      // Additive documents have no feature graph in monolithic mode. Keep
-      // them independent rather than making every new feature wait for the
-      // final phase of the original PRD (or for the previous feature).
-      if (tasks.length > 0) pushPhase(manifest.phases, phaseId, `Feature: ${name}`, name, `Additive feature ${name}`, tasks, []);
-      else warnings.push(`Feature '${name}' had no compilable requirements; no tasks emitted.`);
+  if (repo.sourceLayout !== "features") throw new Error("Only product vision + feature sources can be compiled. Convert legacy source documents first.");
+  const manifest = compileFeatureManifest(repo, options);
+  const tasks = manifest.phases.flatMap((phase) => phase.tasks);
+  const sources = new Map([repo.visionPath, ...repo.featurePaths].map((file) => [relative(repo.repoRoot, file).replace(/\\/g, "/"), readFileSync(file, "utf8")]));
+  const integrity = documentIntegrity(repo.repoRoot, sources, tasks);
+  if (integrity.errors.length) throw new Error(integrity.errors.join("\n"));
+  manifest.warnings.push(...integrity.warnings);
+  const byId = new Map(tasks.map((task) => [task.id, task]));
+  const visiting = new Set<string>();
+  const visited = new Set<string>();
+  const visit = (task: ManifestTask): void => {
+    if (visiting.has(task.id)) throw new Error(`Task dependency cycle at '${task.id}'.`);
+    if (visited.has(task.id)) return;
+    visiting.add(task.id);
+    const phase = manifest.phases.find((entry) => entry.tasks.includes(task))!;
+    const dependencies = [...task.dependencies, ...phase.dependencies.flatMap((id) => manifest.phases.find((entry) => entry.id === id)?.tasks.map((entry) => entry.id) ?? [])];
+    for (const id of dependencies) {
+      const dependency = byId.get(id);
+      if (!dependency) {
+        if (task.contract) throw new Error(`Task '${task.id}' has unknown dependency '${id}'.`);
+        continue;
+      }
+      visit(dependency);
     }
-    if (manifest.phases.some((phase) => phase.feature)) {
-      manifest.warnings.push("Additive feature documents compiled after the monolithic PRD phases.");
-    }
-  }
-  validateManifestSafety(manifest);
+    task.inputs = [...new Set([...task.inputs ?? [], ...dependencies.flatMap((id) => byId.get(id)?.produces ? [byId.get(id)!.produces!] : [])])];
+    visiting.delete(task.id);
+    visited.add(task.id);
+    if (!task.contract) manifest.warnings.push(`Legacy task '${task.id}' has inferred ownership/outputs and no structured acceptance contract; migrate before unattended execution.`);
+  };
+  for (const task of tasks) visit(task);
   return manifest;
 }
 
@@ -717,7 +677,7 @@ export interface TeamValidation {
 /** Deterministic team-validation gate mirroring forge-build-agent-team Step 7. */
 export function validateTeam(manifest: ExecutionManifest, agents: AgentDescriptor[]): TeamValidation {
   const unassignedTasks = manifest.phases
-    .flatMap((phase) => phase.tasks.filter((task) => !task.ownerAgent))
+    .flatMap((phase) => phase.tasks.filter((task) => !task.ownerAgent && task.contract?.kind !== "human-review"))
     .map((task) => task.id);
 
   const fileOwners = new Map<string, { owners: Set<string>; tasks: string[] }>();
@@ -782,7 +742,7 @@ export function buildResponsibilityMatrix(manifest: ExecutionManifest, validatio
   const byOwner = new Map<string, { phase: string; feature: string; taskId: string; outputs: string[] }[]>();
   for (const phase of manifest.phases) {
     for (const task of phase.tasks) {
-      const owner = task.ownerAgent ?? "unassigned";
+      const owner = task.contract?.kind === "human-review" ? "human-reviewer" : task.ownerAgent ?? "unassigned";
       const list = byOwner.get(owner) ?? [];
       list.push({ phase: phase.id, feature: phase.feature ?? "", taskId: task.id, outputs: task.expectedOutputs });
       byOwner.set(owner, list);

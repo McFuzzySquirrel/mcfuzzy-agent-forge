@@ -3,6 +3,12 @@
 - **Status:** Accepted
 - **Date:** 2026-09-07
 
+Transport amendment: [ADR-046](046-task-execution-files.md) extends this adapter
+to shared execution-file prompts for repository tasks. Native agent selection,
+JSON envelopes, permissions, model rules and authoring behavior remain intact.
+The original inline repository-prompt choice below is historical; text-only
+requests still use inline prompts.
+
 ## Context
 
 Claude Code was an authoring harness only. The forge generated agent teams into

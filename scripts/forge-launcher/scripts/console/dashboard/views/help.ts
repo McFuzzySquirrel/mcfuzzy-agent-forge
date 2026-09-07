@@ -96,7 +96,7 @@ function quickHelp(): HTMLElement {
       "The Continue button on the Overview page advances one stage at a time, running the same steps the terminal launcher runs - so you can review each result (for example the drafted PRD in Plan & Team) and come back later to continue. Nothing runs until you click it.",
       dl([
         ["Idea", "your project description in docs/IDEA.md."],
-        ["PRD", "a reviewed requirements document (docs/PRD.md, or product-vision + features)."],
+        ["Requirements", "reviewed docs/PRD.md plus docs/features/*.md, required for every solution."],
         ["Agent team", "specialist agents + skills generated from the PRD."],
         ["Build", "the workflow engine runs the tasks in the execution manifest."],
       ]),
@@ -131,7 +131,7 @@ function quickHelp(): HTMLElement {
     ])]),
     helpSection("Key terms", [dl([
       ["PRD", "Product Requirements Document - the review gate before building."],
-      ["Product vision / feature", "a decomposed PRD's split form (overview + per-feature docs)."],
+      ["Product vision / feature", "the canonical requirements layout: shared overview plus one or more owning features."],
       ["Agent", "a specialist persona that does a job (e.g. qa-engineer)."],
       ["Skill", "a reusable instruction set an agent follows."],
       ["Manifest", "the compiled task list the engine executes."],

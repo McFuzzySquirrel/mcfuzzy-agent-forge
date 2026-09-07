@@ -9,12 +9,17 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
-    "cross-spawn": "^7.0.6"
+    "cross-spawn": "^7.0.6",
+    "read-cmd-shim": "^5.0.0",
+    "which": "^5.0.0"
   },
   "devDependencies": {
     "@types/cross-spawn": "^6.0.6",
     "@types/node": "^22.10.0",
     "tsx": "^4.19.0",
     "typescript": "^5.7.0"
+  },
+  "allowScripts": {
+    "esbuild@0.28.2": true
   }
 }

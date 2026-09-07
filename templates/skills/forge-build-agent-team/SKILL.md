@@ -16,9 +16,8 @@ packages or an execution manifest.
 Load `references/detect-harness.md` and resolve
 `HARNESS_AGENTS_DIR`/`HARNESS_SKILLS_DIR`. Select:
 
-- **Full build:** a complete PRD and no existing project team.
-- **Vision + features:** `docs/product-vision.md` plus `docs/features/`.
-- **Feature increment:** a Feature PRD plus an existing team.
+- **Initial team:** validated `docs/PRD.md` plus `docs/features/`.
+- **Feature increment:** new canonical features registered in the vision plus an existing team.
 
 Treat `.github/agents`, `.github/skills`, `.agents`, `.opencode`, and `.claude`
 as supported layouts. Never assume `.agents` when `.github` is explicit.
@@ -30,7 +29,24 @@ requirements, non-functional requirements, phases, testing, deployment, and
 cross-cutting concerns. In feature mode, read all affected existing agents and
 preserve unaffected files byte-for-byte.
 
+Before generating agents, require canonical vision and features for every
+solution and run the adapter's read-only authoring validator. Review the task
+table from `forge-build-prd/references/task-contract.md`; report authoring repairs
+when a task bundles a roadmap increment, crosses unrelated ownership boundaries,
+omits tests for a changed surface, or embeds human acceptance. Do not compensate
+by inventing an all-purpose specialist for an oversized task.
+
 ### Step 2: Define non-overlapping agents
+
+Read the structured `forge-task` blocks in the planning documents. Generate
+specialists matching every implementation task's planned `ownerAgent` exactly
+and confirm each assignment against its requirements and deliverables, not
+keyword similarity. Do not use Forge coordinators as implementation owners.
+If a planned assignment is unsuitable, report the required authoring correction
+and stop rather than silently reassigning or rewriting the plan. Human-review
+tasks have no model owner. Require specialists to preserve task scope, run the
+declared checks, return the runtime's `forge-result` report, and never fabricate
+test outcomes or human attestations.
 
 Map every requirement to exactly one owner. Required coverage includes
 architecture/build and QA; add domain agents only when the source requires

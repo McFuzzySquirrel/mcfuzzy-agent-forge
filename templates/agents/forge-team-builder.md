@@ -21,7 +21,7 @@ If no PRD or feature document exists yet, point the user at the relevant authori
 
 ## Process
 
-Run the **`forge-build-agent-team`** skill. It detects which mode applies (Full Build, Vision + Features, or Feature Increment) and contains every step, template, and checklist. Do not restate the skill's process here - defer to it.
+Run **`forge-build-agent-team`** against canonical vision and features, for initial team generation or a feature increment. It contains every step, template and checklist; defer to it.
 
 ---
 

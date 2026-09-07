@@ -4,6 +4,7 @@ import { resolve } from "node:path";
 import { runCommand, extractModelFlags, canSelectAgentNatively } from "./run.ts";
 import type { AgentDescriptor, HarnessAdapter, HarnessRunContext, TaskAttemptRequest, TaskResult } from "../types.ts";
 import { inlinePersona } from "../request.ts";
+import { executionPrompt } from "../task-execution.ts";
 import { startAttachServer, type AttachServer } from "./opencode-server.ts";
 
 /**
@@ -17,13 +18,12 @@ import { startAttachServer, type AttachServer } from "./opencode-server.ts";
  * `--agent <name>` so opencode loads the persona itself (the session shows the
  * forge agent rather than the default build agent) and the persona is not
  * inlined. For other harness roots (`.agents`, `.claude`, `.github`) opencode
- * cannot discover the agent files, so - since `opencode run` has no
- * `--system-prompt` flag - the agent file body is prepended to the user prompt
- * as an inline context block instead.
+ * cannot discover the agent files, so the persona is included in the repository
+ * task's execution file instead (inline for text-only tasks).
  *
  * Expected CLI shapes:
- *   opencode run [--model <model-id>] [--agent <name>] "<task prompt>"
- *   opencode run [--model <model-id>] "<agent body + task prompt>"
+ *   opencode run [--model <model-id>] [--agent <name>] "<short execution-file instruction>"
+ *   opencode run [--model <model-id>] "<short execution-file instruction>"
  *
  * Set OPENCODE_BIN env var to override the opencode binary path.
  * Set OPENCODE_EXTRA_FLAGS env var to inject extra flags (e.g. "--no-stream").
@@ -89,7 +89,7 @@ export class OpenCodeAdapter implements HarnessAdapter {
     const modelFlag = request.effectiveModel ? ["--model", request.effectiveModel] : [];
     const agentFlag = this.canSelectAgent(request) ? ["--agent", agent.name] : [];
 
-    const prompt = [agentFlag.length === 0 ? inlinePersona(request) : "", request.instructions].filter(Boolean).join("\n\n");
+    const prompt = executionPrompt(request, agentFlag.length === 0 ? inlinePersona(request) : "");
     // `--dir` pins the project directory explicitly: `opencode run` resolves its
     // working directory from its parent process, not the child's spawn `cwd`, so
     // relying on `cwd: repoRoot` alone runs tasks in the wrong project when the

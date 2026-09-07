@@ -26,8 +26,8 @@ export interface ForgeRepo {
   harnessRoot: HarnessRoot;
   agentRoot: string;
   skillRoot: string;
-  /** Compile source layout: monolithic `docs/PRD.md`, or decomposed vision + features. */
-  sourceLayout: "monolithic" | "features";
+  /** Every solution compiles its product vision and canonical features. */
+  sourceLayout: "features";
   prdPath: string;
   /** `docs/product-vision.md` when the repo is decomposed. */
   visionPath: string;
@@ -43,8 +43,19 @@ export interface ForgeRepo {
 
 export type TaskCapability = "text" | "repository-tools";
 
+export interface TaskContract {
+  version: 1;
+  kind: "implementation" | "human-review";
+  requirements: string[];
+  acceptanceCriteria: string[];
+  constraints: string[];
+  references: string[];
+  reviewFile?: string;
+}
+
 export interface ManifestTask {
   id: string;
+  contract?: TaskContract;
   title: string;
   description: string;
   ownerAgent?: string;
@@ -78,7 +89,7 @@ export interface ManifestPhase {
   id: string;
   title: string;
   description: string;
-  /** Owning feature name in feature mode (e.g. "Budgets"); absent for monolithic. */
+  /** Owning feature name (e.g. "Budgets"). */
   feature?: string;
   ownerAgents: string[];
   dependencies: string[];
@@ -91,8 +102,8 @@ export interface ExecutionManifest {
   generatedAt: string;
   /** Task decomposition granularity used when compiling the manifest. */
   granularity?: "coarse" | "fine";
-  /** Compile source: monolithic `docs/PRD.md` or decomposed vision + features. */
-  sourceLayout?: "monolithic" | "features";
+  /** Missing layout metadata in historical manifests requires recompilation. */
+  sourceLayout?: "features";
   repoRoot: string;
   harnessRoot: HarnessRoot;
   /** The document the build is compiled from (PRD, or vision when decomposed). */

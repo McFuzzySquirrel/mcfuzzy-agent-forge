@@ -58,12 +58,15 @@ test("captureWorktree lists untracked files and excludes engine-owned docs paths
   writeFileSync(join(dir, "src", "a.ts"), "// a\n", "utf8");
   writeFileSync(join(dir, "docs", "WORKFLOW-STATE.json"), "{}", "utf8");
   writeFileSync(join(dir, "docs", "artifacts", "x.json"), "{}", "utf8");
+  mkdirSync(join(dir, "docs/task-executions"), { recursive: true });
+  writeFileSync(join(dir, "docs/task-executions/request.md"), "Execution snapshot");
 
   const snap = await captureWorktree(dir);
   assert.ok(snap, "should capture a git worktree");
   assert.ok(snap.paths.has("src/a.ts"), `expected src/a.ts in ${[...snap.paths]}`);
   assert.ok(!snap.paths.has("docs/WORKFLOW-STATE.json"), "engine-owned state must be excluded");
   assert.ok(!snap.paths.has("docs/artifacts/x.json"), "engine artifacts must be excluded");
+  assert.ok(!snap.paths.has("docs/task-executions/request.md"), "execution files must not count as task work");
 });
 
 test("captureWorktree handles porcelain -z rename records without phantom paths", async () => {
@@ -158,7 +161,7 @@ test("verifyTaskResult passes a substantive response even without file changes",
 test("verifyTaskResult skips the no-op heuristic when validation is enabled and declared", async () => {
   const root = mkdtempSync(join(tmpdir(), "verify-validation-"));
   const result = await verifyTaskResult(
-    makeTask({ validationCommands: ["true"] }),
+    makeTask({ validationCommands: ['node -e "process.exit(0)"'] }),
     makeResult({ stdout: "Ready for the task." }),
     null,
     { repoRoot: root, allowNoop: false, runValidation: true },
@@ -168,10 +171,10 @@ test("verifyTaskResult skips the no-op heuristic when validation is enabled and 
 
 test("runTaskValidation requires every command to pass", async () => {
   const root = mkdtempSync(join(tmpdir(), "verify-runval-"));
-  const pass = await runTaskValidation(makeTask({ validationCommands: ["true"] }), root, 10_000);
+  const pass = await runTaskValidation(makeTask({ validationCommands: ['node -e "process.exit(0)"'] }), root, 10_000);
   assert.equal(pass.ok, true);
 
-  const fail = await runTaskValidation(makeTask({ validationCommands: ["false"] }), root, 10_000);
+  const fail = await runTaskValidation(makeTask({ validationCommands: ['node -e "process.exit(1)"'] }), root, 10_000);
   assert.equal(fail.ok, false);
   assert.match(fail.reason ?? "", /validation command failed/);
 

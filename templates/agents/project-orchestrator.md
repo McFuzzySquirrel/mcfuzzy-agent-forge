@@ -52,7 +52,7 @@ Users invoke you with these patterns. The `forge-orchestrate-build` skill handle
 
 ## Process
 
-Run the **`forge-orchestrate-build`** skill against the relevant document (PRD, Product Vision + Feature docs, or Feature PRD). The skill detects the mode (Full Build, Feature, Feature-Based Build), drives the full analysis-execution-progress cycle, and includes its own validation checklists and output format guidance.
+Run **`forge-orchestrate-build`** against the product vision and canonical feature graph, optionally selecting registered features. Every solution requires this layout. The skill validates sources and drives analysis, execution and progress reporting.
 
 Do not restate the skill's process here -defer to it.
 

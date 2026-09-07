@@ -4,7 +4,47 @@ Detailed release and change notes for MyForge.
 
 ---
 
-## September 2026 - Unreleased
+## September 2026 - v3.62
+
+### Consolidated Task Architecture Decisions
+
+- Consolidated the seven unpublished task ADRs into four final decisions:
+  [execution and completion contracts](adr/044-structured-task-contracts.md),
+  [canonical authoring, readiness and sizing](adr/045-prd-readiness-and-task-sizing.md),
+  [execution files and generated-artifact lifecycle](adr/046-task-execution-files.md),
+  and [attempt diagnostics and retry feedback](adr/047-task-completion-diagnostics.md).
+- Preserved the rationale for rejected thresholds, verbose reports and random
+  input filenames as alternatives considered, without an internal supersession
+  chain among unpublished records. Migration and verification limits remain.
+- Updated ADR references and added reciprocal amendment notices to ADR-017,
+  ADR-018, ADR-022, ADR-024, ADR-030 and ADR-035. Claude ADR-042/043 remain separate.
+- Earlier release entries retain their historical behavior descriptions; their
+  task ADR references now point to the consolidated records. Runtime behavior,
+  target templates, workflow state and recorded task outcomes are unchanged by
+  this documentation consolidation.
+
+---
+
+## September 2026 - v3.61
+
+### Task Contracts Integrated with Claude
+
+- Integrated structured contracts, canonical features, completion diagnostics and
+  compact task results with the mainline Claude execution and authoring support.
+- Claude repository tasks now use the shared short execution-file prompt, native
+  agent selection and file-based fallback personas. JSON-envelope classification,
+  model handling, permissions and authoring defaults remain unchanged.
+- Added Claude coverage for Windows BAT large-request transport, compact reports,
+  retry feedback and execution snapshots; text-only requests remain inline.
+- Consolidated task input snapshots, latest outputs and archived attempt traces
+  under `docs/artifacts/`. Bootstrap now ignores that directory; auto-commit
+  excludes new and legacy generated records without changing the user's index.
+  Existing files and audit links are preserved. See
+  [ADR-046](adr/046-task-execution-files.md).
+- Preserved Claude ADR-042/043 alongside the task-contract decisions, now
+  consolidated as ADR-044 through ADR-047 with explicit transport relationships.
+- Existing target engines require template updates; this integration does not
+  migrate target state, rerun tasks or change previously recorded evidence.
 
 ### Claude Code as an execution harness and authoring runner
 
@@ -18,6 +58,161 @@ Detailed release and change notes for MyForge.
   Code in the model-planning terminal.
 - Existing Claude repos with a persisted OpenCode-shaped stage model must re-pick it against
   `claude_cli` or set inherit; `FORGE_RUN_WITH=opencode` restores the previous runner.
+
+---
+
+## September 2026 - v3.60
+
+### Ignore Generated Extraction Results
+
+- Bootstrap adds `docs/extraction-results/` to the target repository's
+  `.gitignore`, alongside dependency and engine-log exclusions.
+- Existing ignore rules are preserved, and repeated bootstrap runs do not
+  duplicate the generated entries. Already tracked files are not untracked.
+
+---
+
+## September 2026 - v3.59
+
+### Compact Results and Task-ID Execution Files
+
+- Task reports require only `summary` and `unresolved`. Summary strings and lists
+  are accepted; decisions, interfaces, tests and caveat lists are optional.
+  Existing rich reports remain supported. Mandatory engine checks are unchanged.
+- Report errors identify the actual missing field, invalid type, malformed JSON,
+  missing fence or size limit instead of treating every problem as a missing report.
+- Repository CLI attempts reuse `docs/task-executions/<task-id>.md`. Latest results
+  use `<task-id>.result.json`; timestamped, attempt-numbered result archives retain
+  history and are the targets of workflow state and audit links. Current files
+  are replaced atomically, with linked-file protections and safe filename handling.
+- Confirmed the bank's three rejected reports parse with the updated schema:
+  each used a summary list, which the old string-only check rejected despite
+  successful harness execution and existing outputs. Bank validations and state
+  were not changed or rerun during diagnosis.
+- See [ADR-044](adr/044-structured-task-contracts.md),
+  [ADR-046](adr/046-task-execution-files.md) and [Task Contracts](task-contracts.md). Reinstall updated engine
+  templates in existing target repositories before retrying their tasks.
+
+---
+
+## September 2026 - v3.58
+
+### Task Completion Diagnostics and Nonblocking Caveats
+
+- Structured result reports distinguish blocking `unresolved` requirements from
+  optional `warnings` and `validationLimitations`. Prompts define the distinction;
+  unverified required checks remain blockers. Older reports remain compatible.
+- Nonblocking caveats survive artifact creation and downstream context projection.
+  Expected outputs, report validity and engine-run validation still gate completion.
+- Retries receive the previous rejection reason (bounded to 4000 characters) and
+  its retained result path, with instructions to preserve completed work.
+- Each settled invocation retains its harness result, parsed report when valid,
+  and passed/failed/skipped completion gates in `docs/task-executions/*.result.json`.
+  Workflow attempt history and audit events link the evidence before retrying.
+  The directory remains excluded from work attribution and engine auto-commits.
+- Added regression coverage for caveats, blockers, every rejection gate, harness
+  failures, cancellation, retry feedback, durable history and protected paths.
+- See [ADR-047](adr/047-task-completion-diagnostics.md) and [Task Contracts](task-contracts.md). Update installed engine
+  templates before retrying target tasks; no target repository or task state is
+  modified automatically.
+
+---
+
+## September 2026 - v3.57
+
+### Canonical Features and Compact Requirements
+
+- Every solution now requires a product vision and at least one feature, with no
+  size threshold or monolithic authoring/compilation fallback. Imported documents
+  remain source material; historical originals are preserved, not executed.
+- New authoring writes canonical features directly. ID-only traceability and
+  version-2 contracts reuse requirement/constraint definitions rather than
+  duplicating prose; compilation emits complete version-1 execution contracts.
+- Authoring and compilation reject duplicate definitions, uncovered canonical
+  requirements and copied active task bodies. Repeated prose produces warnings.
+- Scoped references select exact headings or canonical IDs, deduplicate inline
+  content, preserve repository path/size protections, and bind human reviews to
+  relevant source content. Repository agents still read references on demand.
+- Saved manifests without feature-layout metadata must be recompiled. Existing
+  target repositories are not modified automatically. See
+  [ADR-045](adr/045-prd-readiness-and-task-sizing.md) and the
+  [migration guide](canonical-features.md).
+
+---
+
+## September 2026 - v3.56
+
+### Short task launch prompts and on-demand references
+
+- Copilot and OpenCode repository tasks now launch with a short, single-line
+  instruction pointing to a per-attempt file under `docs/task-executions/`.
+  The validated task scope, mandatory criteria, validation commands, dependency
+  context and fallback persona remain in the execution file, not CLI arguments.
+- Repository reference files are validated but read by agents on demand instead
+  of embedding their entire contents. Explicit text-only requests retain inline
+  context; the OpenAI API transport and human-review gates are unchanged.
+- Copilot uses the supported `--agent` flag for native selection, replacing the
+  multiline `/agent` directive that is truncated by Windows batch wrappers.
+- Execution files have unique names and SHA-256 digests, are retained for
+  diagnosis, cannot be task deliverables, and are excluded from work attribution
+  and engine auto-commits. Pre-staged execution files stop auto-commit without
+  discarding the user's staged work.
+- Windows regression tests cover large references/personas through actual BAT
+  wrappers for both adapters and both native/fallback selection modes.
+- Added ADR-046. Update installed target-repository engine templates to use this
+  transport; no target project is changed automatically by this source update.
+
+---
+
+## September 2026 - v3.55
+
+### Enforced PRD readiness and execution-sized task authoring
+
+- New and existing-repository PRD authoring share the mandatory decomposition
+  threshold: 15+ functional requirements or 3+ phases. Existing domain documents
+  and "authoring only" instructions do not waive the canonical vision/features
+  layout. Headless decomposition does not require a second opt-in.
+- A read-only adapter validator checks task contracts before team generation:
+  planned owners, concrete output files, reference existence/limits, duplicate
+  IDs, unknown dependencies, empty phases and task/feature cycles. The launcher
+  uses its bundled validator and records the resulting document fingerprints.
+- Draft reuse, resume and team generation revalidate existing artifacts; stale
+  completion markers cannot bypass missing decomposition. Invalid output leaves
+  authoring failed with repair guidance. Additive feature validation preserves
+  the original PRD and resolves prerequisites from existing structured tasks.
+- Task guidance now includes work-package split examples, a task/check review
+  table, surface-specific tests, zero-test safeguards, explicit prerequisites,
+  separate broad evaluation tasks and human-review gates. Granularity and test
+  relevance remain author/reviewer judgments, not claimed machine guarantees.
+- The launcher ships `tsx` as a runtime dependency for bundled validation;
+  target projects do not need adapter dependencies installed for this gate.
+- Added ADR-045. Existing target projects are not rewritten automatically;
+  legacy checkbox inspection remains available with `--allow-legacy`.
+
+---
+
+## September 2026 - v3.54
+
+### Structured task contracts and evidence-based execution
+
+- New planning guidance uses explicit `forge-task` JSON blocks with bounded
+  outcomes, specialist ownership, requirements, criteria, references, outputs,
+  dependency IDs and validation commands. Legacy plans remain supported with
+  migration warnings; existing target projects are not rewritten automatically.
+- Structured compilation preserves task text, rejects unresolved owners and
+  dependencies/cycles, and carries prerequisite-phase artifacts into prompts.
+- Runtime prompts include bounded local reference contents and acceptance
+  criteria. Structured tasks require passing validation and a `forge-result`
+  outcome report, independent of the legacy opt-in validation flag.
+- Human-review tasks pause without model dispatch and require operator evidence
+  via `approve-task`; changed task/reference/evidence fingerprints invalidate
+  approval. Attestations are local audit records, not authenticated identities.
+- Artifact handoffs now preserve outcome reports, decisions, interfaces and
+  engine-verified commands without invented confidence scores.
+- Legacy path inference excludes numeric versions and explicit source references.
+  Validation shell commands preserve quoted arguments on Windows; standard npm
+  Node CLI shims are resolved directly to preserve multiline task prompts.
+- Added ADR-044 and the task-contract authoring/migration guide.
 
 ---
 

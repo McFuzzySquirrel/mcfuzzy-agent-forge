@@ -2,12 +2,17 @@
 
 This is the authoritative template for Feature PRDs. Load this when drafting or reviewing a Feature PRD.
 
+Use globally unique canonical `forge-requirement` definitions for owned stories,
+requirements and constraints. Tables below list IDs, links and metadata, not a
+second copy of definition text. Shared rules remain in their owning source.
+Use compact version-2 task contracts and register this feature in the vision.
+
 # Feature: [Feature Name]
 
 ## 1. Feature Overview
 
 **Feature Name:** ...
-**Parent Document:** [Link to original PRD or product vision, e.g., docs/PRD.md or docs/product-vision.md]
+**Parent Document:** [Product Vision](../PRD.md)
 **Status:** Draft | In Review | Approved | In Progress | Implemented
 **Summary:** A concise description of what this feature does and why it matters.
 **Scope:** What's included in this feature and what's explicitly excluded.
@@ -19,7 +24,7 @@ This is the authoritative template for Feature PRDs. Load this when drafting or 
 
 > **Note:** This section is required in **post-project mode** (adding to an existing project). In **greenfield mode** (initial project decomposition), replace with a brief note: "Greenfield feature -no existing system. See Product Vision at [path]."
 
-**Completed PRD Phases:** List which phases from the original PRD are complete (with checkmarks).
+**Completed Feature Tasks:** Reference existing completed task IDs and owning features.
 **Relevant Existing Components:** Which parts of the existing system this feature touches (files, modules, services).
 **Existing Agents Involved:** Which current agents' domains this feature falls within.
 **Established Conventions:** Key architectural or coding conventions from the original project that this feature must follow.
@@ -39,9 +44,9 @@ This is the authoritative template for Feature PRDs. Load this when drafting or 
 
 ## 4. User Stories
 
-| ID | As a... | I want to... | So that... | Priority |
-|----|---------|-------------|-----------|----------|
-| FT-US-01 | [persona] | [action] | [outcome] | Must / Should / Could |
+| ID | Canonical Source | Ownership | Priority |
+|----|------------------|-----------|----------|
+| FT-US-01 | [Owning definition link] | Owns / Participates | Must / Should / Could |
 
 ---
 
@@ -63,17 +68,17 @@ Any new technologies, libraries, or tools required. For each:
 
 ## 6. Functional Requirements
 
-| ID | Requirement | Affects Existing | Priority |
+| ID | Canonical Source | Affects Existing | Priority |
 |----|-------------|-----------------|----------|
-| FT-FR-01 | Description of the requirement | Yes/No (which component if yes) | Must / Should / Could |
+| FT-FR-01 | [Owning definition link] | Yes/No (which component if yes) | Must / Should / Could |
 
 ---
 
 ## 7. Non-Functional Requirements
 
-| ID | Requirement | Priority |
+| ID | Canonical Source | Priority |
 |----|-------------|----------|
-| FT-NF-01 | Performance, security, accessibility requirements specific to this feature | Must / Should / Could |
+| FT-NF-01 | [Owning definition link] | Must / Should / Could |
 
 ---
 
@@ -104,12 +109,10 @@ Any new technologies, libraries, or tools required. For each:
 ## 9. Implementation Phases
 
 ### Phase F1: [Name]
-- [ ] Task 1
-- [ ] Task 2
+[One forge-task JSON block per bounded outcome; follow forge-build-prd/references/task-contract.md.]
 
 ### Phase F2: [Name]
-- [ ] Task 1
-- [ ] Task 2
+[Preserve requirements, criteria, explicit owners/dependencies, references, outputs, validation and human gates.]
 
 ---
 

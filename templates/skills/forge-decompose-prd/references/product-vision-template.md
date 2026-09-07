@@ -2,6 +2,13 @@
 
 Load this when writing a product vision document.
 
+Use this structure for direct authoring or legacy conversion. Source-section
+placeholders below describe where to find existing decisions during conversion;
+new solutions populate them directly. Define shared rules/stories once with
+`forge-requirement` blocks. Tables list IDs, canonical links and metadata instead
+of repeating definition text. Feature-owned requirements and tasks stay in their
+features; this vision has no executable task catalogue.
+
 ```markdown
 # Product Vision: [Product Name]
 
@@ -11,7 +18,7 @@ Load this when writing a product vision document.
 **Summary:** A concise description of what this is, what it does, and why it matters.
 **Target Platform:** Where this runs or is deployed.
 **Key Constraints:** Any overarching constraints.
-**Original PRD:** [Link to original PRD, e.g., docs/PRD.md]
+**Historical Sources:** [Optional links to preserved conversion inputs; not execution sources]
 
 ---
 

@@ -39,7 +39,22 @@ The CLI auto-detects the repository root, so it can be run from inside the skill
 
 ### Task granularity
 
-`compile` decomposes each PRD phase into tasks at a configurable granularity:
+Before team generation, run `npm run validate-prd -- /absolute/path/to/project`
+from this skill directory. This read-only authoring gate validates decomposition,
+planned task contracts, concrete outputs, references and dependencies without
+requiring generated agents or running implementation commands. For additive
+features append `--feature docs/features/<name>.md`. Compilation still validates
+actual generated owners. See the shared contract for task-size and test reviews.
+
+New plans use fenced `forge-task` JSON objects inside phase headings. Follow
+[the shared authoring contract](../forge-build-prd/references/task-contract.md).
+Compilation preserves these tasks without heuristic splitting, requires explicit
+generated specialist owners, rejects unresolved task dependencies and cycles,
+and wires prerequisite task/phase artifacts into inputs. Human-review contracts
+have no agent owner and are excluded from unassigned-agent warnings.
+
+Legacy checkbox plans remain supported with per-task migration warnings.
+`compile` decomposes legacy PRD phases at a configurable granularity:
 
 ```bash
 npm run forge-execution-adapter -- compile                       # fine (default)
@@ -64,12 +79,13 @@ The chosen granularity is recorded on the manifest as `granularity: "coarse" |
 different granularity produces a new task set — start a fresh engine run
 (`rm docs/WORKFLOW-STATE.json`) rather than mixing with an in-progress run.
 
-### Compile source: monolithic vs decomposed features
+### Compile Source: Canonical Features
 
-`compile` auto-detects the repo's PRD representation:
+`compile` requires `docs/PRD.md` + `docs/features/*.md` for every
+solution. Historical source documents never contribute tasks or commands.
+Missing canonical files require authoring or conversion before compilation.
 
-- **Monolithic** — `docs/PRD.md` with `## Phase N:` headings (the default).
-- **Decomposed (features)** — `docs/product-vision.md` + `docs/features/*.md`.
+- **Features** - `docs/PRD.md` + `docs/features/*.md`.
   The compiler reads the vision's `## 14. Features` dependency table, orders the
   features topologically (dependencies first), and compiles each feature's
   `## 5. Implementation Tasks` / `### Phase N:` blocks into manifest phases.
@@ -192,8 +208,7 @@ By default the embedded tooling writes:
 - **Do not re-author the PRD.** If the PRD is ambiguous, preserve that ambiguity as manifest warnings. The adapter compiles; it does not redesign.
 - **Do not assume `.agents/` only.** Normalize `.github/` and `.claude/` roots the same way bootstrap does.
 - **Do not invent ownership when the match is weak.** Leave `ownerAgent` empty and emit a warning rather than assigning the wrong specialist.
-- **Do not hide unsupported modes.** The adapter compiles monolithic `docs/PRD.md`
-  full-build flows and decomposed vision + features flows. If a feature doc has no
+- **Use canonical sources only.** The adapter compiles vision + features. If a feature doc has no
   compilable phases or the vision lacks a dependency table, surface a warning.
 - **Keep checkpoints append-only in the audit log.** `docs/PROGRESS.md` is mutable state; the audit log is the immutable record.
 
@@ -205,7 +220,7 @@ Before reporting success:
 
 - [ ] Harness root was detected and reported
 - [ ] At least one agent file and one skill file were discovered
-- [ ] The PRD representation was parsed into at least one phase (monolithic `docs/PRD.md`, or vision + features in decomposed mode)
+- [ ] Canonical feature documents were parsed into at least one phase
 - [ ] `docs/EXECUTION-MANIFEST.json` was written with warnings for ambiguities
 - [ ] `docs/agent-responsibility-matrix.md` was written with the team-validation results
 - [ ] `docs/PROGRESS.md` stayed consistent with the manifest checkpoint state

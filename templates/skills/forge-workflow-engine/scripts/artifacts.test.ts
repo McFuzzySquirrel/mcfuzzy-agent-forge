@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { mkdtempSync, rmSync } from "node:fs";
+import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
@@ -55,7 +55,23 @@ test("ArtifactStore seeds counters from existing files on disk", () => {
   }
 });
 
-test("synthesise uses task title+description as summary and sets confidence 0.9", () => {
+test("typed handoffs coexist with task input, output and trace files at the artifact root", (context) => {
+  const root = mkdtempSync(join(tmpdir(), "forge-artifacts-mixed-"));
+  context.after(() => rmSync(root, { recursive: true, force: true }));
+  const store = new ArtifactStore({ artifactsPath: root });
+  const artifact = store.write(makeArtifact("review", "TASK-1"));
+  writeFileSync(join(root, "TASK-1.md"), "Current task input");
+  writeFileSync(join(root, "TASK-1.result.json"), '{"outcome":"passed"}');
+  writeFileSync(join(root, "TASK-1.2026-09-07T17-00-00-000Z.attempt-1.result.json"), '{"gates":[]}');
+  assert.deepEqual(store.read(artifact.artifactId), artifact);
+  assert.equal(store.read("missing"), null);
+  assert.deepEqual(store.readAll(), [artifact]);
+  assert.deepEqual(store.readByTask("TASK-1"), [artifact]);
+  assert.deepEqual(store.readByType("review"), [artifact]);
+  assert.equal(store.write(makeArtifact("review", "TASK-2")).artifactId, "review-002");
+});
+
+test("legacy synthesis labels missing structured evidence and does not invent confidence", () => {
   const root = mkdtempSync(join(tmpdir(), "forge-artifacts-synth-"));
   try {
     const store = new ArtifactStore({ artifactsPath: root });
@@ -69,8 +85,8 @@ test("synthesise uses task title+description as summary and sets confidence 0.9"
       agentOutput: "I'll start by understanding the existing code.",
       inputArtifactIds: [],
     });
-    assert.equal(artifact.summary, "Set up foundation: Create the initial project scaffold and directory structure.");
-    assert.equal(artifact.confidence, 0.9);
+    assert.match(artifact.summary, /no structured outcome report/);
+    assert.equal(artifact.confidence, undefined);
     assert.deepEqual(artifact.filesChanged, ["src/index.ts", "src/types.ts"]);
     assert.equal(typeof artifact.payload["agentOutputExcerpt"], "string");
     assert.equal(artifact.payload["taskDescription"], "Create the initial project scaffold and directory structure.");
@@ -79,7 +95,7 @@ test("synthesise uses task title+description as summary and sets confidence 0.9"
   }
 });
 
-test("synthesise falls back to stdout heuristic when no description is provided", () => {
+test("legacy synthesis retains trailing output without claiming a verified summary", () => {
   const root = mkdtempSync(join(tmpdir(), "forge-artifacts-synth-fallback-"));
   try {
     const store = new ArtifactStore({ artifactsPath: root });
@@ -93,7 +109,8 @@ test("synthesise falls back to stdout heuristic when no description is provided"
       agentOutput: "Created the main entry point and wired up the router.\nAlso added startup wiring.",
       inputArtifactIds: [],
     });
-    assert.equal(artifact.summary, "Created the main entry point and wired up the router.");
+    assert.match(artifact.summary, /no structured outcome report/);
+    assert.match(String(artifact.payload.agentOutputExcerpt), /Created the main entry point/);
   } finally {
     rmSync(root, { recursive: true, force: true });
   }

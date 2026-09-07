@@ -11,6 +11,7 @@ import { actions, setModelOverride, summary } from "./console/repo.ts";
 import { currentJobForRepo } from "./console/jobs.ts";
 import { authoringConfigPath } from "./authoring-config.ts";
 import { fingerprintFiles, saveAuthoringStage, stageInputFingerprint } from "./authoring-state.ts";
+import { writeFeatureFixture } from "./feature-fixture.ts";
 
 let port = 46700;
 function fixture(t: TestContext, harnessRoot = ".github"): string {
@@ -25,7 +26,7 @@ function fixture(t: TestContext, harnessRoot = ".github"): string {
   fs.mkdirSync(path.join(root, "docs"));
   fs.mkdirSync(path.join(root, harnessRoot, "agents"), { recursive: true });
   fs.writeFileSync(path.join(root, harnessRoot, "agents", "worker.md"), '---\nname: worker\ndescription: "Worker"\n---\n');
-  fs.writeFileSync(path.join(root, "docs", "PRD.md"), "# Existing PRD\n");
+  writeFeatureFixture(root);
   return root;
 }
 

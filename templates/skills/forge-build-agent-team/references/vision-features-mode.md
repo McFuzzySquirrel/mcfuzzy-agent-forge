@@ -31,21 +31,23 @@ Read every feature document listed in the product vision's Features section (typ
 5. **Dependencies** -Which other features this feature depends on.
 6. **Testing strategy** -How this feature will be tested.
 
-Build a **unified requirements view** -a consolidated list of all functional requirements across all features, noting which feature each requirement belongs to.
+Build a unified ID-to-owner view with canonical links across all features. Do not
+copy requirement descriptions or task catalogues into another document.
 
 ### Step 3v: Identify Specialist Roles
 
-Using the unified requirements view, map domains to specialist agent roles. Apply the same heuristics as Step 2 (in Full Build Mode):
+Using the unified requirements view, map domains to specialist agent roles. Apply the heuristics from Step 2 of the parent skill:
 
 - **Required agents** -Project Architect, QA/Test Engineer (always created).
 - **Domain agents** -Based on the tech stack from the product vision.
 - **Feature agents** -Based on functional requirement groups across all features.
 
-**Key difference from Full Build Mode:** Requirements come from multiple feature documents rather than one PRD. When the same domain appears across multiple features (e.g., database requirements in Feature 1 and Feature 3), aggregate them under one agent rather than creating per-feature agents.
+When the same domain appears across multiple features, assign one specialist
+across those features rather than creating duplicate per-feature agents.
 
 ### Step 4v: Define Agent Boundaries
 
-Follow the same process as Step 3 (in Full Build Mode), with these additional considerations:
+Follow Step 3 of the parent skill, with these additional considerations:
 
 - Map each feature requirement to exactly one agent. The mapping should note which feature document the requirement came from.
 - When an agent owns requirements from multiple features, list all feature document references in their Key Reference section.
@@ -53,14 +55,14 @@ Follow the same process as Step 3 (in Full Build Mode), with these additional co
 
 ### Step 5v: Identify Skill Candidates
 
-Follow the same process as Step 4 (in Full Build Mode). Look for patterns that
+Follow Step 4 of the parent skill. Look for patterns that
 repeat across features and record candidates in the exact
 `docs/SKILL-CANDIDATES.json` handoff. Do not invoke `skill-creator` or write
 skill packages during team generation.
 
 ### Step 6v: Write Agents and the Candidate Handoff
 
-Follow the same process as Step 5 (in Full Build Mode), then persist the
+Follow Step 5 of the parent skill, then persist the
 candidate handoff. The independent `forge-build-project-skills` stage owns
 skill creation and review, including headless authorization and model routing.
 Preserve unaffected existing skills.
@@ -90,7 +92,7 @@ Preserve unaffected existing skills.
 
 ### Step 7v: Validate the Team
 
-Follow the same validation checklist as Step 7 (in Full Build Mode), plus:
+Follow the validation checklist in Step 7 of the parent skill, plus:
 
 - [ ] Every feature document's functional requirements map to exactly one agent.
 - [ ] Agents that own requirements from multiple features reference all relevant feature documents.
@@ -99,7 +101,7 @@ Follow the same validation checklist as Step 7 (in Full Build Mode), plus:
 
 ### Step 8v: Present the Team
 
-Follow the same presentation format as Step 8 (in Full Build Mode), with an additional Feature Coverage table:
+Follow the presentation format in Step 8 of the parent skill, with an additional Feature Coverage table:
 
 ```markdown
 ## Feature Coverage

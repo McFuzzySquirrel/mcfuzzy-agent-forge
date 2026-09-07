@@ -1,6 +1,6 @@
 ---
 name: forge-auto-build
-description: "Execution fast-path meta-skill that chains the build pipeline from an existing PRD in a single continuous flow: forge-build-agent-team → optionally forge-assign-models → one build execution path (`forge-orchestrate-build` or `forge-workflow-engine`). This is a terminal/headless fast-path, driven by forge-launcher or `opencode run --auto` — it is NOT the in-harness entry point. Inside a chat harness use `@project-orchestrator` (interactive) or `@workflow-orchestrator` (autonomous). Use this skill when a PRD already exists (docs/PRD.md or the decomposed product-vision + features layout) and you want to go from that approved PRD to a fully built, validated, and committed project without manual hand-offs between steps. A single pre-flight confirmation gate is presented before the autonomous run begins."
+description: "Terminal/headless build pipeline from validated docs/PRD.md and docs/features/*.md through team generation, optional model assignment and one execution path. Use when approved canonical features should become a built, validated project after one pre-flight gate. Inside a chat harness use @project-orchestrator or @workflow-orchestrator instead."
 ---
 
 # Skill: Full Auto Build (End-to-End Pipeline)
@@ -20,7 +20,7 @@ You are running the **build pipeline** on behalf of the user in one continuous, 
 
 The underlying skills (`forge-build-agent-team`, `forge-assign-models`, `forge-orchestrate-build`) each own their own work. You are the conductor: you invoke them in sequence, verify each handoff, commit progress, and keep the user informed without interrupting them.
 
-**A PRD is a required prerequisite.** This skill does **not** create or generate a PRD. It consumes one that already exists: `docs/PRD.md`, or the decomposed representation `docs/product-vision.md` together with `docs/features/*.md`. PRD creation is a deliberate stage owned by `forge-build-prd` / `forge-auto-build-prd`.
+**Reviewed features are a required prerequisite.** This skill does not author requirements. It consumes only `docs/PRD.md` with `docs/features/*.md`. Run `validate-prd` before team generation. Missing canonical files require `forge-build-prd` or conversion with `forge-decompose-prd`; historical source documents are not executable.
 
 ---
 
@@ -28,8 +28,8 @@ The underlying skills (`forge-build-agent-team`, `forge-assign-models`, `forge-o
 
 | Skill | Scope | Pauses |
 |---|---|---|
-| `forge-auto-build-prd` | idea → reviewed PRD (with automatic decomposition) | Review gate inside PRD flow |
-| `forge-build-prd` | idea/seed docs → `docs/PRD.md` | Review gate before save |
+| `forge-auto-build-prd` | idea to reviewed canonical vision and features | Review gate inside authoring flow |
+| `forge-build-prd` | idea/seed docs to vision and features directly | Review gate before save |
 | `@project-orchestrator` | In-harness interactive build execution only (no PRD, no team) | Optional pause between each phase |
 | `@workflow-orchestrator` | In-harness build execution via the workflow engine only | One pre-run gate |
 | **`forge-auto-build`** | **Terminal/headless** fast-path: existing PRD → agent team → (optional models) → choose manual or engine build path → committed result | **One** pre-flight gate, then fully autonomous |
@@ -57,21 +57,14 @@ Use this skill when you want the build pipeline to run hands-free after a single
 
 When the user invokes this skill, perform the following before touching any files:
 
-1. **Verify the PRD prerequisite.** Confirm one of the following exists:
-   - `docs/PRD.md`, or
-   - `docs/product-vision.md` together with `docs/features/*.md`.
-   If neither representation exists, **stop immediately** and direct the user to first run `forge-auto-build-prd` or `forge-build-prd`. Do not ask for a one-line idea and do not proceed.
-2. **Resolve the PRD source.** Determine which PRD representation to use with the following precedence:
-   - If the user supplied an explicit argument (a PRD path), use it as-is.
-   - Otherwise, use `docs/PRD.md`.
-   - Otherwise, use the decomposed layout (`docs/product-vision.md` + `docs/features/*.md`).
-   - If both a monolithic PRD and the decomposed layout exist, present a short numbered choice and ask the user to pick one for this run.
+1. **Verify canonical sources.** Require `docs/PRD.md` and at least one `docs/features/*.md`, then run `validate-prd`. Stop on errors and direct the user to author or convert requirements.
+2. **Select features.** Use the canonical feature graph. Explicit feature selections must belong to it. Do not offer a legacy document or alternate layout as a build source.
 3. **Echo the selected PRD.** Restate the selected PRD (or vision + features) path in one or two sentences so the user can see what this run will use.
    - Do not add any extra confirmation gate here; continue to the normal pre-flight summary and `GO` checkpoint.
 4. **Check repo state** and flag anything that changes the flow:
    - Do `.md` agent files already exist in `HARNESS_AGENTS_DIR` (beyond the forge templates)? If yes, note that Stage 1 (team generation) will run in **Feature Increment Mode**.
    - Does `docs/product-vision.md` with `docs/features/*.md` exist? If yes, note that Stage 1 will run in **Vision + Features Mode**.
-   - Note whether the PRD is monolithic or decomposed so the team builder and orchestrator select the right mode.
+   - Always use feature-based team generation and execution.
 5. **Present the planned stages** as a numbered list:
    - Stage 1: `forge-build-agent-team` → produce agents and immutable `docs/SKILL-CANDIDATES.json`
    - Stage 1b: `forge-build-project-skills` → create/reuse/extend planned project skills independently
@@ -97,11 +90,9 @@ When the user invokes this skill, perform the following before touching any file
 
 **PRD-requirement behavior examples:**
 
-- User ran `forge-auto-build docs/PRD.md`: use that explicit PRD path.
-- User ran `forge-auto-build` and `docs/PRD.md` exists: use `docs/PRD.md`.
-- User ran `forge-auto-build` and only `docs/product-vision.md` + `docs/features/*.md` exist: use the decomposed layout.
-- User ran `forge-auto-build` and both layouts exist: ask the user to choose one for this run.
-- User ran `forge-auto-build` and no PRD representation exists: stop and direct to `forge-auto-build-prd` or `forge-build-prd`.
+- Canonical vision and features exist: validate and use the feature graph.
+- Only legacy source documents exist: stop and direct to `forge-decompose-prd`.
+- No requirements exist: stop and direct to `forge-auto-build-prd` or `forge-build-prd`.
 
 **Do not proceed until the user types `GO` (or a clear equivalent such as `start`, `run it`, `proceed`).**
 
@@ -111,8 +102,8 @@ When the user invokes this skill, perform the following before touching any file
 Pre-flight checklist -verify before typing GO:
 
 Input
-- [ ] A PRD representation exists and is correct
-      (docs/PRD.md, or docs/product-vision.md + docs/features/)
+- [ ] Canonical requirements exist and are validated
+  (docs/PRD.md + docs/features/*.md, including one-feature solutions)
 - [ ] The PRD has been reviewed and you are ready to build from it
 - [ ] The target project directory is open and git-initialised
 - [ ] MyForge templates are bootstrapped (`HARNESS_AGENTS_DIR` and `HARNESS_SKILLS_DIR` exist)
@@ -132,7 +123,7 @@ Expectations
 
 ### Stage 1: Run `forge-build-agent-team`
 
-Invoke the `forge-build-agent-team` skill against the approved PRD (`docs/PRD.md`, or against `docs/product-vision.md` + `docs/features/*.md` if that layout exists). Let the skill detect its own mode (Full Build, Vision + Features, or Feature Increment).
+Invoke `forge-build-agent-team` against the validated product vision and feature graph. Use initial team generation or feature-increment mode, never a standalone source document.
 
 When it finishes:
 - Verify `.md` agent files exist under `HARNESS_AGENTS_DIR`.
@@ -236,8 +227,7 @@ npm install
 npm run forge-execution-adapter -- compile
 ```
 
-The adapter auto-detects the PRD representation: monolithic `docs/PRD.md`, or
-the **decomposed layout** (`docs/product-vision.md` + `docs/features/*.md`)
+The adapter requires the canonical layout (`docs/PRD.md` + `docs/features/*.md`)
 compiled from the features in dependency-graph order. It also runs a
 team-validation gate and writes `docs/agent-responsibility-matrix.md`
 (owner × phase × task × outputs).

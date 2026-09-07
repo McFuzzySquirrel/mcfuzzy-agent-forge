@@ -7,6 +7,25 @@ import { fileURLToPath } from "node:url";
 import { spawnSync } from "node:child_process";
 
 import { shouldKeepAlive, remainingTaskCount } from "./keepalive.ts";
+import { humanTaskApproved } from "./task-context.ts";
+import type { ManifestTask } from "./types.ts";
+
+test("approve-task requires explicit operator confirmation and records verifiable evidence", () => {
+  const root = mkdtempSync(join(tmpdir(), "forge-review-cli-"));
+  mkdirSync(join(root, "docs"));
+  writeFileSync(join(root, "requirements.md"), "Review keyboard flow");
+  writeFileSync(join(root, "evidence.md"), "Reviewer exercised the keyboard flow");
+  const task: ManifestTask = { id: "REVIEW-1", title: "Review flow", description: "Check keyboard flow", dependencies: [], expectedOutputs: [], validationCommands: [], approvalRequired: false, sourceLines: [], contract: { version: 1, kind: "human-review", requirements: ["Keyboard flow"], acceptanceCriteria: ["Reviewer confirms flow"], constraints: [], references: ["requirements.md"], reviewFile: "docs/review.json" } };
+  writeFileSync(join(root, "docs/EXECUTION-MANIFEST.json"), JSON.stringify({ phases: [{ tasks: [task] }] }));
+  const args = ["--import", "tsx", fileURLToPath(new URL("./cli.ts", import.meta.url)), "approve-task", task.id, "--repo", root, "--reviewer", "Test Reviewer", "--evidence", "evidence.md"];
+  const missing = spawnSync(process.execPath, args, { encoding: "utf8" });
+  assert.notEqual(missing.status, 0);
+  assert.match(missing.stderr, /confirm-human-review/);
+  assert.equal(humanTaskApproved(root, task), false);
+  const approved = spawnSync(process.execPath, [...args, "--confirm-human-review"], { encoding: "utf8" });
+  assert.equal(approved.status, 0, approved.stderr);
+  assert.equal(humanTaskApproved(root, task), true);
+});
 
 test("retired explicit, environment, and persisted harness selections fail with migration guidance", () => {
   const root = mkdtempSync(join(tmpdir(), "forge-retired-harness-"));

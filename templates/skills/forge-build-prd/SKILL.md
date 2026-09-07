@@ -1,11 +1,11 @@
 ---
 name: forge-build-prd
-description: "Build a comprehensive Product Requirements Document (PRD) or Technical Specification from a user's idea, concept, or research document. Use this skill when asked to create, draft, or formalize a PRD, spec, or requirements document."
+description: "Author a product vision and canonical feature requirements from an idea, research, or existing repository. Use when asked to create, draft, or formalize a PRD, spec, or requirements; every solution uses features."
 ---
 
 # Skill: Build a PRD or Spec from an Idea or Research
 
-You are a product requirements analyst. Your job is to take a user's idea, concept, or research document and produce a comprehensive **Product Requirements Document (PRD)** or **Technical Specification** that can serve as the authoritative reference for future implementation work by humans and AI agents.
+You are a product requirements analyst. Produce `docs/PRD.md` and one or more `docs/features/*.md` directly. This is the only active requirements layout, even for a one-task solution. Do not create a monolithic PRD or duplicate task catalogue. Existing documents are source material; preserve historical originals but never use them as execution sources.
 
 ---
 
@@ -69,7 +69,15 @@ Wait for the user to respond. Ask follow-up questions if answers reveal new unkn
 
 ### Step 3: Draft the Document
 
-Produce a structured PRD using the template in `references/prd-template.md`. Load that file now and follow its structure. Use information gathered in Steps 1–2. Where the user has not specified a detail, state a reasonable default assumption and mark it in the **Open Questions** section.
+Load `references/task-contract.md` before writing implementation phases. Author
+one bounded `forge-task` JSON block per task, carrying requirement meaning,
+acceptance criteria, constraints, source references, explicit planned specialist
+names, dependencies, deliverable paths, and executable validation commands.
+Separate human sign-off from agent preparation. Apply its per-task review in
+both interactive and headless gap checks; document-level completeness alone is
+not sufficient. The compiler does not repair vague instructions.
+
+Load `references/prd-template.md` for the canonical layout, and the sibling `forge-decompose-prd/references/product-vision-template.md` and `feature-document-template.md` for document structure. Identify feature boundaries before writing tasks. The vision owns shared architecture, constraints and cross-feature stories; each feature owns its specific definitions and tasks. Use globally stable IDs, ID-only traceability links and version-2 task contracts. Write each requirement once as a `forge-requirement` definition and resolve references at compilation. Record reasonable default assumptions in Open Questions.
 
 > Adapt depth to project scope - a weekend prototype needs less detail than an enterprise platform. Keep all section headings for consistency.
 
@@ -114,7 +122,7 @@ Ask:
 - Are any sections missing, incorrect, or over-specified?
 - Should any priorities be adjusted?
 
-Incorporate feedback and iterate until the user confirms the document is ready. Once confirmed, save the final PRD to `docs/PRD.md` and proceed to Step 5.
+Incorporate feedback until the user confirms the vision and features are ready. Save directly to the canonical files and proceed to Step 5.
 
 > **Headless mode.** When invoked non-interactively, present the checklist once
 > (it is part of the audit trail) but do **not** block for approval - the
@@ -123,22 +131,22 @@ Incorporate feedback and iterate until the user confirms the document is ready. 
 > acceptance criteria, a defined tech stack, non-functional requirements
 > (performance, security, privacy), and implementation phases; **fill any gaps**
 > the same way the interactive gap-fill pass would. Only then save
-> `docs/PRD.md` and run Step 5.
+> `docs/PRD.md` and `docs/features/*.md` and run Step 5.
 
 ---
 
-### Step 5: Check Decomposition Criteria
+### Step 5: Validate Canonical Features
 
-Run immediately after the user confirms the PRD is ready and it has been saved to `docs/PRD.md`.
+Every solution must have a nonempty vision feature table listing every feature,
+exact dependency names, and a valid task/feature DAG. A small solution has one
+feature, not a different representation. Run the read-only `validate-prd` command
+in `references/task-contract.md`. Fix unresolved IDs, duplicate definitions or
+task bodies, uncovered requirements and invalid contracts. Review prose warnings
+and replace copied text with canonical links where appropriate.
 
-1. Evaluate the existing decomposition criteria directly from the PRD:
-   - 15+ functional requirements, **or**
-   - 3+ implementation phases.
-2. If the PRD qualifies, **automatically invoke `forge-decompose-prd`** to produce `docs/product-vision.md` and `docs/features/*.md`. Do **not** ask the user whether they want decomposition -the threshold is a mechanical, deterministic check.
-3. If the PRD does not qualify, retain the monolithic `docs/PRD.md` and report that decomposition was not required.
-4. Report the outcome either way so the user knows which layout downstream stages will consume.
-
-The qualification threshold is unchanged (15+ functional requirements or 3+ implementation phases). `forge-decompose-prd` remains independently invokable for older PRDs, PRDs modified after generation, or documents the user explicitly wants to decompose below the automatic threshold.
+`forge-decompose-prd` is a conversion tool for supplied legacy source documents,
+not a second generation pass for new solutions. Preserve completed task IDs and
+historical source files; only canonical feature tasks are executable.
 
 ---
 
@@ -151,9 +159,12 @@ After writing the PRD, run this self-check before presenting it to the user:
 - [ ] Security & Privacy section addresses data handling even if no sensitive data is involved
 - [ ] Non-functional requirements include performance, security, and accessibility
 - [ ] Implementation phases are ordered and each phase is independently shippable
+- [ ] Each phase contains execution-sized tasks, with acceptance-to-check mappings and concrete output/test files; it is not one task per roadmap increment
+- [ ] UI, domain, infrastructure and documentation checks cover their respective deliverables; human judgments are separate review tasks
+- [ ] The deterministic `validate-prd` gate passes without `--allow-legacy`
 - [ ] Open Questions are populated with every unresolved decision, each with a default assumption
 - [ ] The document references any existing project docs rather than duplicating them
-- [ ] The decomposition check ran after confirmation: qualifying PRDs produced `docs/product-vision.md` + `docs/features/*.md`; non-qualifying PRDs remain monolithic and the outcome was reported
+- [ ] The vision and at least one feature exist, every definition has one owner, and every task appears in exactly one feature
 
 If any checkbox is unchecked, fix the gap before presenting to the user.
 
@@ -164,9 +175,9 @@ If any checkbox is unchecked, fix the gap before presenting to the user.
 - **Never fabricate version numbers.** Search for the latest stable release of every technology. If you cannot verify, note "version unverified" and flag it in Open Questions.
 - **MoSCoW is the default priority scheme.** Don't invent a new one unless the user asks.
 - **Existing project docs are authoritative.** If the repo has a prior PRD, architecture docs, or research notes, review them first. Build on them rather than contradicting or duplicating existing decisions.
-- **The template uses 21 numbered sections.** Adapt depth per section but keep all headings - downstream tools (`forge-build-agent-team`, `project-orchestrator`) reference specific section numbers.
-- **Decomposition is automatic, not optional for qualifying PRDs.** If the PRD meets the threshold (15+ functional requirements or 3+ implementation phases), run `forge-decompose-prd` in Step 5 without asking. Do not present a decomposition opt-in question.
-- **Never modify `docs/PRD.md` during decomposition.** `forge-decompose-prd` produces `docs/product-vision.md` and `docs/features/*.md` alongside the original -preserve the monolithic PRD.
+- **Features are mandatory.** There is no size threshold, monolithic fallback, or authoring-only exemption.
+- **Do not duplicate shared rules.** Keep canonical definitions in the vision or owning feature and use ID references elsewhere.
+- **Preserve history.** Do not rewrite supplied historical documents or renumber completed work during conversion.
 
 ---
 

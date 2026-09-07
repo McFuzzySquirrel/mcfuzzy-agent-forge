@@ -7,13 +7,12 @@ Load this when writing a feature document.
 
 ## Traceability
 
-| Feature ID | Original PRD ID | Description |
-|-----------|----------------|-------------|
-| {PREFIX}-US-01 | US-03 | Original user story reference |
-| {PREFIX}-FR-01 | FR-07 | Original requirement reference |
+| Canonical ID | Owner / Source Link | Relationship |
+|--------------|---------------------|--------------|
+| US-03 | [Vision](../PRD.md#US-03) | participates |
+| FR-07 | This feature | owns |
 
 **Product Vision:** [docs/product-vision.md](../product-vision.md)
-**Original PRD:** [docs/PRD.md](../PRD.md)
 
 ---
 
@@ -37,9 +36,9 @@ Load this when writing a feature document.
 
 ## 3. Functional Requirements
 
-| ID | Requirement | Priority |
-|----|-------------|----------|
-| {PREFIX}-FR-01 | Description of the requirement | Must / Should / Could |
+[Write each requirement once as a forge-requirement JSON block with id, kind and
+text. Preserve canonical IDs. Keep priority in an ID/priority index if needed.
+Reference shared definitions in the vision rather than copying them.]
 
 ---
 
@@ -52,11 +51,11 @@ Load this when writing a feature document.
 ## 5. Implementation Tasks
 
 ### Phase 1: [Name]
-- [ ] Task 1
-- [ ] Task 2
+[Author version-2 forge-task JSON blocks using requirementRefs/constraintRefs.
+Preserve stable task IDs during conversion; do not create a second catalogue.]
 
 ### Phase 2: [Name]
-- [ ] Task 1
+[Include explicit dependency IDs, verification and separate human-review gates.]
 
 ---
 

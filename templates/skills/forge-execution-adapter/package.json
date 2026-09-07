@@ -4,6 +4,7 @@
   "type": "module",
   "description": "Portable execution adapter tooling for MyForge repositories",
   "scripts": {
+    "validate-prd": "tsx scripts/prd-validation.ts",
     "forge-execution-adapter": "tsx scripts/adapter.ts",
     "test": "node --import tsx --test scripts/*.test.ts",
     "typecheck": "tsc --noEmit"
@@ -15,5 +16,8 @@
     "@types/node": "^22.10.0",
     "tsx": "^4.19.0",
     "typescript": "^5.7.0"
+  },
+  "allowScripts": {
+    "esbuild@0.28.2": true
   }
 }

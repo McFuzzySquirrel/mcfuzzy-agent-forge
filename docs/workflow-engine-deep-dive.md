@@ -141,14 +141,19 @@ Once a task is ready, `executeTask` takes over:
 2. markTaskStarted() → saves state with status:"running", increments attempt counter
 
 3. for attempt in range(0, maxRetries+1):
-       request = prepareTaskRequest(agent, task, projectedContext, budget, attempt)
+  request = prepareTaskRequest(agent, task, projectedContext, budget, attempt,
+           previousFailure, previousResultPath)
        result = harness.invoke(request)
        if result.success:
+      check outputs and structured report (including blocking unresolved)
+      run required manifest validation commands if earlier gates pass
+  persist result + gate outcomes; link attemptHistory and audit event
+  if all applicable gates pass:
            markTaskComplete(state, outputFiles, stdout)
            saveState() + syncProgressMd() + finish commit bookkeeping
            write audit event: task.complete
            return
-       if last attempt:
+      if last attempt or terminal failure kind:
            markTaskFailed(state, errorMessage)
            write audit event: task.failed
            return
@@ -156,6 +161,27 @@ Once a task is ready, `executeTask` takes over:
            sleep(retryDelayMs)
            write audit event: task.retrying
 ```
+
+Structured reports keep blocking `unresolved` requirements separate from optional
+`warnings` and `validationLimitations`. An unverified required acceptance check
+remains blocking; engine-owned commit work and optional hosted checks do not
+belong in `unresolved`. Legacy reports without caveat fields remain compatible.
+The engine does not semantically classify notes or prove natural-language criteria.
+Only `summary` and `unresolved` are required; a summary list is normalized to a
+string. Optional detail fields no longer require boilerplate. Report errors name
+the actual invalid field or format instead of always reporting a missing handoff.
+
+Each repository CLI attempt refreshes `docs/artifacts/<task-id>.md` with
+current instructions rather than creating a new randomly named request file.
+Each settled attempt updates `<task-id>.result.json` and archives a
+`<task-id>.<timestamp>.attempt-<number>.result.json` with the
+full harness result, parsed handoff when valid and the five gate outcomes. State
+retains lightweight `attemptHistory` links to the immutable archives, and audit records
+`task.attempt.finished` before another invocation starts. Failed attempts pass
+their reason (bounded to 4000 characters) and evidence path to the next request.
+Skipped gates are not successful checks. These sensitive local diagnostics share
+the execution directory's protections and manual retention policy. See
+[Task Contracts](task-contracts.md#completion-and-retry-diagnostics).
 
 The retry loop is the engine's resilience mechanism. If a model call fails transiently - network timeout, rate limit, model error - the task is retried up to `--max-retries` times (default: 2) with a configurable delay (default 5 seconds). Only if all attempts fail does the task enter the `failed` state, which halts the phase.
 
@@ -242,7 +268,7 @@ Each adapter translates a `(agent, task)` pair into a real execution call:
 Shells out to the `opencode` CLI per task:
 
 ```
-opencode run --model <agent.model> [--agent <name>] "<task title + description>"
+opencode run --model <agent.model> [--agent <name>] --dir <repo> "<short execution-file instruction>"
 ```
 
 When the owning agent's file lives under the project's `.opencode/agents/`
@@ -250,9 +276,11 @@ directory, the adapter passes `--agent <name>` so opencode loads the persona
 itself - the session runs under the forge agent rather than the default build
 agent - and the persona is not inlined. `opencode run` has no `--system-prompt`
 flag, so for other harness roots (`.agents`, `.claude`, `.github`) it falls back
-to inlining the agent body into the prompt. Provider-qualified model IDs are
-passed through unchanged on this path. The task's title and description complete
-the user prompt. Outputs are verified and then enriched with worktree-diff
+to including the agent body in the repository task's execution file.
+Provider-qualified model IDs are passed through unchanged on this path. A short
+single-line prompt directs the agent to the execution file, which contains the
+validated task instructions and reference paths. Supporting documents are read
+on demand. Outputs are verified and then enriched with worktree-diff
 attribution so in-place edits are preserved in task state and artifacts.
 
 ### `CopilotAdapter`
@@ -260,12 +288,18 @@ attribution so in-place edits are preserved in task state and artifacts.
 Shells out to the GitHub Copilot CLI per task:
 
 ```
-copilot -p "<agent context + task prompt>" --yolo
+copilot -p "<short execution-file instruction>" [--agent <name>] --yolo
 ```
 
 When the owning agent's file lives under `.github/agents/`, the adapter can use
-the inline `/agent <name>` directive so Copilot loads the persona natively;
-otherwise it falls back to inlining the agent file contents into the prompt.
+the `--agent <name>` flag so Copilot loads the persona natively;
+otherwise it includes the persona in the repository task's execution file.
+Unlike the old multiline `/agent` directive, the single-line prompt survives
+Windows BAT wrappers. The task-ID execution file is refreshed per invocation and
+its SHA-256 digest is logged for diagnosis, outside work attribution and
+auto-commits. It is not a new source specification or authenticated evidence.
+Explicit text-only requests retain inline content. See
+[Task Contracts](task-contracts.md#execution-files-and-reference-reading).
 `--yolo` auto-approves tool permissions, mirroring the opencode adapter's
 `--auto`, and provider prefixes are stripped from model IDs before they are
 passed to the Copilot CLI. Select it with `--harness copilot` (or
@@ -276,12 +310,13 @@ passed to the Copilot CLI. Select it with `--harness copilot` (or
 Shells out to the Claude Code CLI per task:
 
 ```
-claude -p "<task prompt>" --output-format json --agent <name> --permission-mode bypassPermissions
+claude -p "<short execution-file instruction>" --output-format json [--agent <name>] --permission-mode bypassPermissions
 ```
 
 When the owning agent's file lives under `.claude/agents/`, the adapter passes
 `--agent <name>` so the CLI loads the persona natively; for every other harness
-root it inlines the agent file body into the prompt. `--permission-mode
+root it includes the persona in `docs/artifacts/<task-id>.md` using the shared
+execution-file writer. Explicit text-only tasks remain inline. `--permission-mode
 bypassPermissions` auto-approves tool calls for the non-interactive run, and
 provider prefixes are stripped from model IDs as they are for Copilot. The
 `--output-format json` result envelope drives failure classification: a
@@ -290,6 +325,10 @@ tool denial under bypassPermissions are `configuration` failures the operator
 must fix, while 429s, 5xx statuses, and everything else are `retryable`. Select
 it with `--harness claude` (or `FORGE_ENGINE_HARNESS=claude`).
 
+Successful envelope `result` text enters the same structured-report and validation
+gates as other harnesses. Retry feedback, latest results and immutable attempt
+archives use the shared engine paths; envelope success does not bypass the gates.
+
 ### `OpenAIAdapter`
 
 The OpenAI adapter is text-only. It rejects legacy tasks and any task requiring
@@ -297,7 +336,7 @@ repository tools before making a request. A valid text task sends a
 `POST /v1/chat/completions` with:
 
 - System message: the agent's `rawBody` (the content of the `.agent.md` file) plus injected constraints
-- User message: the task title, description, expected outputs, and validation commands
+- User message: the task title, description, expected outputs, and validation commands; contract tasks also carry requirements, acceptance criteria, constraints, bounded source-reference contents, and the required outcome-report format
 
 This enables fully API-driven builds without any local tooling installed, but
 only for tasks explicitly requiring `text`.
@@ -305,6 +344,9 @@ only for tasks explicitly requiring `text`.
 ### Common task request and capabilities
 
 The engine prepares a read-only `TaskAttemptRequest` before each adapter call.
+Structured implementation contracts require repository tooling, passing validation,
+and an outcome report; human-review contracts pause for operator attestation and
+never reach a harness. See [task contracts](task-contracts.md).
 It contains the agent and task descriptors, effective model, projected context,
 repository root, attempt metadata, and budget. Effective model precedence is:
 

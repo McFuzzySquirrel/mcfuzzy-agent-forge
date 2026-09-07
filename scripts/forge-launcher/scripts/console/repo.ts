@@ -371,7 +371,7 @@ export function summary(p: RepoPaths): Summary {
     repoName: path.basename(p.repoRoot),
     harness,
     hasIdea: fs.existsSync(p.ideaPath) || fs.existsSync(path.join(p.repoRoot, "IDEA.md")),
-    hasPrd: fs.existsSync(p.prdPath),
+    hasPrd: fs.existsSync(p.visionPath) && hasFeatures,
     hasVision: fs.existsSync(p.visionPath),
     hasFeatures,
     hasTeam: team.length > 0,
@@ -591,7 +591,6 @@ export function docsIndex(p: RepoPaths): DocsIndex {
   };
 
   push("idea", "idea", "Project Idea", "docs/IDEA.md", p.ideaPath);
-  push("prd", "prd", "PRD", "docs/PRD.md", p.prdPath);
   push("vision", "vision", "Product Vision", "docs/product-vision.md", p.visionPath);
   push("progress", "progress", "Progress", "docs/PROGRESS.md", p.progressPath);
   push("model-plan", "model-plan", "Model Plan", "docs/MODEL-PLAN.md", p.modelPlanPath);

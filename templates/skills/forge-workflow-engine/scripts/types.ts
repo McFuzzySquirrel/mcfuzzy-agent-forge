@@ -32,10 +32,25 @@ export interface TaskRecord {
   agentOutput?: string;
   errorMessage?: string;
   failureKind?: TaskFailureKind;
+  attemptHistory?: TaskAttemptSummary[];
   /** ID of the artifact produced by this task, if any */
   artifactId?: string;
   /** IDs of artifacts consumed as input context for this task */
   inputArtifactIds?: string[];
+}
+
+export interface TaskAttemptSummary {
+  attempt: number;
+  outcome: "passed" | "failed" | "cancelled";
+  resultPath: string;
+  reason?: string;
+}
+
+export interface TaskGateResult {
+  gate: "harness" | "outputs" | "handoff" | "requirements" | "validation";
+  status: "passed" | "failed" | "skipped";
+  reason?: string;
+  evidence?: string[];
 }
 
 // ─── Workflow run state ───────────────────────────────────────────────────────
@@ -188,6 +203,7 @@ export interface AuditEvent {
     | "task.failed"
     | "task.cancelled"
     | "task.retrying"
+    | "task.attempt.finished"
     | "task.skipped"
     | "task.committed"
     | "phase.started"
@@ -202,6 +218,7 @@ export interface AuditEvent {
   attempt?: number;
   outputFiles?: string[];
   durationMs?: number;
+  resultPath?: string;
   note?: string;
   /** Populated for artifact.created events */
   artifactId?: string;

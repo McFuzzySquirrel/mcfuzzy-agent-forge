@@ -74,3 +74,18 @@ test("commitTaskWork honors a custom message template", async () => {
   assert.ok(sha);
   assert.match(gitLogOneline(root)[0]!, /chore\(task 2\.3\): Fix the bug/);
 });
+
+for (const directory of ["docs/artifacts", "docs/task-executions"]) {
+test(`auto-commit excludes ${directory} and refuses pre-staged snapshots without discarding them`, async () => {
+  const root = mkdtempSync(join(tmpdir(), "forge-commit-execution-"));
+  initGit(root);
+  mkdirSync(join(root, directory), { recursive: true });
+  writeFileSync(join(root, directory, "request.md"), "Engine snapshot");
+  writeFileSync(join(root, "result.txt"), "Task output");
+  assert.ok(await commitTaskWork("1", "Task", root));
+  assert.equal(execFileSync("git", ["ls-tree", "-r", "--name-only", "HEAD"], { cwd: root, encoding: "utf8" }).trim(), "result.txt");
+  execFileSync("git", ["add", directory], { cwd: root });
+  assert.equal(await commitTaskWork("2", "Task", root), null);
+  assert.match(execFileSync("git", ["diff", "--cached", "--name-only"], { cwd: root, encoding: "utf8" }), /request.md/);
+});
+}

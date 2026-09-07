@@ -59,13 +59,15 @@ git commit -m "chore: bootstrap MyForge agent and skill templates"
 
 ## Fast Path - Build a Reviewed PRD in One Prompt (Optional)
 
-If you want to go from a one-liner idea to a **reviewed, confirmed PRD** without copy-pasting between skills, use the `forge-auto-build-prd` meta-skill. It confirms your idea, then chains `forge-build-prd` (interview → draft → review) and automatically runs the decomposition check - a qualifying PRD (15+ functional requirements or 3+ implementation phases) is decomposed into a Product Vision + Feature documents with no opt-in question. The skill stops after the PRD, before team generation.
+To go from a one-line idea to reviewed requirements, use `forge-auto-build-prd`.
+It confirms the idea and invokes `forge-build-prd` to author product vision and
+features directly, including one-feature solutions. It stops before team generation.
 
 ```
 @workspace /forge-auto-build-prd I want to build [describe your idea in one sentence].
 ```
 
-`forge-build-prd` presents its PRD review checklist before the document is saved. Reply `revise: <notes>` to iterate on the PRD, or approve to finish. Once `docs/PRD.md` exists (plus `docs/product-vision.md` + `docs/features/*.md` when decomposed), generate the team and build - `forge-launcher resume` from the terminal, or in the harness `/forge-build-agent-team` then `@project-orchestrator` / `@workflow-orchestrator`.
+`forge-build-prd` presents its PRD review checklist before the document is saved. Reply `revise: <notes>` to iterate on the PRD, or approve to finish. Once `docs/PRD.md` exists (plus `docs/PRD.md` + `docs/features/*.md` when decomposed), generate the team and build - `forge-launcher resume` from the terminal, or in the harness `/forge-build-agent-team` then `@project-orchestrator` / `@workflow-orchestrator`.
 
 If you prefer to drive the PRD yourself, use `forge-build-prd` directly (Step 2 below).
 
@@ -87,7 +89,7 @@ opencode run --auto "/forge-auto-build Use docs/PRD.md as the project PRD. GO"
 
 **How it works:**
 
-1. Its pre-flight check verifies a PRD representation exists -`docs/PRD.md`, or `docs/product-vision.md` + `docs/features/*.md` -then presents a single pre-flight gate. Review the plan and type `GO` to launch.
+1. Its pre-flight validates `docs/PRD.md` + `docs/features/*.md`, then presents a single approval gate. Review the plan and type `GO` to launch.
 2. After `GO`, the flow advances through three separate authoring stages - PRD, team, and project skills - before manifest compilation and execution. A failed skills stage must be reported and retried explicitly; it is not silently treated as "no skills required".
    The team-to-skills candidate handoff is required and immutable; an empty or
    all-`omit` candidate set is the explicit successful no-skills result.
@@ -141,18 +143,21 @@ non-functional requirements (performance, security, privacy), and implementation
 Flag anything missing and fill in the gaps.
 ```
 
-> **Automatic decomposition:** once you confirm the PRD is ready and it is saved to `docs/PRD.md`, `forge-build-prd` runs its decomposition check automatically. If the PRD has **15+ functional requirements or 3+ implementation phases**, it invokes `forge-decompose-prd` to produce `docs/product-vision.md` + `docs/features/*.md` -no opt-in question. If it does not qualify, the monolithic `docs/PRD.md` is kept and the outcome is reported.
+> **Canonical authoring:** `forge-build-prd` writes PRD.md and features directly.
+> There is no standalone PRD, intermediate catalogue or size threshold.
 
 ---
 
-## Step 3 - (Optional) Decompose into Features
+## Step 3 - Convert Legacy Sources When Needed
 
-For larger projects, break the PRD into a Product Vision + individual Feature documents before building the team. **This now happens automatically** when a PRD qualifies (15+ functional requirements or 3+ implementation phases) -see Step 2b. Use the manual skill below for older PRDs, PRDs modified after generation, or documents you want to decompose below the automatic threshold.
+Skip conversion for newly authored canonical features. Existing source documents
+must be converted before building, regardless of size. Preserve historical
+originals and completed task IDs, but do not execute or maintain duplicate tasks.
 
 ### 3a. Decompose
 
 ```
-@workspace /forge-decompose-prd Analyze docs/PRD.md and decompose it into:
+@workspace /forge-decompose-prd Analyze docs/requirements-source.md and convert it into:
 - A Product Vision document at docs/product-vision.md
 - Individual Feature documents in docs/features/
 Ensure each feature is self-contained with its own user stories, requirements, phases, and acceptance criteria.
@@ -174,15 +179,7 @@ Report any gaps or issues.
 
 ### 4a. Build the team
 
-**From a monolithic PRD:**
-```
-@workspace /forge-build-agent-team Analyze docs/PRD.md and generate a complete specialist agent team.
-Create agent files (`.md`) in .agents/agents/ and persist ownership metadata.
-Ensure every PRD requirement has a clearly assigned primary owner agent. Do not
-create project skill packages in this stage.
-```
-
-**From a decomposed Product Vision + Features:**
+**From Canonical Product Vision and Features:**
 ```
 @workspace /forge-build-agent-team Analyze docs/product-vision.md and all feature documents in docs/features/.
 Generate a complete specialist agent team (`.md` files) in .agents/agents/
