@@ -226,7 +226,7 @@ Run this path only if the user included `--workflow-engine` in their `GO` comman
 
 This path uses the workflow engine as the build executor instead of `forge-orchestrate-build`. The manifest is the execution plan; the engine performs the actual autonomous run through the selected harness. The engine is a **detached, standalone process** - it is never run as a blocking child of this session. You author in the chat; the engine executes on its own (dark orchestration), survives this session ending, and can be resumed with `run`.
 
-Select the per-task harness with the `FORGE_ENGINE_HARNESS` environment variable (`opencode` default, `copilot`, `openai`, or `stub`).
+Select the per-task harness with the `FORGE_ENGINE_HARNESS` environment variable (`opencode`, `copilot`, `claude`, `openai`, or `stub`; the launcher defaults to `claude` for a `.claude` repo, `copilot` for `.github`, and `opencode` otherwise).
 
 **Step 3a: Compile the execution manifest**
 
