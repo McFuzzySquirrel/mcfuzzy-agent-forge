@@ -5,7 +5,7 @@ import { consoleCli } from "./console/cli.ts";
 import { engineRunCli } from "./engine-run.ts";
 import { fail } from "./format.ts";
 import { runCompileManifest, runDraftExistingPrd, runDraftPrd, runDraftTeam, runDraftSkills, runFeaturePrd, runLauncher, runResume } from "./launcher.ts";
-import { AUTHORING_STAGES, loadAuthoringConfig, saveAuthoringConfig, type AuthoringModels } from "./authoring-config.ts";
+import { AUTHORING_RUNNER_CHOICES, AUTHORING_STAGES, loadAuthoringConfig, saveAuthoringConfig, type AuthoringModels, type AuthoringOptions, type AuthoringRunnerChoice } from "./authoring-config.ts";
 import { readAuthoringInventory, refreshAuthoringInventory } from "./authoring-inventory.ts";
 import { detectRepoRoot } from "./paths.ts";
 import { PromptCancelled, prompts } from "./prompts.ts";
@@ -34,6 +34,7 @@ Usage:
   forge-launcher draft-team [--repo <path>]     # headless: PRD → agent team
   forge-launcher draft-skills [--repo <path>]   # headless: skill candidates → project skills
   forge-launcher authoring-config [--repo <path>] [--prd-model <id|inherit>] [--team-model <id|inherit>] [--skills-model <id|inherit>]
+                                  [--runner <copilot|opencode|claude|inherit>]
   forge-launcher authoring-models [--repo <path>] [--runner copilot|opencode|claude] [--refresh]
   forge-launcher feature-prd [--repo <path>] [--prompt <text>] # author in docs/features/
   forge-launcher feature-increment [--repo <path>] [--prompt <text>] [--run] # author, update team, compile, optionally run
@@ -43,6 +44,8 @@ Launcher options:
   --prd-model <id|inherit>     Select the PRD authoring model.
   --team-model <id|inherit>    Select the team authoring model.
   --skills-model <id|inherit>  Select the skills authoring model.
+  --runner <copilot|opencode|claude|inherit>
+                      Select the authoring runner (inherit uses the harness rule).
   --non-interactive   Skip all interactive prompts (requires env vars; see docs/forge-launcher.md).
   --headless          Drive the queued skill directly from the terminal via
                       'opencode run --auto' or 'copilot -p --yolo' instead of opening a CLI.
@@ -52,7 +55,7 @@ Launcher options:
   --no-update-check   Skip the daily npm update check.
   -h, --help          Show this help.
 
-Model flags are saved to docs/authoring-config.json when creating a project.
+Model and runner flags are saved to docs/authoring-config.json when creating a project.
 On draft/feature/resume subcommands they override only that invocation.
 
 engine-run control:
@@ -75,37 +78,48 @@ deterministically. Set FORGE_RUN_WITH=stub (plus FORGE_STUB_NOOP=1) to run the
 auto-draft stages offline against canned artifacts.
 `;
 
+function isRunnerChoice(value: string): value is AuthoringRunnerChoice {
+  return (AUTHORING_RUNNER_CHOICES as readonly string[]).includes(value);
+}
+
 async function main(): Promise<number> {
   const input = process.argv.slice(2);
   const args: string[] = [];
   const models: AuthoringModels = {};
+  let requestedRunner: string | undefined;
   for (let i = 0; i < input.length; i++) {
     const argument = input[i]!;
+    if (argument === "--runner") {
+      const value = input[++i];
+      if (!value || value.startsWith("--")) throw new Error("--runner requires copilot, opencode, claude, or inherit.");
+      requestedRunner = value;
+      continue;
+    }
     const stage = AUTHORING_STAGES.find((name) => argument === `--${name}-model`);
     if (!stage) { args.push(argument); continue; }
     const value = input[++i];
     if (!value || value.startsWith("--")) throw new Error(`${argument} requires a model ID or inherit.`);
     models[stage] = value;
   }
-  const authoringOptions = { models };
+  const authoringOptions: AuthoringOptions = { models, ...(requestedRunner !== undefined ? { runner: requestedRunner } : {}) };
 
   if (args[0] === "authoring-config" || args[0] === "authoring-models") {
     let repo = detectRepoRoot();
-    let runner: "copilot" | "opencode" | "claude" = "opencode";
     let refresh = false;
     for (let i = 1; i < args.length; i++) {
       if (args[i] === "--repo") {
         const value = args[++i];
         if (!value) throw new Error("--repo requires a path.");
         repo = path.resolve(value);
-      } else if (args[i] === "--runner") {
-        const value = args[++i];
-        if (value !== "copilot" && value !== "opencode" && value !== "claude") throw new Error("--runner requires copilot, opencode, or claude.");
-        runner = value;
       } else if (args[i] === "--refresh") refresh = true;
       else throw new Error(`Unknown option: ${args[i]}`);
     }
     if (args[0] === "authoring-models") {
+      // Per-invocation inventory listing: this axis never inherits.
+      if (requestedRunner !== undefined && !isRunnerChoice(requestedRunner)) {
+        throw new Error("--runner requires copilot, opencode, or claude.");
+      }
+      const runner: AuthoringRunnerChoice = (requestedRunner as AuthoringRunnerChoice | undefined) ?? "opencode";
       process.stdout.write(`${JSON.stringify(refresh ? await refreshAuthoringInventory(repo, runner) : readAuthoringInventory(repo), null, 2)}\n`);
     } else {
       const config = loadAuthoringConfig(repo);
@@ -113,7 +127,13 @@ async function main(): Promise<number> {
         if (models[stage] === "inherit") delete config.models[stage];
         else if (models[stage] !== undefined) config.models[stage] = models[stage];
       }
-      process.stdout.write(`${JSON.stringify(Object.keys(models).length ? saveAuthoringConfig(repo, config) : config, null, 2)}\n`);
+      if (requestedRunner === "inherit") delete config.runner;
+      else if (requestedRunner !== undefined) {
+        if (!isRunnerChoice(requestedRunner)) throw new Error("--runner requires copilot, opencode, claude, or inherit.");
+        config.runner = requestedRunner;
+      }
+      const changed = Object.keys(models).length > 0 || requestedRunner !== undefined;
+      process.stdout.write(`${JSON.stringify(changed ? saveAuthoringConfig(repo, config) : config, null, 2)}\n`);
     }
     return 0;
   }

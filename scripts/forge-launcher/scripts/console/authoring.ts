@@ -1,15 +1,23 @@
 import fs from "node:fs";
 import path from "node:path";
+import { selectAuthoringRunner } from "../authoring-config.ts";
 import { inventoryForRunner, readAuthoringInventory, refreshAuthoringInventory, type AuthoringRunner, type InventoryProbe } from "../authoring-inventory.ts";
-import { detectHarnessRoot, registryPath, runnerForHarnessRoot } from "./paths.ts";
+import { detectHarnessRoot, registryPath } from "./paths.ts";
 
+/**
+ * An explicit per-call runner wins outright; otherwise the ladder in
+ * `selectAuthoringRunner` decides (environment, saved project choice, harness
+ * rule). Without a repo there is no project choice to read, so an unset
+ * environment still lands on opencode.
+ */
 export function selectedAuthoringRunner(repoRoot?: string, requested?: unknown): AuthoringRunner {
-  const runner = requested ?? process.env.FORGE_RUN_WITH
-    ?? (repoRoot ? runnerForHarnessRoot(detectHarnessRoot(repoRoot)) : "opencode");
-  if (runner !== "copilot" && runner !== "opencode" && runner !== "claude" && runner !== "stub") {
-    throw new Error("Authoring runner must be copilot, opencode, claude, or stub.");
+  if (requested !== undefined && requested !== null) {
+    if (requested !== "copilot" && requested !== "opencode" && requested !== "claude" && requested !== "stub") {
+      throw new Error("Authoring runner must be copilot, opencode, claude, or stub.");
+    }
+    return requested;
   }
-  return runner;
+  return selectAuthoringRunner(repoRoot ?? "", repoRoot ? detectHarnessRoot(repoRoot) : undefined, {}, process.env).runner;
 }
 
 export function authoringInventoryCache(): string {

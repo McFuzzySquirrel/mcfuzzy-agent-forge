@@ -329,6 +329,7 @@ export class RunController {
     if (req.authoringConfig) {
       const config = validateAuthoringConfig(req.authoringConfig);
       for (const stage of AUTHORING_STAGES) launcherArgs.push(`--${stage}-model`, config.models[stage] ?? "inherit");
+      if (config.runner) launcherArgs.push("--runner", config.runner);
     }
     const { cmd, args } = engineDetachedCommand(launcherArgs);
     const repoDir = path.join(parentDir, req.name);

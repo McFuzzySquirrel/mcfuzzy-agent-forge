@@ -1,7 +1,7 @@
 import fs from "node:fs";
 import path from "node:path";
 import { runCommand } from "./format.ts";
-import { writeAuthoringJson, selectAuthoringModel, type AuthoringModels, type AuthoringStage, type ModelSource } from "./authoring-config.ts";
+import { writeAuthoringJson, selectAuthoringModel, type AuthoringModels, type AuthoringStage, type ModelSource, type RunnerSource } from "./authoring-config.ts";
 
 export type AuthoringRunner = "copilot" | "opencode" | "claude" | "stub";
 export interface AuthoringInventoryModel {
@@ -14,6 +14,7 @@ export interface AuthoringInventory { models: AuthoringInventoryModel[]; last_ve
 export interface AuthoringInvocation {
   runner: AuthoringRunner;
   source: ModelSource;
+  runnerSource?: RunnerSource;
   requestedModel?: string;
   effectiveModel?: string;
   inventoryVerifiedAt?: string;

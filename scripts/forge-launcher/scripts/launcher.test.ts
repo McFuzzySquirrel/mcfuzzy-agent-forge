@@ -193,6 +193,28 @@ test("new-project model options persist while inherit clears saved choices and b
   assert.equal(fs.existsSync(path.join(repo, "docs", "PRD.md")), false);
 });
 
+test("new-project runner option persists as the project authoring runner", async (t) => {
+  const parent = tmpDir();
+  t.after(() => fs.rmSync(parent, { recursive: true, force: true }));
+  const repo = path.join(parent, "saved-authoring-runner");
+  const { code, out } = await runCli([
+    "--non-interactive", "--no-update-check", "--runner", "claude",
+  ], {
+    FORGE_HARNESS_CHOICE: "4",
+    FORGE_REPO_NAME: "saved-authoring-runner",
+    FORGE_REPO_PARENT_DIR: parent,
+    FORGE_HOME: path.join(parent, "console-home"),
+    FORGE_IDEA: "A thing",
+    FORGE_YN_DEFAULT: "n",
+    FORGE_AUTO_DRAFT: "0",
+    FORGE_RUN_WITH: "stub",
+  });
+  assert.equal(code, 0, out);
+  assert.deepEqual(JSON.parse(fs.readFileSync(path.join(repo, "docs", "authoring-config.json"), "utf8")), {
+    version: 1, models: {}, runner: "claude",
+  });
+});
+
 test("GitHub projects default to the copilot engine harness", () => {
   assert.equal(defaultEngineHarness("github"), "copilot");
   assert.equal(defaultEngineHarness("opencode"), "opencode");

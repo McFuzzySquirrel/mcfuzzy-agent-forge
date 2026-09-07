@@ -9,7 +9,7 @@ import { RunController, type SpawnOptions } from "./console/control.ts";
 import { inferEngineHarness, repoPaths } from "./console/paths.ts";
 import { actions, setModelOverride, summary } from "./console/repo.ts";
 import { currentJobForRepo } from "./console/jobs.ts";
-import { authoringConfigPath } from "./authoring-config.ts";
+import { authoringConfigPath, saveAuthoringConfig } from "./authoring-config.ts";
 import { fingerprintFiles, saveAuthoringStage, stageInputFingerprint } from "./authoring-state.ts";
 import { writeFeatureFixture } from "./feature-fixture.ts";
 
@@ -42,6 +42,9 @@ test("authoring settings API is token-gated, validates shape, and clears to inhe
   });
   assert.equal((await post({ version: 1, models: { unknown: "model" } })).status, 400);
   assert.equal((await post({ version: 1, models: { prd: "one two" } })).status, 400);
+  assert.equal((await post({ version: 1, models: {}, runner: "gpt" })).status, 400);
+  assert.equal((await post({ version: 1, models: {}, runner: "claude" })).status, 200);
+  assert.equal(JSON.parse(fs.readFileSync(authoringConfigPath(root), "utf8")).runner, "claude");
   const config = { version: 1, models: { prd: "gpt-6-astra", team: "gpt-5.6-luna" } };
   assert.equal((await post(config)).status, 200);
   assert.deepEqual(JSON.parse(fs.readFileSync(authoringConfigPath(root), "utf8")), config);
@@ -111,11 +114,29 @@ test("claude model discovery probes /model and lists the stable aliases", async 
   ]);
 });
 
+/** A PATH directory holding only the named fake executables, so the runner probe sees exactly these. */
+function fakeBin(t: TestContext, ...commands: string[]): string {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "forge-bin-"));
+  t.after(() => fs.rmSync(dir, { recursive: true, force: true }));
+  for (const command of commands) {
+    const file = path.join(dir, command);
+    fs.writeFileSync(file, "#!/bin/sh\nexit 0\n");
+    fs.chmodSync(file, 0o755);
+  }
+  return dir;
+}
+
 test("a .claude repo defaults the authoring runner to opencode and the engine harness to claude", async (t) => {
   const root = fixture(t, ".claude");
   const previous = process.env.FORGE_RUN_WITH;
   delete process.env.FORGE_RUN_WITH;
   t.after(() => { if (previous === undefined) delete process.env.FORGE_RUN_WITH; else process.env.FORGE_RUN_WITH = previous; });
+  // Inheritance consults the machine, so pin PATH to a fake opencode. Without
+  // this the assertion would pass or fail on whether the developer happens to
+  // have OpenCode installed.
+  const previousPath = process.env.PATH;
+  process.env.PATH = fakeBin(t, "opencode");
+  t.after(() => { process.env.PATH = previousPath; });
   assert.equal(inferEngineHarness(root), "claude");
   const server = await startConsoleServer({ repoRoot: root, port: port++, open: false });
   t.after(() => server.stop());
@@ -132,6 +153,32 @@ test("FORGE_RUN_WITH=claude selects the claude authoring runner for a .claude re
   t.after(() => server.stop());
   const inventory = await fetch(`${server.url}/api/authoring-inventory`).then((r) => r.json());
   assert.equal(inventory.runner, "claude");
+});
+
+test("a saved project runner drives the inventory endpoint and the refresh probe", async (t) => {
+  const root = fixture(t);
+  const previous = process.env.FORGE_RUN_WITH;
+  delete process.env.FORGE_RUN_WITH;
+  t.after(() => { if (previous === undefined) delete process.env.FORGE_RUN_WITH; else process.env.FORGE_RUN_WITH = previous; });
+  saveAuthoringConfig(root, { version: 1, models: {}, runner: "opencode" });
+  let probes = 0;
+  const server = await startConsoleServer({
+    repoRoot: root, port: port++, open: false,
+    inventoryProbe: async (runner) => {
+      probes++;
+      assert.equal(runner, "opencode");
+      return { code: 0, stdout: "Available models:\n- anthropic/claude-4\n", stderr: "" };
+    },
+  });
+  t.after(() => server.stop());
+  const inventory = await fetch(`${server.url}/api/authoring-inventory`).then((r) => r.json());
+  assert.equal(inventory.runner, "opencode");
+  const refreshed = await fetch(`${server.url}/api/authoring-inventory/refresh`, {
+    method: "POST", headers: { "Content-Type": "application/json", "X-Forge-Token": server.token },
+    body: JSON.stringify({}),
+  }).then((r) => r.json());
+  assert.equal(refreshed.runner, "opencode");
+  assert.equal(probes, 1);
 });
 
 test("a .github repo still infers the copilot engine harness", (t) => {
@@ -222,6 +269,22 @@ test("new project request passes three distinct model flags and marks auto-setup
   assert.equal(args[args.indexOf("--team-model") + 1], "gpt-5.6-luna");
   assert.equal(args[args.indexOf("--skills-model") + 1], "gpt-6-astra");
   assert.equal(result.job?.autoDraft, true);
+});
+
+test("new project request forwards an explicit authoring runner to the launcher", (t) => {
+  const root = fixture(t);
+  let captured: { args: string[]; options: SpawnOptions } | undefined;
+  const controller = new RunController(root, { spawner: (_cmd, args, options) => {
+    captured = { args, options };
+    return { pid: 987656 };
+  } });
+  const result = controller.createProject({
+    name: "runner-project", parentDir: root, idea: "Build something", autoDraft: false, harness: "claude",
+    authoringConfig: { version: 1, models: {}, runner: "claude" },
+  });
+  assert.equal(result.ok, true);
+  assert.ok(captured);
+  assert.equal(captured.args[captured.args.indexOf("--runner") + 1], "claude");
 });
 
 test("synchronous startup failure is an error result, not a running success", (t) => {
