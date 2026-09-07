@@ -3,7 +3,7 @@ import path from "node:path";
 import { runCommand } from "./format.ts";
 import { writeAuthoringJson, selectAuthoringModel, type AuthoringModels, type AuthoringStage, type ModelSource } from "./authoring-config.ts";
 
-export type AuthoringRunner = "copilot" | "opencode" | "stub";
+export type AuthoringRunner = "copilot" | "opencode" | "claude" | "stub";
 export interface AuthoringInventoryModel {
   id: string;
   provider: string;
@@ -59,8 +59,15 @@ export function readAuthoringInventory(repo: string): AuthoringInventory {
   return { models, last_verified };
 }
 
+const RUNNER_PROVIDERS: Record<AuthoringRunner, string[]> = {
+  copilot: ["copilot_cli", "copilot_subscription"],
+  opencode: ["opencode_cli"],
+  claude: ["claude_cli"],
+  stub: ["stub"],
+};
+
 export function inventoryForRunner(inventory: AuthoringInventory, runner: AuthoringRunner): AuthoringInventoryModel[] {
-  const providers = runner === "copilot" ? ["copilot_cli", "copilot_subscription"] : runner === "opencode" ? ["opencode_cli"] : ["stub"];
+  const providers = RUNNER_PROVIDERS[runner];
   return inventory.models.filter((model) => providers.includes(model.provider));
 }
 
@@ -106,15 +113,57 @@ function parseCopilotMetadataOutput(text: string): string[] {
   return parseModelInventoryOutput(section, "copilot");
 }
 
+/** Claude Code has no models subcommand; its built-in /model command reports the accepted names without a generative call. */
+export function parseClaudeModelOutput(text: string): string[] {
+  let envelope: unknown;
+  try {
+    envelope = JSON.parse(text.trim()) as unknown;
+  } catch {
+    const last = text.split(/\r?\n/).map((line) => line.trim()).filter(Boolean).at(-1) ?? "";
+    try {
+      envelope = JSON.parse(last) as unknown;
+    } catch {
+      envelope = undefined;
+    }
+  }
+  if (!record(envelope)) throw new Error("claude model discovery returned no JSON result envelope.");
+  if (envelope.is_error === true) throw new Error(`claude model discovery failed: ${String(envelope.result ?? "unknown error")}`);
+  // Whitespace runs collapse to single spaces so a list wrapped across lines is not truncated.
+  const result = (typeof envelope.result === "string" ? envelope.result : "").replace(/\s+/g, " ");
+  const start = result.indexOf("Available:");
+  if (start < 0) return [];
+  const sentence = result.slice(start + "Available:".length)
+    .split(", or a full model ID")[0]!
+    .split(/\.(?:\s|$)/)[0]!;
+  const ids: string[] = [];
+  for (const raw of sentence.split(",")) {
+    // "default" and "best" resolve differently per account, so they are never stable choices.
+    const entry = raw.trim();
+    if (!entry || entry === "default" || entry === "best") continue;
+    if (!/^[a-z0-9][a-z0-9.\-]*(?:\[[0-9a-z]+\])?$/i.test(entry)) continue;
+    if (!ids.includes(entry)) ids.push(entry);
+  }
+  return ids;
+}
+
+const PROBE_ARGS: Record<Exclude<AuthoringRunner, "stub">, string[]> = {
+  copilot: ["--help"],
+  opencode: ["models"],
+  // --bare skips hooks, plugin sync and auto-memory, which a metadata probe has no use for.
+  claude: ["-p", "/model", "--bare", "--output-format", "json"],
+};
+
 const defaultProbe: InventoryProbe = (runner, args, repo) => runCommand(runner, args, { cwd: repo, capture: true });
 
 /** Uses runner metadata only; Copilot's prompt UI is deliberately not queried. */
 export async function refreshAuthoringInventory(repo: string, runner: AuthoringRunner, probe: InventoryProbe = defaultProbe): Promise<AuthoringInventory> {
   if (runner === "stub") return readAuthoringInventory(repo);
-  const args = runner === "opencode" ? ["models"] : ["--help"];
+  const args = PROBE_ARGS[runner];
   const result = await probe(runner, args, repo);
   if (result.code !== 0) throw new Error(`${runner} model discovery failed (${result.code}): ${result.stderr.trim() || result.stdout.trim()}`);
-  const ids = runner === "copilot" ? parseCopilotMetadataOutput(result.stdout) : parseModelInventoryOutput(result.stdout, runner);
+  const ids = runner === "copilot" ? parseCopilotMetadataOutput(result.stdout)
+    : runner === "claude" ? parseClaudeModelOutput(result.stdout)
+    : parseModelInventoryOutput(result.stdout, runner);
   if (!ids.length) throw new Error(`${runner} model discovery returned no unambiguous model IDs. Verify docs/research/model-inventory.json from a trusted runner inventory or select inherit.`);
   const raw = readRawInventory(repo);
   const prior = readAuthoringInventory(repo);
@@ -149,9 +198,12 @@ export async function resolveAuthoringModel(
   let compatible = inventoryForRunner(inventory, runner);
   const requested = selection.requestedModel;
   const copilotQualified = /^(?:anthropic|openai|google|github-copilot|copilot)\/[^/]+$/.test(requested);
+  const claudeQualified = /^anthropic\/[^/]+$/.test(requested);
+  // Claude inventory IDs carry no provider segment, so only an explicit anthropic/ prefix is stripped.
   const matching = () => compatible.find((model) => model.id === requested ||
     (runner === "copilot" && (!requested.includes("/") || copilotQualified) &&
-      model.id.split("/").at(-1) === requested.split("/").at(-1)));
+      model.id.split("/").at(-1) === requested.split("/").at(-1)) ||
+    (runner === "claude" && claudeQualified && model.id === requested.split("/").at(-1)));
   if (!matching() || !fresh(matching()?.last_verified)) {
     inventory = await refreshAuthoringInventory(repo, runner, probe);
     compatible = inventoryForRunner(inventory, runner);
@@ -163,7 +215,8 @@ export async function resolveAuthoringModel(
   if (model.capabilities?.tool_calling === false || model.capabilities?.tools === false) {
     throw new Error(`Explicit ${stage} model "${selection.requestedModel}" does not support required authoring tools.`);
   }
-  return { runner, ...selection, effectiveModel: runner === "copilot" ? model.id.split("/").at(-1) : model.id, inventoryVerifiedAt: model.last_verified };
+  const effectiveModel = runner === "copilot" || runner === "claude" ? model.id.split("/").at(-1) : model.id;
+  return { runner, ...selection, effectiveModel, inventoryVerifiedAt: model.last_verified };
 }
 
 export function authoringArgv(invocation: AuthoringInvocation, repo: string, message: string, extra: string[] = []): string[] {
@@ -171,7 +224,13 @@ export function authoringArgv(invocation: AuthoringInvocation, repo: string, mes
     throw new Error("Conflicting extra model argument: use --prd-model, --team-model, or --skills-model.");
   }
   const model = invocation.effectiveModel ? ["--model", invocation.effectiveModel] : [];
-  return invocation.runner === "copilot"
-    ? ["-p", message, "--yolo", ...model, ...extra]
-    : ["run", "--auto", "--dir", repo, ...model, ...extra, message];
+  switch (invocation.runner) {
+    case "copilot":
+      return ["-p", message, "--yolo", ...model, ...extra];
+    case "claude":
+      return ["-p", message, "--permission-mode", "bypassPermissions", ...model, ...extra];
+    default:
+      // opencode, and stub which never reaches a real spawn.
+      return ["run", "--auto", "--dir", repo, ...model, ...extra, message];
+  }
 }

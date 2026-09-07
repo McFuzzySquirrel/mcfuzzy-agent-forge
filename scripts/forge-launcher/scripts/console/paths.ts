@@ -126,9 +126,16 @@ export function detectHarnessRoot(repoRoot: string): HarnessRoot | null {
   return selectProjectHarnessRoot(repoRoot).root;
 }
 
+/** Maps a detected harness root to the runner that drives it. */
+export function runnerForHarnessRoot(root: HarnessRoot | null): "copilot" | "opencode" | "claude" {
+  if (root === ".github") return "copilot";
+  if (root === ".claude") return "claude";
+  return "opencode";
+}
+
 /** Engine harness to use when a repo has no persisted engine-config.json. */
 export function inferEngineHarness(repoRoot: string): string {
-  return detectHarnessRoot(repoRoot) === ".github" ? "copilot" : "opencode";
+  return runnerForHarnessRoot(detectHarnessRoot(repoRoot));
 }
 
 /** Locates the bootstrapped forge-workflow-engine skill dir (any harness root). */

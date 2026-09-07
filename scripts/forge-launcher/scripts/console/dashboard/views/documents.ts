@@ -4,6 +4,7 @@ import { api } from "../api.js";
 import { store } from "../state.js";
 import { el, toast } from "../render/dom.js";
 import { renderMarkdown } from "../render/md.js";
+import { runnerForHarness } from "../runners.js";
 import type { AgentInfo, AuthoringConfig, AuthoringInventory, AuthoringStage, AuthoringStageState, DocEntry, DocsIndex, SkillInfo, TeamIndex } from "../types.js";
 
 let unsub: Array<() => void> = [];
@@ -226,7 +227,7 @@ function buildAuthoringSettings(panel: HTMLElement, initial: AuthoringConfig, in
 
   refresh.addEventListener("click", () => {
     refresh.disabled = true;
-    const runner = inventory.runner ?? (store.summary?.harness === "github" ? "copilot" : "opencode");
+    const runner = inventory.runner ?? runnerForHarness(store.summary?.harness ?? "");
     for (const [stage, select] of selects) {
       if (select.value) config.models[stage] = select.value;
       else delete config.models[stage];
@@ -364,7 +365,7 @@ function renderAgents(host: HTMLElement, team: TeamIndex): void {
 }
 
 function modelTerminalPanel(): HTMLElement {
-  const provider = el("select", null, [el("option", { value: "opencode" }, "OpenCode"), el("option", { value: "copilot" }, "Copilot")]);
+  const provider = el("select", null, [el("option", { value: "opencode" }, "OpenCode"), el("option", { value: "copilot" }, "Copilot"), el("option", { value: "claude" }, "Claude Code")]);
   const message = el("textarea", { rows: "3", placeholder: "Ask the model assistant to review or improve MODEL-PLAN.md" });
   (message as HTMLTextAreaElement).value = "/forge-assign-models Discover the available models from OpenCode, Copilot, Ollama, and BYOK, normalize the model IDs, enrich capabilities with BenchLM, and update the model inventory and plan.";
   const button = el("button", { className: "btn btn-sm btn-primary" }, "Launch model terminal");
@@ -372,7 +373,7 @@ function modelTerminalPanel(): HTMLElement {
     const text = (message as HTMLTextAreaElement).value.trim();
     if (!text) { toast("Enter a message first."); return; }
     button.setAttribute("disabled", "true");
-    void api.launchModelTerminal((provider as HTMLSelectElement).value as "opencode" | "copilot", text)
+    void api.launchModelTerminal((provider as HTMLSelectElement).value as "opencode" | "copilot" | "claude", text)
       .then((result) => toast(result.message ?? "terminal launch requested"))
       .catch((err) => toast(err instanceof Error ? err.message : "terminal launch failed"))
       .finally(() => button.removeAttribute("disabled"));

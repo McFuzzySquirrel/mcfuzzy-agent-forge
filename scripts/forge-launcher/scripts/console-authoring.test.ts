@@ -6,14 +6,14 @@ import { test, type TestContext } from "node:test";
 import { get } from "node:http";
 import { startConsoleServer } from "./console/server.ts";
 import { RunController, type SpawnOptions } from "./console/control.ts";
-import { repoPaths } from "./console/paths.ts";
+import { inferEngineHarness, repoPaths } from "./console/paths.ts";
 import { actions, setModelOverride, summary } from "./console/repo.ts";
 import { currentJobForRepo } from "./console/jobs.ts";
 import { authoringConfigPath } from "./authoring-config.ts";
 import { fingerprintFiles, saveAuthoringStage, stageInputFingerprint } from "./authoring-state.ts";
 
 let port = 46700;
-function fixture(t: TestContext): string {
+function fixture(t: TestContext, harnessRoot = ".github"): string {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), "forge-authoring-console-"));
   const old = process.env.FORGE_HOME;
   process.env.FORGE_HOME = path.join(root, "registry");
@@ -23,8 +23,8 @@ function fixture(t: TestContext): string {
   });
   fs.mkdirSync(path.join(root, ".git"));
   fs.mkdirSync(path.join(root, "docs"));
-  fs.mkdirSync(path.join(root, ".github", "agents"), { recursive: true });
-  fs.writeFileSync(path.join(root, ".github", "agents", "worker.md"), '---\nname: worker\ndescription: "Worker"\n---\n');
+  fs.mkdirSync(path.join(root, harnessRoot, "agents"), { recursive: true });
+  fs.writeFileSync(path.join(root, harnessRoot, "agents", "worker.md"), '---\nname: worker\ndescription: "Worker"\n---\n');
   fs.writeFileSync(path.join(root, "docs", "PRD.md"), "# Existing PRD\n");
   return root;
 }
@@ -74,6 +74,56 @@ test("model discovery works before a project exists and filters by runner", asyn
   const refreshed = await response.json();
   assert.deepEqual(refreshed.models.map((model: { id: string }) => model.id), ["gpt-6-astra", "gpt-5.6-luna"]);
   assert.deepEqual((await fetch(`${endpoint}?runner=opencode`).then((r) => r.json())).models, []);
+});
+
+test("claude model discovery probes /model and lists the stable aliases", async (t) => {
+  fixture(t);
+  let probes = 0;
+  const server = await startConsoleServer({
+    port: port++, open: false,
+    inventoryProbe: async (runner, args) => {
+      probes++;
+      assert.equal(runner, "claude");
+      assert.deepEqual(args, ["-p", "/model", "--bare", "--output-format", "json"]);
+      return { code: 0, stdout: JSON.stringify({
+        type: "result",
+        is_error: false,
+        result: "Current model: `Haiku 4.5`\nUsage: /model <name>. Available: sonnet, opus, haiku, fable, best, sonnet[1m], opus[1m], fable[1m], opusplan, default, or a full model ID.",
+      }), stderr: "" };
+    },
+  });
+  t.after(() => server.stop());
+  const response = await fetch(`${server.url}/api/authoring-inventory/refresh`, {
+    method: "POST", headers: { "Content-Type": "application/json", "X-Forge-Token": server.token },
+    body: JSON.stringify({ runner: "claude" }),
+  });
+  assert.equal(response.status, 200);
+  assert.equal(probes, 1);
+  const refreshed = await response.json();
+  assert.equal(refreshed.runner, "claude");
+  assert.deepEqual(refreshed.models.map((model: { id: string }) => model.id), [
+    "sonnet", "opus", "haiku", "fable", "sonnet[1m]", "opus[1m]", "fable[1m]", "opusplan",
+  ]);
+});
+
+test("a .claude repo defaults the authoring runner and the engine harness to claude", async (t) => {
+  const root = fixture(t, ".claude");
+  const previous = process.env.FORGE_RUN_WITH;
+  delete process.env.FORGE_RUN_WITH;
+  t.after(() => { if (previous === undefined) delete process.env.FORGE_RUN_WITH; else process.env.FORGE_RUN_WITH = previous; });
+  assert.equal(inferEngineHarness(root), "claude");
+  const server = await startConsoleServer({ repoRoot: root, port: port++, open: false });
+  t.after(() => server.stop());
+  const inventory = await fetch(`${server.url}/api/authoring-inventory`).then((r) => r.json());
+  assert.equal(inventory.runner, "claude");
+});
+
+test("a .github repo still infers the copilot engine harness", (t) => {
+  assert.equal(inferEngineHarness(fixture(t, ".github")), "copilot");
+});
+
+test("a harness root that is neither .github nor .claude still infers opencode", (t) => {
+  assert.equal(inferEngineHarness(fixture(t, ".opencode")), "opencode");
 });
 
 test("legacy projects remain ready but failed skill authoring blocks native dispatch", (t) => {

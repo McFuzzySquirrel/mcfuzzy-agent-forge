@@ -2,6 +2,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { AppStore, Epoch } from "./console/dashboard/state.js";
 import { validateTextUpload } from "./console/dashboard/views/new.js";
+import { runnerForHarness } from "./console/dashboard/runners.js";
 
 test("project drafts remain isolated and can be reset independently", () => {
   const store = new AppStore();
@@ -42,4 +43,15 @@ test("upload validation rejects unsupported extensions and binary MIME types", (
   assert.doesNotThrow(() => validateTextUpload({ name: "notes.txt", type: "" }, "Research"));
   assert.throws(() => validateTextUpload({ name: "report.pdf", type: "application/pdf" }, "Research"), /supported text file/);
   assert.throws(() => validateTextUpload({ name: "notes.md", type: "application/pdf" }, "Research"), /unsupported MIME type/);
+});
+
+test("harness to runner mapping accepts harness names and harness roots alike", () => {
+  assert.equal(runnerForHarness("github"), "copilot");
+  assert.equal(runnerForHarness(".github"), "copilot");
+  assert.equal(runnerForHarness("claude"), "claude");
+  assert.equal(runnerForHarness(".claude"), "claude");
+  assert.equal(runnerForHarness("opencode"), "opencode");
+  assert.equal(runnerForHarness(".opencode"), "opencode");
+  assert.equal(runnerForHarness(".agents"), "opencode");
+  assert.equal(runnerForHarness(""), "opencode");
 });

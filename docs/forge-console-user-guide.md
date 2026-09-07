@@ -213,13 +213,17 @@ the runner supplies one)
 ```
 
 The **Model planning terminal** control in the Agents section opens a new
-interactive terminal in the repository. Choose OpenCode or Copilot, enter a
-message, and launch it using one of these commands:
+interactive terminal in the repository. Choose OpenCode, Copilot, or Claude
+Code, enter a message, and launch it using one of these commands:
 
 ```bash
 opencode --prompt "<message>"
 copilot -i "<message>" --yolo
+claude "<message>"
 ```
+
+Claude Code opens interactively with its default permissions, so its tool use is
+approved in the terminal rather than bypassed.
 
 The assistant is not applied automatically. Review its changes and update the
 model plan or agent overrides explicitly.

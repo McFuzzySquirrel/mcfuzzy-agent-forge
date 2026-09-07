@@ -111,7 +111,7 @@ export const api = {
   setModelOverride(agent: string, primary?: string, fallback?: string): Promise<{ ok: boolean; message: string }> {
     return post("/api/model-plan/override", { agent, primary, fallback });
   },
-  launchModelTerminal(provider: "opencode" | "copilot", message: string): Promise<LaunchCliResult> {
+  launchModelTerminal(provider: "opencode" | "copilot" | "claude", message: string): Promise<LaunchCliResult> {
     return post<LaunchCliResult>("/api/model-plan/terminal", { provider, message });
   },
   teamContent(relPath: string): Promise<FileContent> {

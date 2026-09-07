@@ -118,7 +118,7 @@ npx forge-launcher@beta draft-skills [--repo <path>] [--prd-model <id|inherit>]
 npx forge-launcher@beta authoring-config [--repo <path>] [--prd-model <id|inherit>]
                               [--team-model <id|inherit>] [--skills-model <id|inherit>]
 npx forge-launcher@beta authoring-models --repo <path>
-                              --runner <copilot|opencode> [--refresh]
+                              --runner <copilot|opencode|claude> [--refresh]
 ```
 
 When installed globally (`npm install -g forge-launcher@beta`), drop the `npx`.
@@ -226,6 +226,14 @@ Copilot refresh uses the CLI's non-generative `--help` metadata interface; it
 never submits `/model list` or another model-selection prompt. If the installed
 Copilot version does not expose model IDs in its metadata, refresh reports an
 explicit discovery error, while inherited runner defaults remain usable.
+Claude refresh uses the CLI's non-generative `/model` command
+(`claude -p "/model" --bare --output-format json`) and records exactly the
+aliases that command lists: `sonnet`, `opus`, `haiku`, `fable`, `sonnet[1m]`,
+`opus[1m]`, `fable[1m]`, and `opusplan`. The account-relative `default` and
+`best` entries are dropped, and an `anthropic/`-qualified request is accepted
+with the prefix stripped. A pinned full model ID such as `claude-opus-5` is not
+in that inventory and fails closed: set it as the `model` in your Claude Code
+settings and leave the stage on `inherit`, so the CLI's own default carries it.
 
 In non-interactive runs, set `FORGE_AUTO_DRAFT=1` instead:
 
@@ -264,7 +272,8 @@ $env:FORGE_YN_DEFAULT = "y"
 By default Step 8 opens an interactive CLI (`opencode`, `claude`, `copilot`) in a
 separate terminal and prints the skill command to run there. With `--headless`
 the launcher instead drives the queued skill directly from the terminal via
-`opencode run --auto` or `copilot -p --yolo`, so you never enter a chat session.
+`opencode run --auto`, `copilot -p --yolo`, or `claude -p`, so you never enter a
+chat session.
 After the authoring stages, headless auto-draft compiles the native manifest and
 advances the detached engine build. Engine startup failures are reported
 through the launcher instead of being mistaken for a successful handoff.
@@ -306,11 +315,19 @@ What gets queued:
 The embedded `GO` satisfies `forge-auto-build`'s pre-flight gate, and the
 headless `forge-auto-build-prd` invocation skips its interactive confirmation
 and clarifying questions (every unknown is recorded as an Open Question with a
-default assumption in the PRD). Use `FORGE_RUN_WITH=copilot` to emit
-`copilot -p "..." --yolo` instead of `opencode run --auto` (defaults to
-`copilot` for the GitHub Copilot harness, `opencode` otherwise), and
-`FORGE_WORKFLOW_ENGINE=1` to append `GO --workflow-engine` so the build executes
-through the workflow engine. On that path the engine runs **detached** (not as a
+default assumption in the PRD). `FORGE_RUN_WITH` selects the authoring runner
+and its command shape: `opencode` emits `opencode run --auto`, `copilot` emits
+`copilot -p "<message>" --yolo`, and `claude` emits
+`claude -p "<message>" --permission-mode bypassPermissions [--model <alias>]`.
+The default is `copilot` for the GitHub Copilot harness, `claude` for the Claude
+harness, and `opencode` otherwise. Existing Claude-harness repositories must
+re-pick their stage models against the `claude_cli` inventory or set them to
+`inherit`, since an OpenCode-shaped ID like `anthropic/claude-sonnet-4` now fails
+closed, and they need a logged-in `claude` binary; `FORGE_RUN_WITH=opencode`
+restores the previous runner. Note that `bypassPermissions` can be disabled by a
+managed Claude Code policy, in which case the runner exits non-zero before
+authoring starts. Set `FORGE_WORKFLOW_ENGINE=1` to append
+`GO --workflow-engine` so the build executes through the workflow engine. On that path the engine runs **detached** (not as a
 blocking child of the session) and the per-task harness is selected with
 `FORGE_ENGINE_HARNESS=claude|opencode|copilot|openai|stub`.
 
@@ -413,7 +430,8 @@ default assumption) and still keep human review between stages:
 
 1. **Idea → PRD.** With no PRD yet, Step 8 asks *"Generate the PRD from
    `docs/IDEA.md` automatically now?"*. Answering yes runs `forge-auto-build-prd`
-   headless (via `opencode run --auto` / `copilot -p --yolo`), producing
+   headless (via `opencode run --auto`, `copilot -p --yolo`, or `claude -p`),
+   producing
    `docs/PRD.md` (plus `docs/product-vision.md` + `docs/features/*.md` when it
    qualifies for decomposition), committed as `docs: add auto-drafted PRD`.
    Review it, then choose: draft the team now, launch the harness CLI to be
@@ -515,8 +533,8 @@ as a checkbox on the Overview, and `resume`/monitor commands honour it. See
 [ADR-035](adr/035-auto-commit-after-task.md).
 
 > Auto-draft drives the harness CLI directly, so it needs `opencode` (or
-> `copilot` via `FORGE_RUN_WITH=copilot`). It commits each generated artifact so
-> your repo stays reviewable at every boundary.
+> `copilot` or `claude` via `FORGE_RUN_WITH`). It commits each generated
+> artifact so your repo stays reviewable at every boundary.
 >
 > Long-running steps (bootstrap, headless/auto-draft skill runs, GitHub repo
 > creation, push) show a spinner in a terminal, so you can tell the launcher is
@@ -864,7 +882,7 @@ reflect the running build (monitor + resume) rather than the manual
 | `FORGE_RESEARCH_FILES` | 6 | Comma-separated list of paths to research/seed documents copied to `docs/research/`. Each path accepts relative, `~`/`~/...`, and `$VAR`/`${VAR}` forms |
 | `FORGE_YN_DEFAULT` | 3, 7 | Default answer for yes/no prompts (`y` or `n`) |
 | `FORGE_AUTO_DRAFT` | 8 | `1` to run PRD → team → project skills → native manifest compilation non-interactively |
-| `FORGE_RUN_WITH` | 8 | Authoring runner: `opencode`, `copilot`, or `stub` (default: `copilot` for the GitHub harness, `opencode` otherwise). `stub` runs offline fixtures - combine with `FORGE_STUB_NOOP=1` to test failure diagnostics |
+| `FORGE_RUN_WITH` | 8 | Authoring runner: `opencode`, `copilot`, `claude`, or `stub` (default: `copilot` for the GitHub harness, `claude` for the Claude harness, `opencode` otherwise). `stub` runs offline fixtures - combine with `FORGE_STUB_NOOP=1` to test failure diagnostics |
 | `FORGE_STUB_NOOP` | 8 | `1` makes the stub skill runner (`FORGE_RUN_WITH=stub`) write nothing, exercising the auto-draft failure diagnostics |
 | `FORGE_LAUNCHER_DEBUG` | 8 | `1` (or the `--debug` flag) prints the skill-run log tail after every headless skill run; also passes `--print-logs` to `opencode` |
  | `FORGE_ENGINE_CONCURRENCY` | 8 | Persisted engine concurrency preference (default `1`); shown in summaries and config even though current repo-task execution remains serialized |
