@@ -45,6 +45,7 @@ test("authoring settings API is token-gated, validates shape, and clears to inhe
   assert.equal((await post({ version: 1, models: {}, runner: "gpt" })).status, 400);
   assert.equal((await post({ version: 1, models: {}, runner: "claude" })).status, 200);
   assert.equal(JSON.parse(fs.readFileSync(authoringConfigPath(root), "utf8")).runner, "claude");
+  assert.deepEqual(await fetch(url).then((r) => r.json()), { version: 1, models: {}, runner: "claude" });
   const config = { version: 1, models: { prd: "gpt-6-astra", team: "gpt-5.6-luna" } };
   assert.equal((await post(config)).status, 200);
   assert.deepEqual(JSON.parse(fs.readFileSync(authoringConfigPath(root), "utf8")), config);

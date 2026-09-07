@@ -228,6 +228,8 @@ export type AuthoringStage = "prd" | "team" | "skills";
 export interface AuthoringConfig {
   version: 1;
   models: Partial<Record<AuthoringStage, string>>;
+  /** Explicit authoring runner; absent means "inherit from the harness". */
+  runner?: "copilot" | "opencode" | "claude";
 }
 
 export interface AuthoringInventory {

@@ -3,7 +3,7 @@
 import { api } from "../api.js";
 import { store } from "../state.js";
 import { el, toast } from "../render/dom.js";
-import { runnerForHarness } from "../runners.js";
+import { AUTHORING_RUNNER_OPTIONS, effectiveRunner } from "../runners.js";
 import type { AuthoringConfig, CreateProjectRequest, ProjectInfo } from "../types.js";
 
 let createRepoDir: string | null = null;
@@ -129,11 +129,14 @@ function buildAuthoringControls(harness: HTMLSelectElement): AuthoringControls {
   const selects = new Map<string, HTMLSelectElement>();
   const status = el("div", { className: "dim small", role: "status", "aria-live": "polite" }, "Choose a supported harness to load models.");
   const refresh = el("button", { className: "btn btn-sm", type: "button" }, "Refresh models");
+  const runnerSelect = el("select", { id: "new-authoring-runner", "aria-label": "Authoring runner" }, AUTHORING_RUNNER_OPTIONS.map(([value, label]) => el("option", { value }, label))) as HTMLSelectElement;
+  const project = store.projectKey();
+  runnerSelect.value = store.getDraft(project, "runner", "inherit");
   let requestId = 0;
 
   const load = async (force: boolean): Promise<void> => {
     const selectedHarness = harness.value;
-    const runner = runnerForHarness(selectedHarness);
+    const runner = effectiveRunner(runnerSelect.value, selectedHarness);
     const id = ++requestId;
     status.textContent = force ? "Refreshing authoring models…" : "Loading authoring models…";
     for (const select of selects.values()) select.disabled = true;
@@ -166,6 +169,10 @@ function buildAuthoringControls(harness: HTMLSelectElement): AuthoringControls {
   };
   refresh.addEventListener("click", () => void load(true));
   harness.addEventListener("change", () => void load(false));
+  runnerSelect.addEventListener("change", () => {
+    store.setDraft(project, "runner", runnerSelect.value);
+    void load(false);
+  });
   for (const [stage, label] of stages) {
     const select = el("select", { id: `new-authoring-model-${stage}`, disabled: true, "aria-label": label }) as HTMLSelectElement;
     select.appendChild(el("option", { value: "" }, "Inherit runner default"));
@@ -176,13 +183,18 @@ function buildAuthoringControls(harness: HTMLSelectElement): AuthoringControls {
     root: el("div", { className: "doc-section authoring-config" }, [
       el("h4", null, "Authoring models"),
       el("p", { className: "dim small" }, "Optional per-stage models for PRD, team, and project-skill authoring. Empty selections inherit the selected runner default."),
+      el("div", { className: "field" }, [el("label", { for: "new-authoring-runner" }, "Authoring runner"), runnerSelect]),
       ...stages.map(([stage, label]) => el("div", { className: "field" }, [el("label", { for: `new-authoring-model-${stage}` }, label), selects.get(stage)!])),
       el("div", { className: "row gap wrap" }, [refresh, status]),
     ]),
-    getConfig: () => ({
-      version: 1,
-      models: Object.fromEntries([...selects].map(([stage, select]) => [stage, select.value || "inherit"])),
-    }) as AuthoringConfig,
+    getConfig: () => {
+      const config = {
+        version: 1,
+        models: Object.fromEntries([...selects].map(([stage, select]) => [stage, select.value || "inherit"])),
+      } as AuthoringConfig;
+      if (runnerSelect.value && runnerSelect.value !== "inherit") config.runner = runnerSelect.value as NonNullable<AuthoringConfig["runner"]>;
+      return config;
+    },
   };
 }
 

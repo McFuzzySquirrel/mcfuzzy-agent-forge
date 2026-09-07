@@ -2,7 +2,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { AppStore, Epoch } from "./console/dashboard/state.js";
 import { validateTextUpload } from "./console/dashboard/views/new.js";
-import { runnerForHarness } from "./console/dashboard/runners.js";
+import { AUTHORING_RUNNER_OPTIONS, effectiveRunner, runnerForHarness } from "./console/dashboard/runners.js";
 import { authoringRunnerForHarness, engineHarnessForHarness, harnessCliForHarness, harnessKey } from "./console/dashboard/harness-rules.js";
 import type { AuthoringRunnerName, EngineHarnessName, HarnessCliName, HarnessKey } from "./console/dashboard/harness-rules.js";
 
@@ -88,4 +88,19 @@ test("harness to runner mapping accepts harness names and harness roots alike", 
   assert.equal(runnerForHarness(".opencode"), "opencode");
   assert.equal(runnerForHarness(".agents"), "opencode");
   assert.equal(runnerForHarness(""), "opencode");
+});
+
+test("the authoring runner options are the four the console offers, inherit first", () => {
+  assert.deepEqual(AUTHORING_RUNNER_OPTIONS.map(([value]) => value), ["inherit", "opencode", "copilot", "claude"]);
+  assert.deepEqual(AUTHORING_RUNNER_OPTIONS.map(([, label]) => label), ["Inherit from harness", "OpenCode", "Copilot", "Claude Code"]);
+});
+
+test("effectiveRunner falls back to the harness rule only for inherit", () => {
+  assert.equal(effectiveRunner("inherit", "github"), "copilot");
+  assert.equal(effectiveRunner("inherit", ".claude"), "opencode");
+  assert.equal(effectiveRunner("inherit", ""), "opencode");
+  assert.equal(effectiveRunner("", "github"), "copilot");
+  assert.equal(effectiveRunner("claude", "github"), "claude");
+  assert.equal(effectiveRunner("copilot", ".claude"), "copilot");
+  assert.equal(effectiveRunner("opencode", "github"), "opencode");
 });

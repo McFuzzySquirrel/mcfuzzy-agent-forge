@@ -4,7 +4,7 @@ import { api } from "../api.js";
 import { store } from "../state.js";
 import { el, toast } from "../render/dom.js";
 import { renderMarkdown } from "../render/md.js";
-import { runnerForHarness } from "../runners.js";
+import { AUTHORING_RUNNER_OPTIONS, effectiveRunner } from "../runners.js";
 import type { AgentInfo, AuthoringConfig, AuthoringInventory, AuthoringStage, AuthoringStageState, DocEntry, DocsIndex, SkillInfo, TeamIndex } from "../types.js";
 
 let unsub: Array<() => void> = [];
@@ -161,7 +161,7 @@ async function loadAuthoringSettings(panel: HTMLElement, generation: number): Pr
 }
 
 function buildAuthoringSettings(panel: HTMLElement, initial: AuthoringConfig, inventory: AuthoringInventory, initialDirty = false): HTMLElement {
-  let config: AuthoringConfig = { version: 1, models: { ...initial.models } };
+  let config: AuthoringConfig = { version: 1, models: { ...initial.models }, ...(initial.runner ? { runner: initial.runner } : {}) };
   let dirty = initialDirty;
   let saveInFlight = false;
   const stages: Array<[AuthoringStage, string]> = [
@@ -177,6 +177,31 @@ function buildAuthoringSettings(panel: HTMLElement, initial: AuthoringConfig, in
   const updateRetryState = (): void => {
     for (const { button } of retryButtons) button.disabled = dirty || saveInFlight || button.hidden;
   };
+  const runnerSelect = el("select", { id: "authoring-runner", "aria-label": "Authoring runner" }, AUTHORING_RUNNER_OPTIONS.map(([value, label]) => el("option", { value }, label))) as HTMLSelectElement;
+  runnerSelect.value = config.runner ?? "inherit";
+  const selectedRunner = (): string => runnerSelect.value || "inherit";
+  /** Copies the live select values back into `config` before a rebuild. */
+  const captureSelections = (): void => {
+    for (const [stage, select] of selects) {
+      if (select.value) config.models[stage] = select.value;
+      else delete config.models[stage];
+    }
+    if (selectedRunner() === "inherit") delete config.runner;
+    else config.runner = selectedRunner() as NonNullable<AuthoringConfig["runner"]>;
+  };
+  runnerSelect.addEventListener("change", () => {
+    dirty = true;
+    updateRetryState();
+    status.textContent = "Loading authoring models for the selected runner…";
+    captureSelections();
+    void api.authoringInventory(effectiveRunner(selectedRunner(), store.summary?.harness ?? ""))
+      .then((next) => {
+        panel.replaceChildren(buildAuthoringSettings(panel, config, next, dirty));
+      })
+      .catch((error) => {
+        status.textContent = error instanceof Error ? error.message : "Unable to load authoring models for the selected runner.";
+      });
+  });
 
   for (const [stage, label] of stages) {
     const select = el("select", { id: `authoring-model-${stage}`, "aria-label": label }) as HTMLSelectElement;
@@ -202,6 +227,7 @@ function buildAuthoringSettings(panel: HTMLElement, initial: AuthoringConfig, in
     for (const [stage, select] of selects) {
       if (select.value) next.models[stage] = select.value;
     }
+    if (selectedRunner() !== "inherit") next.runner = selectedRunner() as NonNullable<AuthoringConfig["runner"]>;
     save.disabled = true;
     saveInFlight = true;
     updateRetryState();
@@ -209,7 +235,8 @@ function buildAuthoringSettings(panel: HTMLElement, initial: AuthoringConfig, in
     void api.saveAuthoringConfig(next)
       .then((result) => {
         if (!result.ok) throw new Error(result.message || "save failed");
-        config = { version: 1, models: { ...result.config.models } };
+        config = { version: 1, models: { ...result.config.models }, ...(result.config.runner ? { runner: result.config.runner } : {}) };
+        runnerSelect.value = result.config.runner ?? "inherit";
         dirty = false;
         status.textContent = result.message || "Authoring settings saved.";
         toast(status.textContent);
@@ -227,11 +254,8 @@ function buildAuthoringSettings(panel: HTMLElement, initial: AuthoringConfig, in
 
   refresh.addEventListener("click", () => {
     refresh.disabled = true;
-    const runner = inventory.runner ?? runnerForHarness(store.summary?.harness ?? "");
-    for (const [stage, select] of selects) {
-      if (select.value) config.models[stage] = select.value;
-      else delete config.models[stage];
-    }
+    const runner = effectiveRunner(selectedRunner(), store.summary?.harness ?? "");
+    captureSelections();
     void api.refreshAuthoringInventory(runner)
       .then((next) => {
         panel.replaceChildren(buildAuthoringSettings(panel, config, next, dirty));
@@ -277,6 +301,7 @@ function buildAuthoringSettings(panel: HTMLElement, initial: AuthoringConfig, in
   authoringStagesHost = stageHost;
 
   return el("div", null, [
+    el("div", { className: "field" }, [el("label", { for: "authoring-runner" }, "Authoring runner"), runnerSelect]),
     el("div", { className: "form-row" }, stages.map(([stage, label]) => el("div", { className: "field" }, [el("label", { for: `authoring-model-${stage}` }, label), selects.get(stage)!]))),
     el("div", { className: "row gap wrap" }, [save, refresh, status]),
     stageHost,
