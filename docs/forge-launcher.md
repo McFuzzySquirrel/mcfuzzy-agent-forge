@@ -278,6 +278,7 @@ you can also run the engine directly as a standalone process:
 ```bash
 forge-launcher engine-run --harness opencode --yes   # per-task: opencode run --auto
 forge-launcher engine-run --harness copilot --yes    # per-task: copilot -p --yolo
+forge-launcher engine-run --harness claude --yes     # per-task: claude -p --output-format json
 ```
 
 A `--headless` launcher run can therefore go from idea to finished build without
@@ -311,7 +312,7 @@ default assumption in the PRD). Use `FORGE_RUN_WITH=copilot` to emit
 `FORGE_WORKFLOW_ENGINE=1` to append `GO --workflow-engine` so the build executes
 through the workflow engine. On that path the engine runs **detached** (not as a
 blocking child of the session) and the per-task harness is selected with
-`FORGE_ENGINE_HARNESS=opencode|copilot|openai|stub`.
+`FORGE_ENGINE_HARNESS=claude|opencode|copilot|openai|stub`.
 
 > **Headless + engine:** the engine's own pre-run gate is interactive-only. It
 > auto-skips when stdin is not a TTY, and `--yes` (or `FORGE_ENGINE_YES=1`)
@@ -435,8 +436,10 @@ default assumption) and still keep human review between stages:
 Choosing *run now* or *print the command* opens the **engine configuration**
 step - a set of defaults you can press Enter through:
 
-- **Per-task harness** - `opencode` (default), `copilot`, `openai`, `stub`
-  (offline testing).
+- **Per-task harness** - `claude`, `opencode`, `copilot`, `openai`, `stub`
+  (offline testing). The default follows the repository's harness: `claude` for
+  repos bootstrapped with `--harness claude`, `copilot` for `--harness github`,
+  `opencode` otherwise.
 - **Task granularity** - `fine` (default: sub-bullets + oversized-bullet
   splits) or `coarse` (one task per PRD bullet). Choosing a granularity
   recompiles `docs/EXECUTION-MANIFEST.json` at that granularity.
@@ -871,7 +874,7 @@ reflect the running build (monitor + resume) rather than the manual
  | `FORGE_ENGINE_RETRY_DELAY_MS` | 8 | Delay between task retries in ms (default `5000`) |
  | `FORGE_ENGINE_HEARTBEAT_MS` | 8 | Engine heartbeat interval in ms while a task runs (default `60000`; `0` disables) |
  | `FORGE_WORKFLOW_ENGINE` | 8 | `1` to append `GO --workflow-engine` to the queued headless command (build executes via the workflow engine) |
-  | `FORGE_ENGINE_HARNESS` | 8 | Per-task harness for the workflow engine: `opencode` (default), `copilot`, `openai`, or `stub` |
+  | `FORGE_ENGINE_HARNESS` | 8 | Per-task harness for the workflow engine: `claude`, `opencode`, `copilot`, `openai`, or `stub`. Default follows the repository harness: `claude` for `--harness claude`, `copilot` for `--harness github`, `opencode` otherwise |
   | `FORGE_ENGINE_VIZ` | 8 | `1` to launch the live Forge Board dashboard with the engine run |
   | `FORGE_ENGINE_VIZ_PORT` | 8 | Dashboard port when `FORGE_ENGINE_VIZ=1` (default `4299`) |
   | `FORGE_ENGINE_ALLOW_NOOP` | 8 | `1` to relax the engine's output-verification no-op heuristic (`engine-run --allow-noop`) |

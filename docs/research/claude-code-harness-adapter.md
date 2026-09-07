@@ -227,9 +227,12 @@ Templates and docs:
 - [ ] `docs/workflow-engine.md` and `docs/workflow-engine-deep-dive.md`
 - [ ] New ADR, next free number is 042, recording the decision and the non-goals above
 
-**Do not forget the launcher mirror.** `scripts/forge-launcher/resources/templates/skills/forge-workflow-engine/`
-carries a full duplicate of the engine, harness directory included. A change that lands only in
-`templates/` ships a launcher that cannot select the new harness.
+**The launcher mirror needs no hand-editing.** `scripts/forge-launcher/resources/templates/` is
+gitignored (`.gitignore` line 7) and regenerated from `templates/` by
+`scripts/forge-launcher/scripts/stage-resources.mjs` during the launcher's `prepack` script, so
+a change in `templates/` reaches the packed launcher on its own. A stale local copy only affects
+local verification; re-run the staging script or rsync `templates/` over it if local runs look
+out of date.
 
 ## Test plan
 
@@ -277,5 +280,5 @@ Envelope cases, one per row of the classification table:
 ## Estimate
 
 The adapter itself is roughly 120 lines, most of it structurally identical to the Copilot
-adapter, plus about 160 lines of tests. The larger share of the work is the wiring checklist and
-keeping the launcher mirror in step. One focused change, not a project.
+adapter, plus about 160 lines of tests. The larger share of the work is the wiring checklist; the
+launcher mirror regenerates itself at pack time. One focused change, not a project.

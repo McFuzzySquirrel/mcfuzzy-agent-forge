@@ -49,9 +49,10 @@ or `--session-id` reuse, no `--bare`, and no `stream-json` output.
 
 ## Consequences
 
-The engine mirror under `scripts/forge-launcher/` must track this change; the
-canonical engine under `templates/skills/forge-workflow-engine/` is the source
-of truth and the mirror is updated separately.
+The canonical engine under `templates/skills/forge-workflow-engine/` is the
+single source of truth. The launcher copy under
+`scripts/forge-launcher/resources/templates/` is gitignored and regenerated from
+it by `stage-resources.mjs` at pack time, so nothing needs mirroring by hand.
 
 Ambient repository `CLAUDE.md` context is loaded by the CLI on every task. This
 is documented rather than suppressed: the engine's projected context and the

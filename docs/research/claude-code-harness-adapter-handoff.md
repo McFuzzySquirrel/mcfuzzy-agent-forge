@@ -171,10 +171,13 @@ Places that enumerate transport names today:
 - `templates/agents/workflow-orchestrator.md:34-36` quick actions and `:56` the harness
   confirmation step, both of which list opencode, openai and stub
 
-**The trap.** `scripts/forge-launcher/resources/templates/skills/forge-workflow-engine/` holds a
-complete duplicate of the engine including `scripts/harness/`. A change landing only in
-`templates/` ships a launcher that cannot select the new harness. Confirmed by listing both
-harness directories.
+**Correction: there is no trap here.** This document originally called
+`scripts/forge-launcher/resources/templates/skills/forge-workflow-engine/` a committed duplicate
+that had to be hand-mirrored. That was wrong: the directory existed locally only as a stale
+`prepack` leftover, which is what the original listing found. `scripts/forge-launcher/resources/templates/`
+is gitignored (`.gitignore` line 7) and regenerated from `templates/` by
+`scripts/forge-launcher/scripts/stage-resources.mjs` during the launcher's `prepack` script. A
+change in `templates/` alone ships correctly; a stale local copy only affects local verification.
 
 ### 3.5 Test pattern to copy
 
@@ -294,8 +297,9 @@ Then, in order:
    structurally the same file.
 3. Skim `docs/adr/040-native-adapter-contracts.md` for the contract boundary.
 4. Read section 5 for the resolved decisions and the probe evidence behind them.
-5. Implement against the wiring checklist in the scope document, and mirror into
-   `scripts/forge-launcher/resources/templates/skills/forge-workflow-engine/`.
+5. Implement against the wiring checklist in the scope document. The launcher copy under
+   `scripts/forge-launcher/resources/templates/` is gitignored and regenerated at pack time, so
+   there is nothing to mirror by hand.
 6. `npm test` and `npm run typecheck` in `templates/skills/forge-workflow-engine`.
 7. Add ADR-042 recording the decision and the non-goals.
 
@@ -343,11 +347,11 @@ The gap is sharper than missing parity. Native agent selection is keyed to each 
 
 Probing `claude` v2.1.263 showed every failure exits with status 1: not logged in, unknown `--agent`, invalid `--session-id`, max turns. An exit code cannot separate configuration faults from transient ones, so the adapter passes `--output-format json` and classifies on `is_error`, `subtype`, `terminal_reason`, `api_error_status` and `permission_denials`. It unwraps the envelope and returns `result` as `stdout`, so the verifier sees the same final-message text it would in text mode. The full classification table and the raw probe results are in the two documents.
 
-## One trap
+## No launcher mirror to maintain
 
-`scripts/forge-launcher/resources/templates/skills/forge-workflow-engine/` carries a complete duplicate of the engine, harness directory included. A change landing only in `templates/` ships a launcher that cannot select the new harness.
+`scripts/forge-launcher/resources/templates/` is gitignored and regenerated from `templates/` by `scripts/forge-launcher/scripts/stage-resources.mjs` during the launcher's `prepack` script, so a change in `templates/` alone ships correctly. A stale local copy only affects local verification.
 
 ## Estimate
 
-Roughly 120 lines of adapter, most of it structurally identical to the Copilot adapter, plus about 160 lines of tests. The larger share is the wiring checklist and keeping the launcher mirror in step.
+Roughly 120 lines of adapter, most of it structurally identical to the Copilot adapter, plus about 160 lines of tests. The larger share is the wiring checklist; the launcher copy regenerates itself at pack time.
 ```
