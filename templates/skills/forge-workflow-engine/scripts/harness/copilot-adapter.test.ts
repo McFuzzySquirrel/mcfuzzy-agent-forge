@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
-import test from "node:test";
-import { mkdtempSync, writeFileSync, readFileSync } from "node:fs";
+import test, { type TestContext } from "node:test";
+import { mkdtempSync, rmSync, writeFileSync, readFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
@@ -14,8 +14,15 @@ interface Shim {
   argsFile: string;
 }
 
-function makeShim(): Shim {
-  const dir = mkdtempSync(join(tmpdir(), "forge-copilot-adapter-"));
+/** A temp directory removed when the test that made it finishes. */
+function tempDir(t: TestContext, prefix: string): string {
+  const dir = mkdtempSync(join(tmpdir(), prefix));
+  t.after(() => rmSync(dir, { recursive: true, force: true }));
+  return dir;
+}
+
+function makeShim(t: TestContext): Shim {
+  const dir = tempDir(t, "forge-copilot-adapter-");
   const argsFile = join(dir, "args.json");
   const bin = makeNodeShim(dir, "fake-copilot", `
 const fs = require("fs");
@@ -69,10 +76,10 @@ function recordedPrompt(shim: Shim): string {
   return recorded.slice(recorded.indexOf("-p") + 1).join(" ");
 }
 
-test("prepends /agent for .github-rooted agents and omits the inline persona", async () => {
-  const root = mkdtempSync(join(tmpdir(), "forge-copilot-repo-"));
+test("prepends /agent for .github-rooted agents and omits the inline persona", async (t) => {
+  const root = tempDir(t, "forge-copilot-repo-");
   const agent = makeAgent(join(root, ".github", "agents", "discovery-engineer.md"));
-  const shim = makeShim();
+  const shim = makeShim(t);
 
   await invokeWith(shim, agent, root);
 
@@ -81,10 +88,10 @@ test("prepends /agent for .github-rooted agents and omits the inline persona", a
   assert.ok(!prompt.includes("You are a Discovery Engineer"), prompt);
 });
 
-test("falls back to inlining the persona for non-.github harness roots", async () => {
-  const root = mkdtempSync(join(tmpdir(), "forge-agents-repo-"));
+test("falls back to inlining the persona for non-.github harness roots", async (t) => {
+  const root = tempDir(t, "forge-agents-repo-");
   const agent = makeAgent(join(root, ".agents", "agents", "discovery-engineer.md"));
-  const shim = makeShim();
+  const shim = makeShim(t);
 
   await invokeWith(shim, agent, root);
 
@@ -93,10 +100,10 @@ test("falls back to inlining the persona for non-.github harness roots", async (
   assert.ok(prompt.includes("You are a Discovery Engineer"), prompt);
 });
 
-test("never uses /agent when the agent has no name", async () => {
-  const root = mkdtempSync(join(tmpdir(), "forge-noname-repo-"));
+test("never uses /agent when the agent has no name", async (t) => {
+  const root = tempDir(t, "forge-noname-repo-");
   const agent = { ...makeAgent(join(root, ".github", "agents", "unnamed.md")), name: "" };
-  const shim = makeShim();
+  const shim = makeShim(t);
 
   await invokeWith(shim, agent, root);
 
@@ -105,10 +112,10 @@ test("never uses /agent when the agent has no name", async () => {
   assert.ok(prompt.includes("You are a Discovery Engineer"), prompt);
 });
 
-test("FORGE_ENGINE_NATIVE_AGENT=0 forces the inline-persona fallback for .github agents", async () => {
-  const root = mkdtempSync(join(tmpdir(), "forge-nonative-repo-"));
+test("FORGE_ENGINE_NATIVE_AGENT=0 forces the inline-persona fallback for .github agents", async (t) => {
+  const root = tempDir(t, "forge-nonative-repo-");
   const agent = makeAgent(join(root, ".github", "agents", "discovery-engineer.md"));
-  const shim = makeShim();
+  const shim = makeShim(t);
   const original = process.env.FORGE_ENGINE_NATIVE_AGENT;
   process.env.FORGE_ENGINE_NATIVE_AGENT = "0";
   try {
@@ -123,9 +130,9 @@ test("FORGE_ENGINE_NATIVE_AGENT=0 forces the inline-persona fallback for .github
   assert.ok(prompt.includes("You are a Discovery Engineer"), prompt);
 });
 
-test("prompt includes the execute-now directive in both native and inline modes", async () => {
-  const root = mkdtempSync(join(tmpdir(), "forge-directive-repo-"));
-  const shim = makeShim();
+test("prompt includes the execute-now directive in both native and inline modes", async (t) => {
+  const root = tempDir(t, "forge-directive-repo-");
+  const shim = makeShim(t);
 
   await invokeWith(shim, makeAgent(join(root, ".github", "agents", "discovery-engineer.md")), root);
   const nativePrompt = recordedPrompt(shim);
@@ -136,10 +143,10 @@ test("prompt includes the execute-now directive in both native and inline modes"
   assert.ok(inlinePrompt.includes("Perform the task now"), inlinePrompt);
 });
 
-test("prompt surfaces the per-task timeout and retry budget when provided", async () => {
-  const root = mkdtempSync(join(tmpdir(), "forge-budget-repo-"));
+test("prompt surfaces the per-task timeout and retry budget when provided", async (t) => {
+  const root = tempDir(t, "forge-budget-repo-");
   const agent = makeAgent(join(root, ".agents", "agents", "discovery-engineer.md"));
-  const shim = makeShim();
+  const shim = makeShim(t);
   const original = process.env.COPILOT_BIN;
   process.env.COPILOT_BIN = shim.bin;
   try {

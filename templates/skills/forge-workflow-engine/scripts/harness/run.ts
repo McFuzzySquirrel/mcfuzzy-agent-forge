@@ -1,6 +1,7 @@
 import spawn from "cross-spawn";
 import { execFile, type ChildProcess } from "node:child_process";
-import type { TaskFailureKind } from "../types.ts";
+import { relative } from "node:path";
+import type { TaskAttemptRequest, TaskFailureKind } from "../types.ts";
 
 const CLEANUP_TIMEOUT_MS = 1000;
 
@@ -179,4 +180,21 @@ export function extractModelFlags(args: string[]): { flags: string[]; model?: st
 /** Model IDs may carry a provider prefix (`anthropic/claude-sonnet-5`); CLIs want the bare ID. */
 export function stripProviderPrefix(model: string): string {
   return model.includes("/") ? model.slice(model.lastIndexOf("/") + 1) : model;
+}
+
+/**
+ * True when the request's agent can be selected natively by a harness whose
+ * agent directory is `<root>/agents/`: the agent has a name, its file lives
+ * under that directory relative to repoRoot, and FORGE_ENGINE_NATIVE_AGENT is
+ * not "0" (which forces the inline-persona fallback for every harness).
+ */
+export function canSelectAgentNatively(
+  request: Pick<TaskAttemptRequest, "agent" | "repoRoot">,
+  root: ".github" | ".opencode" | ".claude",
+): boolean {
+  const { agent, repoRoot } = request;
+  if (process.env["FORGE_ENGINE_NATIVE_AGENT"] === "0") return false;
+  if (!agent.name) return false;
+  const parts = relative(repoRoot, agent.path).split(/[\\/]/);
+  return parts[0] === root && parts[1] === "agents" && parts.length > 2;
 }

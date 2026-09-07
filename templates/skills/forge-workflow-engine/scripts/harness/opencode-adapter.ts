@@ -1,7 +1,7 @@
 import { existsSync, readFileSync } from "node:fs";
-import { relative, resolve } from "node:path";
+import { resolve } from "node:path";
 
-import { runCommand, extractModelFlags } from "./run.ts";
+import { runCommand, extractModelFlags, canSelectAgentNatively } from "./run.ts";
 import type { AgentDescriptor, HarnessAdapter, HarnessRunContext, TaskAttemptRequest, TaskResult } from "../types.ts";
 import { inlinePersona } from "../request.ts";
 import { startAttachServer, type AttachServer } from "./opencode-server.ts";
@@ -154,19 +154,9 @@ export class OpenCodeAdapter implements HarnessAdapter {
     };
   }
 
-  /**
-   * True when opencode can select this agent natively: it must have a name and
-   * its file must live under the project's `.opencode/agents/` directory - the
-   * only harness root opencode scans for agent definitions. For `.agents`,
-   * `.claude`, and `.github` roots the adapter falls back to inlining the
-   * persona into the prompt. Set FORGE_ENGINE_NATIVE_AGENT=0
-   * to force the inline-persona fallback even for `.opencode` agents.
-   */
-  private canSelectAgent({ agent, repoRoot }: TaskAttemptRequest): boolean {
-    if (process.env["FORGE_ENGINE_NATIVE_AGENT"] === "0") return false;
-    if (!agent.name) return false;
-    const parts = relative(repoRoot, agent.path).split(/[\\/]/);
-    return parts[0] === ".opencode" && parts[1] === "agents" && parts.length > 2;
+  /** True when opencode can select this agent natively; see `canSelectAgentNatively`. */
+  private canSelectAgent(request: TaskAttemptRequest): boolean {
+    return canSelectAgentNatively(request, ".opencode");
   }
 }
 
