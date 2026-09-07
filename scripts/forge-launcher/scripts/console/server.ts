@@ -550,10 +550,14 @@ export async function startConsoleServer(options: ConsoleServerOptions = {}): Pr
         if (urlPath === "/api/model-plan/terminal") {
           if (!options.allowExternalOpen) return sendJson(res, 200, { ok: false, message: "terminal launch not enabled" });
           if (!currentRepo) return sendJson(res, 400, { ok: false, message: "no repo selected" });
-          const provider = body.provider === "copilot" ? "copilot" : body.provider === "opencode" ? "opencode" : "";
+          const provider = body.provider === "copilot" ? "copilot"
+            : body.provider === "opencode" ? "opencode"
+            : body.provider === "claude" ? "claude" : "";
           const message = typeof body.message === "string" ? body.message.trim() : "";
           if (!provider || !message || message.length > 10000) return sendJson(res, 400, { ok: false, message: "provider and a message up to 10000 characters are required" });
-          const args = provider === "copilot" ? ["-i", message, "--yolo"] : ["--prompt", message];
+          const args = provider === "copilot" ? ["-i", message, "--yolo"]
+            : provider === "claude" ? [message]
+            : ["--prompt", message];
           const launched = await launchCli(provider, currentRepo, args);
           const command = `${provider} ${args.map((arg) => JSON.stringify(arg)).join(" ")}`;
           return sendJson(res, 200, { ok: true, launched, cli: provider, command, message: launched ? `${provider} launched in a new terminal.` : `Run manually: cd "${currentRepo}" && ${command}` });

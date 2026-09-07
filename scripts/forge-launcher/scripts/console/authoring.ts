@@ -1,13 +1,13 @@
 import fs from "node:fs";
 import path from "node:path";
 import { inventoryForRunner, readAuthoringInventory, refreshAuthoringInventory, type AuthoringRunner, type InventoryProbe } from "../authoring-inventory.ts";
-import { detectHarnessRoot, registryPath } from "./paths.ts";
+import { detectHarnessRoot, registryPath, runnerForHarnessRoot } from "./paths.ts";
 
 export function selectedAuthoringRunner(repoRoot?: string, requested?: unknown): AuthoringRunner {
   const runner = requested ?? process.env.FORGE_RUN_WITH
-    ?? (repoRoot && detectHarnessRoot(repoRoot) === ".github" ? "copilot" : "opencode");
-  if (runner !== "copilot" && runner !== "opencode" && runner !== "stub") {
-    throw new Error("Authoring runner must be copilot or opencode.");
+    ?? (repoRoot ? runnerForHarnessRoot(detectHarnessRoot(repoRoot)) : "opencode");
+  if (runner !== "copilot" && runner !== "opencode" && runner !== "claude" && runner !== "stub") {
+    throw new Error("Authoring runner must be copilot, opencode, or claude.");
   }
   return runner;
 }

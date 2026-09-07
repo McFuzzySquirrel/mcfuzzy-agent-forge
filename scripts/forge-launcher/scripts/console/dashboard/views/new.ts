@@ -3,6 +3,7 @@
 import { api } from "../api.js";
 import { store } from "../state.js";
 import { el, toast } from "../render/dom.js";
+import { runnerForHarness } from "../runners.js";
 import type { AuthoringConfig, CreateProjectRequest, ProjectInfo } from "../types.js";
 
 let createRepoDir: string | null = null;
@@ -132,7 +133,7 @@ function buildAuthoringControls(harness: HTMLSelectElement): AuthoringControls {
 
   const load = async (force: boolean): Promise<void> => {
     const selectedHarness = harness.value;
-    const runner = selectedHarness === "github" ? "copilot" : "opencode";
+    const runner = runnerForHarness(selectedHarness);
     const id = ++requestId;
     status.textContent = force ? "Refreshing authoring models…" : "Loading authoring models…";
     for (const select of selects.values()) select.disabled = true;

@@ -879,6 +879,30 @@ test("model planning endpoint launches the selected interactive CLI", async () =
   });
 });
 
+test("model planning endpoint launches claude with the message as a positional prompt", async () => {
+  await withServer(async (server, repo) => {
+    const calls: Array<{ cli: string; dir: string; args: string[] }> = [];
+    // Same second-server seam as the copilot case: the shared fixture does not
+    // enable external terminal launches.
+    await server.stop();
+    const replacement = await startConsoleServer({
+      repoRoot: repo,
+      port: nextPort(),
+      open: false,
+      allowExternalOpen: true,
+      onLog: () => {},
+      launchCli: async (cli, dir, args) => { calls.push({ cli, dir, args }); return true; },
+    });
+    try {
+      const result = await postJson(`${replacement.url}/api/model-plan/terminal`, { provider: "claude", message: "Review MODEL-PLAN.md" }, { "X-Forge-Token": replacement.token });
+      assert.equal((result.body as { ok: boolean }).ok, true);
+      assert.deepEqual(calls[0], { cli: "claude", dir: repo, args: ["Review MODEL-PLAN.md"] });
+    } finally {
+      await replacement.stop();
+    }
+  });
+});
+
 test("model inventory and overrides preserve provider-qualified IDs", async () => {
   const root = makeRepo();
   const docsResearch = join(root, "docs", "research");
