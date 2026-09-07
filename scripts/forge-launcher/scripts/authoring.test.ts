@@ -12,13 +12,13 @@ import { runDraftPrd, runDraftSkills, runDraftTeam, runFeatureIncrement, runLaun
 import { createSessionScope } from "./launcher-session.ts";
 import { prompts, withPromptSession } from "./prompts.ts";
 
-function fixture(t: { after: (fn: () => void) => void }): string {
+function fixture(t: { after: (fn: () => void) => void }, harnessRoot = ".github"): string {
   const repo = fs.mkdtempSync(path.join(os.tmpdir(), "forge-authoring-"));
   t.after(() => fs.rmSync(repo, { recursive: true, force: true }));
   fs.mkdirSync(path.join(repo, "docs"), { recursive: true });
-  fs.mkdirSync(path.join(repo, ".github", "agents"), { recursive: true });
+  fs.mkdirSync(path.join(repo, harnessRoot, "agents"), { recursive: true });
   for (const skill of ["forge-auto-build-prd", "forge-build-prd", "forge-build-feature-prd", "forge-build-agent-team", "forge-build-project-skills"]) {
-    write(repo, `.github/skills/${skill}/SKILL.md`, `---\nname: ${skill}\ndescription: "Fixture"\n---\n# Fixture\n`);
+    write(repo, `${harnessRoot}/skills/${skill}/SKILL.md`, `---\nname: ${skill}\ndescription: "Fixture"\n---\n# Fixture\n`);
   }
   execFileSync("git", ["init", "-q", repo]);
   execFileSync("git", ["-C", repo, "config", "user.email", "test@example.invalid"]);
@@ -141,6 +141,11 @@ test("Claude model discovery mines the /model envelope and refuses error envelop
     /claude model discovery failed/,
   );
   assert.throws(() => parseClaudeModelOutput("not json"), /no JSON result envelope/);
+  const wrapped = JSON.stringify({
+    type: "result", is_error: false,
+    result: "Current model: `Haiku 4.5`\nUsage: /model <name>. Available: sonnet, opus, haiku, fable, best,\n  sonnet[1m], opus[1m], fable[1m], opusplan, default, or a full model ID.",
+  });
+  assert.deepEqual(parseClaudeModelOutput(wrapped), CLAUDE_MODEL_IDS);
 });
 
 test("Claude inventory probes the built-in model command and retains other providers", async (t) => {
@@ -466,6 +471,33 @@ test("settings CLI saves and clears stage values and direct draft argv preserves
   assert.equal(readAuthoringState(repo).stages.prd, undefined);
   invoke(["authoring-config", "--repo", repo, "--prd-model", "inherit"]);
   assert.deepEqual(loadAuthoringConfig(repo).models, { skills: "skills-3" });
+});
+
+test("headless draft builds the claude command from the runner, the harness, and debug mode", (t) => {
+  const cli = fileURLToPath(new URL("./cli.ts", import.meta.url));
+  const invoke = (repo: string, env: NodeJS.ProcessEnv = {}) => {
+    const base = { ...process.env, ...env };
+    if (!Object.hasOwn(env, "FORGE_RUN_WITH")) delete base.FORGE_RUN_WITH;
+    delete base.FORGE_PRD_MODEL;
+    return execFileSync(process.execPath, ["--import", "tsx", cli, "draft-prd", "--repo", repo, "--dry-run"], {
+      encoding: "utf8", env: base,
+    });
+  };
+  const claudeCommand = (output: string) => output.split(/\r?\n/).map((line) => line.trim()).find((line) => line.startsWith("claude ")) ?? "";
+
+  const explicit = fixture(t);
+  const chosen = claudeCommand(invoke(explicit, { FORGE_RUN_WITH: "claude" }));
+  assert.match(chosen, /^claude -p /);
+  assert.match(chosen, /--permission-mode bypassPermissions/);
+  assert.equal(chosen.endsWith("--debug"), false);
+
+  const debug = fixture(t);
+  const debugged = claudeCommand(invoke(debug, { FORGE_RUN_WITH: "claude", FORGE_LAUNCHER_DEBUG: "1" }));
+  assert.match(debugged, /^claude -p /);
+  assert.equal(debugged.endsWith("--debug"), true);
+
+  const harnessDefault = fixture(t, ".claude");
+  assert.match(claudeCommand(invoke(harnessDefault)), /^claude -p /);
 });
 
 test("candidate validation rejects unsafe paths and malformed handoff rather than assuming no skills", (t) => {

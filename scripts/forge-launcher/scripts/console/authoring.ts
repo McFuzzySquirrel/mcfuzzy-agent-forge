@@ -7,7 +7,7 @@ export function selectedAuthoringRunner(repoRoot?: string, requested?: unknown):
   const runner = requested ?? process.env.FORGE_RUN_WITH
     ?? (repoRoot ? runnerForHarnessRoot(detectHarnessRoot(repoRoot)) : "opencode");
   if (runner !== "copilot" && runner !== "opencode" && runner !== "claude" && runner !== "stub") {
-    throw new Error("Authoring runner must be copilot, opencode, or claude.");
+    throw new Error("Authoring runner must be copilot, opencode, claude, or stub.");
   }
   return runner;
 }

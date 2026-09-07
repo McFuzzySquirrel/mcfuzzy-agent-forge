@@ -128,11 +128,11 @@ export function parseClaudeModelOutput(text: string): string[] {
   }
   if (!record(envelope)) throw new Error("claude model discovery returned no JSON result envelope.");
   if (envelope.is_error === true) throw new Error(`claude model discovery failed: ${String(envelope.result ?? "unknown error")}`);
-  const result = typeof envelope.result === "string" ? envelope.result : "";
+  // Whitespace runs collapse to single spaces so a list wrapped across lines is not truncated.
+  const result = (typeof envelope.result === "string" ? envelope.result : "").replace(/\s+/g, " ");
   const start = result.indexOf("Available:");
   if (start < 0) return [];
   const sentence = result.slice(start + "Available:".length)
-    .split(/\r?\n/)[0]!
     .split(", or a full model ID")[0]!
     .split(/\.(?:\s|$)/)[0]!;
   const ids: string[] = [];

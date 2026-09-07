@@ -248,6 +248,12 @@ function debugMode(): boolean {
   return state.env.FORGE_LAUNCHER_DEBUG === "1";
 }
 
+/** Extra author arguments appended only under FORGE_LAUNCHER_DEBUG=1. */
+const RUNNER_DEBUG_ARGS: Partial<Record<AuthoringRunner, string[]>> = {
+  opencode: ["--print-logs"],
+  claude: ["--debug"],
+};
+
 function hasGeneratedTeam(): boolean {
   const agentsDir = harnessAgentsDir();
   if (!fs.existsSync(agentsDir)) return false;
@@ -511,7 +517,7 @@ function headlessRunner(): AuthoringRunner {
   const runner = state.env.FORGE_RUN_WITH;
   if (runner) {
     if (runner !== "copilot" && runner !== "opencode" && runner !== "claude" && runner !== "stub") {
-      throw new Error(`Unsupported authoring runner: ${runner}. Use copilot, opencode, or claude.`);
+      throw new Error(`Unsupported authoring runner: ${runner}. Use copilot, opencode, claude, or stub.`);
     }
     return runner;
   }
@@ -617,7 +623,7 @@ async function runSkillHeadless(msg: string, opts: LauncherOptions): Promise<boo
     });
     throw error;
   }
-  const args = authoringArgv(invocation, state.repoDir, msg, debugMode() && runner === "opencode" ? ["--print-logs"] : debugMode() && runner === "claude" ? ["--debug"] : []);
+  const args = authoringArgv(invocation, state.repoDir, msg, debugMode() ? RUNNER_DEBUG_ARGS[runner] ?? [] : []);
   invocation = { ...invocation, argv: args, skill: skillName };
   const cmdStr = `${runner} ${args.map((arg) => /^[a-zA-Z0-9_-]+$/.test(arg) ? arg : JSON.stringify(arg)).join(" ")}`;
   command(cmdStr);
