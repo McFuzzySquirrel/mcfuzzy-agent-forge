@@ -22,6 +22,7 @@ import {
   repoPaths,
   upsertProject,
 } from "./paths.ts";
+import { harnessCliForHarness } from "./dashboard/harness-rules.ts";
 import * as repo from "./repo.ts";
 import type { ControlAction, CreateProjectRequest } from "./types.ts";
 
@@ -124,10 +125,7 @@ function openPath(filePath: string): void {
 
 /** Chooses the harness CLI + launch args for a forge repo (github → copilot, claude → claude, else opencode). */
 function harnessCli(repoRoot: string): { cli: string; args: string[] } {
-  const root = detectHarnessRoot(repoRoot);
-  if (root === ".github") return { cli: "copilot", args: [] };
-  if (root === ".claude") return { cli: "claude", args: ["."] };
-  return { cli: "opencode", args: ["."] };
+  return harnessCliForHarness(detectHarnessRoot(repoRoot));
 }
 
 /** Staging dir for browser-uploaded PRD/research files (needed before the new repo exists). */

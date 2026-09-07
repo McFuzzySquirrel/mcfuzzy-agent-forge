@@ -1,7 +1,7 @@
 import { existsSync } from "node:fs";
-import { relative, resolve } from "node:path";
+import { resolve } from "node:path";
 
-import { runCommand, extractModelFlags, stripProviderPrefix } from "./run.ts";
+import { runCommand, extractModelFlags, stripProviderPrefix, canSelectAgentNatively } from "./run.ts";
 import type { HarnessAdapter, TaskAttemptRequest, TaskFailureKind, TaskResult } from "../types.ts";
 import { inlinePersona } from "../request.ts";
 
@@ -129,20 +129,9 @@ export class ClaudeAdapter implements HarnessAdapter {
     };
   }
 
-  /**
-   * True when the Claude Code CLI can select this agent natively: it must have
-   * a name and its file must live under the project's `.claude/agents/`
-   * directory - the only harness root the CLI scans for repo agent
-   * definitions. For `.agents`, `.github`, and `.opencode` roots the adapter
-   * falls back to inlining the persona into the prompt. Set
-   * FORGE_ENGINE_NATIVE_AGENT=0 to force the inline-persona fallback even for
-   * `.claude` agents.
-   */
-  private canSelectAgent({ agent, repoRoot }: TaskAttemptRequest): boolean {
-    if (process.env["FORGE_ENGINE_NATIVE_AGENT"] === "0") return false;
-    if (!agent.name) return false;
-    const parts = relative(repoRoot, agent.path).split(/[\\/]/);
-    return parts[0] === ".claude" && parts[1] === "agents" && parts.length > 2;
+  /** True when the Claude Code CLI can select this agent natively; see `canSelectAgentNatively`. */
+  private canSelectAgent(request: TaskAttemptRequest): boolean {
+    return canSelectAgentNatively(request, ".claude");
   }
 }
 

@@ -1,13 +1,12 @@
 import assert from "node:assert/strict";
-import test, { afterEach, beforeEach } from "node:test";
-import { mkdirSync, mkdtempSync, writeFileSync, readFileSync } from "node:fs";
-import { tmpdir } from "node:os";
+import test, { afterEach, beforeEach, type TestContext } from "node:test";
+import { mkdirSync, writeFileSync, readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 
 import { ClaudeAdapter } from "./claude-adapter.ts";
 import type { AgentDescriptor, ManifestTask, TaskResult } from "../types.ts";
 import { prepareTaskRequest } from "../request.ts";
-import { makeNodeShim } from "../test-support.ts";
+import { makeNodeShim, tempDir } from "../test-support.ts";
 
 const SUCCESS_ENVELOPE =
   '{"type":"result","subtype":"success","is_error":false,"result":"Substantive completed text response.","permission_denials":[],"session_id":"00000000-0000-4000-8000-000000000000"}';
@@ -22,8 +21,8 @@ interface Shim {
  * CLAUDE_SHIM_EXIT so each test drives a real child process. Writes are
  * synchronous so nothing is lost to the pipe when the shim exits.
  */
-function makeShim(): Shim {
-  const dir = mkdtempSync(join(tmpdir(), "forge-claude-adapter-"));
+function makeShim(t: TestContext): Shim {
+  const dir = tempDir(t, "forge-claude-adapter-");
   const argsFile = join(dir, "args.json");
   const bin = makeNodeShim(dir, "fake-claude", `
 const fs = require("fs");
@@ -62,8 +61,8 @@ function makeAgent(path: string): AgentDescriptor {
   };
 }
 
-function makeRepo(): string {
-  return mkdtempSync(join(tmpdir(), "forge-claude-repo-"));
+function makeRepo(t: TestContext): string {
+  return tempDir(t, "forge-claude-repo-");
 }
 
 function agentIn(root: string, harnessRoot: string): AgentDescriptor {
@@ -125,9 +124,9 @@ afterEach(() => {
   Object.assign(process.env, savedEnv);
 });
 
-test("passes --agent for .claude-rooted agents and omits the inline persona", async () => {
-  const root = makeRepo();
-  const shim = makeShim();
+test("passes --agent for .claude-rooted agents and omits the inline persona", async (t) => {
+  const root = makeRepo(t);
+  const shim = makeShim(t);
 
   const result = await invoke(shim, agentIn(root, ".claude"), root);
 
@@ -137,10 +136,10 @@ test("passes --agent for .claude-rooted agents and omits the inline persona", as
   assert.ok(!recordedPrompt(shim).includes("You are a Discovery Engineer"), recordedPrompt(shim));
 });
 
-test("falls back to inlining the persona for non-.claude harness roots", async () => {
+test("falls back to inlining the persona for non-.claude harness roots", async (t) => {
   for (const harnessRoot of [".github", ".opencode", ".agents"]) {
-    const root = makeRepo();
-    const shim = makeShim();
+    const root = makeRepo(t);
+    const shim = makeShim(t);
 
     const result = await invoke(shim, agentIn(root, harnessRoot), root);
 
@@ -150,9 +149,9 @@ test("falls back to inlining the persona for non-.claude harness roots", async (
   }
 });
 
-test("never passes --agent when the agent has no name", async () => {
-  const root = makeRepo();
-  const shim = makeShim();
+test("never passes --agent when the agent has no name", async (t) => {
+  const root = makeRepo(t);
+  const shim = makeShim(t);
   const agent = { ...agentIn(root, ".claude"), name: "" };
 
   await invoke(shim, agent, root);
@@ -161,9 +160,9 @@ test("never passes --agent when the agent has no name", async () => {
   assert.ok(recordedPrompt(shim).includes("You are a Discovery Engineer"));
 });
 
-test("FORGE_ENGINE_NATIVE_AGENT=0 forces the inline-persona fallback for .claude agents", async () => {
-  const root = makeRepo();
-  const shim = makeShim();
+test("FORGE_ENGINE_NATIVE_AGENT=0 forces the inline-persona fallback for .claude agents", async (t) => {
+  const root = makeRepo(t);
+  const shim = makeShim(t);
   process.env.FORGE_ENGINE_NATIVE_AGENT = "0";
 
   await invoke(shim, agentIn(root, ".claude"), root);
@@ -172,10 +171,10 @@ test("FORGE_ENGINE_NATIVE_AGENT=0 forces the inline-persona fallback for .claude
   assert.ok(recordedPrompt(shim).includes("You are a Discovery Engineer"));
 });
 
-test("prompt carries the execute-now directive and the budget in both native and inline modes", async () => {
+test("prompt carries the execute-now directive and the budget in both native and inline modes", async (t) => {
   for (const harnessRoot of [".claude", ".agents"]) {
-    const root = makeRepo();
-    const shim = makeShim();
+    const root = makeRepo(t);
+    const shim = makeShim(t);
 
     await invoke(shim, agentIn(root, harnessRoot), root, { timeoutMs: 30_000, maxRetries: 3 });
 
@@ -186,9 +185,9 @@ test("prompt carries the execute-now directive and the budget in both native and
   }
 });
 
-test("strips the provider prefix from the model before passing --model", async () => {
-  const root = makeRepo();
-  const shim = makeShim();
+test("strips the provider prefix from the model before passing --model", async (t) => {
+  const root = makeRepo(t);
+  const shim = makeShim(t);
 
   await invoke(shim, agentIn(root, ".claude"), root, { task: makeTask({ model: "anthropic/claude-sonnet-5" }) });
 
@@ -196,9 +195,9 @@ test("strips the provider prefix from the model before passing --model", async (
   assert.equal(args[args.indexOf("--model") + 1], "claude-sonnet-5");
 });
 
-test("always passes JSON output and bypassPermissions, and folds CLAUDE_EXTRA_FLAGS in once", async () => {
-  const root = makeRepo();
-  const shim = makeShim();
+test("always passes JSON output and bypassPermissions, and folds CLAUDE_EXTRA_FLAGS in once", async (t) => {
+  const root = makeRepo(t);
+  const shim = makeShim(t);
   process.env.CLAUDE_EXTRA_FLAGS = "--model opus --bare";
   const adapter = makeAdapter(shim);
 
@@ -216,9 +215,9 @@ test("always passes JSON output and bypassPermissions, and folds CLAUDE_EXTRA_FL
   assert.equal(args[args.indexOf("--model") + 1], "opus");
 });
 
-test("success envelope yields the result text, existing output files, and a session log line", async () => {
-  const root = makeRepo();
-  const shim = makeShim();
+test("success envelope yields the result text, existing output files, and a session log line", async (t) => {
+  const root = makeRepo(t);
+  const shim = makeShim(t);
   const scanner = join(root, "src", "discovery", "scanner.ts");
   mkdirSync(dirname(scanner), { recursive: true });
   writeFileSync(scanner, "export const scan = () => [];\n");
@@ -236,9 +235,9 @@ test("success envelope yields the result text, existing output files, and a sess
   );
 });
 
-test("a not-logged-in error envelope is a configuration failure", async () => {
-  const root = makeRepo();
-  const shim = makeShim();
+test("a not-logged-in error envelope is a configuration failure", async (t) => {
+  const root = makeRepo(t);
+  const shim = makeShim(t);
   stubEnvelope({ type: "result", subtype: "success", is_error: true, result: "Not logged in · Please run /login", session_id: "s1" });
 
   const result = await invoke(shim, agentIn(root, ".claude"), root);
@@ -248,15 +247,15 @@ test("a not-logged-in error envelope is a configuration failure", async () => {
   assert.equal(result.errorMessage, "Not logged in · Please run /login");
 });
 
-test("api_error_status decides between retryable and configuration", async () => {
+test("api_error_status decides between retryable and configuration", async (t) => {
   const cases: Array<{ status: number; kind: string }> = [
     { status: 429, kind: "retryable" },
     { status: 403, kind: "configuration" },
     { status: 503, kind: "retryable" },
   ];
   for (const { status, kind } of cases) {
-    const root = makeRepo();
-    const shim = makeShim();
+    const root = makeRepo(t);
+    const shim = makeShim(t);
     stubEnvelope({
       type: "result", subtype: "error_during_execution", is_error: true,
       terminal_reason: "api_error", api_error_status: status, result: `API error ${status}`,
@@ -269,9 +268,9 @@ test("api_error_status decides between retryable and configuration", async () =>
   }
 });
 
-test("error_during_execution without an API status is retryable", async () => {
-  const root = makeRepo();
-  const shim = makeShim();
+test("error_during_execution without an API status is retryable", async (t) => {
+  const root = makeRepo(t);
+  const shim = makeShim(t);
   stubEnvelope({ type: "result", subtype: "error_during_execution", is_error: true, terminal_reason: "api_error", api_error_status: null, result: "" });
 
   const result = await invoke(shim, agentIn(root, ".claude"), root);
@@ -281,9 +280,9 @@ test("error_during_execution without an API status is retryable", async () => {
   assert.equal(result.errorMessage, "claude error_during_execution (api_error)");
 });
 
-test("error_max_turns is a configuration failure", async () => {
-  const root = makeRepo();
-  const shim = makeShim();
+test("error_max_turns is a configuration failure", async (t) => {
+  const root = makeRepo(t);
+  const shim = makeShim(t);
   stubEnvelope({ type: "result", subtype: "error_max_turns", is_error: true, terminal_reason: "max_turns" });
 
   const result = await invoke(shim, agentIn(root, ".claude"), root);
@@ -293,9 +292,9 @@ test("error_max_turns is a configuration failure", async () => {
   assert.equal(result.errorMessage, "claude error_max_turns (max_turns)");
 });
 
-test("permission denials under bypassPermissions are a configuration failure naming every tool", async () => {
-  const root = makeRepo();
-  const shim = makeShim();
+test("permission denials under bypassPermissions are a configuration failure naming every tool", async (t) => {
+  const root = makeRepo(t);
+  const shim = makeShim(t);
   stubEnvelope({
     type: "result", subtype: "success", is_error: false, result: "done",
     permission_denials: [{ tool_name: "Write" }, { tool_name: "Bash" }, { tool_name: "Bash" }],
@@ -309,9 +308,9 @@ test("permission denials under bypassPermissions are a configuration failure nam
   assert.equal(result.errorMessage, "claude denied tool calls under bypassPermissions: Write, Bash");
 });
 
-test("a denial with no tool_name is still a configuration failure", async () => {
-  const root = makeRepo();
-  const shim = makeShim();
+test("a denial with no tool_name is still a configuration failure", async (t) => {
+  const root = makeRepo(t);
+  const shim = makeShim(t);
   stubEnvelope({
     type: "result", subtype: "success", is_error: false, result: "done",
     permission_denials: [{}], session_id: "s3",
@@ -324,9 +323,9 @@ test("a denial with no tool_name is still a configuration failure", async () => 
   assert.equal(result.errorMessage, "claude denied tool calls under bypassPermissions: unnamed tool");
 });
 
-test("a nonzero exit with no envelope is a configuration failure carrying stderr", async () => {
-  const root = makeRepo();
-  const shim = makeShim();
+test("a nonzero exit with no envelope is a configuration failure carrying stderr", async (t) => {
+  const root = makeRepo(t);
+  const shim = makeShim(t);
   process.env.CLAUDE_SHIM_STDOUT = "";
   process.env.CLAUDE_SHIM_STDERR = "--agent 'x' not found\n";
   process.env.CLAUDE_SHIM_EXIT = "1";
@@ -339,9 +338,9 @@ test("a nonzero exit with no envelope is a configuration failure carrying stderr
   assert.equal(result.stderr, "--agent 'x' not found\n");
 });
 
-test("a clean exit with unparseable stdout is an exception", async () => {
-  const root = makeRepo();
-  const shim = makeShim();
+test("a clean exit with unparseable stdout is an exception", async (t) => {
+  const root = makeRepo(t);
+  const shim = makeShim(t);
   process.env.CLAUDE_SHIM_STDOUT = "Welcome to Claude Code!\nnot json at all";
 
   const result = await invoke(shim, agentIn(root, ".claude"), root);
@@ -352,8 +351,8 @@ test("a clean exit with unparseable stdout is an exception", async () => {
   assert.ok(result.errorMessage?.includes("not json at all"), result.errorMessage);
 });
 
-test("a spawn failure passes the runCommand failure kind through unchanged", async () => {
-  const root = makeRepo();
+test("a spawn failure passes the runCommand failure kind through unchanged", async (t) => {
+  const root = makeRepo(t);
   process.env.CLAUDE_BIN = join(root, "no-such-claude-binary");
   const adapter = new ClaudeAdapter();
 
@@ -364,9 +363,9 @@ test("a spawn failure passes the runCommand failure kind through unchanged", asy
   assert.ok(result.errorMessage);
 });
 
-test("a JSON object that is not a result envelope counts as no envelope", async () => {
-  const root = makeRepo();
-  const shim = makeShim();
+test("a JSON object that is not a result envelope counts as no envelope", async (t) => {
+  const root = makeRepo(t);
+  const shim = makeShim(t);
   process.env.CLAUDE_SHIM_STDOUT = '{"type":"system","subtype":"init"}';
 
   const result = await invoke(shim, agentIn(root, ".claude"), root);
@@ -376,9 +375,9 @@ test("a JSON object that is not a result envelope counts as no envelope", async 
   assert.ok(result.errorMessage?.startsWith("claude returned no JSON result envelope"), result.errorMessage);
 });
 
-test("a banner ahead of the envelope does not lose it", async () => {
-  const root = makeRepo();
-  const shim = makeShim();
+test("a banner ahead of the envelope does not lose it", async (t) => {
+  const root = makeRepo(t);
+  const shim = makeShim(t);
   process.env.CLAUDE_SHIM_STDOUT = `Warning: config\n${SUCCESS_ENVELOPE}`;
 
   const result = await invoke(shim, agentIn(root, ".claude"), root);
@@ -387,9 +386,9 @@ test("a banner ahead of the envelope does not lose it", async () => {
   assert.equal(result.stdout, "Substantive completed text response.");
 });
 
-test("a nonzero exit alongside a success envelope is retryable", async () => {
-  const root = makeRepo();
-  const shim = makeShim();
+test("a nonzero exit alongside a success envelope is retryable", async (t) => {
+  const root = makeRepo(t);
+  const shim = makeShim(t);
   process.env.CLAUDE_SHIM_EXIT = "2";
 
   const result = await invoke(shim, agentIn(root, ".claude"), root);
@@ -399,9 +398,9 @@ test("a nonzero exit alongside a success envelope is retryable", async () => {
   assert.ok(result.errorMessage?.includes("exited with status 2 despite a success envelope"), result.errorMessage);
 });
 
-test("is_error wins over a success subtype", async () => {
-  const root = makeRepo();
-  const shim = makeShim();
+test("is_error wins over a success subtype", async (t) => {
+  const root = makeRepo(t);
+  const shim = makeShim(t);
   stubEnvelope({ type: "result", subtype: "success", is_error: true, terminal_reason: "completed", result: "Something went wrong." });
 
   const result = await invoke(shim, agentIn(root, ".claude"), root);

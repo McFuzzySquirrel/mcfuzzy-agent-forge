@@ -1,21 +1,20 @@
 import assert from "node:assert/strict";
-import test from "node:test";
-import { mkdtempSync, writeFileSync, readFileSync } from "node:fs";
-import { tmpdir } from "node:os";
+import test, { type TestContext } from "node:test";
+import { writeFileSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 
 import { OpenCodeAdapter } from "./opencode-adapter.ts";
 import type { AgentDescriptor, ManifestTask } from "../types.ts";
 import { prepareTaskRequest } from "../request.ts";
-import { makeNodeShim } from "../test-support.ts";
+import { makeNodeShim, tempDir } from "../test-support.ts";
 
 interface Shim {
   bin: string;
   argsFile: string;
 }
 
-function makeShim(): Shim {
-  const dir = mkdtempSync(join(tmpdir(), "forge-opencode-adapter-"));
+function makeShim(t: TestContext): Shim {
+  const dir = tempDir(t, "forge-opencode-adapter-");
   const argsFile = join(dir, "args.json");
   const bin = makeNodeShim(dir, "fake-opencode", `
 const fs = require("fs");
@@ -64,10 +63,10 @@ async function invokeWith(shim: Shim, agent: AgentDescriptor, root: string): Pro
   }
 }
 
-test("passes --agent for .opencode-rooted agents and omits the inline persona", async () => {
-  const root = mkdtempSync(join(tmpdir(), "forge-opencode-repo-"));
+test("passes --agent for .opencode-rooted agents and omits the inline persona", async (t) => {
+  const root = tempDir(t, "forge-opencode-repo-");
   const agent = makeAgent(join(root, ".opencode", "agents", "discovery-engineer.md"));
-  const shim = makeShim();
+  const shim = makeShim(t);
 
   await invokeWith(shim, agent, root);
 
@@ -77,10 +76,10 @@ test("passes --agent for .opencode-rooted agents and omits the inline persona", 
   assert.ok(!recorded.some((arg) => arg.includes("You are a Discovery Engineer")));
 });
 
-test("preserves the provider prefix for OpenCode model IDs", async () => {
-  const root = mkdtempSync(join(tmpdir(), "forge-opencode-model-repo-"));
+test("preserves the provider prefix for OpenCode model IDs", async (t) => {
+  const root = tempDir(t, "forge-opencode-model-repo-");
   const agent = { ...makeAgent(join(root, ".opencode", "agents", "discovery-engineer.md")), model: "github-copilot/gpt-5.6-luna" };
-  const shim = makeShim();
+  const shim = makeShim(t);
 
   await invokeWith(shim, agent, root);
 
@@ -90,10 +89,10 @@ test("preserves the provider prefix for OpenCode model IDs", async () => {
   assert.equal(recorded[modelIndex + 1], "github-copilot/gpt-5.6-luna");
 });
 
-test("falls back to inlining the persona for non-.opencode harness roots", async () => {
-  const root = mkdtempSync(join(tmpdir(), "forge-agents-repo-"));
+test("falls back to inlining the persona for non-.opencode harness roots", async (t) => {
+  const root = tempDir(t, "forge-agents-repo-");
   const agent = makeAgent(join(root, ".agents", "agents", "discovery-engineer.md"));
-  const shim = makeShim();
+  const shim = makeShim(t);
 
   await invokeWith(shim, agent, root);
 
@@ -102,10 +101,10 @@ test("falls back to inlining the persona for non-.opencode harness roots", async
   assert.ok(recorded.some((arg) => arg.includes("You are a Discovery Engineer")));
 });
 
-test("never passes --agent when the agent has no name", async () => {
-  const root = mkdtempSync(join(tmpdir(), "forge-noname-repo-"));
+test("never passes --agent when the agent has no name", async (t) => {
+  const root = tempDir(t, "forge-noname-repo-");
   const agent = { ...makeAgent(join(root, ".opencode", "agents", "unnamed.md")), name: "" };
-  const shim = makeShim();
+  const shim = makeShim(t);
 
   await invokeWith(shim, agent, root);
 
@@ -114,10 +113,10 @@ test("never passes --agent when the agent has no name", async () => {
   assert.ok(recorded.some((arg) => arg.includes("You are a Discovery Engineer")));
 });
 
-test("prompt includes the execute-now directive so agents do not just acknowledge", async () => {
-  const root = mkdtempSync(join(tmpdir(), "forge-directive-repo-"));
+test("prompt includes the execute-now directive so agents do not just acknowledge", async (t) => {
+  const root = tempDir(t, "forge-directive-repo-");
   const agent = makeAgent(join(root, ".agents", "agents", "discovery-engineer.md"));
-  const shim = makeShim();
+  const shim = makeShim(t);
 
   await invokeWith(shim, agent, root);
 
@@ -127,10 +126,10 @@ test("prompt includes the execute-now directive so agents do not just acknowledg
   assert.ok(prompt.includes("list the files you created or changed"), prompt);
 });
 
-test("prompt surfaces the per-task timeout and retry budget when provided", async () => {
-  const root = mkdtempSync(join(tmpdir(), "forge-budget-repo-"));
+test("prompt surfaces the per-task timeout and retry budget when provided", async (t) => {
+  const root = tempDir(t, "forge-budget-repo-");
   const agent = makeAgent(join(root, ".agents", "agents", "discovery-engineer.md"));
-  const shim = makeShim();
+  const shim = makeShim(t);
   const original = process.env.OPENCODE_BIN;
   process.env.OPENCODE_BIN = shim.bin;
   try {
@@ -148,10 +147,10 @@ test("prompt surfaces the per-task timeout and retry budget when provided", asyn
   assert.ok(prompt.includes("retried up to 2 time(s)"), prompt);
 });
 
-test("prompt includes the normalized default budget when no overrides are provided", async () => {
-  const root = mkdtempSync(join(tmpdir(), "forge-nobudget-repo-"));
+test("prompt includes the normalized default budget when no overrides are provided", async (t) => {
+  const root = tempDir(t, "forge-nobudget-repo-");
   const agent = makeAgent(join(root, ".agents", "agents", "discovery-engineer.md"));
-  const shim = makeShim();
+  const shim = makeShim(t);
 
   await invokeWith(shim, agent, root);
 
@@ -161,10 +160,10 @@ test("prompt includes the normalized default budget when no overrides are provid
   assert.ok(prompt.includes("retried up to 0 time(s)"), prompt);
 });
 
-test("FORGE_ENGINE_NATIVE_AGENT=0 forces the inline-persona fallback for .opencode agents", async () => {
-  const root = mkdtempSync(join(tmpdir(), "forge-nonative-repo-"));
+test("FORGE_ENGINE_NATIVE_AGENT=0 forces the inline-persona fallback for .opencode agents", async (t) => {
+  const root = tempDir(t, "forge-nonative-repo-");
   const agent = makeAgent(join(root, ".opencode", "agents", "discovery-engineer.md"));
-  const shim = makeShim();
+  const shim = makeShim(t);
   const original = process.env.FORGE_ENGINE_NATIVE_AGENT;
   process.env.FORGE_ENGINE_NATIVE_AGENT = "0";
   try {

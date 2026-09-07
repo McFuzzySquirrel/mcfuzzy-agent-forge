@@ -431,14 +431,13 @@ default assumption) and still keep human review between stages:
 1. **Idea → PRD.** With no PRD yet, Step 8 asks *"Generate the PRD from
    `docs/IDEA.md` automatically now?"*. Answering yes runs `forge-auto-build-prd`
    headless (via `opencode run --auto`, `copilot -p --yolo`, or `claude -p`),
-   producing
-   `docs/PRD.md` (plus `docs/product-vision.md` + `docs/features/*.md` when it
-   qualifies for decomposition), committed as `docs: add auto-drafted PRD`.
-   Review it, then choose: draft the team now, launch the harness CLI to be
-   interviewed/refine interactively, or stop.
+   producing `docs/PRD.md` (plus `docs/product-vision.md` + `docs/features/*.md`
+   when it qualifies for decomposition), committed as
+   `docs: add auto-drafted PRD`. Review it, then choose: draft the team now,
+   launch the harness CLI to be interviewed/refine interactively, or stop.
 2. **PRD → team.** With a PRD present, Step 8 asks *"Generate the agent team
    from the PRD automatically now?"*. Answering yes runs `forge-build-agent-team`
-   headless,    producing the agent files and ownership metadata, committed as
+   headless, producing the agent files and ownership metadata, committed as
    `feat: generate auto-drafted agent team`. When a decomposed
     layout exists (`docs/product-vision.md` + `docs/features/*.md`), the team is
     built **from the feature documents** (Vision + Features mode); otherwise it is
@@ -945,10 +944,10 @@ or autonomously:
 ```
 
 `forge-auto-build` remains available as the **terminal/headless fast-path** -
-the launcher's `--headless` / auto-draft drives it via `opencode run --auto`
-(queued as `/forge-auto-build Use docs/PRD.md as the project PRD. GO
-[--workflow-engine]`). It requires a PRD representation to exist and never
-generates one.
+the launcher's `--headless` / auto-draft drives it via `opencode run --auto`,
+`copilot -p`, or `claude -p` (queued as `/forge-auto-build Use docs/PRD.md as
+the project PRD. GO [--workflow-engine]`). It requires a PRD representation to
+exist and never generates one.
 
 ---
 

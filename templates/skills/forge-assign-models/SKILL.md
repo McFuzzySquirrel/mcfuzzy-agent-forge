@@ -1,6 +1,6 @@
 ---
 name: forge-assign-models
-description: "Discover the user's available OpenCode, Copilot, BYOK, and local Ollama models, enrich their capabilities with BenchLM evidence, classify generated agents, and recommend or apply per-agent model assignments. Use after `forge-build-agent-team` or whenever the team changes."
+description: "Discover the user's available OpenCode, Copilot, Claude Code, BYOK, and local Ollama models, enrich their capabilities with BenchLM evidence, classify generated agents, and recommend or apply per-agent model assignments. Use after `forge-build-agent-team` or whenever the team changes."
 ---
 
 # Skill: Assign Models to a Generated Agent Team
@@ -45,10 +45,10 @@ Default to **Recommend** if no mode is specified.
 ### Step 1: Discover the Available Model Inventory
 
 Build a single inventory of models the user can invoke. Never invent models.
-The OpenCode and Copilot CLI probes below are mandatory discovery actions, not
-optional suggestions. Execute both commands before inspecting Ollama or
-producing a recommendation. If a command is unavailable or exits non-zero,
-record that result and continue with the other sources.
+The OpenCode, Copilot and Claude Code CLI probes below are mandatory discovery
+actions, not optional suggestions. Execute all three commands before
+inspecting Ollama or producing a recommendation. If a command is unavailable
+or exits non-zero, record that result and continue with the other sources.
 
 #### 1a. OpenCode CLI
 
@@ -79,7 +79,27 @@ submit `/model list` or another generative prompt for inventory discovery.
 If no authoritative IDs are exposed, preserve the diagnostics and fail closed
 for explicit model selections; inherited runner defaults remain valid.
 
-#### 1c. Local Ollama
+#### 1c. Claude Code CLI
+
+Run this built-in slash command exactly, in print mode, when the `claude`
+executable is available:
+
+```bash
+claude -p "/model" --bare --output-format json
+```
+
+Capture its exit status, stdout, and stderr under `claude_cli.diagnostics`.
+Stdout is a single JSON object. `is_error: true` means the probe failed,
+typically because the user is not logged in; record that result under
+`claude_cli.diagnostics` with `available: false` and continue with the other
+sources. Otherwise mine the comma-separated list after `Available:` in the
+`result` text for the accepted aliases, drop `default` and `best` because they
+resolve to a different model per account, and write the remainder as normalized
+IDs under `claude_cli.models`. Never guess additional model IDs: the inventory
+holds exactly what `/model` lists, so a full model ID that is not listed is not
+assignable.
+
+#### 1d. Local Ollama
 
 Default to `http://localhost:11434` (honor `OLLAMA_HOST` if set).
 1. `GET /api/tags` - capture `name`, `size`, `modified_at`.
@@ -89,21 +109,21 @@ Default to `http://localhost:11434` (honor `OLLAMA_HOST` if set).
 
 If Ollama is unreachable, record `{ "ollama": { "available": false, "reason": "..." } }` and continue.
 
-#### 1d. Normalize CLI model output
+#### 1e. Normalize CLI model output
 
 Parse output line-by-line and strip headings, bullets, numbering, table borders, quotes, backticks, provider labels, and trailing annotations such as `(recommended)` or `[available]`. Preserve provider-qualified IDs when they are part of the actual identifier, such as `openai/gpt-5`. Reject empty or clearly non-model lines, deduplicate case-insensitively, and retain the canonical spelling from the source. Store raw output only under diagnostics; use normalized IDs everywhere else. If a line is ambiguous, mark it unverified rather than guessing.
 
 Examples: `OpenAI: gpt-5` becomes `gpt-5`; `Anthropic - claude-sonnet-4 (recommended)` becomes `claude-sonnet-4`; `openai/gpt-5` remains `openai/gpt-5`.
 
-#### 1e. BYOK Provider
+#### 1f. BYOK Provider
 
 If `COPILOT_PROVIDER_BASE_URL` is set: `GET {base_url}/v1/models`. Capture `id` and `context_length`. On 401/403/404, record the reason and skip.
 
-#### 1f. BenchLM capability enrichment
+#### 1g. BenchLM capability enrichment
 
-For each normalized model, query BenchLM's public model/leaderboard data when available and attach the model URL, overall score, agentic/tool-use score, coding score, reasoning score, context length, evidence status, and retrieval timestamp. BenchLM is capability evidence only: a model is assignable only if OpenCode, Copilot, BYOK, or Ollama discovered it. Unmatched models remain usable with `capabilities: "unverified"`; an unavailable BenchLM response must not discard a discovered model.
+For each normalized model, query BenchLM's public model/leaderboard data when available and attach the model URL, overall score, agentic/tool-use score, coding score, reasoning score, context length, evidence status, and retrieval timestamp. BenchLM is capability evidence only: a model is assignable only if OpenCode, Copilot, Claude Code, BYOK, or Ollama discovered it. Unmatched models remain usable with `capabilities: "unverified"`; an unavailable BenchLM response must not discard a discovered model.
 
-#### 1g. Persist the Inventory
+#### 1h. Persist the Inventory
 
 Write `docs/research/model-inventory.json`. Load `references/model-inventory-schema.md` for the canonical JSON shape. Adapt to what was actually discovered; omit empty sections.
 

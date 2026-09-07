@@ -1,7 +1,9 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { readFileSync } from "node:fs";
-import { runCommand } from "./run.ts";
+import { join } from "node:path";
+import { canSelectAgentNatively, runCommand } from "./run.ts";
+import type { AgentDescriptor } from "../types.ts";
 
 const options = { cwd: process.cwd(), timeoutMs: 5000, maxBufferBytes: 1024 };
 
@@ -105,5 +107,44 @@ test("termination settlement stays bounded when an escaped descendant retains ou
     assert.ok(Date.now() - started < 2500, "inherited pipes must not keep the promise open indefinitely");
   } finally {
     if (descendantPid && isRunning(descendantPid)) process.kill(descendantPid, "SIGKILL");
+  }
+});
+
+function agentAt(root: string, harnessRoot: string, name = "discovery-engineer"): AgentDescriptor {
+  return {
+    name,
+    description: "Discovery engineer",
+    path: join(root, harnessRoot, "agents", "discovery-engineer.md"),
+    expertise: [],
+    collaboration: [],
+    constraints: [],
+    rawBody: "You are a Discovery Engineer.",
+  };
+}
+
+test("native agent selection accepts an agent under the harness's own agents directory", () => {
+  const repoRoot = join(process.cwd(), "repo");
+  assert.equal(canSelectAgentNatively({ agent: agentAt(repoRoot, ".claude"), repoRoot }, ".claude"), true);
+});
+
+test("native agent selection rejects an agent rooted at a different harness", () => {
+  const repoRoot = join(process.cwd(), "repo");
+  assert.equal(canSelectAgentNatively({ agent: agentAt(repoRoot, ".claude"), repoRoot }, ".github"), false);
+});
+
+test("native agent selection rejects an agent with no name", () => {
+  const repoRoot = join(process.cwd(), "repo");
+  assert.equal(canSelectAgentNatively({ agent: agentAt(repoRoot, ".claude", ""), repoRoot }, ".claude"), false);
+});
+
+test("FORGE_ENGINE_NATIVE_AGENT=0 forces the inline-persona fallback for every harness", () => {
+  const repoRoot = join(process.cwd(), "repo");
+  const saved = process.env["FORGE_ENGINE_NATIVE_AGENT"];
+  process.env["FORGE_ENGINE_NATIVE_AGENT"] = "0";
+  try {
+    assert.equal(canSelectAgentNatively({ agent: agentAt(repoRoot, ".claude"), repoRoot }, ".claude"), false);
+  } finally {
+    if (saved === undefined) delete process.env["FORGE_ENGINE_NATIVE_AGENT"];
+    else process.env["FORGE_ENGINE_NATIVE_AGENT"] = saved;
   }
 });

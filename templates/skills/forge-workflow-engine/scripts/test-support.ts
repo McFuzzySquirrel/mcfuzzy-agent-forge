@@ -1,5 +1,7 @@
-import { writeFileSync } from "node:fs";
+import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
 import { join } from "node:path";
+import type { TestContext } from "node:test";
 
 /** Exercise the same executable/shim path as an npm-installed CLI on each OS. */
 export function makeNodeShim(directory: string, name: string, body: string): string {
@@ -9,4 +11,11 @@ export function makeNodeShim(directory: string, name: string, body: string): str
   const command = join(directory, `${name}.cmd`);
   writeFileSync(command, `@echo off\r\n"${process.execPath}" "${script}" %*\r\n`);
   return command;
+}
+
+/** A temp directory removed when the test that made it finishes. */
+export function tempDir(t: TestContext, prefix: string): string {
+  const dir = mkdtempSync(join(tmpdir(), prefix));
+  t.after(() => rmSync(dir, { recursive: true, force: true }));
+  return dir;
 }

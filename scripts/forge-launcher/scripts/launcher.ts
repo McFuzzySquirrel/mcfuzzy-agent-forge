@@ -4,6 +4,7 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { bootstrap, repositoryLogFile } from "./bootstrap.ts";
 import { upsertProject } from "./console/paths.ts";
+import { authoringRunnerForHarness, engineHarnessForHarness, harnessCliForHarness } from "./console/dashboard/harness-rules.ts";
 import { command, fail, header, info, link, ok, out, printLogTail, runCommand, runLogged, runWithHeartbeat, spawnDetached, step, warn } from "./format.ts";
 import { detectRepoRoot, expandPath, resolveInputFile } from "./paths.ts";
 import { prompt as defaultPrompt, promptMultiline as defaultPromptMultiline, promptPath as defaultPromptPath, promptPathLoop as defaultPromptPathLoop, promptSelect as defaultPromptSelect, promptYesNo as defaultPromptYesNo, prompts, withPromptSession } from "./prompts.ts";
@@ -63,9 +64,7 @@ export interface LauncherOptions extends AuthoringOptions {
 type HarnessName = "github" | "opencode" | "claude" | "agents";
 
 export function defaultEngineHarness(harness: HarnessName): string {
-  if (harness === "github") return "copilot";
-  if (harness === "claude") return "claude";
-  return "opencode";
+  return engineHarnessForHarness(harness);
 }
 
 interface LauncherState {
@@ -521,7 +520,7 @@ function headlessRunner(): AuthoringRunner {
     }
     return runner;
   }
-  return state.harness === "github" ? "copilot" : state.harness === "claude" ? "claude" : "opencode";
+  return authoringRunnerForHarness(state.harness);
 }
 
 async function headlessCmdFor(msg: string): Promise<string> {
@@ -2282,8 +2281,8 @@ async function openCliFor(cmd: string): Promise<void> {
     out("    Continue with forge-launcher resume to select the next stage's model independently.");
     return;
   }
-  const cli = state.harness === "github" ? "copilot" : state.harness === "claude" ? "claude" : "opencode";
-  const launched = await launchCliInTerminal(cli, state.repoDir, state.harness === "github" ? [] : ["."]);
+  const { cli, args } = harnessCliForHarness(state.harness);
+  const launched = await launchCliInTerminal(cli, state.repoDir, args);
   if (launched) ok(`${cli} launched in a separate terminal.`);
   else {
     warn(`${cli} did not open automatically. Run:`);

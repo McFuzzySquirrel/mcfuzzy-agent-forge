@@ -51,6 +51,12 @@ The canonical shape for `docs/research/model-inventory.json`:
     "models": [],
     "diagnostics": { "raw_output": "", "error": null }
   },
+  "claude_cli": {
+    "available": true,
+    "command": "claude -p \"/model\" --bare --output-format json",
+    "models": [],
+    "diagnostics": { "raw_output": "", "error": null }
+  },
   "byok_provider": {
     "endpoint": "http://localhost:11434",
     "models": []

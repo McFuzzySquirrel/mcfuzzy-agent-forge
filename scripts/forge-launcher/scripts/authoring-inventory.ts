@@ -130,20 +130,24 @@ export function parseClaudeModelOutput(text: string): string[] {
   if (envelope.is_error === true) throw new Error(`claude model discovery failed: ${String(envelope.result ?? "unknown error")}`);
   // Whitespace runs collapse to single spaces so a list wrapped across lines is not truncated.
   const result = (typeof envelope.result === "string" ? envelope.result : "").replace(/\s+/g, " ");
-  const start = result.indexOf("Available:");
-  if (start < 0) return [];
-  const sentence = result.slice(start + "Available:".length)
-    .split(", or a full model ID")[0]!
-    .split(/\.(?:\s|$)/)[0]!;
-  const ids: string[] = [];
-  for (const raw of sentence.split(",")) {
-    // "default" and "best" resolve differently per account, so they are never stable choices.
-    const entry = raw.trim();
-    if (!entry || entry === "default" || entry === "best") continue;
-    if (!/^[a-z0-9][a-z0-9.\-]*(?:\[[0-9a-z]+\])?$/i.test(entry)) continue;
-    if (!ids.includes(entry)) ids.push(entry);
+  const marker = "Available:";
+  // Every occurrence is tried in order: an earlier incidental "Available:" in
+  // the prose must not shadow the real alias list further along.
+  for (let start = result.indexOf(marker); start >= 0; start = result.indexOf(marker, start + marker.length)) {
+    const sentence = result.slice(start + marker.length)
+      .split(", or a full model ID")[0]!
+      .split(/\.(?:\s|$)/)[0]!;
+    const ids: string[] = [];
+    for (const raw of sentence.split(",")) {
+      // "default" and "best" resolve differently per account, so they are never stable choices.
+      const entry = raw.trim();
+      if (!entry || entry === "default" || entry === "best") continue;
+      if (!/^[a-z0-9][a-z0-9.\-]*(?:\[[0-9a-z]+\])?$/i.test(entry)) continue;
+      if (!ids.includes(entry)) ids.push(entry);
+    }
+    if (ids.length > 0) return ids;
   }
-  return ids;
+  return [];
 }
 
 const PROBE_ARGS: Record<Exclude<AuthoringRunner, "stub">, string[]> = {
