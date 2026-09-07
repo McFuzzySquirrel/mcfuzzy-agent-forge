@@ -34,7 +34,7 @@ Usage:
   forge-launcher draft-team [--repo <path>]     # headless: PRD → agent team
   forge-launcher draft-skills [--repo <path>]   # headless: skill candidates → project skills
   forge-launcher authoring-config [--repo <path>] [--prd-model <id|inherit>] [--team-model <id|inherit>] [--skills-model <id|inherit>]
-  forge-launcher authoring-models [--repo <path>] [--runner copilot|opencode] [--refresh]
+  forge-launcher authoring-models [--repo <path>] [--runner copilot|opencode|claude] [--refresh]
   forge-launcher feature-prd [--repo <path>] [--prompt <text>] # author in docs/features/
   forge-launcher feature-increment [--repo <path>] [--prompt <text>] [--run] # author, update team, compile, optionally run
   forge-launcher compile-manifest [--repo <path>]  # headless: team → execution manifest
@@ -91,7 +91,7 @@ async function main(): Promise<number> {
 
   if (args[0] === "authoring-config" || args[0] === "authoring-models") {
     let repo = detectRepoRoot();
-    let runner: "copilot" | "opencode" = "opencode";
+    let runner: "copilot" | "opencode" | "claude" = "opencode";
     let refresh = false;
     for (let i = 1; i < args.length; i++) {
       if (args[i] === "--repo") {
@@ -100,7 +100,7 @@ async function main(): Promise<number> {
         repo = path.resolve(value);
       } else if (args[i] === "--runner") {
         const value = args[++i];
-        if (value !== "copilot" && value !== "opencode") throw new Error("--runner requires copilot or opencode.");
+        if (value !== "copilot" && value !== "opencode" && value !== "claude") throw new Error("--runner requires copilot, opencode, or claude.");
         runner = value;
       } else if (args[i] === "--refresh") refresh = true;
       else throw new Error(`Unknown option: ${args[i]}`);

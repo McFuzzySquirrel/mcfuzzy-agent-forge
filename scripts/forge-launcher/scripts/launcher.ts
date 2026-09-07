@@ -510,10 +510,12 @@ function headlessSkillMsgForSession(): string {
 function headlessRunner(): AuthoringRunner {
   const runner = state.env.FORGE_RUN_WITH;
   if (runner) {
-    if (runner !== "copilot" && runner !== "opencode" && runner !== "stub") throw new Error(`Unsupported authoring runner: ${runner}. Use copilot or opencode.`);
+    if (runner !== "copilot" && runner !== "opencode" && runner !== "claude" && runner !== "stub") {
+      throw new Error(`Unsupported authoring runner: ${runner}. Use copilot, opencode, or claude.`);
+    }
     return runner;
   }
-  return state.harness === "github" ? "copilot" : "opencode";
+  return state.harness === "github" ? "copilot" : state.harness === "claude" ? "claude" : "opencode";
 }
 
 async function headlessCmdFor(msg: string): Promise<string> {
@@ -615,7 +617,7 @@ async function runSkillHeadless(msg: string, opts: LauncherOptions): Promise<boo
     });
     throw error;
   }
-  const args = authoringArgv(invocation, state.repoDir, msg, debugMode() && runner === "opencode" ? ["--print-logs"] : []);
+  const args = authoringArgv(invocation, state.repoDir, msg, debugMode() && runner === "opencode" ? ["--print-logs"] : debugMode() && runner === "claude" ? ["--debug"] : []);
   invocation = { ...invocation, argv: args, skill: skillName };
   const cmdStr = `${runner} ${args.map((arg) => /^[a-zA-Z0-9_-]+$/.test(arg) ? arg : JSON.stringify(arg)).join(" ")}`;
   command(cmdStr);

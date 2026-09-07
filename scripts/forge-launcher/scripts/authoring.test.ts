@@ -6,7 +6,7 @@ import path from "node:path";
 import { execFileSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
 import { loadAuthoringConfig, saveAuthoringConfig, selectAuthoringModel, writeAuthoringJson } from "./authoring-config.ts";
-import { authoringArgv, parseModelInventoryOutput, refreshAuthoringInventory, resolveAuthoringModel } from "./authoring-inventory.ts";
+import { authoringArgv, inventoryForRunner, parseClaudeModelOutput, parseModelInventoryOutput, readAuthoringInventory, refreshAuthoringInventory, resolveAuthoringModel, type AuthoringRunner } from "./authoring-inventory.ts";
 import { authoringReadiness, authoringStageIsCurrent, fingerprintFiles, readAuthoringState, readSkillCandidates } from "./authoring-state.ts";
 import { runDraftPrd, runDraftSkills, runDraftTeam, runFeatureIncrement, runLauncher, runResume, type LauncherOptions } from "./launcher.ts";
 import { createSessionScope } from "./launcher-session.ts";
@@ -36,6 +36,21 @@ function inventory(repo: string): void {
     last_verified: new Date().toISOString(),
     copilot_cli: { models: [{ id: "prd-1" }, { id: "team-2" }, { id: "skills-3" }] },
     opencode_cli: { models: [{ id: "anthropic/team-2" }] },
+  });
+}
+const CLAUDE_MODEL_RESULT = "Current model: `Haiku 4.5`\nUsage: /model <name>. Available: sonnet, opus, haiku, fable, best, sonnet[1m], opus[1m], fable[1m], opusplan, default, or a full model ID.";
+const CLAUDE_ENVELOPE = JSON.stringify({ type: "result", is_error: false, result: CLAUDE_MODEL_RESULT });
+const CLAUDE_MODEL_IDS = ["sonnet", "opus", "haiku", "fable", "sonnet[1m]", "opus[1m]", "fable[1m]", "opusplan"];
+async function claudeProbe(runner: AuthoringRunner, args: string[]) {
+  assert.equal(runner, "claude");
+  assert.deepEqual(args, ["-p", "/model", "--bare", "--output-format", "json"]);
+  return { code: 0, stdout: CLAUDE_ENVELOPE, stderr: "" };
+}
+function claudeInventory(repo: string): void {
+  writeAuthoringJson(path.join(repo, "docs/research/model-inventory.json"), {
+    last_verified: new Date().toISOString(),
+    claude_cli: { models: CLAUDE_MODEL_IDS.map((id) => ({ id })) },
+    copilot_cli: { models: [{ id: "prd-1" }] },
   });
 }
 const candidates = {
@@ -117,6 +132,56 @@ test("inventory parser rejects prose and preserves qualified OpenCode IDs", () =
   assert.deepEqual(parseModelInventoryOutput("Available models:\n- anthropic/claude-4\nopenai/gpt-5\nNo models available\n", "opencode"), ["anthropic/claude-4", "openai/gpt-5"]);
   assert.deepEqual(parseModelInventoryOutput("Models:\n1. claude-4 (default)\ngpt-5\n", "copilot"), ["claude-4", "gpt-5"]);
   assert.deepEqual(parseModelInventoryOutput("| Model | Multiplier |\n| `claude-4` | 1x |\nOpenAI: gpt-5 (1x)\nold-1 (unavailable)", "copilot"), ["claude-4", "gpt-5"]);
+});
+
+test("Claude model discovery mines the /model envelope and refuses error envelopes", () => {
+  assert.deepEqual(parseClaudeModelOutput(CLAUDE_ENVELOPE), CLAUDE_MODEL_IDS);
+  assert.throws(
+    () => parseClaudeModelOutput(JSON.stringify({ type: "result", is_error: true, result: "Not logged in · Please run /login" })),
+    /claude model discovery failed/,
+  );
+  assert.throws(() => parseClaudeModelOutput("not json"), /no JSON result envelope/);
+});
+
+test("Claude inventory probes the built-in model command and retains other providers", async (t) => {
+  const repo = fixture(t);
+  const old = "2020-01-01T00:00:00Z";
+  writeAuthoringJson(path.join(repo, "docs/research/model-inventory.json"), {
+    last_verified: old, copilot_cli: { models: [{ id: "old-1" }] },
+  });
+  const result = await refreshAuthoringInventory(repo, "claude", claudeProbe);
+  assert.deepEqual(result.models.filter((model) => model.provider === "claude_cli").map((model) => model.id), CLAUDE_MODEL_IDS);
+  assert.equal(result.models.find((model) => model.provider === "copilot_cli")?.last_verified, old);
+});
+
+test("Claude stage models accept aliases and anthropic qualification but fail closed on full IDs", async (t) => {
+  const repo = fixture(t);
+  claudeInventory(repo);
+  const bare = await resolveAuthoringModel(repo, "prd", "claude", { prd: "opus" }, {}, claudeProbe);
+  assert.equal(bare.effectiveModel, "opus");
+  const qualified = await resolveAuthoringModel(repo, "prd", "claude", { prd: "anthropic/opus" }, {}, claudeProbe);
+  assert.equal(qualified.effectiveModel, "opus");
+  await assert.rejects(
+    resolveAuthoringModel(repo, "prd", "claude", { prd: "claude-opus-5" }, {}, claudeProbe),
+    /unavailable or unverified for claude/,
+  );
+});
+
+test("Claude argv bypasses permissions headlessly and still guards conflicting model flags", async (t) => {
+  const repo = fixture(t);
+  claudeInventory(repo);
+  const resolved = await resolveAuthoringModel(repo, "prd", "claude", { prd: "opus" }, {}, claudeProbe);
+  assert.deepEqual(authoringArgv(resolved, repo, "/fixture"), ["-p", "/fixture", "--permission-mode", "bypassPermissions", "--model", "opus"]);
+  assert.deepEqual(authoringArgv(resolved, repo, "/fixture", ["--debug"]), ["-p", "/fixture", "--permission-mode", "bypassPermissions", "--model", "opus", "--debug"]);
+  assert.throws(() => authoringArgv(resolved, repo, "/fixture", ["-mother"]), /Conflicting extra model/);
+});
+
+test("Claude selection reads its own provider section and ignores other runners", (t) => {
+  const repo = fixture(t);
+  claudeInventory(repo);
+  const stored = readAuthoringInventory(repo);
+  assert.deepEqual(inventoryForRunner(stored, "claude").map((model) => model.id), CLAUDE_MODEL_IDS);
+  assert.deepEqual(inventoryForRunner(stored, "copilot").map((model) => model.id), ["prd-1"]);
 });
 
 test("real argv carries stage models; only Copilot strips qualification", async (t) => {
