@@ -19,11 +19,14 @@ repository or running the tool, not inferred. File and line references are again
 | Fork | `lithiumriver/mcfuzzy-agent-forge`, public, parent `McFuzzySquirrel/mcfuzzy-agent-forge` |
 | Remotes | `origin` upstream (read-only), `fork` the lithiumriver fork |
 | Pushed | Yes, to `fork` |
-| Upstream PR | **Blocked**, see below. Cross-fork PRs cannot be opened from this account. |
-| Fork PR | Opened against `lithiumriver:main` instead, so the work is reviewable in the fork. |
+| Upstream PR | Open: McFuzzySquirrel/mcfuzzy-agent-forge #79 (this branch), stacked with #80 (authoring runner) and #81 (follow-ups). |
+| Fork PR | lithiumriver #1 to #3 were the interim review venue before upstream access; superseded by the upstream PRs. |
 | Implementation | **Done**, same branch: adapter, wiring, docs, ADR-042, launcher default. Open questions resolved 2026-09-07, see section 5. |
 
-### The upstream PR is blocked
+### The upstream PR was blocked, resolved 2026-09-07
+
+The cause was a pending collaborator invitation on the upstream repository. Accepting it granted
+write access and the PRs opened normally. The diagnosis below is kept for the record.
 
 `gh pr create` fails with:
 
