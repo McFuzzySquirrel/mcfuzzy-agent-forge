@@ -36,10 +36,20 @@ command is the interactive hand-off (`launcher.ts:1671` and `:2277`, and
 commands: `headlessCmdFor` builds a message such as `/forge-auto-build-prd ...`
 (`launcher.ts:505-507`) and `runSkillHeadless` first checks the skill exists under the
 project's own harness root (`skillPathFor`, `launcher.ts:626-635`). For a `.claude` repo that
-root is `.claude/skills/`. Claude Code resolves `.claude/skills/<name>` as `/<name>` natively;
-whether OpenCode resolves slash commands from a `.claude` root is not verified (open question
-1). Either way, the runner native to the root the repo was scaffolded for is the one that
-should drive its authoring, which is the same argument ADR-042 made for execution.
+root is `.claude/skills/`. The two runners treat that message differently, verified 2026-09-07:
+
+- **Claude Code** resolves `/forge-auto-build-prd ...` as a deterministic skill invocation in
+  print mode. A probe skill under `.claude/skills/` whose body said "reply with exactly
+  PROBE-OK-7731" returned exactly that in one turn, with and without trailing arguments.
+- **OpenCode** discovers `.claude/skills/*/SKILL.md` as Claude-compatible skills, but exposes
+  them through its `skill` tool, which the model calls on demand. Slash commands come only
+  from `.opencode/commands/` or the OpenCode config. So `/forge-auto-build-prd ...` reaches
+  the model as plain text and the model must decide to load the skill. This is how OpenCode
+  works on its own `.opencode/skills/` root too, so today's fallback functions, but the
+  invocation is model-mediated rather than native.
+
+The runner native to the root the repo was scaffolded for is the one that should drive its
+authoring, which is the same argument ADR-042 made for execution, with determinism added.
 
 ## What a runner has to provide
 
@@ -48,7 +58,7 @@ Read from `authoring-inventory.ts` and `launcher.ts`; every item is a concrete b
 | Concern | Copilot | OpenCode | Claude Code (proposed) |
 |---|---|---|---|
 | Headless argv (`authoringArgv`, `:173-177`) | `-p <msg> --yolo [--model m]` | `run --auto --dir <repo> [--model m] <msg>` | `-p <msg> --permission-mode bypassPermissions [--model m]` |
-| Inventory probe (`refreshAuthoringInventory`, `:110-114`) | `copilot --help`, text-mined | `opencode models` | `claude -p "/model" --output-format json`, see below |
+| Inventory probe (`refreshAuthoringInventory`, `:110-114`) | `copilot --help`, text-mined | `opencode models` | `claude -p "/model" --bare --output-format json`, see below |
 | Inventory parser (`:117`) | `parseCopilotMetadataOutput` | `parseModelInventoryOutput` | new `parseClaudeModelOutput` |
 | Provider key (`inventoryForRunner`, `:63`) | `copilot_cli`, `copilot_subscription` | `opencode_cli` | `claude_cli` |
 | `effectiveModel` (`:166`) | provider prefix stripped | kept | stripped, as the execution adapter does |
@@ -82,11 +92,18 @@ unambiguous IDs only. Two consequences:
   `result: "Not logged in · Please run /login"` and exit 1, which the existing
   `result.code !== 0` check at `:112` already turns into a clear discovery error.
 
+The probe passes `--bare`. Verified: `--bare` still executes the built-in `/model` command
+(5 ms against 12 ms without it) while skipping hooks, plugin sync and auto-memory, which a
+metadata probe has no use for. `--bare` must **not** be used for authoring: with it, a
+project skill under `.claude/skills/` is reported as `Unknown command`.
+
 Full model IDs (`claude-opus-5`, `claude-sonnet-5`) are accepted by `--model` but do not
 appear in the `/model` list. `resolveAuthoringModel` fails closed on anything not in the
-inventory (`:157-160`), so a user who wants a pinned full ID would be refused. Open question 3
-asks whether to seed the inventory with the alias list only, or additionally accept any
-`claude-*` ID that the CLI accepts at launch.
+inventory (`:157-160`), so a user who asks for a pinned full ID is refused. Decided: the
+inventory holds exactly what `/model` lists. Accepting an arbitrary `claude-*` string would
+mean trusting a model the inventory cannot verify, which is the case ADR-041 exists to
+prevent. A user who needs a pinned full ID sets it as the `model` in their Claude Code
+settings and selects `inherit` for the stage, so the CLI's own default carries it.
 
 ### Output format for authoring
 
@@ -128,7 +145,7 @@ argument unanswered and depends on the unverified assumption in open question 1.
 - `:6` union gains `"claude"`.
 - `:63` `inventoryForRunner`: `claude` maps to `["claude_cli"]`.
 - `:110-117` `refreshAuthoringInventory`: probe args for `claude` are
-  `["-p", "/model", "--output-format", "json"]`; parse with `parseClaudeModelOutput(stdout)`,
+  `["-p", "/model", "--bare", "--output-format", "json"]`; parse with `parseClaudeModelOutput(stdout)`,
   which JSON-parses the envelope, refuses `is_error`, and mines `result` for the `Available:`
   list. Keep the `${runner}_cli` provider write at `:126` unchanged.
 - `:150-155` matching: add a `claudeQualified` test for `anthropic/<id>` and strip the prefix
@@ -153,7 +170,8 @@ Console:
 - `console/authoring.ts:7-13`: default `.claude` root to `claude`; validator accepts it.
 - `console/paths.ts:131` `inferEngineHarness`: `.claude` root infers `claude`. This is the
   engine axis, not the runner, but it is the same two-way idiom and the same bug for Claude
-  repos; fixing it here keeps the console consistent with ADR-042 (open question 5).
+  repos. Decided: fix it here, so one change owns every console default for Claude repos and
+  the adapter PR stays frozen under review.
 - `console/dashboard/views/new.ts:135` and `documents.ts:229`: same default rule.
 - `console/dashboard/views/documents.ts:367,375` and `console/dashboard/api.ts:114`: third
   option `Claude Code` with value `claude`.
@@ -175,8 +193,10 @@ docs where the model-planning terminal is described. New ADR at 043.
   `.claude/skills/` and `--bare` is documented to skip plugin sync and hooks.
 - **`--fallback-model`.** The console's model plan carries a primary and a fallback per agent
   (`setModelOverride`, `console/dashboard/api.ts:111`). ADR-040's "metadata only" rule was
-  stated for execution. Authoring is a different axis, but nothing in the current runners
-  passes a fallback either, so the runner should not start (open question 2).
+  stated for execution. Decided: the runner does not pass `--fallback-model`. Neither
+  existing runner passes a fallback, the per-agent fallback in the model plan describes
+  execution agents rather than authoring stages, and a silent fallback would make the
+  `invocation.effectiveModel` recorded in `docs/authoring-state.json` (ADR-039) untrue.
 - **Account-dependent inventory.** The `/model` list reflects the logged-in plan, so
   `docs/research/model-inventory.json` is per developer. That is already true for Copilot
   and OpenCode and is why the file carries `last_verified` and diagnostics.
@@ -192,7 +212,7 @@ so no `claude` binary is needed in CI.
    with `default` and `best` dropped; `is_error: true` throws with the `result` text;
    non-JSON stdout throws.
 2. `refreshAuthoringInventory(repo, "claude", probe)` calls the probe with
-   `["-p","/model","--output-format","json"]` and writes a `claude_cli` section.
+   `["-p","/model","--bare","--output-format","json"]` and writes a `claude_cli` section.
 3. `resolveAuthoringModel` for `claude`: `opus` resolves to `opus`; `anthropic/claude-opus-5`
    resolves only if `claude-opus-5` is in the inventory, with the prefix stripped; an unknown
    model fails closed with the existing message.
@@ -217,24 +237,41 @@ so no `claude` binary is needed in CI.
 - [ ] ADR-043
 - [ ] The launcher's `resources/templates/` copy needs nothing; it is regenerated at prepack
 
-## Open questions
+## Open questions, resolved 2026-09-07
 
-1. **Does `opencode run` resolve `/forge-*` skills from `.claude/skills/`?** If yes, today's
-   fallback works and this change is about nativeness and model selection; if no, Claude
-   repos cannot author headlessly at all today and this is a bug fix. One probe on a
-   bootstrapped Claude repo settles it.
-2. **Fallback models for authoring.** Leave `--fallback-model` unused for symmetry with the
-   other runners, or let the model plan's per-agent fallback map onto it here?
-3. **Full model IDs.** Accept only what `/model` lists, or also any `claude-*` full ID?
-   Accepting full IDs means trusting a string the inventory cannot verify, which ADR-041
-   argues against.
-4. **Nested invocation.** Answered: a print-mode call inside a Claude Code session succeeds,
-   see the wrinkles section. Nothing to clear.
-5. **Where does the console `inferEngineHarness` fix belong?** It is an execution-axis bug for
-   Claude repos that the adapter PR did not cover. Fix it here, or as a follow-up on the
-   adapter branch?
-6. **Probe hygiene.** Should the inventory probe pass `--bare` to skip hooks and plugin sync
-   for a call that only needs a slash command, if `--bare` still allows slash commands?
+1. **Does OpenCode resolve `/forge-*` skills from `.claude/skills/`?** Partly. OpenCode's
+   documentation lists `.claude/skills/<name>/SKILL.md` as a Claude-compatible discovery
+   path, loaded through its `skill` tool when the model chooses to; slash commands are only
+   read from `.opencode/commands/`. Claude Code invokes the same skill deterministically from
+   `-p`, verified with a probe skill. So today's fallback works by the model's discretion, and
+   the change is about native, deterministic invocation plus model selection. Not a bug fix,
+   but more than parity.
+2. **Fallback models.** No `--fallback-model`. See the wrinkles section for the three reasons.
+3. **Full model IDs.** Inventory holds only what `/model` lists. A pinned full ID goes in the
+   user's Claude Code settings with the stage set to `inherit`. See the inventory section.
+4. **Nested invocation.** Works; a print-mode call inside a Claude Code session succeeds.
+   Nothing to clear.
+5. **Console `inferEngineHarness`.** Fixed on this branch, so one change owns every console
+   default for Claude repos.
+6. **Probe hygiene.** The inventory probe passes `--bare`; authoring never does. Verified both
+   ways: `--bare` keeps `/model` working and makes project skills unknown.
+
+### Probe evidence
+
+Run on v2.1.263 with model `haiku`, from a scratch repo containing
+`.claude/skills/probe-skill/SKILL.md` whose body instructs an exact reply.
+
+| Probe | Result |
+|---|---|
+| `claude -p "/model" --output-format json` | `is_error: false`, `duration_ms: 12`, `result` lists the accepted names |
+| `claude -p "/model" --bare --output-format json` | same list, `duration_ms: 5` |
+| `CLAUDECODE=1 claude -p "/model" --output-format json` | `is_error: false`, nested call accepted |
+| `claude -p "/probe-skill" --output-format json` | `num_turns: 1`, `result: "PROBE-OK-7731"` |
+| `FORGE_HEADLESS=1 claude -p "/probe-skill with trailing arguments" --output-format json` | `num_turns: 1`, `result: "PROBE-OK-7731"` |
+| `claude -p "/probe-skill" --bare --output-format json` | `num_turns: 0`, `result: "Unknown command: /probe-skill"` |
+
+OpenCode itself is not installed on this machine; its behaviour is taken from the current
+documentation pages for skills and commands at opencode.ai.
 
 ## Estimate
 
