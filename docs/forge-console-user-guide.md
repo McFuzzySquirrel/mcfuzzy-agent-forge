@@ -188,6 +188,7 @@ environment:
 - `opencode models` for OpenCode models,
 - `copilot --help` metadata for Copilot models when the installed CLI exposes
   an authoritative model section,
+- `claude -p "/model" --bare --output-format json` for Claude Code models,
 - the local Ollama API when Ollama is running, and
 - the configured BYOK provider when `COPILOT_PROVIDER_BASE_URL` is set.
 
