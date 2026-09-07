@@ -132,9 +132,12 @@ forge-launcher draft-prd  --repo <path>   # idea → PRD (headless)
 forge-launcher draft-team --repo <path>   # PRD → agent team (headless)
 ```
 
-They honor `FORGE_RUN_WITH` (`opencode`/`copilot`/`claude`/`stub`) first, then
-the `runner` saved in `docs/authoring-config.json`, and otherwise derive the
-runner from the project's harness (`github` → copilot, otherwise opencode).
+They honor the `--runner` flag (`opencode`/`copilot`/`claude`/`inherit`) first,
+then `FORGE_RUN_WITH` (the same values plus `stub`), then the `runner` saved in
+`docs/authoring-config.json`, and otherwise derive the runner from the project's
+harness (`github` → copilot, otherwise opencode). The one exception to that
+order is `FORGE_RUN_WITH=stub`: it is an offline lock, so `--runner` cannot
+override it and an offline run never spawns a real runner.
 
 ---
 
