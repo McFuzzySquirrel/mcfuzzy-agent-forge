@@ -32,6 +32,7 @@ Do **not** use this agent if:
 |---|---|
 | `Run the workflow` | Compile manifest if needed, then start or resume a full engine run |
 | `Run with OpenCode` | Same as above, explicitly using `--harness opencode` |
+| `Run with Claude Code` | Same as above, explicitly using `--harness claude` |
 | `Run with OpenAI` | Same as above, explicitly using `--harness openai` |
 | `Dry run` | Execute with `--harness stub` - no real model calls, verifies engine setup |
 | `Show status` | Read `docs/WORKFLOW-STATE.json` and summarize run state |
@@ -53,7 +54,7 @@ Do **not** use this agent if:
    ```bash
    cd .agents/skills/forge-workflow-engine && npm install
    ```
-3. **Confirm harness** - ask the user which harness to use if not specified: `opencode`, `openai`, or `stub` (dry-run).
+3. **Confirm harness** - ask the user which harness to use if not specified: `opencode`, `copilot`, `claude`, `openai`, or `stub` (dry-run).
 4. **Summarize the plan** - show the number of phases and tasks in the manifest, the harness, and the retry policy.
 5. **Get confirmation** - present a concise pre-run checklist and wait for `GO`.
 

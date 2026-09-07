@@ -175,3 +175,8 @@ export function extractModelFlags(args: string[]): { flags: string[]; model?: st
   }
   return { flags, model };
 }
+
+/** Model IDs may carry a provider prefix (`anthropic/claude-sonnet-5`); CLIs want the bare ID. */
+export function stripProviderPrefix(model: string): string {
+  return model.includes("/") ? model.slice(model.lastIndexOf("/") + 1) : model;
+}

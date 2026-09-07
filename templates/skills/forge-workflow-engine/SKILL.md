@@ -1,6 +1,6 @@
 ---
 name: forge-workflow-engine
-description: "Dynamic workflow orchestration engine that reads docs/EXECUTION-MANIFEST.json and drives every task to completion through a pluggable harness adapter (OpenCode CLI, OpenAI API, or stub). Maintains docs/WORKFLOW-STATE.json for machine-readable run state and syncs docs/PROGRESS.md after every task. Use this skill after forge-execution-adapter has compiled the manifest."
+description: "Dynamic workflow orchestration engine that reads docs/EXECUTION-MANIFEST.json and drives every task to completion through a pluggable harness adapter (OpenCode CLI, GitHub Copilot CLI, Claude Code CLI, OpenAI API, or stub). Maintains docs/WORKFLOW-STATE.json for machine-readable run state and syncs docs/PROGRESS.md after every task. Use this skill after forge-execution-adapter has compiled the manifest."
 ---
 
 # Skill: Forge Workflow Engine
@@ -21,7 +21,7 @@ Before running this skill, the following must exist in the repository:
   - `.claude/agents/` (Claude Code harness)
   - `.opencode/agents/` (OpenCode harness)
   - `.agents/agents/` (generic / default fallback)
-- A configured execution harness (OpenCode CLI in `$PATH`, or `OPENAI_API_KEY` set)
+- A configured execution harness (OpenCode CLI in `$PATH`, the `claude` CLI in `$PATH`, or `OPENAI_API_KEY` set)
 
 If the manifest does not exist yet, run the adapter first:
 
@@ -55,6 +55,7 @@ npm install
 ```bash
 npm run workflow-engine -- run
 npm run workflow-engine -- run --harness opencode
+npm run workflow-engine -- run --harness claude
 npm run workflow-engine -- run --harness openai
 npm run workflow-engine -- run --harness stub          # dry-run, no real calls
 npm run workflow-engine -- run --max-retries 3 --retry-delay-ms 10000
@@ -165,7 +166,7 @@ heavy task a longer budget:
 ```
 
 The pre-run summary prints the effective timeout. Adapters that shell out
-(`opencode`, `copilot`, `openai`, `stub`) enforce it on the child process; the
+(`opencode`, `copilot`, `claude`, `openai`, `stub`) enforce it on the child process; the
 `openai` adapter enforces it on the API call via `AbortController`.
 
 ### Output verification gate (strict by default)
@@ -258,6 +259,7 @@ The engine is harness-agnostic. Select the backend with `--harness`:
 |---|---|---|
 | **OpenCode CLI** (default) | `--harness opencode` | `opencode run --model <m> [--agent <name>] --dir <repo> "<task prompt>"` |
 | **GitHub Copilot CLI** | `--harness copilot` | `copilot -p "/agent <name> <task prompt>" --yolo` (native for `.github/agents/`; inline-persona fallback otherwise) |
+| **Claude Code CLI** | `--harness claude` | `claude -p "<task prompt>" --output-format json --agent <name> --permission-mode bypassPermissions` (native for `.claude/agents/`; inline-persona fallback otherwise) |
 | **OpenAI API** | `--harness openai` | `POST /v1/chat/completions` with agent rawBody as system prompt |
 | **Stub** | `--harness stub` | Returns synthetic success; no real calls (for testing) |
 
@@ -270,6 +272,17 @@ The engine is harness-agnostic. Select the backend with `--harness`:
 | `FORGE_ENGINE_ATTACH` | *(empty)* | `1` to force the `opencode serve` keep-alive for the run (`--keep-alive`); `0` to force cold start per task (`--no-keep-alive`); unset = adaptive (keep-alive when >1 task remains) |
 | `FORGE_ENGINE_ATTACH_URL` | *(empty)* | Attach tasks to an existing `opencode serve` URL instead of cold-starting per task (`--attach`) |
 | `FORGE_ENGINE_NATIVE_AGENT` | *(empty)* | `0` to force the inline-persona fallback instead of `--agent <name>` for `.opencode/` agents |
+
+### Claude Code adapter environment variables
+
+| Variable | Default | Purpose |
+|---|---|---|
+| `CLAUDE_BIN` | `claude` | Path to the Claude Code CLI binary |
+| `CLAUDE_EXTRA_FLAGS` | *(empty)* | Extra flags appended to every `claude -p` call (e.g. `--model opus`) |
+
+`--permission-mode bypassPermissions` is always passed so tool calls are
+auto-approved in a non-interactive run, and the `--output-format json` result
+envelope is parsed to classify failures as `configuration` or `retryable`.
 
 ### Copilot adapter environment variables
 
@@ -294,9 +307,16 @@ default build agent) and does **not** inline it. For other harness roots
 falls back to inlining the persona (`agent.rawBody`) as an inline context block.
 Tool permissions are auto-approved with `--auto` in both cases.
 
-Set **`FORGE_ENGINE_NATIVE_AGENT=0`** on either harness to force the
+The claude adapter selects the forge agent natively when its file lives under
+the project's `.claude/agents/` directory: it passes `--agent <name>` so the
+Claude Code CLI loads the persona itself. It is the only transport that is
+native on the forge's canonical Claude root. For other harness roots
+(`.agents`, `.github`, `.opencode`) the CLI cannot discover the agent files, so
+the adapter inlines the persona into the prompt instead.
+
+Set **`FORGE_ENGINE_NATIVE_AGENT=0`** on any of these harnesses to force the
 inline-persona fallback instead of native agent selection (`--agent` /
-`/agent`).
+`/agent`), including for the claude adapter.
 
 ### Task capability and request contract
 

@@ -63,7 +63,9 @@ export interface LauncherOptions extends AuthoringOptions {
 type HarnessName = "github" | "opencode" | "claude" | "agents";
 
 export function defaultEngineHarness(harness: HarnessName): string {
-  return harness === "github" ? "copilot" : "opencode";
+  if (harness === "github") return "copilot";
+  if (harness === "claude") return "claude";
+  return "opencode";
 }
 
 interface LauncherState {

@@ -59,7 +59,7 @@ concurrency, timeout, retries, heartbeat, keep-alive/attach, viz).
 MyForge works with any harness that reads agents and skills from a repo:
 GitHub Copilot (`.github/agents/`), Claude Code (`.claude/agents/`), opencode
 (`.opencode/agents/`), or a generic `.agents/` directory. The build itself runs
-through a harness adapter - `opencode`, `copilot`, `openai`, or `stub` (dry-run
+through a harness adapter - `opencode`, `copilot`, `claude`, `openai`, or `stub` (dry-run
 without spending tokens).
 
 ## Docs
