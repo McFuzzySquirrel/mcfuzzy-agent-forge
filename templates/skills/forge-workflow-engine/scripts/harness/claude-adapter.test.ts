@@ -1,13 +1,12 @@
 import assert from "node:assert/strict";
 import test, { afterEach, beforeEach, type TestContext } from "node:test";
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync, readFileSync } from "node:fs";
-import { tmpdir } from "node:os";
+import { mkdirSync, writeFileSync, readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 
 import { ClaudeAdapter } from "./claude-adapter.ts";
 import type { AgentDescriptor, ManifestTask, TaskResult } from "../types.ts";
 import { prepareTaskRequest } from "../request.ts";
-import { makeNodeShim } from "../test-support.ts";
+import { makeNodeShim, tempDir } from "../test-support.ts";
 
 const SUCCESS_ENVELOPE =
   '{"type":"result","subtype":"success","is_error":false,"result":"Substantive completed text response.","permission_denials":[],"session_id":"00000000-0000-4000-8000-000000000000"}';
@@ -15,13 +14,6 @@ const SUCCESS_ENVELOPE =
 interface Shim {
   bin: string;
   argsFile: string;
-}
-
-/** A temp directory removed when the test that made it finishes. */
-function tempDir(t: TestContext, prefix: string): string {
-  const dir = mkdtempSync(join(tmpdir(), prefix));
-  t.after(() => rmSync(dir, { recursive: true, force: true }));
-  return dir;
 }
 
 /**

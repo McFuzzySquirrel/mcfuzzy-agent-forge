@@ -1,24 +1,16 @@
 import assert from "node:assert/strict";
 import test, { type TestContext } from "node:test";
-import { mkdtempSync, rmSync, writeFileSync, readFileSync } from "node:fs";
-import { tmpdir } from "node:os";
+import { writeFileSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 
 import { CopilotAdapter } from "./copilot-adapter.ts";
 import type { AgentDescriptor, ManifestTask } from "../types.ts";
 import { prepareTaskRequest } from "../request.ts";
-import { makeNodeShim } from "../test-support.ts";
+import { makeNodeShim, tempDir } from "../test-support.ts";
 
 interface Shim {
   bin: string;
   argsFile: string;
-}
-
-/** A temp directory removed when the test that made it finishes. */
-function tempDir(t: TestContext, prefix: string): string {
-  const dir = mkdtempSync(join(tmpdir(), prefix));
-  t.after(() => rmSync(dir, { recursive: true, force: true }));
-  return dir;
 }
 
 function makeShim(t: TestContext): Shim {
