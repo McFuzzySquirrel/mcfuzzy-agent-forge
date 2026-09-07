@@ -164,6 +164,11 @@ function buildAuthoringSettings(panel: HTMLElement, initial: AuthoringConfig, in
   let config: AuthoringConfig = { version: 1, models: { ...initial.models }, ...(initial.runner ? { runner: initial.runner } : {}) };
   let dirty = initialDirty;
   let saveInFlight = false;
+  // Refresh and the runner select both reload the inventory and rebuild this
+  // panel, so a slow response must not land after a newer one. Every reload
+  // takes a ticket from this counter and drops itself if the counter has moved
+  // on, the same guard the wizard's load() uses.
+  let inventoryRequestId = 0;
   const stages: Array<[AuthoringStage, string]> = [
     ["prd", "PRD authoring model"],
     ["team", "Team authoring model"],
@@ -194,11 +199,14 @@ function buildAuthoringSettings(panel: HTMLElement, initial: AuthoringConfig, in
     updateRetryState();
     status.textContent = "Loading authoring models for the selected runner…";
     captureSelections();
+    const id = ++inventoryRequestId;
     void api.authoringInventory(effectiveRunner(selectedRunner(), store.summary?.harness ?? ""))
       .then((next) => {
+        if (id !== inventoryRequestId) return;
         panel.replaceChildren(buildAuthoringSettings(panel, config, next, dirty));
       })
       .catch((error) => {
+        if (id !== inventoryRequestId) return;
         status.textContent = error instanceof Error ? error.message : "Unable to load authoring models for the selected runner.";
       });
   });
@@ -256,11 +264,14 @@ function buildAuthoringSettings(panel: HTMLElement, initial: AuthoringConfig, in
     refresh.disabled = true;
     const runner = effectiveRunner(selectedRunner(), store.summary?.harness ?? "");
     captureSelections();
+    const id = ++inventoryRequestId;
     void api.refreshAuthoringInventory(runner)
       .then((next) => {
+        if (id !== inventoryRequestId) return;
         panel.replaceChildren(buildAuthoringSettings(panel, config, next, dirty));
       })
       .catch((error) => {
+        if (id !== inventoryRequestId) return;
         status.textContent = error instanceof Error ? error.message : "Unable to refresh inventory.";
       })
       .finally(() => { refresh.disabled = false; });
