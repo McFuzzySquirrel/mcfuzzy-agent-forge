@@ -101,6 +101,7 @@ npx forge-launcher@beta [--non-interactive] [--headless] [--draft] [--dry-run] [
                               [--runner <copilot|opencode|claude|inherit>]
 npx forge-launcher@beta bootstrap [TARGET_DIR] [--harness agents|github|claude|opencode] [--force]
 npx forge-launcher@beta bootstrap [TARGET_DIR] ... [--init-git]
+                              [--runner <copilot|opencode|claude>]
 npx forge-launcher@beta engine-run [--repo <path>] [--harness <h>] [--concurrency <n>]
                               [--task-timeout-ms <ms>] [--yes] [--dry-run]
                               [--keep-alive [--keep-alive-port <n>]] [--no-keep-alive] [--attach <url>]
@@ -124,6 +125,17 @@ npx forge-launcher@beta authoring-models --repo <path>
 ```
 
 When installed globally (`npm install -g forge-launcher@beta`), drop the `npx`.
+
+`bootstrap` takes these options:
+
+- `--harness agents|github|claude|opencode` - which harness root receives the
+  copied agents and skills. Defaults to `agents`.
+- `--force` - overwrite existing Forge files instead of prompting.
+- `--init-git` - run `git init` when the target is not a repository yet.
+- `--runner copilot|opencode|claude` - the authoring runner the repository
+  should use. The choice is saved into the new repository's
+  `docs/authoring-config.json`, so later authoring runs pick it up without the
+  flag. Omit it to keep inheriting the runner from the harness.
 
 #### Install locally before publishing
 

@@ -95,7 +95,9 @@ To use MyForge with an application that already exists, open **Projects** and
 choose **Bootstrap an existing repo**. The folder must be a Git repository;
 enable **Initialize git if needed** explicitly for a non-Git folder. Existing
 application files are preserved, and Forge files are overwritten only when
-**Overwrite existing Forge files** is selected.
+**Overwrite existing Forge files** is selected. The form also offers an
+**Authoring runner**, which defaults to inheriting the runner from the harness;
+picking one saves it into the repository's `docs/authoring-config.json`.
 
 After a build completes, use **Add a feature** on Overview. This runs
 `forge-build-feature-prd` against the existing codebase and team, writes an
