@@ -17,7 +17,7 @@ Usage:
   forge-launcher [options]
   forge-launcher help
   forge-launcher bootstrap [TARGET_DIR] [--harness agents|github|claude|opencode] [--force] [--init-git]
-                           [--runner copilot|opencode|claude]
+                           [--runner copilot|opencode|claude|inherit]
   forge-launcher console [--repo <path>] [--port <n>] [--no-open]
   forge-launcher engine-run [--repo <path>] [--harness <h>] [--granularity <fine|coarse>]
                             [--concurrency <n>] [--task-timeout-ms <ms>] [--max-retries <n>]
@@ -143,9 +143,9 @@ async function main(): Promise<number> {
   // Subcommands
   if (args[0] === "bootstrap") {
     // `--runner` is consumed by the shared parse above, so hand the bootstrap
-    // parser its own copy; `inherit` is simply the absence of a preference.
+    // parser its own copy; without this the flag never reaches `bootstrapCli`.
     const rest = args.slice(1);
-    if (requestedRunner !== undefined && requestedRunner.trim() !== "inherit") rest.push("--runner", requestedRunner);
+    if (requestedRunner !== undefined) rest.push("--runner", requestedRunner);
     return bootstrapCli(rest);
   }
   if (args[0] === "console") return consoleCli(args.slice(1));

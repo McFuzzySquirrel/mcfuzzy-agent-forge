@@ -1,5 +1,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
+import { execFileSync } from "node:child_process";
+import { fileURLToPath } from "node:url";
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
@@ -9,6 +11,19 @@ import { expandPath, detectRepoRoot, resolveInputFile } from "./paths.ts";
 
 function tmpDir(): string {
   return fs.mkdtempSync(path.join(os.tmpdir(), "fl-bootstrap-"));
+}
+
+const CLI = fileURLToPath(new URL("./cli.ts", import.meta.url));
+
+/**
+ * Runs `bootstrap` through `cli.ts` in a subprocess so the shared `--runner`
+ * pre-pass in `main()` is exercised for real. Calling `bootstrapCli` directly
+ * skips it, and it is the only thing that carries the flag to the subcommand.
+ */
+function bootstrapViaCli(target: string, args: string[]): string {
+  return execFileSync(process.execPath, ["--import", "tsx", CLI, "bootstrap", target, ...args], {
+    encoding: "utf8", timeout: 120_000, env: { ...process.env },
+  });
 }
 
 test("harness roots map to the right directories", () => {
@@ -93,10 +108,40 @@ test("bootstrapCli rejects an unknown runner before doing any work", async () =>
 
   await assert.rejects(
     () => bootstrapCli([target, "--runner", "gpt"]),
-    /Unsupported authoring runner: gpt\. Use copilot, opencode, or claude\./,
+    /Unsupported authoring runner: gpt\. Use copilot, opencode, claude, or inherit\./,
   );
   assert.ok(!fs.existsSync(path.join(target, ".agents")));
   assert.ok(!fs.existsSync(path.join(target, "docs", "authoring-config.json")));
+});
+
+test("the CLI carries --runner through to the bootstrapped repository", () => {
+  const chosen = tmpDir();
+  fs.mkdirSync(path.join(chosen, ".git"));
+  bootstrapViaCli(chosen, ["--harness", "claude", "--runner", "claude", "--force"]);
+  assert.match(fs.readFileSync(path.join(chosen, "docs", "authoring-config.json"), "utf8"), /"runner": "claude"/);
+
+  const inherited = tmpDir();
+  fs.mkdirSync(path.join(inherited, ".git"));
+  bootstrapViaCli(inherited, ["--harness", "claude", "--runner", "inherit", "--force"]);
+  const config = path.join(inherited, "docs", "authoring-config.json");
+  if (fs.existsSync(config)) assert.equal(JSON.parse(fs.readFileSync(config, "utf8")).runner, undefined);
+});
+
+test("a corrupt authoring config warns instead of failing a completed bootstrap", async () => {
+  const target = tmpDir();
+  fs.mkdirSync(path.join(target, ".git"));
+  fs.mkdirSync(path.join(target, "docs"), { recursive: true });
+  fs.writeFileSync(path.join(target, "docs", "authoring-config.json"), "{ not json", "utf8");
+
+  const code = await bootstrap({ targetDir: target, harness: "claude", force: true, nonInteractive: true, runner: "claude" });
+  assert.equal(code, 0);
+  assert.ok(fs.existsSync(path.join(target, ".claude", "agents", "project-orchestrator.md")));
+
+  const log = fs.readFileSync(path.join(target, "docs", "engine-run.log"), "utf8");
+  assert.match(log, /Authoring runner 'claude' was not saved/);
+  assert.match(log, /docs[\\/]authoring-config\.json/);
+  assert.match(log, /Bootstrap complete/);
+  assert.equal(fs.readFileSync(path.join(target, "docs", "authoring-config.json"), "utf8"), "{ not json");
 });
 
 test("expandPath expands ~, ~/..., $VAR and ${VAR}", () => {

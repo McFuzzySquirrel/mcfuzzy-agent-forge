@@ -8,6 +8,9 @@ import type { AuthoringRunnerChoice } from "./authoring-config.ts";
 
 export type Harness = "agents" | "github" | "claude" | "opencode";
 
+/** Repository-relative path of the file the runner preference is saved in. */
+const AUTHORING_CONFIG_RELATIVE = path.join("docs", "authoring-config.json");
+
 export const HARNESS_ROOTS: Record<Harness, string> = {
   agents: ".agents",
   github: ".github",
@@ -196,10 +199,17 @@ export async function bootstrap(opts: BootstrapOptions): Promise<number> {
     // Written last so a failed copy never leaves a runner preference behind in
     // a repository that was not actually bootstrapped.
     if (opts.runner) {
-      const config = loadAuthoringConfig(targetDir);
-      saveAuthoringConfig(targetDir, { ...config, runner: opts.runner });
       log.out("");
-      log.ok(`Authoring runner: ${opts.runner} (docs/authoring-config.json)`);
+      // The copying above already succeeded, so a config this repository was
+      // carrying before the bootstrap must not turn a done job into a failure.
+      try {
+        const config = loadAuthoringConfig(targetDir);
+        saveAuthoringConfig(targetDir, { ...config, runner: opts.runner });
+        log.ok(`Authoring runner: ${opts.runner} (${AUTHORING_CONFIG_RELATIVE})`);
+      } catch (error) {
+        const reason = error instanceof Error ? error.message : String(error);
+        log.warn(`Authoring runner '${opts.runner}' was not saved: ${AUTHORING_CONFIG_RELATIVE} could not be read or written (${reason}). Fix that file and re-run, or set the runner from the Console.`);
+      }
     }
 
     log.out("");
@@ -230,13 +240,16 @@ export async function bootstrapCli(args: string[]): Promise<number> {
       harness = v as Harness;
     } else if (a === "--runner") {
       // Rejected before any copying so an unusable runner never half-bootstraps.
+      // Same wording and same accepted values as the shared parse in `cli.ts`,
+      // which is what a real command line hits first; `inherit` reaches here as
+      // the absence of a preference, leaving the repository on the harness rule.
       const v = args[++i];
-      if (!v || v.startsWith("--")) throw new Error("--runner requires copilot, opencode, or claude.");
+      if (!v || v.startsWith("--")) throw new Error("--runner requires copilot, opencode, claude, or inherit.");
       const trimmed = v.trim();
-      if (!isRunnerChoice(trimmed)) {
-        throw new Error(`Unsupported authoring runner: ${v}. Use copilot, opencode, or claude.`);
-      }
-      runner = trimmed;
+      if (trimmed === "inherit") runner = undefined;
+      else if (!isRunnerChoice(trimmed)) {
+        throw new Error(`Unsupported authoring runner: ${v}. Use copilot, opencode, claude, or inherit.`);
+      } else runner = trimmed;
     } else if (a.startsWith("--")) {
       throw new Error(`Unknown option: ${a}`);
     } else if (!targetDir) {

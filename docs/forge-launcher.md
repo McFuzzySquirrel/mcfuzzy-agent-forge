@@ -101,7 +101,7 @@ npx forge-launcher@beta [--non-interactive] [--headless] [--draft] [--dry-run] [
                               [--runner <copilot|opencode|claude|inherit>]
 npx forge-launcher@beta bootstrap [TARGET_DIR] [--harness agents|github|claude|opencode] [--force]
 npx forge-launcher@beta bootstrap [TARGET_DIR] ... [--init-git]
-                              [--runner <copilot|opencode|claude>]
+                              [--runner <copilot|opencode|claude|inherit>]
 npx forge-launcher@beta engine-run [--repo <path>] [--harness <h>] [--concurrency <n>]
                               [--task-timeout-ms <ms>] [--yes] [--dry-run]
                               [--keep-alive [--keep-alive-port <n>]] [--no-keep-alive] [--attach <url>]
@@ -132,10 +132,13 @@ When installed globally (`npm install -g forge-launcher@beta`), drop the `npx`.
   copied agents and skills. Defaults to `agents`.
 - `--force` - overwrite existing Forge files instead of prompting.
 - `--init-git` - run `git init` when the target is not a repository yet.
-- `--runner copilot|opencode|claude` - the authoring runner the repository
-  should use. The choice is saved into the new repository's
+- `--runner copilot|opencode|claude|inherit` - the authoring runner the
+  repository should use. The choice is saved into the new repository's
   `docs/authoring-config.json`, so later authoring runs pick it up without the
-  flag. Omit it to keep inheriting the runner from the harness.
+  flag. `inherit` means the same as omitting the flag: the repository keeps
+  taking its runner from the harness. A repository whose existing
+  `docs/authoring-config.json` cannot be read is still bootstrapped; the run
+  warns that the runner was not saved.
 
 #### Install locally before publishing
 
