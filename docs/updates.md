@@ -4,6 +4,23 @@ Detailed release and change notes for MyForge.
 
 ---
 
+## September 2026 - v3.67
+
+### Consistent Terminated Process Results
+
+- Fixed a Windows process-transport race where timed-out invocations could
+  report exit status 1 instead of null depending on whether `taskkill` completed
+  before the child's output streams closed.
+- Runner-initiated timeout, cancellation, and output-overflow termination now
+  consistently returns null status. Failure reasons and classifications are
+  preserved; processes that exit normally retain their actual exit codes.
+- Added deterministic regressions for both Windows cleanup callback orders
+  across all three termination reasons, plus normal zero and nonzero exits.
+- Existing target repositories need the updated workflow-engine
+  `scripts/harness/run.ts`. Cleanup deadlines and retry policy are unchanged.
+
+---
+
 ## September 2026 - v3.66
 
 ### Bounded OpenCode Server Shutdown

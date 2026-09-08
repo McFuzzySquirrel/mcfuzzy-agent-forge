@@ -226,6 +226,13 @@ The interval defaults to 60 seconds and is controlled with `--heartbeat-ms <ms>`
 
 Every harness call also runs under a per-task timeout (default **10 minutes**, configurable via `--task-timeout-ms` / `FORGE_ENGINE_TASK_TIMEOUT_MS`). If the call exceeds it, the adapter terminates the owned process tree: POSIX uses a dedicated process group, while Windows uses recursive `taskkill`; the HTTP adapter aborts its request. Cleanup and pipe settlement are bounded, and incomplete cleanup is surfaced as an exception so it cannot be blindly retried. A task can declare its own longer budget with a `timeoutMs` field in the manifest, which overrides the engine-wide default. Because `runCommand` is async, the timeout does not block the heartbeat. See ADR-022.
 
+`runCommand` returns `status: null` whenever it initiates termination for a
+timeout, cancellation, or output overflow. This does not depend on whether
+Windows `taskkill` completes before or after the child's `close` event; successful
+cleanup still waits for both. Failure reasons and classifications remain intact,
+and processes that exit without runner-initiated termination retain their real
+exit codes, including nonzero codes.
+
 ### State is always saved before the next loop iteration
 
 The engine persists state at three important boundaries:

@@ -2,10 +2,81 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
+import childProcess, { type ChildProcess } from "node:child_process";
+import { EventEmitter } from "node:events";
+import { syncBuiltinESMExports } from "node:module";
+import { PassThrough } from "node:stream";
 import { canSelectAgentNatively, runCommand } from "./run.ts";
 import type { AgentDescriptor } from "../types.ts";
 
 const options = { cwd: process.cwd(), timeoutMs: 5000, maxBufferBytes: 1024 };
+
+for (const mode of ["timeout", "cancelled", "overflow"] as const) {
+  for (const order of ["close-first", "cleanup-first"] as const) {
+    test(`terminated process status is null for ${mode} with ${order}`, {
+      skip: process.platform !== "win32" ? "Windows asynchronous taskkill callback ordering." : false,
+    }, async (context) => {
+      const child = Object.assign(new EventEmitter(), {
+        pid: 43210,
+        stdout: new PassThrough(),
+        stderr: new PassThrough(),
+        kill: () => true,
+        unref: () => {},
+      }) as unknown as ChildProcess;
+      let finishCleanup: (() => void) | undefined;
+      const spawn = context.mock.method(childProcess, "spawn", () => child);
+      const execFile = context.mock.method(childProcess, "execFile", (...args: unknown[]) => {
+        assert.equal(args[0], "taskkill");
+        assert.deepEqual(args[1], ["/PID", "43210", "/T", "/F"]);
+        const callback = args.at(-1) as (error: null, stdout: string, stderr: string) => void;
+        finishCleanup = () => callback(null, "", "");
+        return { kill: () => true, unref: () => {} } as unknown as ChildProcess;
+      });
+      syncBuiltinESMExports();
+      context.mock.timers.enable({ apis: ["setTimeout"] });
+      try {
+        const controller = new AbortController();
+        let settled = false;
+        const pending = runCommand(process.execPath, [], {
+          ...options, timeoutMs: 150, signal: controller.signal,
+        }).then((result) => {
+          settled = true;
+          return result;
+        });
+        if (mode === "timeout") context.mock.timers.tick(150);
+        else if (mode === "cancelled") controller.abort();
+        else child.stdout!.emit("data", Buffer.alloc(options.maxBufferBytes + 1));
+        assert.ok(finishCleanup, "termination must start owned process-tree cleanup");
+        if (order === "close-first") child.emit("close", 1);
+        else finishCleanup();
+        await Promise.resolve();
+        assert.equal(settled, false, "must wait for both cleanup and stream closure");
+        if (order === "close-first") finishCleanup();
+        else child.emit("close", 1);
+        const result = await pending;
+        assert.equal(result.status, null);
+        assert.equal(result.failureKind, mode === "overflow" ? "exception" : mode);
+        assert.match(result.error ?? "", mode === "timeout" ? /timed out after 150ms/ : mode === "cancelled" ? /Task cancelled/ : /stdout exceeded 1024 bytes/);
+      } finally {
+        context.mock.timers.reset();
+        spawn.mock.restore();
+        execFile.mock.restore();
+        syncBuiltinESMExports();
+        child.stdout?.destroy();
+        child.stderr?.destroy();
+      }
+    });
+  }
+}
+
+for (const exitCode of [0, 7]) {
+  test(`normal process exit preserves status ${exitCode}`, async () => {
+    const result = await runCommand(process.execPath, ["-e", `process.exit(${exitCode})`], options);
+    assert.equal(result.status, exitCode);
+    assert.equal(result.error, undefined);
+    assert.equal(result.failureKind, undefined);
+  });
+}
 
 function isRunning(pid: number): boolean {
   try {

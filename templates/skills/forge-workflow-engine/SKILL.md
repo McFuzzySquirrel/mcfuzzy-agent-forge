@@ -188,6 +188,11 @@ Each task runs against the harness with a per-task timeout. If the harness call
 does not finish in time, the child process is killed and the task counts as
 failed (subject to `--max-retries`). The default is **10 minutes**.
 
+Process transport results use `status: null` when the runner initiates timeout,
+cancellation, or output-overflow termination, regardless of cleanup callback
+order. The failure reason and classification remain available; normal process
+exits retain their actual exit codes.
+
 ```bash
 npm run workflow-engine -- run --task-timeout-ms 1500000       # 25 minutes
 FORGE_ENGINE_TASK_TIMEOUT_MS=1500000 npm run workflow-engine -- run
