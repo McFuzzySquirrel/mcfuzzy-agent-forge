@@ -91,7 +91,7 @@ export function runCommand(
       clearTimeout(cleanupTimer);
       opts.signal?.removeEventListener("abort", cancel);
       const bootMs = firstOutputAt === undefined ? Date.now() - startedAt : firstOutputAt - startedAt;
-      resolve({ stdout, stderr, status, error: failure?.error ?? error, failureKind: failure?.failureKind, bootMs });
+      resolve({ stdout, stderr, status: terminating ? null : status, error: failure?.error ?? error, failureKind: failure?.failureKind, bootMs });
     };
 
     const terminate = (error: string, failureKind: TaskFailureKind) => {
