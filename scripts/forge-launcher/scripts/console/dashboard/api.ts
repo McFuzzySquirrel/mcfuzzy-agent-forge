@@ -159,7 +159,7 @@ export const api = {
   control(action: ControlAction, taskId?: string): Promise<ControlResult> {
     return post<ControlResult>("/api/control", { action, taskId });
   },
-  bootstrap(req: { path: string; harness?: string; force?: boolean; initGit?: boolean }): Promise<ControlResult> {
+  bootstrap(req: { path: string; harness?: string; force?: boolean; initGit?: boolean; runner?: string }): Promise<ControlResult> {
     return post<ControlResult>("/api/projects/bootstrap", req);
   },
   featurePrd(prompt: string): Promise<ControlResult> {

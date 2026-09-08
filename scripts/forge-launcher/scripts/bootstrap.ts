@@ -3,6 +3,8 @@ import path from "node:path";
 import { ok, out, runCommand, warn } from "./format.ts";
 import { prompt, promptYesNo, prompts } from "./prompts.ts";
 import { resolveResources } from "./resources.ts";
+import { isRunnerChoice, loadAuthoringConfig, saveAuthoringConfig } from "./authoring-config.ts";
+import type { AuthoringRunnerChoice } from "./authoring-config.ts";
 
 export type Harness = "agents" | "github" | "claude" | "opencode";
 
@@ -19,6 +21,11 @@ export interface BootstrapOptions {
   force?: boolean;
   initGit?: boolean;
   nonInteractive?: boolean;
+  /**
+   * Authoring runner to record in the bootstrapped repository. Omitted means
+   * the repository keeps inheriting the runner from its harness.
+   */
+  runner?: AuthoringRunnerChoice;
   /** When set, all progress output is appended here instead of stdout. */
   logFile?: string;
 }
@@ -185,6 +192,16 @@ export async function bootstrap(opts: BootstrapOptions): Promise<number> {
     log.out(`Gitignore (${path.join(targetDir, ".gitignore")}):`);
     ensureGitignore(targetDir);
 
+    // --- Authoring runner ---
+    // Written last so a failed copy never leaves a runner preference behind in
+    // a repository that was not actually bootstrapped.
+    if (opts.runner) {
+      const config = loadAuthoringConfig(targetDir);
+      saveAuthoringConfig(targetDir, { ...config, runner: opts.runner });
+      log.out("");
+      log.ok(`Authoring runner: ${opts.runner} (docs/authoring-config.json)`);
+    }
+
     log.out("");
     log.out("Bootstrap complete.");
     log.out(`Commit ${root}/agents/ (.md), ${root}/skills/, and docs/ to your repository.`);
@@ -199,6 +216,7 @@ export async function bootstrapCli(args: string[]): Promise<number> {
   let harness: Harness = "agents";
   let force = false;
   let initGit = false;
+  let runner: AuthoringRunnerChoice | undefined;
   let i = 0;
   for (; i < args.length; i++) {
     const a = args[i];
@@ -210,6 +228,15 @@ export async function bootstrapCli(args: string[]): Promise<number> {
         throw new Error(`Error: Unknown harness '${v}'. Valid: agents, github, claude, opencode`);
       }
       harness = v as Harness;
+    } else if (a === "--runner") {
+      // Rejected before any copying so an unusable runner never half-bootstraps.
+      const v = args[++i];
+      if (!v || v.startsWith("--")) throw new Error("--runner requires copilot, opencode, or claude.");
+      const trimmed = v.trim();
+      if (!isRunnerChoice(trimmed)) {
+        throw new Error(`Unsupported authoring runner: ${v}. Use copilot, opencode, or claude.`);
+      }
+      runner = trimmed;
     } else if (a.startsWith("--")) {
       throw new Error(`Unknown option: ${a}`);
     } else if (!targetDir) {
@@ -222,5 +249,5 @@ export async function bootstrapCli(args: string[]): Promise<number> {
     }
     targetDir = await prompt("Target repository path [.]", ".");
   }
-  return bootstrap({ targetDir: targetDir || ".", harness, force, initGit, nonInteractive: prompts.nonInteractive });
+  return bootstrap({ targetDir: targetDir || ".", harness, force, initGit, nonInteractive: prompts.nonInteractive, ...(runner ? { runner } : {}) });
 }

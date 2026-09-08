@@ -17,6 +17,7 @@ Usage:
   forge-launcher [options]
   forge-launcher help
   forge-launcher bootstrap [TARGET_DIR] [--harness agents|github|claude|opencode] [--force] [--init-git]
+                           [--runner copilot|opencode|claude]
   forge-launcher console [--repo <path>] [--port <n>] [--no-open]
   forge-launcher engine-run [--repo <path>] [--harness <h>] [--granularity <fine|coarse>]
                             [--concurrency <n>] [--task-timeout-ms <ms>] [--max-retries <n>]
@@ -140,7 +141,13 @@ async function main(): Promise<number> {
   }
 
   // Subcommands
-  if (args[0] === "bootstrap") return bootstrapCli(args.slice(1));
+  if (args[0] === "bootstrap") {
+    // `--runner` is consumed by the shared parse above, so hand the bootstrap
+    // parser its own copy; `inherit` is simply the absence of a preference.
+    const rest = args.slice(1);
+    if (requestedRunner !== undefined && requestedRunner.trim() !== "inherit") rest.push("--runner", requestedRunner);
+    return bootstrapCli(rest);
+  }
   if (args[0] === "console") return consoleCli(args.slice(1));
   if (args[0] === "engine-run") return engineRunCli(args.slice(1));
   if (args[0] === "draft-prd" || args[0] === "draft-existing-prd" || args[0] === "draft-team" || args[0] === "draft-skills" || args[0] === "compile-manifest" || args[0] === "feature-prd" || args[0] === "feature-increment") {

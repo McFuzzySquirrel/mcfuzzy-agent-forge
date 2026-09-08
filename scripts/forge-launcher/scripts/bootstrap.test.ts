@@ -3,7 +3,8 @@ import assert from "node:assert/strict";
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
-import { bootstrap, HARNESS_ROOTS } from "./bootstrap.ts";
+import { bootstrap, bootstrapCli, HARNESS_ROOTS } from "./bootstrap.ts";
+import { loadAuthoringConfig } from "./authoring-config.ts";
 import { expandPath, detectRepoRoot, resolveInputFile } from "./paths.ts";
 
 function tmpDir(): string {
@@ -68,6 +69,34 @@ test("bootstrap writes progress to the repository-local Console log", async () =
   const log = path.join(target, "docs", "engine-run.log");
   assert.ok(fs.existsSync(log));
   assert.match(fs.readFileSync(log, "utf8"), /Bootstrap complete/);
+});
+
+test("bootstrap persists the requested authoring runner and leaves it unset otherwise", async () => {
+  const chosen = tmpDir();
+  fs.mkdirSync(path.join(chosen, ".git"));
+  await bootstrap({ targetDir: chosen, harness: "claude", force: true, nonInteractive: true, runner: "claude" });
+
+  const config = path.join(chosen, "docs", "authoring-config.json");
+  assert.ok(fs.existsSync(config));
+  assert.match(fs.readFileSync(config, "utf8"), /"runner": "claude"/);
+  assert.equal(loadAuthoringConfig(chosen).runner, "claude");
+
+  const inherited = tmpDir();
+  fs.mkdirSync(path.join(inherited, ".git"));
+  await bootstrap({ targetDir: inherited, harness: "claude", force: true, nonInteractive: true });
+  assert.ok(!fs.existsSync(path.join(inherited, "docs", "authoring-config.json")));
+});
+
+test("bootstrapCli rejects an unknown runner before doing any work", async () => {
+  const target = tmpDir();
+  fs.mkdirSync(path.join(target, ".git"));
+
+  await assert.rejects(
+    () => bootstrapCli([target, "--runner", "gpt"]),
+    /Unsupported authoring runner: gpt\. Use copilot, opencode, or claude\./,
+  );
+  assert.ok(!fs.existsSync(path.join(target, ".agents")));
+  assert.ok(!fs.existsSync(path.join(target, "docs", "authoring-config.json")));
 });
 
 test("expandPath expands ~, ~/..., $VAR and ${VAR}", () => {
