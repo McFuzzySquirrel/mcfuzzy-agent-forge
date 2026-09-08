@@ -16,7 +16,7 @@ export function runTests(directory, args = []) {
   if (files.length === 0) {
     throw new Error(`No test files discovered in ${directory}`);
   }
-  const result = spawnSync(process.execPath, ["--import", "tsx", "--test", ...args, ...files], { stdio: "inherit" });
+  const result = spawnSync(process.execPath, ["--import", "tsx", "--test", "--test-timeout=120000", ...args, ...files], { stdio: "inherit" });
   if (result.error) throw result.error;
   return result.status ?? 1;
 }

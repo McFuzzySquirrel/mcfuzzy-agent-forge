@@ -3,6 +3,8 @@ import test from "node:test";
 import { mkdtempSync, writeFileSync, readFileSync, existsSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import childProcess from "node:child_process";
+import { syncBuiltinESMExports } from "node:module";
 
 import { startAttachServer } from "./opencode-server.ts";
 import { makeNodeShim } from "../test-support.ts";
@@ -56,8 +58,8 @@ function makeFixture(shimBody: string): Fixture {
   return { bin, root };
 }
 
-test("startAttachServer becomes healthy, strips ambient server auth, and stops cleanly", async () => {
-  const { bin, root } = makeFixture(HEALTHY);
+test("startAttachServer becomes healthy, strips ambient server auth, and stops cleanly", { timeout: 15_000 }, async () => {
+  const { bin, root } = makeFixture(`require("fs").writeFileSync("server.pid", String(process.pid));\n${HEALTHY}`);
   const pwFile = join(root, "pw-env.txt");
 
   const original = { ...process.env };
@@ -71,7 +73,13 @@ test("startAttachServer becomes healthy, strips ambient server auth, and stops c
     const res = await fetch(`${server.url}/global/health`);
     assert.equal(res.status, 200);
 
+    const pid = Number(readFileSync(join(root, "server.pid"), "utf8"));
+    const started = Date.now();
+    await Promise.all([server.stop(), server.stop()]);
     await server.stop();
+    assert.ok(Date.now() - started < 6_000, "shutdown must be bounded");
+    assert.throws(() => process.kill(pid, 0), "the server process, not just its wrapper, must be gone");
+    await assert.rejects(fetch(`${server.url}/global/health`, { signal: AbortSignal.timeout(1000) }));
     // The spawned server must NOT have inherited the ambient password.
     assert.equal(existsSync(pwFile), true, "shim should have written the env it saw");
     assert.equal(readFileSync(pwFile, "utf8"), "", "server env must not contain OPENCODE_SERVER_PASSWORD");
@@ -80,8 +88,8 @@ test("startAttachServer becomes healthy, strips ambient server auth, and stops c
   }
 });
 
-test("startAttachServer aborts hung health attempts and fails when the server never becomes healthy", async () => {
-  const { bin, root } = makeFixture(HANGS);
+test("startAttachServer aborts hung health attempts and fails when the server never becomes healthy", { timeout: 15_000 }, async () => {
+  const { bin, root } = makeFixture(`require("fs").writeFileSync("server.pid", String(process.pid));\n${HANGS}`);
   const started = Date.now();
 
   await assert.rejects(
@@ -89,9 +97,13 @@ test("startAttachServer aborts hung health attempts and fails when the server ne
     /did not become healthy within/,
   );
   assert.ok(Date.now() - started < 10_000, "should give up promptly, not hang on a stalled connect");
+  if (existsSync(join(root, "server.pid"))) {
+    const pid = Number(readFileSync(join(root, "server.pid"), "utf8"));
+    assert.throws(() => process.kill(pid, 0), "unhealthy server must not remain running");
+  }
 });
 
-test("OpenCode lifecycle reuses one owned server and never stops an external server", async () => {
+test("OpenCode lifecycle reuses one owned server and never stops an external server", { timeout: 15_000 }, async () => {
   const root = mkdtempSync(join(tmpdir(), "forge-attach-lifecycle-"));
   const callsFile = join(root, "serve-calls.txt");
   const argsFile = join(root, "run-args.json");
@@ -135,7 +147,7 @@ ${HEALTHY}
   }
 });
 
-test("attach startup cancellation tears down the partially prepared server", async () => {
+test("attach startup cancellation tears down the partially prepared server", { timeout: 15_000 }, async () => {
   const root = mkdtempSync(join(tmpdir(), "forge-attach-cancel-"));
   const pidFile = join(root, "pid.txt");
   const bin = makeNodeShim(root, "opencode", `require("fs").writeFileSync(${JSON.stringify(pidFile)}, String(process.pid));\n${HANGS}`);
@@ -151,3 +163,61 @@ test("attach startup cancellation tears down the partially prepared server", asy
     clearTimeout(timer);
   }
 });
+
+test("owned server shutdown escalates when SIGTERM is ignored", {
+  timeout: 15_000,
+  skip: process.platform === "win32" ? "POSIX signal escalation; Windows uses taskkill." : false,
+}, async () => {
+  const { bin, root } = makeFixture(`require("fs").writeFileSync("server.pid", String(process.pid));\n${HEALTHY}
+process.removeAllListeners("SIGTERM");
+process.on("SIGTERM", () => {});
+`);
+  const server = await startAttachServer({ bin, repoRoot: root, timeoutMs: 5_000 });
+  const pid = Number(readFileSync(join(root, "server.pid"), "utf8"));
+  try {
+    await server.stop();
+    assert.throws(() => process.kill(pid, 0), "SIGKILL must terminate the stubborn server");
+  } finally {
+    try { process.kill(pid, "SIGKILL"); } catch (error) {
+      if (!(error instanceof Error && "code" in error && error.code === "ESRCH")) throw error;
+    }
+  }
+});
+
+for (const mode of ["failure", "timeout"] as const) {
+  test(`owned server shutdown reports taskkill ${mode} without hanging`, {
+    timeout: 15_000,
+    skip: process.platform !== "win32" ? "Windows process-tree cleanup." : false,
+  }, async (context) => {
+    const { bin, root } = makeFixture(`require("fs").writeFileSync("server.pid", String(process.pid));\n${HEALTHY}`);
+    const server = await startAttachServer({ bin, repoRoot: root, timeoutMs: 5_000 });
+    const pid = Number(readFileSync(join(root, "server.pid"), "utf8"));
+    const killer = context.mock.method(childProcess, "execFile", (...args: unknown[]) => {
+      assert.equal(args[0], "taskkill");
+      const callback = args.at(-1) as (error: Error, stdout: string, stderr: string) => void;
+      if (mode === "failure") queueMicrotask(() => callback(new Error("simulated failure"), "", "access denied"));
+      return {
+        kill: () => {
+          if (mode === "failure") throw new Error("simulated fallback failure");
+          return true;
+        },
+        unref: () => {},
+      };
+    });
+    syncBuiltinESMExports();
+    try {
+      const started = Date.now();
+      await assert.rejects(server.stop(), mode === "failure" ? /process-tree cleanup failed.*access denied.*fallback termination failed/ : /process-tree cleanup exceeded 5000ms/);
+      assert.ok(Date.now() - started < 7_000, "failed shutdown must remain bounded");
+      assert.equal(killer.mock.callCount(), 1);
+      await assert.rejects(server.stop(), /process-tree cleanup/);
+      assert.equal(killer.mock.callCount(), 1, "repeated stop must preserve the original result");
+    } finally {
+      killer.mock.restore();
+      syncBuiltinESMExports();
+      try { process.kill(pid, "SIGKILL"); } catch (error) {
+        if (!(error instanceof Error && "code" in error && error.code === "ESRCH")) throw error;
+      }
+    }
+  });
+}
