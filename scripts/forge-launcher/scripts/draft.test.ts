@@ -84,12 +84,12 @@ function write(repo: string, rel: string, content: string): void {
   fs.writeFileSync(file, content);
 }
 
-test("draft-prd writes docs/product-vision.md via the stub runner", async () => {
+test("draft-prd writes docs/PRD.md via the stub runner", async () => {
   const repo = makeRepo();
   write(repo, "docs/IDEA.md", "# Project Idea\n\nA thing.\n");
   const { code, out } = await runCli(["draft-prd", "--repo", repo], { FORGE_RUN_WITH: "stub" });
   assert.equal(code, 0, out);
-  assert.ok(fs.existsSync(path.join(repo, "docs", "product-vision.md")), "PRD.md should be written");
+  assert.ok(fs.existsSync(path.join(repo, "docs", "PRD.md")), "PRD.md should be written");
   assert.ok(out.includes("PRD generated"), out);
 });
 
@@ -98,7 +98,7 @@ test("draft-prd with no idea uses existing repository context", async () => {
   const { code, out } = await runCli(["draft-prd", "--repo", repo], { FORGE_RUN_WITH: "stub" });
   assert.equal(code, 0, out);
   assert.ok(out.includes("existing repository"), out);
-  assert.ok(fs.existsSync(path.join(repo, "docs", "product-vision.md")), "PRD.md should be written");
+  assert.ok(fs.existsSync(path.join(repo, "docs", "PRD.md")), "PRD.md should be written");
 });
 
 test("draft-existing-prd uses the project PRD authoring path", async () => {
@@ -108,7 +108,7 @@ test("draft-existing-prd uses the project PRD authoring path", async () => {
   assert.equal(code, 0, out);
   assert.ok(out.includes("existing repository"), out);
   assert.ok(out.includes("Project PRD generated"), out);
-  assert.ok(fs.existsSync(path.join(repo, "docs", "product-vision.md")), "PRD.md should be written");
+  assert.ok(fs.existsSync(path.join(repo, "docs", "PRD.md")), "PRD.md should be written");
 });
 
 test("draft-team writes an agent file via the stub runner", async () => {

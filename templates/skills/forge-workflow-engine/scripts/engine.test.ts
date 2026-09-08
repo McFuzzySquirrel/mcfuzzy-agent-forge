@@ -885,7 +885,7 @@ test("discovery errors are persisted and propagated rather than treated as skips
   const fixture = makeEngineFixture();
   unlinkSync(join(fixture.root, "docs", "PRD.md"));
   const options = engineOptionsFor(fixture, new RecordingHarness(), 1000);
-  await assert.rejects(runEngine(options), /Owner preflight failed:.*product-vision\.md.*features/);
+  await assert.rejects(runEngine(options), /Owner preflight failed:.*PRD\.md.*features/);
   assert.equal(loadState(options.statePath)?.status, "failed");
 });
 

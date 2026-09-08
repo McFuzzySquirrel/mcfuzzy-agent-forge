@@ -207,7 +207,7 @@ test("headless PRD message includes the gap check the manual flow runs", () => {
   assert.ok(msg.includes("security, privacy, accessibility"), msg);
   assert.ok(msg.includes("every solution, including a one-feature project"), msg);
   assert.ok(msg.includes("Run validate-prd"), msg);
-  assert.ok(msg.includes("docs/product-vision.md"), msg);
+  assert.ok(msg.includes("docs/PRD.md"), msg);
   assert.ok(msg.includes("docs/features/*.md"), msg);
   assert.ok(!msg.includes("otherwise keep"), msg);
 });
