@@ -41,9 +41,11 @@ export async function commitTaskWork(
     console.warn(`[engine] Cannot auto-commit task ${taskId}: unable to exclude staged generated artifacts. Unstage docs/artifacts and docs/task-executions before committing.`);
     return null;
   }
-  const add = await runCommand("git", ["add", "-A", "--", ".", ":(exclude)docs/artifacts", ":(exclude)docs/task-executions"], common);
+  const add = await runCommand("git", ["add", "-A", "--", ".", ":(exclude,glob)docs/[a]rtifacts/**", ":(exclude,glob)docs/[t]ask-executions/**"], common);
   if (add.status !== 0) {
-    console.warn(`[engine] git add failed (exit ${add.status}) for task ${taskId}; skipping commit.`);
+    const output = [add.stdout, add.stderr, add.error].filter(Boolean).join("\n");
+    const tail = output.trim().split("\n").slice(-10).join("\n");
+    console.warn(`[engine] git add failed (exit ${add.status}) for task ${taskId}; skipping commit.${tail ? `\n${tail}` : ""}`);
     return null;
   }
 

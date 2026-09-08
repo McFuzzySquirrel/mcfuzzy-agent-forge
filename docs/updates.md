@@ -4,6 +4,24 @@ Detailed release and change notes for MyForge.
 
 ---
 
+## September 2026 - v3.65
+
+### Auto-Commit with Ignored Artifacts
+
+- Fixed task auto-commit failing with Git exit code 1 when generated artifact
+  directories are ignored. Staging still excludes `docs/artifacts/` and legacy
+  `docs/task-executions/`, including nested files, without force-adding them.
+- Staging failures now log bounded Git output and process errors instead of
+  only an exit code. They remain nonfatal to completed tasks.
+- Added regressions for ignored and unignored artifact directories, nested
+  snapshots, similarly named source directories, pre-staged artifact protection,
+  and Git index-lock diagnostics.
+- Existing target repositories need the updated workflow-engine
+  `scripts/commit.ts`. Updating the template does not recover skipped commits,
+  modify the target index, or rerun completed tasks.
+
+---
+
 ## September 2026 - v3.64
 
 ### Canonical PRD Discovery for Execution

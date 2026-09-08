@@ -232,6 +232,17 @@ files (`docs/WORKFLOW-STATE.json`, `docs/EXECUTION-AUDIT.jsonl`,
 `docs/PROGRESS.md`), and records a `task.committed` audit event with the SHA.
 Default message: `feat(forge-engine): complete task {taskId} - {taskTitle}`.
 
+Staging excludes `docs/artifacts/` and legacy `docs/task-executions/`, whether
+ignored or unignored. The exclusion pathspecs use bracket patterns with explicit
+glob descendants (`:(exclude,glob)docs/[a]rtifacts/**` and
+`:(exclude,glob)docs/[t]ask-executions/**`). The brackets prevent Git from treating
+the ignored directory itself as an explicitly named literal prefix; plain
+directory exclusions, even with `/**`, can cause `git add` to exit with code 1.
+Pre-staged generated artifacts block auto-commit without being unstaged or
+discarded. Staging failures log the last ten lines of captured Git output and
+process errors, then skip the commit; Git may already have staged other files
+before reporting an error.
+
 Auto-commit is **on by default**; `--no-auto-commit` / `FORGE_ENGINE_AUTO_COMMIT=0`
 disables it. A missing `.git`, an empty diff, or a failed commit is skipped or
 logged — it never fails a task that already succeeded.
