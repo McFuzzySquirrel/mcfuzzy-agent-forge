@@ -515,9 +515,13 @@ function headlessRunner(): AuthoringRunner {
   }
   // Only inheritance consults the machine. A Claude harness inherits the opencode
   // runner, so on a box with Claude Code but no OpenCode that default cannot run;
-  // fall back to the harness's own CLI. The inherited !== native guard keeps every
-  // other harness off the filesystem, and when neither is installed the result is
+  // fall back to the harness's own CLI. When neither is installed the result is
   // unchanged so the spawn error still names the runner the operator configured.
+  // The inherited !== native guard keeps every other harness off the filesystem.
+  // It is a cost optimisation, not a correctness control: wherever it short
+  // circuits the rest of the condition is self-contradictory, so dropping it
+  // changes only whether a probe runs, never what this returns. No test can catch
+  // its loss, so keep it when moving this rule.
   const inherited = authoringRunnerForHarness(state.harness);
   const native = harnessCliForHarness(state.harness).cli;
   if (inherited !== native && !commandExists(inherited) && commandExists(native)) return native;

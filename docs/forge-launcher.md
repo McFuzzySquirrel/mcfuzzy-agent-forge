@@ -325,12 +325,15 @@ otherwise, including for the Claude harness; `claude` is selected with
 `FORGE_RUN_WITH=claude`. Selecting it requires stage models from the
 `claude_cli` inventory or `inherit`, since an OpenCode-shaped ID like
 `anthropic/claude-sonnet-4` fails closed, and a logged-in `claude` binary. When
-nothing selects a runner and that inherited CLI is not installed while the
-harness's own CLI is, the harness's CLI is used instead, so a Claude repository
-on a machine with Claude Code but no OpenCode authors through `claude`;
-explicit selections are never substituted and still fail when their CLI is
-missing. Note that `bypassPermissions` can be disabled by a managed Claude Code
-policy, in which case the runner exits non-zero before authoring starts. Set
+nothing selects a runner and the inherited runner's CLI is not installed while
+the harness's own CLI is, the harness's CLI is used instead, so a Claude
+repository on a machine with Claude Code but no OpenCode authors through
+`claude`; explicit selections are never substituted and still fail when their
+CLI is missing. A repository that falls back this way comes under the same
+stage-model constraint, so a saved OpenCode-shaped ID fails closed at model
+resolution with an actionable message rather than at spawn. Note that
+`bypassPermissions` can be disabled by a managed Claude Code policy, in which
+case the runner exits non-zero before authoring starts. Set
 `FORGE_WORKFLOW_ENGINE=1` to append
 `GO --workflow-engine` so the build executes through the workflow engine. On that path the engine runs **detached** (not as a
 blocking child of the session) and the per-task harness is selected with

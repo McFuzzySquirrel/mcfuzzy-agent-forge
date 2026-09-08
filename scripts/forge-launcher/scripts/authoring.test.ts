@@ -631,6 +631,9 @@ const AUTHORING_CLI = fileURLToPath(new URL("./cli.ts", import.meta.url));
 function draftPrdDryRun(repo: string, env: NodeJS.ProcessEnv = {}): string {
   const base = { ...process.env, ...env };
   if (!Object.hasOwn(env, "FORGE_RUN_WITH")) delete base.FORGE_RUN_WITH;
+  // Windows inherits `Path`, and commandExists reads `PATH ?? Path`, so a caller
+  // pinning PATH must not leave the machine's real one behind for it to find.
+  if (Object.hasOwn(env, "PATH")) delete base.Path;
   delete base.FORGE_PRD_MODEL;
   return execFileSync(process.execPath, ["--import", "tsx", AUTHORING_CLI, "draft-prd", "--repo", repo, "--dry-run"], {
     encoding: "utf8", env: base,
@@ -686,8 +689,10 @@ test("inherited runner falls back to the harness CLI only when the inherited CLI
   // Neither is installed: unchanged, so the spawn error still names the configured runner.
   assert.match(commandLine(draftPrdDryRun(fixture(t, ".claude"), { PATH: withNeither }), "opencode"), /^opencode run /);
 
-  // For every other harness the inherited runner is the harness CLI, so there is
-  // nothing to substitute and the probe never runs.
+  // A harness whose inherited runner is already its native CLI is never substituted,
+  // even with another runner's CLI the only one installed. This pins the outcome, not
+  // the inherited !== native guard: with inherited === native the rest of the
+  // condition is self-contradictory, so the case passes with the guard removed too.
   assert.match(commandLine(draftPrdDryRun(fixture(t, ".github"), { PATH: withClaude }), "copilot"), /^copilot /);
 
   // An explicit selection is never substituted: it must still fail loudly later.

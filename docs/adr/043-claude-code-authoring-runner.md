@@ -51,10 +51,10 @@ inventory or `inherit`, and a logged-in `claude` binary.
 skips hooks, plugin sync, and auto-memory, which a probe does not need, but it
 also makes a project skill under `.claude/skills/` an unknown command.
 
-Amended 2026-09-07: this ADR first defaulted Claude-harness repositories to the
-`claude` runner. That hid OpenCode's multi-provider inventory from the Console,
-which has no runner selector, so the default was restored and the selector is
-tracked as a follow-up; inheritance now falls back to the harness's own CLI
+Amended 2026-09-07 and 2026-09-08: this ADR first defaulted Claude harnesses
+to the `claude` runner. That hid OpenCode's multi-provider inventory from the
+Console, which has no runner selector, so the default was restored and the
+selector tracked as a follow-up; inherit now falls back to the harness's CLI
 when the inherited one is missing, and explicit selections are exempt.
 
 See `docs/research/claude-authoring-runner.md` for the probe evidence.
