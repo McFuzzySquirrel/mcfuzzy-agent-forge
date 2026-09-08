@@ -28,7 +28,11 @@ The current package-level test suite exercises the main launcher behaviors:
 The workflow-engine package uses an explicit recursive Node-based test
 discovery entry point. It includes root and nested `.test.ts` files and fails
 when no tests are discovered, rather than relying on shell-specific glob
-expansion.
+expansion. Each test file has a default 120-second timeout, so a stuck worker
+fails before the GitHub job's 15-minute deadline. From the engine package
+directory, use `npm test -- --test-timeout=300000` to override this for debugging.
+OpenCode lifecycle tests also have 15-second individual deadlines and verify
+the actual server PID is gone, not just its Windows command wrapper.
 
 The completed Linux Node 22.22.2 baseline is engine 138/138 (including the
 latest process-cleanup and replay-cancellation regressions), launcher 110/110,
@@ -37,8 +41,12 @@ baselines remain historical. A repository workflow now configures a Node 22
 matrix for Linux and
 Windows across the launcher, execution adapter, workflow engine, and skill
 review packages. It also runs the team validation gate plus launcher build and
-version checks. CI is configured, but no Windows run has occurred yet; do not
-present the matrix as Windows execution evidence.
+version checks. In run
+[34192337962](https://github.com/McFuzzySquirrel/mcfuzzy-agent-forge/actions/runs/34192337962),
+all seven other matrix jobs passed, but the Windows engine job stopped reporting
+after test 133 and reached its 15-minute deadline. Linux completed 199 tests
+(198 passed, one skipped). The v3.66 shutdown fix addresses the Windows owned
+server cleanup wait; that historical run is not evidence of the fix passing CI.
 
 To run the same package checks locally from the repository root:
 

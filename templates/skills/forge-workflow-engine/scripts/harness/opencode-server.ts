@@ -1,4 +1,5 @@
 import { createServer } from "node:net";
+import { execFile, type ChildProcess } from "node:child_process";
 
 import spawn from "cross-spawn";
 
@@ -74,8 +75,14 @@ export async function startAttachServer(opts: StartAttachServerOptions): Promise
     cwd: opts.repoRoot,
     env: serverEnv(),
     stdio: ["ignore", "ignore", "pipe"],
+    detached: process.platform !== "win32",
+    windowsHide: true,
   });
 
+  let closed = false;
+  let stopping: Promise<void> | undefined;
+  child.once("close", () => { closed = true; });
+  const stop = () => stopping ??= stopServer(child, closed);
   let stderr = "";
   let spawnError: string | undefined;
   child.stderr?.on("data", (chunk: Buffer) => {
@@ -105,7 +112,7 @@ export async function startAttachServer(opts: StartAttachServerOptions): Promise
           const body = (await res.json()) as { healthy?: boolean };
           if (body.healthy !== false) {
             opts.signal?.throwIfAborted();
-            return { url, port, stop: () => stopServer(child) };
+            return { url, port, stop };
           }
         }
       } catch (error) {
@@ -118,19 +125,76 @@ export async function startAttachServer(opts: StartAttachServerOptions): Promise
     const reason = spawnError !== undefined ? spawnError : `did not become healthy within ${timeoutMs}ms`;
     throw new Error(`opencode serve failed to start on ${url}: ${reason}. ${stderr.trim()}`);
   } catch (error) {
-    await stopServer(child);
+    try {
+      await stop();
+    } catch (cleanupError) {
+      throw new AggregateError([error, cleanupError], `${String(error)}; ${String(cleanupError)}`);
+    }
     throw error;
   }
 }
 
-async function stopServer(child: ReturnType<typeof spawn>): Promise<void> {
-  if (child.exitCode !== null || child.signalCode !== null || !child.pid) return;
-  await new Promise<void>((resolve) => {
-    const timer = setTimeout(() => child.kill("SIGKILL"), 1000);
-    child.once("close", () => {
-      clearTimeout(timer);
-      resolve();
-    });
-    child.kill("SIGTERM");
+async function stopServer(child: ReturnType<typeof spawn>, alreadyClosed: boolean): Promise<void> {
+  if (alreadyClosed || !child.pid) return;
+  const pid = child.pid;
+  const timeoutMs = 5_000;
+  await new Promise<void>((resolve, reject) => {
+    let closed = false;
+    let terminationFinished = false;
+    let settled = false;
+    let forceTimer: ReturnType<typeof setTimeout> | undefined;
+    let treeKiller: ChildProcess | undefined;
+    const finish = (error?: Error) => {
+      if (settled || (!error && (!closed || !terminationFinished))) return;
+      settled = true;
+      clearTimeout(deadline);
+      clearTimeout(forceTimer);
+      child.removeListener("close", onClose);
+      if (error) {
+        for (const target of [treeKiller, child]) {
+          try {
+            target?.kill("SIGKILL");
+          } catch (killError) {
+            error = new AggregateError([error, killError], `${error.message}; fallback termination failed: ${String(killError)}`);
+          }
+          target?.unref();
+        }
+        child.stderr?.destroy();
+        reject(error);
+      } else {
+        resolve();
+      }
+    };
+    const onClose = () => {
+      closed = true;
+      finish();
+    };
+    const deadline = setTimeout(() => finish(new Error(`opencode serve process-tree cleanup exceeded ${timeoutMs}ms (PID ${pid})`)), timeoutMs);
+    child.once("close", onClose);
+    if (process.platform === "win32") {
+      treeKiller = execFile("taskkill", ["/PID", String(pid), "/T", "/F"], {
+        windowsHide: true, timeout: timeoutMs, maxBuffer: 64 * 1024,
+      }, (error, _stdout, stderr) => {
+        terminationFinished = true;
+        finish(error ? new Error(`opencode serve process-tree cleanup failed (PID ${pid}): ${stderr.trim() || error.message}`) : undefined);
+      });
+    } else {
+      const signalTree = (signal: NodeJS.Signals) => {
+        try {
+          process.kill(-pid, signal);
+        } catch (error) {
+          if (!(error instanceof Error && "code" in error && error.code === "ESRCH")) {
+            finish(new Error(`opencode serve process-tree cleanup failed (PID ${pid}): ${String(error)}`));
+          }
+        }
+      };
+      signalTree("SIGTERM");
+      if (settled) return;
+      forceTimer = setTimeout(() => {
+        signalTree("SIGKILL");
+        terminationFinished = true;
+        finish();
+      }, 1000);
+    }
   });
 }

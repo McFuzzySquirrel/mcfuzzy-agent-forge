@@ -197,6 +197,21 @@ the run is persisted as paused for resume. This differs from the graceful CLI
 pause/stop path, which allows the in-flight task to finish before persisting
 `paused`.
 
+### Owned OpenCode server cleanup
+
+Keep-alive mode owns an `opencode serve` process for the run. Shutdown, startup
+failure, and startup cancellation all use the same idempotent cleanup promise.
+On Windows, cleanup uses `taskkill /PID <pid> /T /F` before killing any command
+wrapper separately, so the server cannot retain an inherited stderr pipe after
+its wrapper exits. On POSIX, the server has a dedicated process group; cleanup
+sends SIGTERM and escalates to SIGKILL after one second.
+
+Cleanup waits for both termination work and process/stdio closure, with a
+five-second deadline. Failure rejects explicitly and releases inherited stderr
+handles; it does not claim the server was successfully removed. A startup error
+and a cleanup error are preserved together. External `--attach` servers are not
+owned and are never terminated by engine cleanup.
+
 ### Heartbeat
 
 A long harness call (e.g. a multi-minute `opencode run`, `copilot -p`, or `claude -p`) is silent, which can look like a hang. While `harness.invoke` is in flight, the engine prints a heartbeat line at a fixed interval:

@@ -137,7 +137,14 @@ npm run workflow-engine -- run --harness opencode --no-keep-alive # force cold s
 npm run workflow-engine -- run --harness opencode --keep-alive --keep-alive-port 4096
 ```
 
-The server is torn down when the run finishes. Each `opencode run --attach` still
+The owned server is torn down when the run finishes, startup fails, or startup
+is cancelled. Windows cleanup terminates the server PID tree (including command
+wrappers); POSIX cleanup signals an owned process group and escalates to SIGKILL
+after one second. Cleanup fails explicitly after five seconds instead of waiting
+indefinitely for inherited stderr pipes to close. Repeated shutdown calls share
+one result. Externally supplied `--attach` servers are never stopped by the engine.
+
+Each `opencode run --attach` still
 creates a fresh, isolated session per task - the server only keeps the shared
 project instance (config/skills/MCP) warm. If you already keep an `opencode serve`
 running (e.g. started manually or by the TUI), skip the lifecycle management and

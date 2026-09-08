@@ -4,6 +4,27 @@ Detailed release and change notes for MyForge.
 
 ---
 
+## September 2026 - v3.66
+
+### Bounded OpenCode Server Shutdown
+
+- Fixed Windows workflow-engine validation hanging after test 133: owned
+  OpenCode server shutdown now terminates the Windows PID tree, including
+  command wrappers, before reporting completion.
+- POSIX shutdown signals an owned process group and escalates from SIGTERM to
+  SIGKILL after one second. Cleanup has a five-second deadline on both platforms;
+  failures are reported explicitly and inherited stderr handles are released.
+- Repeated and concurrent shutdown calls share one result. Startup failures
+  retain both the original error and any cleanup error; external attach servers
+  remain outside engine lifecycle management.
+- Added bounded lifecycle regressions for actual server PID removal, startup
+  timeout/cancellation, failed or stalled Windows cleanup, and POSIX escalation.
+  The engine test runner now defaults to a 120-second test-file timeout.
+- Existing target repositories need the updated workflow-engine
+  `scripts/harness/opencode-server.ts`; the GitHub job timeout remains 15 minutes.
+
+---
+
 ## September 2026 - v3.65
 
 ### Auto-Commit with Ignored Artifacts
