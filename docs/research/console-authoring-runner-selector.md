@@ -1,7 +1,7 @@
 # Scoping: an explicit authoring runner selector for the Console and launcher
 
 **Date:** 2026-09-07
-**Status:** Implemented on this branch (ADR-044)
+**Status:** Implemented on this branch (ADR-048)
 **Trigger:** a maintainer reported that model discovery "only looks for Claude" after the
 `claude` authoring runner landed (ADR-043). Root cause: the runner is derived from the harness
 root, the Console's inventory is per runner, and the Console has no way to choose a runner. The
@@ -119,7 +119,7 @@ selects. The `modelTerminalPanel` select (`documents.ts:368`) is the existing pa
 **A. Persist in `docs/authoring-config.json` (recommended).** One file, one validator, one
 precedence ladder, symmetric with models, reaches headless runs and the CLI. Cost: about 40
 lines in `authoring-config.ts`, 20 in `launcher.ts` and `cli.ts`, 10 in `control.ts`, 60 across
-the two views, tests, docs, and ADR-044.
+the two views, tests, docs, and ADR-048.
 
 **B. Console-only, unpersisted.** A select that only steers the inventory calls and the
 refresh. Cheap, but stage retries and headless runs would still use the harness rule, so the
@@ -138,7 +138,7 @@ harness's. Rejected.
 - [ ] `console/dashboard/types.ts`, `views/new.ts`, `views/documents.ts`
 - [ ] Tests: validator accept/reject/inherit round-trip; runner precedence (invocation, env, project, inherit) mirroring `authoring.test.ts:70-78`; headless draft honours the persisted runner; create-project passes `--runner` (mirror `console-authoring.test.ts:191-207`); wizard and settings-panel behaviour through the API seams
 - [ ] Docs: `docs/forge-launcher.md` schema example at `:183-190`, precedence at `:196-198`, CLI flags at `:118-121` and `:212-224`, `FORGE_RUN_WITH` prose at `:318-329` and table at `:884`; `docs/forge-console-user-guide.md:166-178`; `docs/forge-console.md:135` (stale, still omits `claude`); `docs/updates.md`
-- [ ] ADR-044, superseding the "default from harness" sentence of ADR-043
+- [ ] ADR-048, superseding the "default from harness" sentence of ADR-043
 
 ## Open questions
 

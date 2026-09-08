@@ -1,4 +1,4 @@
-# ADR-044: Explicit authoring runner selection
+# ADR-048: Explicit authoring runner selection
 
 - **Status:** Accepted
 - **Date:** 2026-09-07
