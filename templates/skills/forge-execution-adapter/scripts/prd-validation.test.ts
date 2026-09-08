@@ -11,17 +11,17 @@ function fixture(text = document()) {
   const root = mkdtempSync(join(tmpdir(), "prd-validation-"));
   mkdirSync(join(root, "docs/features"), { recursive: true });
   writeFileSync(join(root, "docs/requirements.md"), "Upload limits");
-  writeFileSync(join(root, "docs/product-vision.md"), "# Vision\n## 14. Features\n| # | Feature | File | Dependencies |\n| 1 | Upload | features/upload.md | None |\n");
+  writeFileSync(join(root, "docs/PRD.md"), "# Vision\n## 14. Features\n| # | Feature | File | Dependencies |\n| 1 | Upload | features/upload.md | None |\n");
   writeFileSync(join(root, "docs/features/upload.md"), text);
   return root;
 }
 test("even a single-task solution requires canonical features and ignores historical PRDs", () => {
   const root = mkdtempSync(join(tmpdir(), "features-required-"));
   mkdirSync(join(root, "docs/features"), { recursive: true });
-  writeFileSync(join(root, "docs/PRD.md"), document());
+  writeFileSync(join(root, "docs/product-vision.md"), document());
   writeFileSync(join(root, "docs/requirements.md"), "Upload limits");
-  assert.ok(validatePrd(root).errors.length);
-  writeFileSync(join(root, "docs/product-vision.md"), "# Vision\n## 14. Features\n| # | Feature | File | Dependencies |\n| 1 | Upload | features/upload.md | None |\n");
+  assert.match(validatePrd(root).errors.join("\n"), /Missing docs\/PRD/);
+  writeFileSync(join(root, "docs/PRD.md"), "# Vision\n## 14. Features\n| # | Feature | File | Dependencies |\n| 1 | Upload | features/upload.md | None |\n");
   assert.match(validatePrd(root).errors.join("\n"), /features/);
   writeFileSync(join(root, "docs/features/upload.md"), document());
   const result = validatePrd(root);

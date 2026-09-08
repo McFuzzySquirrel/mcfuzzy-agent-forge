@@ -247,6 +247,29 @@ async function withServer<T>(
   }
 }
 
+test("summary detects newly authored canonical requirements for team generation", async () => {
+  await withServer(async (server, repo) => {
+    const legacyVision = join(repo, "docs", "product-vision.md");
+    if (existsSync(legacyVision)) renameSync(legacyVision, `${legacyVision}.bak`);
+    renameSync(join(repo, ".agents", "agents"), join(repo, ".agents", "agents-backup"));
+    const prd = join(repo, "docs", "PRD.md");
+    renameSync(prd, `${prd}.bak`);
+
+    const before = await getJson(`${server.url}/api/summary`) as { hasPrd: boolean; hasTeam: boolean };
+    assert.equal(before.hasPrd, false);
+    assert.equal(before.hasTeam, false);
+
+    renameSync(`${prd}.bak`, prd);
+    const after = await getJson(`${server.url}/api/summary`) as { hasPrd: boolean; hasVision: boolean; hasTeam: boolean };
+    assert.equal(after.hasPrd, true);
+    assert.equal(after.hasVision, true);
+    assert.equal(after.hasTeam, false);
+
+    const docs = await getJson(`${server.url}/api/docs`) as { entries: Array<{ kind: string; relPath: string; exists: boolean }> };
+    assert.ok(docs.entries.some((entry) => entry.kind === "vision" && entry.relPath === "docs/PRD.md" && entry.exists));
+  });
+});
+
 test("serves summary, tasks, docs, team, and actions", async () => {
   await withServer(async (server, repo) => {
     const summary = await getJson(`${server.url}/api/summary`) as { repoName: string; hasPrd: boolean; hasTeam: boolean; defaultTimeoutMs: number; run: { status: string; counts: { complete: number; running: number }; completedDurationMs: number } };

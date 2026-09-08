@@ -4,6 +4,34 @@ Detailed release and change notes for MyForge.
 
 ---
 
+## September 2026 - v3.64
+
+### Canonical PRD Discovery for Execution
+
+- Fixed execution-adapter discovery reading the retired `docs/product-vision.md`
+  filename while reporting that `docs/PRD.md` was required. Repositories with a
+  canonical PRD and feature documents can now compile their execution manifest.
+- Aligned discovery and authoring-validator regression fixtures with
+  `docs/PRD.md`, retaining coverage that historical documents cannot supply tasks
+  or validation commands.
+- Existing target repositories need the updated execution-adapter discovery
+  script; requirements documents do not need to be renamed or regenerated.
+
+---
+
+## September 2026 - v3.63
+
+### Console PRD Completion Detection
+
+- Fixed the console checking the retired `docs/product-vision.md` filename
+  instead of the canonical `docs/PRD.md`. After PRD and feature authoring,
+  the overview can now advance from "Author project PRD" to "Generate team".
+- Updated the Plan & Team Product Vision link to open `docs/PRD.md`.
+- Added regression coverage for detecting newly authored requirements without
+  a legacy Product Vision file or an existing agent team.
+
+---
+
 ## September 2026 - v3.62
 
 ### Consolidated Task Architecture Decisions

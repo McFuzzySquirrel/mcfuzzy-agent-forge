@@ -591,7 +591,7 @@ export function docsIndex(p: RepoPaths): DocsIndex {
   };
 
   push("idea", "idea", "Project Idea", "docs/IDEA.md", p.ideaPath);
-  push("vision", "vision", "Product Vision", "docs/product-vision.md", p.visionPath);
+  push("vision", "vision", "Product Vision", "docs/PRD.md", p.visionPath);
   push("progress", "progress", "Progress", "docs/PROGRESS.md", p.progressPath);
   push("model-plan", "model-plan", "Model Plan", "docs/MODEL-PLAN.md", p.modelPlanPath);
   for (const f of listMarkdown(path.join(p.repoRoot, "docs", "research"))) {

@@ -428,7 +428,7 @@ function createFeatureFixture() {
   mkdirSync(featuresDir, { recursive: true });
   mkdirSync(join(root, "docs", "features", "sub"), { recursive: true });
 
-  writeFileSync(join(root, "docs", "product-vision.md"), `# Product Vision
+  writeFileSync(join(root, "docs", "PRD.md"), `# Product Vision
 
 ## 14. Features
 
@@ -491,12 +491,13 @@ test("discoverForgeRepo detects the decomposed feature layout", () => {
   const repo = discoverForgeRepo(root);
   assert.equal(repo.sourceLayout, "features");
   assert.equal(repo.featurePaths.length, 3);
-  assert.equal(normalize(repo.visionPath), normalize(join(root, "docs", "product-vision.md")));
+  assert.equal(normalize(repo.visionPath), normalize(join(root, "docs", "PRD.md")));
+  assert.equal(repo.prdPath, repo.visionPath);
 });
 
 test("historical source documents never supply tasks or validation commands", () => {
   const root = createFixture();
-  writeFileSync(join(root, "docs/PRD.md"), "# Historical source\n## Validation\n`npm run obsolete`\n## Phase 1: Retired\n- Run obsolete work\n");
+  writeFileSync(join(root, "docs/product-vision.md"), "# Historical source\n## Validation\n`npm run obsolete`\n## Phase 1: Retired\n- Run obsolete work\n");
   const manifest = compileExecutionManifest(discoverForgeRepo(root));
   assert.equal(manifest.phases.flatMap((phase) => phase.tasks).length, 3);
   assert.ok(!manifest.validationCommands.includes("npm run obsolete"));
@@ -527,7 +528,7 @@ test("compileExecutionManifest compiles features in dependency order with featur
 
 test("compileExecutionManifest falls back to lexical order when the vision has no feature table", () => {
   const root = createFeatureFixture();
-  writeFileSync(join(root, "docs", "product-vision.md"), "# Product Vision\n\nNo features table.\n", "utf8");
+  writeFileSync(join(root, "docs", "PRD.md"), "# Product Vision\n\nNo features table.\n", "utf8");
   const repo = discoverForgeRepo(root);
   const manifest = compileExecutionManifest(repo);
 
