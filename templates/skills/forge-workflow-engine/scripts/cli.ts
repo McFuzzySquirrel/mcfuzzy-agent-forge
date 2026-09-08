@@ -19,6 +19,7 @@ import { CopilotAdapter } from "./harness/copilot-adapter.ts";
 import { ClaudeAdapter } from "./harness/claude-adapter.ts";
 import { OpenAIAdapter } from "./harness/openai-adapter.ts";
 import { StubAdapter } from "./harness/stub-adapter.ts";
+import { approveHumanTask } from "./task-context.ts";
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -34,6 +35,7 @@ Usage:
                                      [--viz [port]] [--no-open]
                                      [--keep-alive] [--keep-alive-port <port>] [--attach <url>] [--no-keep-alive]
   npm run workflow-engine -- status  [--repo <path>]
+  npm run workflow-engine -- approve-task <task-id> --repo <path> --reviewer <name> --evidence <repo-relative-file> --confirm-human-review
   npm run workflow-engine -- replay  <task-id> [--repo <path>] [--harness opencode|copilot|claude|openai|stub]
   npm run workflow-engine -- pause   [--repo <path>]
   npm run workflow-engine -- stop    [--repo <path>]
@@ -234,7 +236,7 @@ async function confirmPreRun(opts: EngineOptions, args: string[], keepAlive?: Ke
 
   console.log("Forge Workflow Engine - Pre-run Summary");
   console.log(`  Harness : ${opts.harness.name}`);
-  console.log(`  Layout  : ${manifest.sourceLayout ?? "monolithic"}`);
+  console.log(`  Layout  : ${manifest.sourceLayout ?? "unsupported legacy manifest; recompile from features"}`);
   console.log(`  Phases  : ${manifest.phases.length}`);
   console.log(`  Tasks   : ${taskCount}`);
   console.log(`  Timeout : ${opts.taskTimeoutMs}ms per task (--task-timeout-ms / per-task timeoutMs overrides)`);
@@ -551,6 +553,17 @@ async function main(): Promise<void> {
   if (!command) usage();
 
   switch (command) {
+    case "approve-task": {
+      if (!hasFlag(args, "--confirm-human-review")) throw new Error("An operator must explicitly attest --confirm-human-review; agents must not invoke this command.");
+      const repo = resolve(flag(args, "--repo") ?? process.cwd());
+      const manifest = JSON.parse(readFileSync(join(repo, "docs", "EXECUTION-MANIFEST.json"), "utf8")) as ExecutionManifest;
+      const task = manifest.phases.flatMap((phase) => phase.tasks).find((entry) => entry.id === args[0]);
+      if (!task) throw new Error("Unknown review task.");
+      const evidence = args.flatMap((arg, index) => arg === "--evidence" && args[index + 1] ? [args[index + 1]!] : []);
+      approveHumanTask(repo, task, flag(args, "--reviewer") ?? "", evidence);
+      console.log(`Recorded operator attestation for ${task.id}. Resume the engine to verify and complete the review task.`);
+      break;
+    }
     case "run": await cmdRun(args); break;
     case "status": await cmdStatus(args); break;
     case "replay": await cmdReplay(args); break;

@@ -4,6 +4,7 @@ import { resolve } from "node:path";
 import { runCommand, extractModelFlags, stripProviderPrefix, canSelectAgentNatively } from "./run.ts";
 import type { HarnessAdapter, TaskAttemptRequest, TaskResult } from "../types.ts";
 import { inlinePersona } from "../request.ts";
+import { executionPrompt } from "../task-execution.ts";
 
 /**
  * GitHub Copilot CLI harness adapter.
@@ -12,15 +13,14 @@ import { inlinePersona } from "../request.ts";
  * structured TaskResult.
  *
  * Agent selection is native when possible: if the owning agent's file lives
- * under the project's `.github/agents/` directory, the adapter prepends the
- * `/agent <name>` directive to the prompt so the Copilot CLI loads the persona
- * itself and the persona is not inlined. For other harness roots (`.agents`,
+ * under the project's `.github/agents/` directory, the adapter passes
+ * `--agent <name>` so the Copilot CLI loads the persona itself. For other roots (`.agents`,
  * `.claude`, `.opencode`) Copilot cannot discover the agent files, so the agent
- * file body is prepended to the user prompt as an inline context block instead.
+ * file body is included in the repository task's execution file instead.
  *
  * Expected CLI shapes:
- *   copilot -p "/agent <name>\n\n<task prompt>" --yolo
- *   copilot -p "<agent body + task prompt>" --yolo
+ *   copilot -p "<short execution-file instruction>" --agent <name> --yolo
+ *   copilot -p "<short execution-file instruction>" --yolo
  *
  * Set COPILOT_BIN env var to override the copilot binary path.
  * Set COPILOT_EXTRA_FLAGS env var to inject extra flags (e.g. "--model gpt-4o").
@@ -48,9 +48,10 @@ export class CopilotAdapter implements HarnessAdapter {
     const start = Date.now();
     const { agent, task, repoRoot } = request;
     const native = this.canSelectAgent(request);
-    const prompt = [native ? `/agent ${agent.name}` : inlinePersona(request), request.instructions].join("\n\n");
+    const prompt = executionPrompt(request, native ? "" : inlinePersona(request));
+    const agentFlag = native ? ["--agent", agent.name] : [];
     const modelFlag = request.effectiveModel ? ["--model", stripProviderPrefix(request.effectiveModel)] : [];
-    const args = ["-p", prompt, ...modelFlag, ...this.extraFlags];
+    const args = ["-p", prompt, ...agentFlag, ...modelFlag, ...this.extraFlags];
 
     const result = await runCommand(this.bin, args, {
       cwd: repoRoot,

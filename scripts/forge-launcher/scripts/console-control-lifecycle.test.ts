@@ -6,6 +6,7 @@ import { test } from "node:test";
 
 import { RunController } from "./console/control.ts";
 import { currentJobForRepo } from "./console/jobs.ts";
+import { writeFeatureFixture } from "./feature-fixture.ts";
 
 test("records asynchronous detached startup failures on the created job", () => {
   const previousHome = process.env.FORGE_HOME;
@@ -13,6 +14,7 @@ test("records asynchronous detached startup failures on the created job", () => 
   const repo = mkdtempSync(join(tmpdir(), "forge-repo-"));
   process.env.FORGE_HOME = home;
   try {
+    writeFeatureFixture(repo);
     let failStartup: ((error: Error) => void) | undefined;
     const controller = new RunController(repo, {
       spawner: (_cmd, _args, options) => {

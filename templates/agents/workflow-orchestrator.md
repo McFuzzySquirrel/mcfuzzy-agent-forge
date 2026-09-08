@@ -46,7 +46,7 @@ Do **not** use this agent if:
 
 ### Before Starting a Run
 
-1. **Verify prerequisites** - confirm `docs/PRD.md`, generated `.md` agent files, and `docs/EXECUTION-MANIFEST.json` exist. If the manifest is missing, offer to compile it:
+1. **Verify prerequisites** - confirm `docs/PRD.md`, non-empty `docs/features/*.md`, generated agents and a manifest compiled with `sourceLayout: "features"`. Convert legacy sources and recompile unsupported manifests before execution. If the manifest is missing, offer to compile it:
    ```bash
    cd .agents/skills/forge-execution-adapter && npm install && npm run forge-execution-adapter -- compile
    ```

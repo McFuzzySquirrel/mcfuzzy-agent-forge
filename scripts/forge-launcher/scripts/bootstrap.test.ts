@@ -46,13 +46,18 @@ test("bootstrap rewrites .agents/ paths for a non-default harness", async () => 
 test("bootstrap adds gitignore entries without duplicating existing ones", async () => {
   const target = tmpDir();
   fs.mkdirSync(path.join(target, ".git"));
-  fs.writeFileSync(path.join(target, ".gitignore"), "node_modules/\n");
+  fs.writeFileSync(path.join(target, ".gitignore"), "node_modules/\ncustom-output/\ndocs/extraction-results/\n");
   await bootstrap({ targetDir: target, harness: "agents", force: true, nonInteractive: true });
 
   const gi = fs.readFileSync(path.join(target, ".gitignore"), "utf8");
   const lines = gi.split("\n");
   assert.ok(lines.includes("docs/engine-run.log"));
+  assert.ok(lines.includes("docs/extraction-results/"));
+  assert.ok(lines.includes("docs/artifacts/"));
+  assert.ok(lines.includes("custom-output/"));
   assert.equal(lines.filter((l) => l === "node_modules/").length, 1);
+  await bootstrap({ targetDir: target, harness: "agents", force: true, nonInteractive: true });
+  assert.equal(fs.readFileSync(path.join(target, ".gitignore"), "utf8"), gi);
 });
 
 test("bootstrap writes progress to the repository-local Console log", async () => {

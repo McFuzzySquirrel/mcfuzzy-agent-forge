@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { execFileSync } from "node:child_process";
-import { mkdtempSync, writeFileSync, mkdirSync } from "node:fs";
+import { mkdtempSync, writeFileSync, mkdirSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
@@ -74,3 +74,57 @@ test("commitTaskWork honors a custom message template", async () => {
   assert.ok(sha);
   assert.match(gitLogOneline(root)[0]!, /chore\(task 2\.3\): Fix the bug/);
 });
+
+test("commitTaskWork logs Git stderr when staging fails", async (context) => {
+  const root = mkdtempSync(join(tmpdir(), "forge-commit-error-"));
+  context.after(() => rmSync(root, { recursive: true, force: true }));
+  initGit(root);
+  writeFileSync(join(root, "result.txt"), "Task output");
+  writeFileSync(join(root, ".git", "index.lock"), "");
+  const warnings: string[] = [];
+  context.mock.method(console, "warn", (message: string) => warnings.push(message));
+
+  assert.equal(await commitTaskWork("1", "Task", root), null);
+  assert.equal(warnings.length, 1);
+  assert.match(warnings[0]!, /git add failed/);
+  assert.match(warnings[0]!, /index\.lock/);
+  assert.match(warnings[0]!, /File exists/);
+});
+
+for (const directory of ["docs/artifacts", "docs/task-executions"]) {
+test(`auto-commit succeeds when ${directory} is ignored`, async (context) => {
+  const root = mkdtempSync(join(tmpdir(), "forge-commit-ignored-"));
+  context.after(() => rmSync(root, { recursive: true, force: true }));
+  initGit(root);
+  mkdirSync(join(root, directory), { recursive: true });
+  writeFileSync(join(root, directory, "request.md"), "Engine snapshot");
+  writeFileSync(join(root, ".gitignore"), `${directory}/\n`);
+  writeFileSync(join(root, "result.txt"), "Task output");
+
+  assert.ok(await commitTaskWork("1", "Task", root));
+  assert.deepEqual(
+    execFileSync("git", ["ls-tree", "-r", "--name-only", "HEAD"], { cwd: root, encoding: "utf8" }).trim().split("\n"),
+    [".gitignore", "result.txt"],
+  );
+  execFileSync("git", ["add", "-f", directory], { cwd: root });
+  assert.equal(await commitTaskWork("2", "Task", root), null);
+  assert.match(execFileSync("git", ["diff", "--cached", "--name-only"], { cwd: root, encoding: "utf8" }), /request.md/);
+});
+
+test(`auto-commit excludes ${directory} and refuses pre-staged snapshots without discarding them`, async () => {
+  const root = mkdtempSync(join(tmpdir(), "forge-commit-execution-"));
+  initGit(root);
+  mkdirSync(join(root, directory), { recursive: true });
+  writeFileSync(join(root, directory, "request.md"), "Engine snapshot");
+  mkdirSync(join(root, directory, "nested"), { recursive: true });
+  writeFileSync(join(root, directory, "nested", "result.json"), "{}");
+  mkdirSync(join(root, `${directory}-source`), { recursive: true });
+  writeFileSync(join(root, `${directory}-source`, "keep.txt"), "Task output");
+  writeFileSync(join(root, "result.txt"), "Task output");
+  assert.ok(await commitTaskWork("1", "Task", root));
+  assert.equal(execFileSync("git", ["ls-tree", "-r", "--name-only", "HEAD"], { cwd: root, encoding: "utf8" }).trim(), `${directory}-source/keep.txt\nresult.txt`);
+  execFileSync("git", ["add", directory], { cwd: root });
+  assert.equal(await commitTaskWork("2", "Task", root), null);
+  assert.match(execFileSync("git", ["diff", "--cached", "--name-only"], { cwd: root, encoding: "utf8" }), /request.md/);
+});
+}

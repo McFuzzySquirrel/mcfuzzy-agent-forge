@@ -113,7 +113,7 @@ export function repoPaths(repoRoot: string): RepoPaths {
     engineConfigPath: path.join(docs, "engine-config.json"),
     ideaPath: path.join(docs, "IDEA.md"),
     prdPath: path.join(docs, "PRD.md"),
-    visionPath: path.join(docs, "product-vision.md"),
+    visionPath: path.join(docs, "PRD.md"),
     featuresDir: path.join(docs, "features"),
     modelPlanPath: path.join(docs, "MODEL-PLAN.md"),
     modelOverridesPath: path.join(docs, "model-overrides.json"),

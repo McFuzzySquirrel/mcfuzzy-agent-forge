@@ -101,8 +101,8 @@ export function fingerprintFiles(repo: string, inputs: string[], extra = ""): st
 }
 
 export function stageInputFingerprint(repo: string, stage: AuthoringStage, harnessRoot: string): string {
-  const prd = ["docs/PRD.md", "docs/product-vision.md", "docs/features"];
-  const inputs = stage === "prd" ? ["docs/IDEA.md"] : stage === "team" ? prd
+  const prd = ["docs/PRD.md", "docs/features"];
+  const inputs = stage === "prd" ? ["docs/IDEA.md", "docs/requirements-source.md"] : stage === "team" ? prd
     : [...prd, path.join(harnessRoot, "agents"), "docs/SKILL-CANDIDATES.json"];
   return fingerprintFiles(repo, inputs, harnessRoot);
 }
@@ -114,8 +114,11 @@ export function authoringStageIsCurrent(repo: string, stage: AuthoringStage, har
     (!state.outputFingerprint || state.outputFingerprint === fingerprintFiles(repo, state.outputs));
 }
 
-/** Legacy projects without an active authoring transaction retain their build path. */
 export function authoringReadiness(repo: string, harnessRoot: string): { ready: boolean; reason?: string; nextStage?: AuthoringStage } {
+  const features = path.join(repo, "docs/features");
+  if (!fs.existsSync(path.join(repo, "docs/PRD.md")) || !fs.existsSync(features) || !fs.statSync(features).isDirectory() || !fs.readdirSync(features).some((file) => file.endsWith(".md"))) {
+    return { ready: false, nextStage: "prd", reason: "Every solution requires docs/PRD.md + docs/features/*.md; run draft-prd to author or convert source requirements." };
+  }
   const state = readAuthoringState(repo);
   if (state.stages.prd && state.stages.prd.status !== "complete") {
     return { ready: false, nextStage: "prd", reason: "PRD authoring is incomplete; retry the failed PRD stage before building." };

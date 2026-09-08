@@ -114,12 +114,44 @@ test("attempt requests are detached, deeply readonly snapshots without mutable w
   assert.equal("tasks" in request, false);
 });
 
+test("repository requests reference documents on demand while text requests retain their contents", (context) => {
+  const root = mkdtempSync(join(tmpdir(), "forge-reference-request-"));
+  context.after(() => rmSync(root, { recursive: true, force: true }));
+  writeFileSync(join(root, "requirements.md"), "Supporting detail. ".repeat(4000));
+  const structured: ManifestTask = { ...task, ownerAgent: agent.name, contract: {
+    version: 1, kind: "implementation", requirements: ["Mandatory requirement"], acceptanceCriteria: ["Mandatory criterion"],
+    constraints: ["Mandatory constraint"], references: ["requirements.md"],
+  } };
+  const repository = prepareTaskRequest({ agent, task: { ...structured, requiredCapabilities: ["repository-tools"] }, repoRoot: root });
+  assert.ok(repository.instructions.length < 3000);
+  assert.ok(repository.instructions.includes("requirements.md"));
+  assert.ok(!repository.instructions.includes("Supporting detail."));
+  for (const required of ["Mandatory requirement", "Mandatory criterion", "Mandatory constraint"]) assert.ok(repository.instructions.includes(required));
+  const text = prepareTaskRequest({ agent, task: structured, repoRoot: root });
+  assert.ok(text.instructions.includes("Supporting detail."));
+});
+
 test("legacy and empty requirements require repository tooling, not merely a text result", () => {
   const harness: HarnessAdapter = { name: "text", supportsConcurrency: true, capabilities: ["text"], invoke: async () => { throw new Error("not called"); } };
   for (const requiredCapabilities of [undefined, []]) {
     assert.throws(() => assertTaskCapabilities({ ...task, expectedOutputs: [], requiredCapabilities }, harness), /requires repository-tools/);
   }
   assert.doesNotThrow(() => assertTaskCapabilities(task, harness));
+});
+
+test("structured retry instructions distinguish blockers and retain bounded failure feedback", (context) => {
+  const root = mkdtempSync(join(tmpdir(), "forge-retry-request-"));
+  context.after(() => rmSync(root, { recursive: true, force: true }));
+  writeFileSync(join(root, "requirements.md"), "Build result and verify tests pass.");
+  const request = prepareTaskRequest({
+    agent, task: { ...task, ownerAgent: agent.name, contract: { version: 1, kind: "implementation", requirements: ["Build result"], acceptanceCriteria: ["Tests pass"], constraints: [], references: ["requirements.md"] } },
+    repoRoot: root, attempt: 2, previousFailure: "validation command failed: npm test\n" + "detail".repeat(2000),
+    previousResultPath: "docs/task-executions/previous.result.json",
+  });
+  for (const expected of ["ONLY blocking unmet requirements", "An unverified required check is a blocker", "warnings", "validationLimitations", "validation command failed: npm test", "docs/task-executions/previous.result.json", "Preserve completed work"]) {
+    assert.ok(request.instructions.includes(expected), expected);
+  }
+  assert.ok(request.instructions.length < 7000);
 });
 
 test("model flags are defaults and conflicting model defaults fail explicitly", () => {

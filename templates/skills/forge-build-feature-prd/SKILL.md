@@ -27,7 +27,7 @@ This skill supports two modes, auto-detected in Step 0:
 
 ### Step 1a: Analyze Existing Project (Post-Project Mode)
 
-1. Read the original PRD (`docs/PRD.md`) - goals, architecture, tech stack, completed phases.
+1. Read the product vision and existing canonical features for goals, architecture, tech stack and completed tasks. Require this layout before authoring an increment.
 2. Review existing agent files in `HARNESS_AGENTS_DIR` — load `forge-build-agent-team/references/detect-harness.md` to determine this path — (`.md` files) — domains, responsibilities, collaboration patterns.
 3. Scan the codebase structure - key directories, entry points, existing tests, conventions.
 4. Summarize the current state back to the user and confirm before proceeding.
@@ -68,6 +68,23 @@ Ask only what's needed. Group by category, skip what's already answered:
 
 ### Step 4: Draft the Feature PRD
 
+Load the sibling skill's `forge-build-prd/references/task-contract.md` and use
+its compact version-2 `forge-task` JSON blocks for implementation phases. Define
+each requirement once using `forge-requirement`; reference shared definitions by
+ID and keep traceability ID/link-only. Register the feature and dependencies in
+the vision's feature table before validation. Preserve
+existing IDs and specialist names for incremental work. Include task-local
+requirements, acceptance criteria, constraints, references, outputs and real
+test commands; separate human review from agent preparation. Do not infer task
+ownership from wording alone.
+
+Apply the shared execution-sized-task review and include its task/check table.
+Features can contain many tasks: split independent behaviors and ownership
+boundaries, not atomic safety invariants. Validate UI work with UI checks and
+keep human rubric scores out of implementation completion. Run the adapter's
+`validate-prd -- <repo-root> --feature docs/features/<name>.md` npm command
+before handoff; unknown prerequisite IDs and invalid contracts must be repaired.
+
 Load `references/feature-prd-template.md` for the full structure. Use information from Steps 0–3. Where unspecified, state a reasonable default and mark it in Open Questions.
 
 > Adapt depth to the feature - a small enhancement needs less detail than a major new subsystem. Keep all section headings.
@@ -90,7 +107,7 @@ Iterate until confirmed.
 - **Mode detection order matters.** Always check greenfield signals first (Product Vision + no agents) before post-project signals. Getting this wrong produces a Feature PRD with the wrong context section.
 - **Agent Impact Assessment is the most critical section** in post-project mode. It directly drives `forge-build-agent-team` Feature Increment Mode. Invest time here - wrong agent assignments cascade.
 - **Don't restate the product vision or original PRD.** Reference them. Only document what's specific to this feature.
-- **Feature PRDs are additive.** They never modify or replace the original PRD or product vision.
+- **Feature increments are additive.** Register new features in the vision's feature table, preserving existing decisions, feature content and completed task IDs.
 
 ---
 

@@ -13,7 +13,8 @@
  *       <artifact-id>.json    e.g. architecture-001.json
  *
  * The store is deliberately file-based so that artifacts can be inspected,
- * diffed, versioned in Git, and replayed without a database.  A future
+ * diffed and replayed without a database. Generated artifacts are ignored by
+ * bootstrap and excluded from engine auto-commit (ADR-046). A future
  * SqliteArtifactStore or BlobArtifactStore can implement the same interface.
  */
 
@@ -27,6 +28,7 @@ import {
 import { dirname, join } from "node:path";
 
 import type { Artifact, ArtifactProjection } from "../../forge-execution-adapter/scripts/types.ts";
+import { parseTaskHandoff } from "./task-result.ts";
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -128,8 +130,9 @@ export class ArtifactStore {
   read(artifactId: string): Artifact | null {
     // Search all subdirectories for the file
     if (!existsSync(this.root)) return null;
-    for (const subdir of readdirSync(this.root)) {
-      const path = join(this.root, subdir, `${artifactId}.json`);
+    for (const entry of readdirSync(this.root, { withFileTypes: true })) {
+      if (!entry.isDirectory()) continue;
+      const path = join(this.root, entry.name, `${artifactId}.json`);
       if (existsSync(path)) {
         return JSON.parse(readFileSync(path, "utf8")) as Artifact;
       }
@@ -157,8 +160,9 @@ export class ArtifactStore {
   readAll(): Artifact[] {
     if (!existsSync(this.root)) return [];
     const results: Artifact[] = [];
-    for (const subdir of readdirSync(this.root)) {
-      const dir = join(this.root, subdir);
+    for (const entry of readdirSync(this.root, { withFileTypes: true })) {
+      if (!entry.isDirectory()) continue;
+      const dir = join(this.root, entry.name);
       if (!existsSync(dir)) continue;
       for (const file of readdirSync(dir)) {
         if (!file.endsWith(".json")) continue;
@@ -189,7 +193,7 @@ export class ArtifactStore {
     inputTypes: string[];
     fields?: string[];
   }): ArtifactProjection {
-    const defaultFields = ["summary", "confidence", "filesChanged", "agentOutputExcerpt"];
+    const defaultFields = ["summary", "confidence", "filesChanged", "agentOutputExcerpt", "decisions", "interfaces", "tests", "unresolved", "warnings", "validationLimitations"];
     const fieldSet = opts.fields ?? defaultFields;
 
     let sourceTokenEstimate = 0;
@@ -296,18 +300,11 @@ export class ArtifactStore {
     producedBy: string;
     outputFiles: string[];
     agentOutput: string;
+    validationEvidence?: string[];
     inputArtifactIds: string[];
   }): Artifact {
-    // Prefer the task description as the summary — it is always meaningful
-    // and unambiguous.  Fall back to the first substantive stdout line if no
-    // description was provided (shouldn't happen in practice).
-    const summary =
-      opts.taskDescription && opts.taskTitle
-        ? `${opts.taskTitle}: ${opts.taskDescription}`.slice(0, 200)
-        : opts.taskDescription
-        ? opts.taskDescription.slice(0, 200)
-        : opts.agentOutput.split("\n").find((l) => l.trim().length > 20)?.trim().slice(0, 200) ??
-          `Task ${opts.taskId} completed successfully.`;
+    const handoff = parseTaskHandoff(opts.agentOutput);
+    const summary = handoff?.summary ?? `Legacy task ${opts.taskId}: no structured outcome report; inspect changed files and logs before relying on completion.`;
 
     return this.write({
       type: opts.type,
@@ -316,13 +313,11 @@ export class ArtifactStore {
       producedBy: opts.producedBy,
       status: "complete",
       summary,
-      // 0.9 is a sensible default for a completed synthesis artifact.
-      // Agents that write structured artifacts can override this.
-      confidence: 0.9,
       inputs: opts.inputArtifactIds,
       filesChanged: opts.outputFiles,
       payload: {
-        agentOutputExcerpt: opts.agentOutput.slice(0, 500),
+        agentOutputExcerpt: handoff?.summary ?? opts.agentOutput.slice(-2000),
+        ...(handoff ? { decisions: handoff.decisions, interfaces: handoff.interfaces, tests: opts.validationEvidence ?? handoff.tests, agentReportedTests: handoff.tests, unresolved: handoff.unresolved, warnings: handoff.warnings ?? [], validationLimitations: handoff.validationLimitations ?? [] } : {}),
         taskDescription: opts.taskDescription,
       },
       nextActions: [],

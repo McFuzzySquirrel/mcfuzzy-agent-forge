@@ -15,6 +15,7 @@ import {
   snapshotFeatureIncrementFiles,
 } from "./launcher.ts";
 import { spawnDetached } from "./format.ts";
+import { writeFeatureFixture } from "./feature-fixture.ts";
 
 const CLI = fileURLToPath(new URL("./cli.ts", import.meta.url));
 
@@ -202,15 +203,13 @@ test("GitHub projects default to the copilot engine harness", () => {
 test("headless PRD message includes the gap check the manual flow runs", () => {
   const msg = headlessSkillMsg();
   assert.ok(msg.startsWith("/forge-auto-build-prd "), msg);
-  assert.ok(msg.includes("PRD gap check"), msg);
   assert.ok(msg.includes("acceptance criteria"), msg);
-  assert.ok(msg.includes("non-functional requirements"), msg);
-  assert.ok(msg.includes("implementation phases"), msg);
-  assert.ok(msg.includes("15 or more functional requirements or 3 or more implementation phases"), msg);
-  assert.ok(msg.includes("automatically invoke forge-decompose-prd"), msg);
-  assert.ok(msg.includes("docs/product-vision.md"), msg);
+  assert.ok(msg.includes("security, privacy, accessibility"), msg);
+  assert.ok(msg.includes("every solution, including a one-feature project"), msg);
+  assert.ok(msg.includes("Run validate-prd"), msg);
+  assert.ok(msg.includes("docs/PRD.md"), msg);
   assert.ok(msg.includes("docs/features/*.md"), msg);
-  assert.ok(msg.includes("otherwise keep the monolithic docs/PRD.md"), msg);
+  assert.ok(!msg.includes("otherwise keep"), msg);
 });
 
 test("team-generation prompt targets the selected harness directories", () => {
@@ -359,6 +358,7 @@ test("feature-prd fails when the skill exits without a new feature document", as
 test("feature-prd accepts a newly created non-empty feature document", async () => {
   const repo = tmpDir();
   execFileSync("git", ["init", "-q", repo]);
+  writeFeatureFixture(repo);
   fs.mkdirSync(path.join(repo, ".agents", "skills", "forge-build-feature-prd"), { recursive: true });
   fs.writeFileSync(path.join(repo, ".agents", "skills", "forge-build-feature-prd", "SKILL.md"), "# feature skill\n");
 
@@ -402,7 +402,7 @@ test("headless skill command pins the repo dir with --dir", async () => {
   assert.match(out, new RegExp(`opencode run --auto --dir "[^"]*[\\\\/]${path.basename(repo)}"`), out);
 });
 
-test("non-interactive run with a PRD queues the separate team authoring stage", async () => {
+test("imported requirements remain source material and queue feature authoring", async () => {
   const parent = tmpDir();
   const prd = path.join(parent, "prd.md");
   fs.writeFileSync(prd, "# PRD\n\n## Phase 1: Foundation\n- Build a thing.\n");
@@ -418,10 +418,9 @@ test("non-interactive run with a PRD queues the separate team authoring stage", 
 
   assert.equal(code, 0, out);
   const repo = path.join(parent, "with-prd-app");
-  assert.ok(fs.existsSync(path.join(repo, "docs", "PRD.md")));
-  assert.ok(out.includes("/forge-build-agent-team Use docs/PRD.md to build the agent team."));
-  assert.ok(out.includes("do not create or modify skill packages"));
-  assert.ok(!out.includes("/forge-auto-build-prd Use docs/IDEA.md"));
+  assert.ok(fs.existsSync(path.join(repo, "docs", "requirements-source.md")));
+  assert.ok(!fs.existsSync(path.join(repo, "docs", "PRD.md")));
+  assert.ok(out.includes("/forge-auto-build-prd"), out);
 });
 
 test("non-interactive run with a PRD and a generated team queues /forge-orchestrate-build", async () => {
@@ -444,7 +443,7 @@ test("non-interactive run with a PRD and a generated team queues /forge-orchestr
   const repo = path.join(parent, "with-team-app");
   assert.ok(fs.existsSync(path.join(repo, ".agents", "agents", "stub-project-agent.md")), out);
   // Team exists -> the in-harness entry is the interactive orchestrator.
-  assert.ok(out.includes("/forge-orchestrate-build Use docs/PRD.md as the project PRD"), out);
+  assert.ok(out.includes("/forge-orchestrate-build Use docs/PRD.md and docs/features/*.md as canonical requirements"), out);
   assert.ok(!out.includes("/forge-auto-build Use docs/PRD.md as the project PRD"), out);
 });
 
@@ -545,7 +544,8 @@ test("auto-draft PRD failure is diagnosed with log tail and no commit", async ()
   assert.equal(code, 1, out);
   const repo = path.join(parent, "draft-fail-app");
   assert.ok(!fs.existsSync(path.join(repo, "docs", "PRD.md")), "no PRD should exist");
-  assert.ok(out.includes("PRD authoring exited without a non-empty PRD"));
+  assert.ok(out.includes("PRD authoring validation failed"), out);
+  assert.ok(out.includes("Missing docs/PRD.md"), out);
   assert.ok(out.includes("forge-launcher draft-prd"));
   assert.ok(out.includes("[stub] invoking forge-auto-build-prd"));
   // nothing was committed beyond the bootstrap commit

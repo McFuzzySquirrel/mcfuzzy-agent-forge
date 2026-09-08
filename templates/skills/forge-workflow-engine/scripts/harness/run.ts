@@ -1,12 +1,16 @@
 import spawn from "cross-spawn";
 import { execFile, type ChildProcess } from "node:child_process";
-import { relative } from "node:path";
+import { existsSync, readFileSync } from "node:fs";
+import { dirname, relative, resolve as resolvePath } from "node:path";
+import readCmdShim from "read-cmd-shim";
+import which from "which";
 import type { TaskAttemptRequest, TaskFailureKind } from "../types.ts";
 
 const CLEANUP_TIMEOUT_MS = 1000;
 
 export interface RunCommandOptions {
   cwd: string;
+  shell?: boolean;
   timeoutMs: number;
   maxBufferBytes: number;
   /** Extra environment variables merged over `process.env`. */
@@ -44,10 +48,26 @@ export function runCommand(
 ): Promise<RunCommandResult> {
   if (opts.signal?.aborted) return Promise.resolve({ stdout: "", stderr: "", status: null, error: "Task cancelled", failureKind: "cancelled" });
   return new Promise((resolve) => {
+    if (process.platform === "win32" && !opts.shell) {
+      try {
+        const command = which.sync(bin, { path: opts.env?.PATH ?? process.env.PATH });
+        if (/\.cmd$/i.test(command)) {
+          const script = resolvePath(dirname(command), readCmdShim.sync(command));
+          if (/\.[cm]?js$/i.test(script) && /^#![^\r\n]*\bnode\b/.test(readFileSync(script, "utf8"))) {
+            const localNode = resolvePath(dirname(command), "node.exe");
+            bin = existsSync(localNode) ? localNode : process.execPath;
+            args = [script, ...args];
+          }
+        }
+      } catch {
+        // Non-npm launchers retain cross-spawn's executable resolution.
+      }
+    }
     // A dedicated POSIX process group lets cancellation include descendants
     // inheriting the output pipes. This remains attached: no unref during work.
     const child = spawn(bin, args, {
       cwd: opts.cwd, env: opts.env, stdio: ["ignore", "pipe", "pipe"],
+      shell: opts.shell,
       detached: process.platform !== "win32", windowsHide: true,
     });
 

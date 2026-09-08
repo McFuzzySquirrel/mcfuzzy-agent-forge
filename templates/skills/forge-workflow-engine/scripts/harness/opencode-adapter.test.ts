@@ -63,6 +63,15 @@ async function invokeWith(shim: Shim, agent: AgentDescriptor, root: string): Pro
   }
 }
 
+function recordedExecution(shim: Shim, root: string): string {
+  const recorded = JSON.parse(readFileSync(shim.argsFile, "utf8")) as string[];
+  const prompt = recorded.at(-1)!;
+  const file = prompt.match(/execution file "([^"]+)"/)?.[1];
+  assert.ok(file, prompt);
+  assert.ok(prompt.length < 1000, prompt);
+  return readFileSync(join(root, file), "utf8");
+}
+
 test("passes --agent for .opencode-rooted agents and omits the inline persona", async (t) => {
   const root = tempDir(t, "forge-opencode-repo-");
   const agent = makeAgent(join(root, ".opencode", "agents", "discovery-engineer.md"));
@@ -98,7 +107,7 @@ test("falls back to inlining the persona for non-.opencode harness roots", async
 
   const recorded = JSON.parse(readFileSync(shim.argsFile, "utf8")) as string[];
   assert.ok(!recorded.includes("--agent"));
-  assert.ok(recorded.some((arg) => arg.includes("You are a Discovery Engineer")));
+  assert.ok(recordedExecution(shim, root).includes("You are a Discovery Engineer"));
 });
 
 test("never passes --agent when the agent has no name", async (t) => {
@@ -110,7 +119,7 @@ test("never passes --agent when the agent has no name", async (t) => {
 
   const recorded = JSON.parse(readFileSync(shim.argsFile, "utf8")) as string[];
   assert.ok(!recorded.includes("--agent"));
-  assert.ok(recorded.some((arg) => arg.includes("You are a Discovery Engineer")));
+  assert.ok(recordedExecution(shim, root).includes("You are a Discovery Engineer"));
 });
 
 test("prompt includes the execute-now directive so agents do not just acknowledge", async (t) => {
@@ -121,7 +130,7 @@ test("prompt includes the execute-now directive so agents do not just acknowledg
   await invokeWith(shim, agent, root);
 
   const recorded = JSON.parse(readFileSync(shim.argsFile, "utf8")) as string[];
-  const prompt = recorded.join(" ");
+  const prompt = recordedExecution(shim, root);
   assert.ok(prompt.includes("Perform the task now"), prompt);
   assert.ok(prompt.includes("list the files you created or changed"), prompt);
 });
@@ -142,7 +151,7 @@ test("prompt surfaces the per-task timeout and retry budget when provided", asyn
   }
 
   const recorded = JSON.parse(readFileSync(shim.argsFile, "utf8")) as string[];
-  const prompt = recorded.join(" ");
+  const prompt = recordedExecution(shim, root);
   assert.ok(prompt.includes("Per-task timeout: 60s"), prompt);
   assert.ok(prompt.includes("retried up to 2 time(s)"), prompt);
 });
@@ -155,7 +164,7 @@ test("prompt includes the normalized default budget when no overrides are provid
   await invokeWith(shim, agent, root);
 
   const recorded = JSON.parse(readFileSync(shim.argsFile, "utf8")) as string[];
-  const prompt = recorded.join(" ");
+  const prompt = recordedExecution(shim, root);
   assert.ok(prompt.includes("Per-task timeout: 600s"), prompt);
   assert.ok(prompt.includes("retried up to 0 time(s)"), prompt);
 });
@@ -175,5 +184,5 @@ test("FORGE_ENGINE_NATIVE_AGENT=0 forces the inline-persona fallback for .openco
 
   const recorded = JSON.parse(readFileSync(shim.argsFile, "utf8")) as string[];
   assert.ok(!recorded.includes("--agent"));
-  assert.ok(recorded.some((arg) => arg.includes("You are a Discovery Engineer")));
+  assert.ok(recordedExecution(shim, root).includes("You are a Discovery Engineer"));
 });

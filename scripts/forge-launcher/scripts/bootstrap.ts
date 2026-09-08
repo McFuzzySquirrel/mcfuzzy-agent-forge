@@ -70,7 +70,7 @@ function copyTree(srcDir: string, destDir: string, rewrite?: { from: string; to:
 
 function ensureGitignore(targetDir: string): void {
   const gi = path.join(targetDir, ".gitignore");
-  const entries = ["node_modules/", "docs/engine-run.log"];
+  const entries = ["node_modules/", "docs/engine-run.log", "docs/artifacts/"];
   let content = "";
   if (fs.existsSync(gi)) content = fs.readFileSync(gi, "utf8");
   if (content && !content.endsWith("\n")) content += "\n";
@@ -80,7 +80,7 @@ function ensureGitignore(targetDir: string): void {
     fs.writeFileSync(gi, content);
     out(`  Updated:  ${gi} (${missing.join(", ")})`);
   } else {
-    out(`  OK:       ${gi} already ignores node_modules/ and engine-run.log`);
+    out(`  OK:       ${gi} already contains all required ignore entries`);
   }
 }
 

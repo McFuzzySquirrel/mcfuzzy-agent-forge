@@ -5,6 +5,7 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import { writeFeatureFixture } from "./feature-fixture.ts";
 
 const CLI = fileURLToPath(new URL("./cli.ts", import.meta.url));
 
@@ -77,6 +78,7 @@ fs.writeFileSync(path.join(docs, "EXECUTION-MANIFEST.json"), JSON.stringify({
 }
 
 function write(repo: string, rel: string, content: string): void {
+  if (rel === "docs/PRD.md") { writeFeatureFixture(repo, content); return; }
   const file = path.join(repo, rel);
   fs.mkdirSync(path.dirname(file), { recursive: true });
   fs.writeFileSync(file, content);

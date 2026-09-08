@@ -11,6 +11,8 @@ import { OpenAIAdapter } from "./harness/openai-adapter.ts";
 import { compileExecutionManifestDetailed } from "../../forge-execution-adapter/scripts/compiler.ts";
 import { discoverForgeRepo } from "../../forge-execution-adapter/scripts/discovery.ts";
 import { readControl, writeControl } from "./control.ts";
+import { approveHumanTask } from "./task-context.ts";
+import { ArtifactStore } from "./artifacts.ts";
 import { reconcileState, loadState, saveState, initState } from "./state.ts";
 import type { EngineOptions, ExecutionManifest, HarnessAdapter, ManifestTask, TaskResult, TaskStatus, WorkflowState } from "./types.ts";
 
@@ -57,6 +59,7 @@ test("validateManifestDependencies rejects duplicate global task ids", () => {
 function makeManifest(phases: ManifestPhase[]): ExecutionManifest {
   return {
     version: "1.0",
+    sourceLayout: "features",
     generatedAt: new Date().toISOString(),
     repoRoot: "/tmp",
     harnessRoot: ".opencode",
@@ -317,7 +320,8 @@ interface EngineFixture {
 function makeEngineFixture(taskOverrides: Partial<ManifestTask> = {}): EngineFixture {
   const root = mkdtempSync(join(tmpdir(), "forge-engine-"));
   mkdirSync(join(root, ".agents", "agents"), { recursive: true });
-  mkdirSync(join(root, "docs"), { recursive: true });
+  mkdirSync(join(root, "docs/features"), { recursive: true });
+  writeFileSync(join(root, "docs/PRD.md"), "# Vision\n## 14. Features\n| # | Feature | File | Dependencies |\n| 1 | Foundation | features/foundation.md | None |\n");
 
   writeFileSync(join(root, ".agents", "agents", "worker.md"), `---
 name: worker
@@ -327,7 +331,7 @@ description: Builds things.
 ## Expertise
 - building
 `, "utf8");
-  writeFileSync(join(root, "docs", "PRD.md"), `# PRD
+  writeFileSync(join(root, "docs/features/foundation.md"), `# Feature: Foundation
 
 ## Phase 1: Foundation
 - Task 1.1: Build a thing
@@ -348,6 +352,7 @@ description: Builds things.
 
   const manifest: ExecutionManifest = {
     version: "1.0",
+    sourceLayout: "features",
     generatedAt: new Date().toISOString(),
     repoRoot: root,
     harnessRoot: ".agents",
@@ -412,6 +417,152 @@ test("effective task timeout prefers the per-task manifest timeoutMs over the en
   assert.deepEqual(harness.timeouts, [25_000]);
 });
 
+test("human review pauses without dispatch and resumes only with task-bound evidence", async () => {
+  const fixture = makeEngineFixture({ ownerAgent: undefined, contract: { version: 1, kind: "human-review", requirements: ["Human checks keyboard flow"], acceptanceCriteria: ["Named reviewer confirms keyboard usability"], constraints: [], references: ["docs/PRD.md"], reviewFile: "docs/reviews/keyboard.json" } });
+  const harness = new RecordingHarness();
+  const options = engineOptionsFor(fixture, harness, 1000, { autoCommit: false });
+  const pending = await runEngine(options);
+  assert.equal(pending.status, "paused");
+  assert.deepEqual(harness.timeouts, []);
+  assert.equal(pending.tasks["1.1"]!.status, "pending");
+  const task = (JSON.parse(readFileSync(fixture.manifestPath, "utf8")) as ExecutionManifest).phases[0]!.tasks[0]!;
+  writeFileSync(join(fixture.root, "review.md"), "Operator reviewed keyboard flow and recorded evidence.");
+  approveHumanTask(fixture.root, task, "Reviewer", ["review.md"]);
+  const resumed = await runEngine(options);
+  assert.equal(resumed.tasks["1.1"]!.status, "complete");
+  assert.deepEqual(harness.timeouts, []);
+  writeFileSync(join(fixture.root, "review.md"), "Changed evidence requires renewed review.");
+  const stale = await runEngine(options);
+  assert.equal(stale.status, "paused");
+  assert.equal(stale.tasks["1.1"]!.status, "pending");
+});
+
+test("structured tasks require passing validation even when legacy validation is disabled", async () => {
+  const fixture = makeEngineFixture({ expectedOutputs: ["result.txt"], validationCommands: ['node -e "process.exit(1)"'], contract: { version: 1, kind: "implementation", requirements: ["Build a result"], acceptanceCriteria: ["Result passes the test"], constraints: [], references: ["docs/PRD.md"] } });
+  const harness: HarnessAdapter = {
+    name: "contract-test", supportsConcurrency: true, capabilities: ["repository-tools"],
+    async invoke() {
+      writeFileSync(join(fixture.root, "result.txt"), "result");
+      return { success: true, outputFiles: ["result.txt"], stderr: "", durationMs: 1, stdout: '```forge-result\n{"summary":"Built result","unresolved":[]}\n```' };
+    },
+  };
+  const state = await runEngine(engineOptionsFor(fixture, harness, 10000, { autoCommit: false, runValidation: false }));
+  assert.equal(state.tasks["1.1"]!.status, "failed");
+  assert.match(state.tasks["1.1"]!.errorMessage!, /validation command failed/);
+});
+
+test("structured completion requires a report and projects engine-verified evidence", async () => {
+  for (const reported of [false, true]) {
+    const fixture = makeEngineFixture({ produces: "work.result", expectedOutputs: ["result.txt"], validationCommands: ['node -e "process.exit(0)"'], contract: { version: 1, kind: "implementation", requirements: ["Build a result"], acceptanceCriteria: ["Result passes the test"], constraints: [], references: ["docs/PRD.md"] } });
+    const harness: HarnessAdapter = {
+      name: "contract-test", supportsConcurrency: true, capabilities: ["repository-tools"],
+      async invoke() {
+        writeFileSync(join(fixture.root, "result.txt"), "result");
+        return { success: true, outputFiles: ["result.txt"], stderr: "", durationMs: 1, stdout: reported ? '```forge-result\n{"summary":["Built result","Atomic update"],"unresolved":[]}\n```' : "Done" };
+      },
+    };
+    const options = engineOptionsFor(fixture, harness, 10000, { autoCommit: false });
+    const state = await runEngine(options);
+    assert.equal(state.tasks["1.1"]!.status, reported ? "complete" : "failed");
+    if (reported) {
+      const store = new ArtifactStore({ artifactsPath: options.artifactsPath });
+      const projection = store.renderProjection(store.project({ taskId: "next", inputTypes: ["work.result"] }));
+      assert.match(projection, /Atomic update/);
+      assert.match(projection, /exit 0 \(engine-verified\)/);
+      assert.doesNotMatch(projection, /Agent claim/);
+    } else assert.match(state.tasks["1.1"]!.errorMessage!, /forge-result/);
+  }
+});
+
+test("structured caveats allow completion while blockers retain evidence and reach retry prompts", async () => {
+  const fixture = makeEngineFixture({ produces: "work.result", expectedOutputs: ["result.txt"], validationCommands: ['node -e "process.exit(0)"'], contract: { version: 1, kind: "implementation", requirements: ["Build result"], acceptanceCriteria: ["Required guard verified"], constraints: [], references: ["docs/PRD.md"] } });
+  const instructions: string[] = [];
+  const outputs: string[] = [];
+  const harness: HarnessAdapter = {
+    name: "caveat-test", supportsConcurrency: true, capabilities: ["repository-tools"],
+    async invoke(request) {
+      instructions.push(request.instructions);
+      if (request.attempt.number === 2) {
+        const persisted = JSON.parse(readFileSync(join(fixture.root, "docs/WORKFLOW-STATE.json"), "utf8"));
+        assert.equal(persisted.tasks["1.1"].attemptHistory[0].outcome, "failed");
+        assert.ok(request.instructions.includes(persisted.tasks["1.1"].attemptHistory[0].resultPath));
+      }
+      writeFileSync(join(fixture.root, "result.txt"), "result");
+      const stdout = "```forge-result\n" + JSON.stringify({ summary: "Built scaffold", decisions: [], interfaces: [], tests: ["Observed local tests pass"], unresolved: request.attempt.number === 1 ? ["Required guard not verified"] : [], warnings: ["Changes await engine auto-commit"], validationLimitations: ["Optional hosted CI has not run"] }) + "\n```";
+      outputs.push(stdout);
+      return { success: true, outputFiles: ["result.txt"], stdout, stderr: "retained diagnostic", durationMs: 1 };
+    },
+  };
+  const options = engineOptionsFor(fixture, harness, 10000, { maxRetries: 1, autoCommit: false });
+  const state = await runEngine(options);
+  assert.equal(state.tasks["1.1"]!.status, "complete");
+  assert.ok(!instructions[0]!.includes("Previous attempt was rejected"));
+  assert.ok(instructions[1]!.includes("Unresolved task requirements: Required guard not verified"));
+  const history = state.tasks["1.1"]!.attemptHistory!;
+  assert.deepEqual(history.map((entry) => entry.outcome), ["failed", "passed"]);
+  for (const [index, entry] of history.entries()) {
+    const evidence = JSON.parse(readFileSync(join(fixture.root, entry.resultPath), "utf8"));
+    assert.equal(evidence.result.stdout, outputs[index]);
+    assert.equal(evidence.result.stderr, "retained diagnostic");
+    assert.equal(evidence.taskId, "1.1");
+    assert.equal(evidence.runId, state.runId);
+    assert.equal(evidence.attempt, index + 1);
+    assert.deepEqual(evidence.gates.map((gate: { status: string }) => gate.status), index === 0 ? ["passed", "passed", "passed", "failed", "skipped"] : ["passed", "passed", "passed", "passed", "passed"]);
+    assert.deepEqual(evidence.handoff.warnings, ["Changes await engine auto-commit"]);
+  }
+  const events = readFileSync(options.auditPath, "utf8").trim().split("\n").map((line) => JSON.parse(line));
+  assert.equal(events.filter((event) => event.action === "task.attempt.finished").length, 2);
+  assert.equal(events.find((event) => event.action === "task.retrying").resultPath, history[0]!.resultPath);
+  assert.equal(loadState(options.statePath)!.tasks["1.1"]!.attemptHistory!.length, 2);
+});
+
+test("structured blockers remain failed after retries and preserve every report", async () => {
+  const fixture = makeEngineFixture({ expectedOutputs: ["result.txt"], validationCommands: ['node -e "process.exit(0)"'], contract: { version: 1, kind: "implementation", requirements: ["Build result"], acceptanceCriteria: ["Tests verified"], constraints: [], references: ["docs/PRD.md"] } });
+  const stdout = '```forge-result\n{"summary":"Incomplete","decisions":[],"interfaces":[],"tests":["Required check not run"],"unresolved":["Required check not verified"],"warnings":[],"validationLimitations":[]}\n```';
+  const state = await runEngine(engineOptionsFor(fixture, {
+    name: "blocked-test", supportsConcurrency: true, capabilities: ["repository-tools"],
+    async invoke() {
+      writeFileSync(join(fixture.root, "result.txt"), "result");
+      return { success: true, outputFiles: ["result.txt"], stdout, stderr: "", durationMs: 1 };
+    },
+  }, 10000, { maxRetries: 1, autoCommit: false }));
+  assert.equal(state.tasks["1.1"]!.status, "failed");
+  assert.match(state.tasks["1.1"]!.errorMessage!, /Required check not verified/);
+  assert.equal(state.tasks["1.1"]!.attemptHistory!.length, 2);
+  for (const entry of state.tasks["1.1"]!.attemptHistory!) {
+    assert.equal(entry.outcome, "failed");
+    assert.equal(JSON.parse(readFileSync(join(fixture.root, entry.resultPath), "utf8")).result.stdout, stdout);
+  }
+});
+
+test("completion gate failures are retained and supplied to the next attempt", async () => {
+  for (const gate of ["outputs", "handoff", "validation"]) {
+    const fixture = makeEngineFixture({ expectedOutputs: ["result.txt"], validationCommands: ["node validate.cjs"], contract: { version: 1, kind: "implementation", requirements: ["Build result"], acceptanceCriteria: ["Result validates"], constraints: [], references: ["docs/PRD.md"] } });
+    writeFileSync(join(fixture.root, "validate.cjs"), 'process.exit(require("node:fs").readFileSync("result.txt", "utf8") === "valid" ? 0 : 1);');
+    const stdout = '```forge-result\n{"summary":"Built result","decisions":[],"interfaces":[],"tests":["Observed validation"],"unresolved":[]}\n```';
+    const options = engineOptionsFor(fixture, {
+      name: "gate-test", supportsConcurrency: true, capabilities: ["repository-tools"],
+      async invoke(request) {
+        const first = request.attempt.number === 1;
+        if (!first) {
+          const history = loadState(join(fixture.root, "docs/WORKFLOW-STATE.json"))!.tasks["1.1"]!.attemptHistory!;
+          assert.ok(request.instructions.includes(history[0]!.reason!));
+          assert.ok(request.instructions.includes(history[0]!.resultPath));
+        }
+        if (!first || gate !== "outputs") writeFileSync(join(fixture.root, "result.txt"), first && gate === "validation" ? "invalid" : "valid");
+        return { success: true, outputFiles: [], stdout: first && gate === "handoff" ? '```forge-result\n{"summary":42,"unresolved":[]}\n```' : stdout, stderr: "", durationMs: 1 };
+      },
+    }, 10000, { maxRetries: 1, autoCommit: false });
+    const state = await runEngine(options);
+    assert.equal(state.status, "complete", gate);
+    const history = state.tasks["1.1"]!.attemptHistory!;
+    const evidence = JSON.parse(readFileSync(join(fixture.root, history[0]!.resultPath), "utf8"));
+    assert.equal(evidence.gates.find((entry: { gate: string }) => entry.gate === gate).status, "failed");
+    if (gate === "handoff") assert.match(history[0]!.reason!, /forge-result\.summary must be/);
+    assert.equal(history[1]!.outcome, "passed");
+  }
+});
+
 test("serialized completion is durable before B starts and survives B throwing and replay", async () => {
   const fixture = makeEngineFixture();
   const manifest = JSON.parse(readFileSync(fixture.manifestPath, "utf8")) as ExecutionManifest;
@@ -443,6 +594,20 @@ test("serialized completion is durable before B starts and survives B throwing a
   assert.deepEqual(resumed.taskIds, ["1.2"]);
   await runEngine({ ...options, harness: resumed });
   assert.deepEqual(resumed.taskIds, ["1.2"], "completed A is never reinvoked");
+});
+
+test("legacy and untagged manifests reject run and replay before dispatch", async () => {
+  for (const sourceLayout of ["monolithic", undefined]) {
+    const fixture = makeEngineFixture();
+    const manifest = JSON.parse(readFileSync(fixture.manifestPath, "utf8"));
+    manifest.sourceLayout = sourceLayout;
+    writeFileSync(fixture.manifestPath, JSON.stringify(manifest));
+    const harness = new RecordingHarness();
+    const options = engineOptionsFor(fixture, harness, 1000);
+    await assert.rejects(runEngine(options), /Feature-based manifest required/);
+    await assert.rejects(replayTask("1.1", options), /Feature-based manifest required/);
+    assert.deepEqual(harness.taskIds, []);
+  }
 });
 
 test("owner preflight rejects required missing owners before any dispatch", async () => {
@@ -590,6 +755,7 @@ test("failure classification controls retries and persists actual attempt counts
       async invoke(request) {
         attempts += 1;
         assert.equal(request.attempt.number, attempts);
+        if (attempts > 1) assert.ok(request.instructions.includes(`\"reason\":\"${kind}\"`));
         return { success: false, outputFiles: [], stdout: "", stderr: "", errorMessage: kind, failureKind: kind, durationMs: 1 };
       },
     }, 1000, { maxRetries: 2, autoCommit: false });
@@ -597,6 +763,13 @@ test("failure classification controls retries and persists actual attempt counts
     assert.equal(state.status, "failed");
     assert.equal(attempts, kind === "timeout" || kind === "retryable" ? 3 : 1);
     assert.equal(state.tasks["1.1"]?.attempt, attempts);
+    assert.equal(state.tasks["1.1"]!.attemptHistory!.length, attempts);
+    for (const entry of state.tasks["1.1"]!.attemptHistory!) {
+      const evidence = JSON.parse(readFileSync(join(fixture.root, entry.resultPath), "utf8"));
+      assert.equal(evidence.result.failureKind, kind);
+      assert.equal(evidence.gates[0].status, "failed");
+      assert.ok(evidence.gates.slice(1).every((gate: { status: string }) => gate.status === "skipped"));
+    }
   }
 });
 
@@ -617,12 +790,16 @@ test("immediate cancellation leaves a durable pending attempt that can resume", 
   assert.equal(state.status, "paused");
   assert.equal(state.tasks["1.1"]?.status, "pending");
   assert.equal(state.tasks["1.1"]?.failureKind, "cancelled");
+  const cancelled = state.tasks["1.1"]!.attemptHistory![0]!;
+  assert.equal(cancelled.outcome, "cancelled");
+  assert.equal(JSON.parse(readFileSync(join(fixture.root, cancelled.resultPath), "utf8")).result.failureKind, "cancelled");
   assert.equal(loadState(options.statePath)?.status, "paused");
   assert.equal(cleaned, true);
   const resumed = new RecordingHarness();
   const complete = await runEngine({ ...options, harness: resumed, signal: undefined });
   assert.equal(complete.status, "complete");
   assert.equal(complete.tasks["1.1"]?.failureKind, undefined);
+  assert.deepEqual(complete.tasks["1.1"]!.attemptHistory!.map((entry) => entry.outcome), ["cancelled", "passed"]);
   assert.deepEqual(resumed.taskIds, ["1.1"]);
 });
 
@@ -708,7 +885,7 @@ test("discovery errors are persisted and propagated rather than treated as skips
   const fixture = makeEngineFixture();
   unlinkSync(join(fixture.root, "docs", "PRD.md"));
   const options = engineOptionsFor(fixture, new RecordingHarness(), 1000);
-  await assert.rejects(runEngine(options), /Owner preflight failed:.*PRD/);
+  await assert.rejects(runEngine(options), /Owner preflight failed:.*PRD\.md.*features/);
   assert.equal(loadState(options.statePath)?.status, "failed");
 });
 
@@ -1195,7 +1372,7 @@ test("output gate: a failing manifest validation command marks the task failed",
 });
 
 test("output gate: a passing manifest validation command allows completion", async () => {
-  const fixture = makeEngineFixture({ validationCommands: ["true"] });
+  const fixture = makeEngineFixture({ validationCommands: ['node -e "process.exit(0)"'] });
   const harness = new HollowHarness();
   const state = await runEngine(engineOptionsFor(fixture, harness, 1_000, { allowNoop: false, runValidation: true }));
 

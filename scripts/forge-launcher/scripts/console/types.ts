@@ -346,7 +346,7 @@ export interface CreateProjectRequest {
   autoDraft?: boolean;
   /** Max agents to run in parallel (0 means engine default). */
   concurrency?: number;
-  /** Server-side path of an existing PRD file to copy into the new repo as docs/PRD.md. */
+  /** Source document to import as docs/requirements-source.md for feature authoring. */
   prdPath?: string;
   /** Server-side paths of research/seed docs to copy into the new repo's docs/research/. */
   researchPaths?: string[];

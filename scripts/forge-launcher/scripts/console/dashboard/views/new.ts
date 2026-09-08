@@ -51,7 +51,7 @@ function buildForm(): HTMLElement {
   // ── Project documents (PRD + research/seed) ──────────────────────────────
   // Mirrors the CLI's Step 6 (addPrdAndResearch): both a file-picker browse and
   // an absolute-path input. Picked files are uploaded to the server; paths are
-  // validated and copied. Either way the docs land in docs/PRD.md / docs/research/
+  // validated and copied. Sources land in docs/requirements-source.md / docs/research/
   // and inform the later PRD build (forge-auto-build-prd reads docs/research/).
   const prdPicker = buildFilePicker(".md,.txt", false);
   const researchPicker = buildFilePicker(".md,.txt", true);

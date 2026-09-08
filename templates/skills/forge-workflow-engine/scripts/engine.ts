@@ -8,6 +8,8 @@ import type {
   ExecutionManifest,
   ManifestTask,
   SelectionScope,
+  TaskAttemptSummary,
+  TaskGateResult,
   TaskResult,
   TaskStatus,
   TaskSelection,
@@ -38,6 +40,9 @@ import { commitTaskWork } from "./commit.ts";
 import { captureWorktree, diffWorktree, runTaskValidation, verifyTaskResult } from "./verify.ts";
 import { clearControl, readControl } from "./control.ts";
 import { assertTaskCapabilities, prepareTaskRequest } from "./request.ts";
+import { humanTaskApproved, taskReferenceContext } from "./task-context.ts";
+import { readTaskHandoff } from "./task-result.ts";
+import { writeTaskAttempt } from "./task-execution.ts";
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -74,7 +79,9 @@ export async function mapLimit<T, R>(
 }
 
 function loadManifest(path: string): ExecutionManifest {
-  return JSON.parse(readFileSync(path, "utf8")) as ExecutionManifest;
+  const manifest = JSON.parse(readFileSync(path, "utf8")) as ExecutionManifest;
+  if (manifest.sourceLayout !== "features") throw new Error("Feature-based manifest required. Convert legacy requirements into docs/PRD.md + docs/features/*.md and recompile before execution.");
+  return manifest;
 }
 
 export function isTaskDone(status: TaskStatus | undefined): boolean {
@@ -267,6 +274,18 @@ async function executeTask(
   shouldStop: () => boolean,
 ): Promise<WorkflowState> {
   const { task } = entry;
+  if (task.contract?.kind === "human-review") {
+    if (shouldStop()) return state;
+    taskReferenceContext(opts.repoRoot, task);
+    if (!humanTaskApproved(opts.repoRoot, task)) {
+      const note = `Human review required for '${task.id}'. Record operator evidence with workflow-engine approve-task, then resume. --yes does not approve human work.`;
+      console.log(`[engine] ${note}`);
+      return { ...state, status: "paused", tasks: { ...state.tasks, [task.id]: { ...state.tasks[task.id]!, errorMessage: note } } };
+    }
+    const artifact = task.produces ? store.write({ type: task.produces, category: "work", taskId: task.id, producedBy: "human-reviewer", status: "complete", summary: `Operator evidence verified for ${task.title}`, filesChanged: [task.contract.reviewFile!], inputs: [], payload: { reviewFile: task.contract.reviewFile }, nextActions: [] }) : undefined;
+    writeAuditEvent(opts.auditPath, { timestamp: new Date().toISOString(), action: "task.complete", runId: state.runId, taskId: task.id, note: `Human attestation: ${task.contract.reviewFile}` });
+    return markTaskComplete(markTaskStarted(state, task.id), task.id, [task.contract.reviewFile!], "Human review approved with evidence.", artifact?.artifactId);
+  }
   const agent = findAgentForTask(agents, task.ownerAgent);
 
   // A stop/pause was requested while this task was queued in the current wave.
@@ -356,6 +375,10 @@ async function executeTask(
     return currentState;
   };
 
+  const previousAttempt = currentState.tasks[task.id]?.attemptHistory?.at(-1);
+  let previousFailure = currentState.tasks[task.id]?.errorMessage ?? previousAttempt?.reason;
+  let previousResultPath = previousAttempt?.resultPath;
+
   for (let attempt = 0; attempt <= opts.maxRetries; attempt += 1) {
     if (attempt > 0) {
       // A stop/pause arrived during the failed attempt. Do not start another
@@ -371,7 +394,9 @@ async function executeTask(
         action: "task.retrying",
         runId: currentState.runId,
         taskId: task.id,
-        attempt: attempt + 1,
+        attempt: currentState.tasks[task.id]!.attempt + 1,
+        note: previousFailure,
+        resultPath: previousResultPath,
       });
       await sleep(opts.retryDelayMs);
       if (shouldStop()) {
@@ -397,21 +422,41 @@ async function executeTask(
         agent, task, repoRoot: opts.repoRoot, contextBlock,
         defaultModel: opts.harness.defaultModel, timeoutMs: opts.taskTimeoutMs,
         maxRetries: opts.maxRetries, attempt: currentState.tasks[task.id]!.attempt,
+        previousFailure, previousResultPath,
         runId: currentState.runId, signal: opts.signal,
       }));
     } catch (error) {
-      if (opts.signal?.aborted) return cancelAttempt();
       const message = `Adapter exception: ${error instanceof Error ? error.message : String(error)}`;
-      currentState = markTaskFailed(currentState, task.id, message);
-      currentState.tasks[task.id] = { ...currentState.tasks[task.id]!, failureKind: "exception" };
-      writeAuditEvent(opts.auditPath, {
-        timestamp: new Date().toISOString(), action: "task.failed", runId: currentState.runId,
-        taskId: task.id, phaseId: entry.phaseId, note: message,
-      });
-      return currentState;
+      result = { success: false, outputFiles: [], stdout: "", stderr: "", durationMs: Date.now() - invokeStart,
+        errorMessage: message, failureKind: opts.signal?.aborted ? "cancelled" : "exception" };
     } finally {
       if (heartbeat) clearInterval(heartbeat);
     }
+
+    const gates: TaskGateResult[] = (["harness", "outputs", "handoff", "requirements", "validation"] as const)
+      .map((gate) => ({ gate, status: "skipped", reason: "Not reached" }));
+    const setGate = (gate: TaskGateResult["gate"], status: TaskGateResult["status"], reason?: string, evidence?: string[]) => {
+      Object.assign(gates.find((entry) => entry.gate === gate)!, { status, reason, evidence });
+    };
+    const recordAttempt = (outcome: TaskAttemptSummary["outcome"], reason?: string) => {
+      const record = currentState.tasks[task.id]!;
+      const resultPath = writeTaskAttempt(opts.repoRoot, {
+        runId: currentState.runId, taskId: task.id, attempt: record.attempt, outcome, reason, result, gates,
+      });
+      currentState.tasks[task.id] = { ...record,
+        attemptHistory: [...(record.attemptHistory ?? []), { attempt: record.attempt, outcome, reason, resultPath }],
+        errorMessage: reason,
+      };
+      saveState(opts.statePath, currentState);
+      writeAuditEvent(opts.auditPath, {
+        timestamp: new Date().toISOString(), action: "task.attempt.finished", runId: currentState.runId,
+        taskId: task.id, phaseId: entry.phaseId, attempt: record.attempt, durationMs: result.durationMs,
+        note: reason ?? "All applicable completion gates passed", resultPath,
+      });
+      previousFailure = reason;
+      previousResultPath = resultPath;
+      console.log(`[engine] Task ${task.id} attempt ${record.attempt} ${outcome}: ${reason ?? "completion gates passed"} (result ${resultPath})`);
+    };
 
     // Record a failed attempt (either the harness failed or the output gate
     // rejected a hollow "success"). Exhausting retries marks the task failed.
@@ -431,23 +476,50 @@ async function executeTask(
       return currentState;
     };
 
-    if (opts.signal?.aborted) return cancelAttempt();
+    if (opts.signal?.aborted) {
+      setGate("harness", "failed", "Task cancelled");
+      recordAttempt("cancelled", "Task cancelled");
+      return cancelAttempt();
+    }
+
+    setGate("harness", result.success ? "passed" : "failed", result.success ? undefined : result.errorMessage ?? result.stderr);
 
     if (result.success) {
       // ── Output verification: never report a task complete with no evidence ─
       const verified = await verifyTaskResult(task, result, baseline, {
         repoRoot: opts.repoRoot,
         allowNoop: opts.allowNoop,
-        runValidation: opts.runValidation,
+        runValidation: Boolean(task.contract) || opts.runValidation,
       });
+      setGate("outputs", verified.ok ? "passed" : "failed", verified.reason);
       let failReason = verified.ok ? undefined : verified.reason;
+      let validationEvidence: string[] | undefined;
+      if (!failReason && task.contract) {
+        const report = readTaskHandoff(result.stdout);
+        const handoff = report.handoff;
+        if (!handoff) failReason = report.error;
+        setGate("handoff", handoff ? "passed" : "failed", handoff ? undefined : failReason);
+        if (handoff) {
+          if (handoff.unresolved.length) failReason = `Unresolved task requirements: ${handoff.unresolved.join("; ")}`;
+          setGate("requirements", failReason ? "failed" : "passed", failReason);
+        }
+      } else if (!task.contract) {
+        setGate("handoff", "skipped", "Legacy task has no structured contract");
+        setGate("requirements", "skipped", "Legacy task has no structured contract");
+      }
 
-      if (!failReason && opts.runValidation) {
+      if (!failReason && (task.contract || opts.runValidation)) {
         const validation = await runTaskValidation(task, opts.repoRoot, task.timeoutMs ?? opts.taskTimeoutMs);
         if (!validation.ok) failReason = validation.reason;
+        else validationEvidence = task.validationCommands.map((command) => `${command}: exit 0 (engine-verified)`);
+        setGate("validation", task.validationCommands.length ? (validation.ok ? "passed" : "failed") : "skipped",
+          task.validationCommands.length ? validation.reason : "No manifest validation commands", validationEvidence);
+      } else if (!task.contract && !opts.runValidation) {
+        setGate("validation", "skipped", "Legacy validation disabled");
       }
 
       if (failReason) {
+        recordAttempt("failed", failReason);
         if (attempt === opts.maxRetries) return failTask(failReason);
         continue; // hollow success → retry
       }
@@ -466,6 +538,8 @@ async function executeTask(
         }
       }
 
+      recordAttempt("passed");
+
       // ── Artifact creation ─────────────────────────────────────────────────
       let artifactId: string | undefined;
 
@@ -478,6 +552,7 @@ async function executeTask(
           producedBy: agent.name,
           outputFiles: result.outputFiles,
           agentOutput: result.stdout,
+          validationEvidence,
           inputArtifactIds,
         });
         artifactId = artifact.artifactId;
@@ -516,6 +591,7 @@ async function executeTask(
       return currentState;
     }
 
+    recordAttempt(result.failureKind === "cancelled" ? "cancelled" : "failed", result.errorMessage ?? result.stderr);
     if (attempt === opts.maxRetries || result.failureKind === "configuration" ||
         result.failureKind === "exception" || result.failureKind === "cancelled") {
       return failTask(result.errorMessage ?? result.stderr);
@@ -534,12 +610,17 @@ async function preflightOwners(
     const selected = scopedTaskSet(state.selection);
     const unresolved = flattenManifest(manifest).filter(({ task }) =>
       (!selected || selected.has(task.id)) && !isTaskDone(state.tasks[task.id]?.status) &&
+      task.contract?.kind !== "human-review" &&
       !findAgentForTask(agents, task.ownerAgent));
     if (unresolved.length > 0) {
       throw new Error(`Missing required owners: ${unresolved.map(({ task }) => `${task.id} (${task.ownerAgent ?? "unassigned"})`).join(", ")}. Restore agent files or correct ownerAgent and recompile.`);
     }
     for (const { task } of flattenManifest(manifest)) {
       if ((selected && !selected.has(task.id)) || isTaskDone(state.tasks[task.id]?.status)) continue;
+      if (task.contract?.kind === "human-review") {
+        taskReferenceContext(opts.repoRoot, task);
+        continue;
+      }
       assertTaskCapabilities(task, opts.harness);
       prepareTaskRequest({ agent: findAgentForTask(agents, task.ownerAgent)!, task,
         repoRoot: opts.repoRoot, defaultModel: opts.harness.defaultModel, timeoutMs: opts.taskTimeoutMs,
@@ -577,6 +658,23 @@ async function runEngineSession(opts: EngineOptions): Promise<WorkflowState> {
   }
   const selection = resolveSelection(manifest, state, opts);
   state = setSelection(state, selection);
+
+  const invalidated = new Set(flattenManifest(manifest).filter(({ task }) =>
+    task.contract?.kind === "human-review" && isTaskDone(state.tasks[task.id]?.status) && !humanTaskApproved(opts.repoRoot, task),
+  ).map(({ task }) => task.id));
+  let previousSize = -1;
+  while (previousSize !== invalidated.size) {
+    previousSize = invalidated.size;
+    for (const { task, phaseIndex } of flattenManifest(manifest)) {
+      const dependencies = [...task.dependencies, ...manifest.phases[phaseIndex]!.dependencies.flatMap((id) => manifest.phases.find((phase) => phase.id === id)?.tasks.map((entry) => entry.id) ?? [])];
+      if (dependencies.some((id) => invalidated.has(id))) invalidated.add(task.id);
+    }
+  }
+  if (invalidated.size) {
+    state = { ...state, status: "paused", tasks: { ...state.tasks } };
+    for (const id of invalidated) state.tasks[id] = { ...state.tasks[id]!, status: "pending", completedAt: undefined, errorMessage: "Human review evidence changed; review and dependent work must be revalidated." };
+    saveState(opts.statePath, state);
+  }
 
   // A previous run that died mid-task may have left tasks marked "running".
   // Reset those to "pending" so they are picked up again instead of deadlocking.
@@ -632,7 +730,7 @@ async function runEngineSession(opts: EngineOptions): Promise<WorkflowState> {
   // written to the control file by `workflow-engine pause|stop`. Checked at the
   // top of each wave so a running task finishes before the run pauses.
   const shouldStop = (): boolean =>
-    Boolean(opts.pauseRequested || opts.stopRequested?.() || opts.signal?.aborted || readControl(opts.controlPath) !== null);
+    Boolean(state.status === "paused" || opts.pauseRequested || opts.stopRequested?.() || opts.signal?.aborted || readControl(opts.controlPath) !== null);
 
   while (!isComplete(manifest, state) && !shouldStop()) {
     if (hasFailed(state)) {
@@ -765,7 +863,10 @@ async function replayTaskSession(taskId: string, opts: EngineOptions): Promise<W
   if (!task || !phaseId) throw new Error(`Task '${taskId}' not found in manifest.`);
   const dependencyIds = expandSelectedTaskIds(manifest, [taskId]).filter((id) => id !== taskId);
   const replayRecords = state.tasks;
-  const incomplete = dependencyIds.filter((id) => !isTaskDone(replayRecords[id]?.status));
+  const incomplete = dependencyIds.filter((id) => {
+    const dependency = findTask(manifest, id);
+    return !isTaskDone(replayRecords[id]?.status) || (dependency?.contract?.kind === "human-review" && !humanTaskApproved(opts.repoRoot, dependency));
+  });
   if (incomplete.length > 0) throw new Error(`Cannot replay '${taskId}': incomplete dependencies ${incomplete.join(", ")}. Run them first.`);
   const agents = await preflightOwners(manifest, {
     ...state, selection: { mode: "manual", taskIds: [taskId] },
@@ -777,7 +878,7 @@ async function replayTaskSession(taskId: string, opts: EngineOptions): Promise<W
 
   const entry = { phaseId, phaseIndex: manifest.phases.findIndex((p) => p.id === phaseId), task };
   state = await executeTask(entry, agents, state, opts, store, () => Boolean(opts.signal?.aborted));
-  if (opts.signal?.aborted && !isComplete(manifest, state)) {
+  if ((state.status === "paused" || opts.signal?.aborted) && !isComplete(manifest, state)) {
     state = { ...state, status: "paused" };
     writeAuditEvent(opts.auditPath, {
       timestamp: new Date().toISOString(), action: "run.paused", runId: state.runId,

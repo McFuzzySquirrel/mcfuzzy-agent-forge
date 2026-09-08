@@ -39,8 +39,8 @@ npm install
 npm run forge-execution-adapter -- compile
 ```
 
-`compile` auto-detects the PRD representation: monolithic `docs/PRD.md`, or the
-**decomposed layout** (`docs/product-vision.md` + `docs/features/*.md`), which
+`compile` requires `docs/PRD.md` + `docs/features/*.md` for every
+solution, including a single feature. It
 compiles the features in dependency-graph order into feature-tagged phases
 (e.g. `BUDGETS-2`). It also runs a team-validation gate (unassigned tasks,
 duplicate file owners, orphan agents) and writes
@@ -112,15 +112,18 @@ verifies every successful call before marking the task complete:
 - **Relax** with `--allow-noop` / `FORGE_ENGINE_ALLOW_NOOP=1` (expected-output
   check stays).
 - **Validation commands** - `--run-validation` / `FORGE_ENGINE_RUN_VALIDATION=1`
-  executes each task's manifest `validationCommands` (cwd = repo root) and
-  requires exit 0 before completion.
+  enables legacy task validation. Structured implementation contracts always
+  execute `validationCommands` (cwd = repo root) and require exit 0, regardless
+  of these flags. They also require a valid `forge-result` outcome report with
+  no unresolved items. See [task contracts](task-contracts.md) for authoring,
+  reference limits, migration, and operator-only human-review gates.
 
 The final run summary and `workflow-engine status` flag tasks completed with no
-recorded output files, so a hollow "complete" run is visible. The opencode
-(`--agent <name>`), copilot (`/agent <name>`), and claude (`--agent <name>` flag)
-harnesses select forge agents natively when their files live under the harness's
-agents directory; `FORGE_ENGINE_NATIVE_AGENT=0` forces the inline-persona prompt
-(the pre-v3.21 behavior) on any of them.
+recorded output files, so a hollow "complete" run is visible. The opencode,
+copilot and claude harnesses select forge agents with `--agent <name>`
+natively when their files live under the harness's agents directory;
+`FORGE_ENGINE_NATIVE_AGENT=0` forces the persona fallback on any of them.
+For repository tasks, that persona is in the execution file rather than argv.
 
 ---
 
@@ -192,23 +195,35 @@ The engine is harness-agnostic. Select the backend with `--harness`:
 
 | Adapter | Flag | How it invokes agents |
 |---|---|---|
-| **OpenCode CLI** (default) | `--harness opencode` | `opencode run --auto [--agent <name>] --dir <repo> "<task prompt>"` |
-| **GitHub Copilot CLI** | `--harness copilot` | `copilot -p "<agent body + task prompt>" --yolo` |
-| **Claude Code CLI** | `--harness claude` | `claude -p "<task prompt>" --output-format json --agent <name> --permission-mode bypassPermissions` (native for `.claude/agents/`; inline-persona fallback otherwise) |
+| **OpenCode CLI** (default) | `--harness opencode` | `opencode run --auto [--agent <name>] --dir <repo> "<short execution-file instruction>"` |
+| **GitHub Copilot CLI** | `--harness copilot` | `copilot -p "<short execution-file instruction>" [--agent <name>] --yolo` |
+| **Claude Code CLI** | `--harness claude` | `claude -p "<short execution-file instruction>" --output-format json [--agent <name>] --permission-mode bypassPermissions` |
 | **OpenAI API** | `--harness openai` | `POST /v1/chat/completions` with the agent `rawBody` as the system prompt |
 | **Stub** | `--harness stub` | Returns synthetic success; no real calls (for testing) |
 
-The `copilot` adapter inlines the agent persona into the prompt (there is no
-`--system-prompt` flag on `copilot -p`). The `opencode` adapter selects the forge
-agent natively when its file lives under the project's `.opencode/agents/`
-directory (`--agent <name>`), so sessions show the forge agent rather than the
-default build agent; for other harness roots it inlines the persona the same way
-the copilot adapter does. The `claude` adapter selects the forge agent natively
-when its file lives under the project's `.claude/agents/` directory (`--agent
-<name>`), inlines the persona for every other harness root, and parses the
-`--output-format json` result envelope to classify a failure as `configuration`
-or `retryable`. All three run the child process asynchronously, so the engine's
-heartbeat stays responsive.
+All three CLI adapters select native agents with `--agent`: Copilot from
+`.github/agents/`, OpenCode from `.opencode/agents/`, and Claude from
+`.claude/agents/`. Other harness roots use the
+persona fallback. Repository tasks launch with a short single-line instruction
+pointing to `docs/artifacts/<task-id>.md` containing current task details,
+prerequisite context and the fallback persona. Reference documents are read on
+demand. This avoids Windows command-line limits and multiline batch truncation.
+Use a Copilot version supporting `--agent`, or disable native selection with
+`FORGE_ENGINE_NATIVE_AGENT=0`.
+
+Execution files are retained local diagnostics, not deliverables. They are
+excluded from work attribution and auto-commit; pre-staged execution files stop
+auto-commit without discarding the staged work. An attached server needs access
+to the same repository files. Explicit text-only requests still carry inline
+content; prefer the API for large text requests. See
+[execution files and reference reading](task-contracts.md#execution-files-and-reference-reading)
+for retention, safety and compatibility limits. All three adapters remain asynchronous
+so the engine's heartbeat stays responsive.
+
+Claude retains JSON-envelope failure classification and permission-denial handling.
+On success, the envelope's `result` text supplies the `forge-result` report to the
+same engine completion gates, attempt archives, and retry feedback as the other
+adapters. A successful CLI envelope alone does not mark a structured task complete.
 
 ---
 
@@ -248,7 +263,7 @@ npm run workflow-engine -- viz     [--repo <path>] [--port <n>] [--no-open]
 | `--viz [port]` | *(off)* | Launch the live Forge Board dashboard (default port `4299`, next free port if busy) |
 | `--no-open` | *(off)* | Do not auto-open the browser (the URL is still printed) |
 | `--allow-noop` | *(off)* | Relax the output-verification no-op gate (missing/trivial output still fails) |
-| `--run-validation` | *(off)* | Execute each task's manifest `validationCommands` and require them to pass |
+| `--run-validation` | *(off for legacy tasks)* | Execute legacy manifest `validationCommands`; structured implementation tasks always require passing validation |
 | `--auto-commit` | **on** | Commit the working tree after each completed task (one commit per task; see *Auto-commit* below) |
 | `--no-auto-commit` | *(off)* | Disable per-task auto-commit (e.g. mid-rebase or with a dirty working tree) |
 | `--commit-message-template <tmpl>` | *(built-in)* | Commit message with `{taskId}` / `{taskTitle}` placeholders; default `feat(forge-engine): complete task {taskId} - {taskTitle}` |
@@ -491,8 +506,9 @@ artifact payloads or previous conversations.
 
 When a task declares `inputs`, the engine (`ArtifactStore.project`) takes the
 latest **completed** artifact of each input type and keeps only a few fields:
-`artifactId`, `type`, `summary`, `confidence`, `filesChanged`, and
-`agentOutputExcerpt` (plus any task-requested `fields`). `renderProjection`
+`artifactId`, `type`, `summary`, optional `confidence`, `filesChanged`,
+`agentOutputExcerpt`, `decisions`, `interfaces`, `tests`, and `unresolved`
+(plus any task-requested `fields`). `renderProjection`
 turns that into a compact markdown block
 (`## Context from previous tasks`), and the harness adapter prepends only that
 block to the agent's prompt - the full `WorkflowState` and the artifact JSONs
@@ -512,9 +528,9 @@ What the percentage does *not* mean:
 - It is relative to the artifact payloads, not the entire prompt.
 - It is a character-count proxy, not the model's real tokenizer.
 - It only trims input tokens; output tokens are unaffected.
-- The default projection stays compact (`summary`, `confidence`,
-  `filesChanged`, and `agentOutputExcerpt`), so the larger the artifacts, the
-  larger the real saving.
+- Default projection keeps outcome summaries, decisions, interfaces, tests,
+  unresolved items, changed files, an output excerpt, and optional confidence.
+  Savings depend on the size of those fields relative to the full artifact.
 
 Plainly: each task hands off a short typed summary of what it produced, not its
 full output; the engine estimates the reduction (~4 chars/token) from the full
@@ -563,7 +579,7 @@ To start fresh (e.g. after recompiling the manifest), delete `docs/WORKFLOW-STAT
 | `FORGE_ENGINE_ATTACH` | *(unset)* | `1` forces the `opencode serve` keep-alive (same as `--keep-alive`); `0` forces cold start per task (same as `--no-keep-alive`); unset = adaptive |
 | `FORGE_ENGINE_ATTACH_URL` | *(unset)* | Attach tasks to an existing `opencode serve` URL (same as `--attach`) |
 | `FORGE_ENGINE_ALLOW_NOOP` | *(unset)* | `1` relaxes the no-op output gate (same as `--allow-noop`) |
-| `FORGE_ENGINE_RUN_VALIDATION` | *(unset)* | `1` runs manifest `validationCommands` per task (same as `--run-validation`) |
+| `FORGE_ENGINE_RUN_VALIDATION` | *(unset)* | `1` enables legacy validation; structured implementation validation is always required |
 | `FORGE_ENGINE_AUTO_COMMIT` | `1` | `0` disables auto-commit after each completed task (same as `--no-auto-commit`); default on |
 | `FORGE_ENGINE_COMMIT_MESSAGE_TEMPLATE` | *(built-in)* | Commit message template with `{taskId}` / `{taskTitle}` placeholders |
 | `OPENCODE_BIN` | `opencode` | Path to the opencode binary |

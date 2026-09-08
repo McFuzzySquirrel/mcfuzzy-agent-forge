@@ -6,6 +6,7 @@ import { dirname, join } from "node:path";
 import { ClaudeAdapter } from "./claude-adapter.ts";
 import type { AgentDescriptor, ManifestTask, TaskResult } from "../types.ts";
 import { prepareTaskRequest } from "../request.ts";
+import { parseTaskHandoff } from "../task-result.ts";
 import { makeNodeShim, tempDir } from "../test-support.ts";
 
 const SUCCESS_ENVELOPE =
@@ -101,6 +102,15 @@ function recordedPrompt(shim: Shim): string {
   return recorded[recorded.indexOf("-p") + 1] ?? "";
 }
 
+function recordedExecution(shim: Shim, root: string): string {
+  const prompt = recordedPrompt(shim);
+  const file = prompt.match(/execution file "([^"]+)"/)?.[1];
+  assert.ok(file, prompt);
+  assert.ok(prompt.length < 1000);
+  assert.ok(!prompt.includes("\n"));
+  return readFileSync(join(root, file), "utf8");
+}
+
 /** Envelope on stdout for the next shim run. */
 function stubEnvelope(envelope: Record<string, unknown>): void {
   process.env.CLAUDE_SHIM_STDOUT = JSON.stringify(envelope);
@@ -133,10 +143,10 @@ test("passes --agent for .claude-rooted agents and omits the inline persona", as
   assert.equal(result.success, true);
   const args = recordedArgs(shim);
   assert.equal(args[args.indexOf("--agent") + 1], "discovery-engineer");
-  assert.ok(!recordedPrompt(shim).includes("You are a Discovery Engineer"), recordedPrompt(shim));
+  assert.ok(!recordedExecution(shim, root).includes("You are a Discovery Engineer"));
 });
 
-test("falls back to inlining the persona for non-.claude harness roots", async (t) => {
+test("stores the fallback persona in the execution file for non-.claude harness roots", async (t) => {
   for (const harnessRoot of [".github", ".opencode", ".agents"]) {
     const root = makeRepo(t);
     const shim = makeShim(t);
@@ -145,7 +155,7 @@ test("falls back to inlining the persona for non-.claude harness roots", async (
 
     assert.equal(result.success, true);
     assert.ok(!recordedArgs(shim).includes("--agent"), harnessRoot);
-    assert.ok(recordedPrompt(shim).includes("You are a Discovery Engineer"), harnessRoot);
+    assert.ok(recordedExecution(shim, root).includes("You are a Discovery Engineer"), harnessRoot);
   }
 });
 
@@ -157,7 +167,7 @@ test("never passes --agent when the agent has no name", async (t) => {
   await invoke(shim, agent, root);
 
   assert.ok(!recordedArgs(shim).includes("--agent"));
-  assert.ok(recordedPrompt(shim).includes("You are a Discovery Engineer"));
+  assert.ok(recordedExecution(shim, root).includes("You are a Discovery Engineer"));
 });
 
 test("FORGE_ENGINE_NATIVE_AGENT=0 forces the inline-persona fallback for .claude agents", async (t) => {
@@ -168,20 +178,48 @@ test("FORGE_ENGINE_NATIVE_AGENT=0 forces the inline-persona fallback for .claude
   await invoke(shim, agentIn(root, ".claude"), root);
 
   assert.ok(!recordedArgs(shim).includes("--agent"));
-  assert.ok(recordedPrompt(shim).includes("You are a Discovery Engineer"));
+  assert.ok(recordedExecution(shim, root).includes("You are a Discovery Engineer"));
 });
 
-test("prompt carries the execute-now directive and the budget in both native and inline modes", async (t) => {
+test("execution file carries the execute-now directive and budget in native and fallback modes", async (t) => {
   for (const harnessRoot of [".claude", ".agents"]) {
     const root = makeRepo(t);
     const shim = makeShim(t);
 
     await invoke(shim, agentIn(root, harnessRoot), root, { timeoutMs: 30_000, maxRetries: 3 });
 
-    const prompt = recordedPrompt(shim);
+    const prompt = recordedExecution(shim, root);
     assert.ok(prompt.includes("Perform the task now"), prompt);
     assert.ok(prompt.includes("Per-task timeout: 30s"), prompt);
     assert.ok(prompt.includes("retried up to 3 time(s)"), prompt);
+  }
+});
+
+test("structured retries preserve feedback in the snapshot and unwrap compact reports", async (t) => {
+  const root = makeRepo(t);
+  const shim = makeShim(t);
+  writeFileSync(join(root, "requirements.md"), "Implement the scanner and verify its output.");
+  const report = '```forge-result\n{"summary":["Implemented scanner","Verified output"],"unresolved":[],"warnings":["Optional follow-up"]}\n```';
+  stubEnvelope({ type: "result", is_error: false, result: report });
+  const result = await makeAdapter(shim).invoke(prepareTaskRequest({
+    agent: agentIn(root, ".claude"),
+    task: makeTask({ ownerAgent: "discovery-engineer", contract: {
+      version: 1, kind: "implementation", requirements: ["Implement scanner"],
+      acceptanceCriteria: ["Verify output"], constraints: [], references: ["requirements.md"],
+    } }),
+    repoRoot: root, attempt: 2, maxRetries: 2,
+    previousFailure: "Required validation failed",
+    previousResultPath: "docs/task-executions/previous.result.json",
+  }));
+  assert.equal(result.success, true);
+  assert.equal(result.stdout, report);
+  const handoff = parseTaskHandoff(result.stdout);
+  assert.ok(handoff);
+  assert.deepEqual(handoff.unresolved, []);
+  assert.deepEqual(handoff.warnings, ["Optional follow-up"]);
+  const content = recordedExecution(shim, root);
+  for (const expected of ["Implement scanner", "Verify output", "requirements.md", "forge-result", "Attempt: 2", "Required validation failed", "docs/task-executions/previous.result.json"]) {
+    assert.ok(content.includes(expected), expected);
   }
 });
 

@@ -123,8 +123,8 @@ export function discoverForgeRepo(start = process.cwd(), preferredHarness?: Harn
   const harnessRoot = harness.root;
   const agentRoot = join(repoRoot, harnessRoot, "agents");
   const skillRoot = join(repoRoot, harnessRoot, "skills");
-  const prdPath = join(repoRoot, "docs", "PRD.md");
-  const visionPath = join(repoRoot, "docs", "product-vision.md");
+  const visionPath = join(repoRoot, "docs", "PRD.md");
+  const prdPath = visionPath;
   const featuresDir = join(repoRoot, "docs", "features");
   const progressPath = join(repoRoot, "docs", "PROGRESS.md");
   const auditPath = join(repoRoot, "docs", "EXECUTION-AUDIT.jsonl");
@@ -134,19 +134,13 @@ export function discoverForgeRepo(start = process.cwd(), preferredHarness?: Harn
     ? readdirSync(featuresDir).filter((entry) => entry.endsWith(".md")).sort().map((entry) => join(featuresDir, entry))
     : [];
   const decomposed = existsSync(visionPath) && featurePaths.length > 0;
-  const sourceLayout: ForgeRepo["sourceLayout"] = decomposed ? "features" : "monolithic";
+  const sourceLayout: ForgeRepo["sourceLayout"] = "features";
 
-  if (!existsSync(prdPath) && !decomposed) {
-    throw new Error(`No PRD representation found under ${repoRoot}. Expected docs/PRD.md, or docs/product-vision.md + docs/features/`);
+  if (!decomposed) {
+    throw new Error(`Every solution requires docs/PRD.md + docs/features/*.md under ${repoRoot}. Run forge-build-prd, or forge-decompose-prd to convert legacy source documents.`);
   }
 
   const warnings = [...harness.warnings];
-  if (!existsSync(prdPath) && decomposed) {
-    warnings.push("No docs/PRD.md; compiling from docs/product-vision.md + docs/features/ only.");
-  }
-  if (existsSync(visionPath) && featurePaths.length === 0) {
-    warnings.push("docs/product-vision.md present but docs/features/ has no .md files; compiling from docs/PRD.md.");
-  }
 
   const agents = walk(agentRoot, (entry) => entry.endsWith(".md") && !entry.endsWith("SKILL.md")).map((path) => parseAgent(path, repoRoot));
   const skills = walk(skillRoot, (entry) => entry === "SKILL.md").map((path) => parseSkill(path, repoRoot));

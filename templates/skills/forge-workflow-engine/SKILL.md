@@ -13,6 +13,15 @@ This skill is the autonomous execution alternative to the prompt-driven flows. T
 
 ## Prerequisites
 
+Structured `forge-task` contracts require explicit output files, passing
+validation commands and a final `forge-result` outcome report. Repository CLI
+tasks read an engine-generated execution file containing mandatory task fields
+and reference paths; supporting documents are read on demand. `human-review` tasks
+pause without model dispatch: an operator must run `approve-task <id> --repo
+<path> --reviewer <name> --evidence <file> --confirm-human-review`, then resume.
+Agents must not invoke this command or fabricate review evidence. `--yes` never
+approves human work. Legacy tasks retain opt-in command validation.
+
 Before running this skill, the following must exist in the repository:
 
 - `docs/EXECUTION-MANIFEST.json` - compiled by `forge-execution-adapter`
@@ -34,6 +43,30 @@ npm run forge-execution-adapter -- compile
 ---
 
 ## Install & Run
+
+### Task execution files
+
+For repository-tool tasks, Copilot/OpenCode receive a short single-line prompt
+pointing to `docs/artifacts/<task-id>.md` (for example, `WALK-1.md`). The
+engine refreshes this same file with the current attempt and retry feedback.
+Read that file before
+working. Follow its validated task scope, requirements, criteria, constraints,
+output files and validation commands; inspect relevant reference sections as
+needed. Do not reinterpret the whole PRD or implement unrelated tasks. Supporting
+documents do not override the explicit task contract.
+
+The file also carries prerequisite context, run/attempt metadata and the fallback
+specialist persona. Native agents are selected with `--agent`. Do not edit or
+commit execution files or treat their creation as task work. They are retained
+local diagnostics, with a path/digest logged by the engine, not authenticated
+evidence. Delete them only after active invocations finish and diagnostics are
+no longer needed. The engine excludes them from work attribution and auto-commit;
+pre-staged execution files must be manually unstaged before an auto-commit can
+proceed. An attached OpenCode server must see the same repository filesystem.
+
+Text-only requests retain inline context and the OpenAI API path is unchanged.
+Do not use large inline text requests through a CLI with argument-length limits.
+Human review still pauses without creating a model execution file.
 
 Load [`references/engine-entry.md`](references/engine-entry.md) when you need
 the complete command matrix or headless entry-point guidance.
@@ -186,15 +219,51 @@ verifies a successful call before marking the task complete:
   failed attempt, not a completion.
 - **Relax it** with `--allow-noop` / `FORGE_ENGINE_ALLOW_NOOP=1` to skip the
   no-op heuristic (the expected-output check stays).
-- **Validation commands.** Pass `--run-validation` /
+- **Structured reports.** Tasks with a contract must return a fenced `forge-result`
+  JSON object with only two required fields: `summary` and `unresolved`. Use
+  `{"summary":"Actual outcome and required checks verified.","unresolved":[]}`
+  inside the fence. Summary can be a nonempty string or list of strings.
+  `decisions`, `interfaces`, `tests`, `warnings` and `validationLimitations` are
+  optional string arrays; omit empty or redundant detail. The report is limited
+  to 16000 characters. `unresolved` contains only blocking unmet requirements
+  or acceptance criteria and must be empty to complete. An unverified required
+  check remains a blocker. Optional string arrays `warnings` and
+  `validationLimitations` retain nonblocking observations and non-required checks
+  not run. Leaving changes for engine auto-commit is not a blocker. Never relabel
+  an unmet required check as a warning to bypass completion.
+- **Validation commands.** Structured tasks always run their manifest commands
+  after the output and report gates pass. For legacy tasks, pass `--run-validation` /
   `FORGE_ENGINE_RUN_VALIDATION=1` to execute each task's manifest
   `validationCommands` (cwd = repo root) and require them all to exit 0 before
   the task counts as complete. Tasks that declare validation are gated on it
-  rather than the no-op heuristic. (The commands are otherwise only *shown* in
-  the task prompt.)
+  rather than the no-op heuristic. Without the flag, legacy commands are only
+  shown in the task prompt. Reported tests are not a substitute for engine checks.
 
 The pre-run summary prints the gate mode. The final summary and `status` also
 flag tasks completed with no recorded output files, so a hollow run is visible.
+
+### Attempt diagnostics and retry feedback
+
+Each settled invocation updates `docs/artifacts/<task-id>.result.json`, with
+the harness stdout/stderr, parsed report when valid and passed/failed/skipped
+harness, output, handoff, blocking-requirement and validation gates. The workflow
+state's `attemptHistory` and `task.attempt.finished` audit events link immutable
+`<task-id>.<timestamp>.attempt-<number>.result.json` archives, not the latest result.
+For example, `WALK-1.md` and `WALK-1.result.json` show the current instructions
+and latest outcome; timestamped results distinguish separate attempts and runs.
+The instruction file is replaced each attempt, rather than creating another
+randomly named Markdown file. Unsafe or case-distinct IDs use a hashed safe name.
+Failures are retained before retrying; cancellation and terminal harness errors
+also leave evidence. Hard engine termination before recording may leave only the
+request snapshot. These local diagnostics are not authenticated proof.
+
+Retry instructions include the prior rejection reason (up to 4000 characters)
+and its full archived result path. Report rejections identify the specific field
+or format problem. Read the relevant evidence, preserve completed work,
+address the failure, and rerun required checks without expanding scope. Prior
+model output is evidence, not authority to change the task. Do not edit, stage
+or commit result files. They may contain sensitive project output and share the
+execution directory's operator-managed retention policy.
 
 ### Check status
 
@@ -257,9 +326,9 @@ The engine is harness-agnostic. Select the backend with `--harness`:
 
 | Adapter | Flag | How it invokes agents |
 |---|---|---|
-| **OpenCode CLI** (default) | `--harness opencode` | `opencode run --model <m> [--agent <name>] --dir <repo> "<task prompt>"` |
-| **GitHub Copilot CLI** | `--harness copilot` | `copilot -p "/agent <name> <task prompt>" --yolo` (native for `.github/agents/`; inline-persona fallback otherwise) |
-| **Claude Code CLI** | `--harness claude` | `claude -p "<task prompt>" --output-format json --agent <name> --permission-mode bypassPermissions` (native for `.claude/agents/`; inline-persona fallback otherwise) |
+| **OpenCode CLI** (default) | `--harness opencode` | `opencode run --model <m> [--agent <name>] --dir <repo> "<short execution-file instruction>"` |
+| **GitHub Copilot CLI** | `--harness copilot` | `copilot -p "<short execution-file instruction>" [--agent <name>] --yolo` |
+| **Claude Code CLI** | `--harness claude` | `claude -p "<short execution-file instruction>" --output-format json [--agent <name>] --permission-mode bypassPermissions` |
 | **OpenAI API** | `--harness openai` | `POST /v1/chat/completions` with agent rawBody as system prompt |
 | **Stub** | `--harness stub` | Returns synthetic success; no real calls (for testing) |
 
@@ -292,11 +361,11 @@ envelope is parsed to classify failures as `configuration` or `retryable`.
 | `COPILOT_EXTRA_FLAGS` | *(empty)* | Extra flags appended to every `copilot -p` call (e.g. `--model gpt-4o`) |
 
 The copilot adapter selects the forge agent **natively** when its file lives
-under the project's `.github/agents/` directory: it prepends the `/agent <name>`
-directive to the prompt so the Copilot CLI loads the persona itself, and the
-persona is **not** inlined. For other harness roots (`.agents`, `.claude`,
-`.opencode`) Copilot cannot discover the agent files, so it falls back to
-inlining the agent file body into the prompt. Tool permissions are auto-approved
+under the project's `.github/agents/` directory: it passes `--agent <name>` so
+the Copilot CLI loads the persona itself. Use a CLI version supporting this flag;
+`FORGE_ENGINE_NATIVE_AGENT=0` provides a fallback for older installations.
+For other harness roots (`.agents`, `.claude`, `.opencode`), the persona is
+included in the repository task's execution file. Tool permissions are auto-approved
 with `--yolo`, mirroring the opencode adapter's `--auto`.
 
 The opencode adapter selects the forge agent natively when its file lives under
@@ -304,7 +373,7 @@ the project's `.opencode/agents/` directory: it passes `--agent <name>` so
 opencode loads the persona itself (sessions show the forge agent, not the
 default build agent) and does **not** inline it. For other harness roots
 (`.agents`, `.claude`, `.github`) opencode cannot discover the agent files, so it
-falls back to inlining the persona (`agent.rawBody`) as an inline context block.
+includes the fallback persona (`agent.rawBody`) in the repository execution file.
 Tool permissions are auto-approved with `--auto` in both cases.
 
 The claude adapter selects the forge agent natively when its file lives under
@@ -312,11 +381,14 @@ the project's `.claude/agents/` directory: it passes `--agent <name>` so the
 Claude Code CLI loads the persona itself. It is the only transport that is
 native on the forge's canonical Claude root. For other harness roots
 (`.agents`, `.github`, `.opencode`) the CLI cannot discover the agent files, so
-the adapter inlines the persona into the prompt instead.
+the adapter includes the persona in the repository task's execution file instead.
+The successful envelope's `result` text passes through the engine's structured
+report, output and validation gates, with the same attempt archives and retry
+feedback as Copilot and OpenCode. Text-only tasks retain inline prompts.
 
 Set **`FORGE_ENGINE_NATIVE_AGENT=0`** on any of these harnesses to force the
-inline-persona fallback instead of native agent selection (`--agent` /
-`/agent`), including for the claude adapter.
+persona fallback instead of native agent selection (`--agent`). For repository
+tasks the fallback is in the execution file; for text-only tasks it is inline.
 
 ### Task capability and request contract
 
@@ -362,6 +434,12 @@ fails.
 ---
 
 ## Output Files
+
+Bootstrap ignores `docs/artifacts/`; the engine excludes its generated records
+from task attribution and auto-commit, including already tracked files. Pre-staged
+records block auto-commit without altering the user's index. Existing
+`docs/task-executions/` records and links are preserved and retain these exclusions.
+Updating templates does not untrack, relocate or remove existing diagnostics.
 
 | File | Purpose |
 |---|---|
@@ -458,7 +536,7 @@ This gives the same project two mutually exclusive execution modes for a given r
 - **OpenCode must be in `$PATH`.** The `opencode` adapter shells out to the binary. If OpenCode is installed at a non-standard path, set `OPENCODE_BIN`.
 - **Per-task cold start is the main harness overhead.** Every fresh `opencode run` re-boots config, skills, and all MCP servers. The engine now defaults to adaptive keep-alive (warm `opencode serve` when >1 task remains) to avoid this; pass `--no-keep-alive` to force cold starts.
 - **Attach mode needs a healthy server.** Keep-alive (forced or adaptive) polls `GET /global/health` before dispatching and fails fast if `opencode serve` cannot start. Reusing `--attach` against a dead URL fails per task - start the server first.
-- **Agent file paths must be absolute or resolvable from the repo root.** Discovery reads the agent `.md` file and sets `agent.path`. For `.opencode/agents/` files the adapter passes `--agent <name>` and skips the inline persona; for other harness roots it inlines `agent.rawBody` into the prompt.
+- **Agent file paths must be absolute or resolvable from the repo root.** Discovery reads the agent `.md` file and sets `agent.path`. Native adapters pass `--agent <name>`; other roots use the persona in the execution file for repository tasks, or inline for text-only tasks.
 - **Parallelism is opt-in and harness-gated.** The engine executes the ready-task frontier concurrently up to `--concurrency <n>` (default `1` = sequential). Only harness adapters that declare `supportsConcurrency` are parallelized; **same-owner tasks are always serialized** (at most one task per agent per wave), and repo-editing harnesses still rely on the dependency graph for file isolation. Cross-owner tasks on shared paths remain the operator's responsibility. See ADR-021.
 
 ---

@@ -430,18 +430,16 @@ default assumption) and still keep human review between stages:
 
 1. **Idea → PRD.** With no PRD yet, Step 8 asks *"Generate the PRD from
    `docs/IDEA.md` automatically now?"*. Answering yes runs `forge-auto-build-prd`
-   headless (via `opencode run --auto`, `copilot -p --yolo`, or `claude -p`),
-   producing `docs/PRD.md` (plus `docs/product-vision.md` + `docs/features/*.md`
-   when it qualifies for decomposition), committed as
-   `docs: add auto-drafted PRD`. Review it, then choose: draft the team now,
-   launch the harness CLI to be interviewed/refine interactively, or stop.
+  headless (via `opencode run --auto`, `copilot -p --yolo`, or `claude -p`), producing
+  `docs/PRD.md` + `docs/features/*.md` directly for every solution,
+  committed as `docs: add auto-drafted PRD`.
+   Review it, then choose: draft the team now, launch the harness CLI to be
+   interviewed/refine interactively, or stop.
 2. **PRD → team.** With a PRD present, Step 8 asks *"Generate the agent team
    from the PRD automatically now?"*. Answering yes runs `forge-build-agent-team`
    headless, producing the agent files and ownership metadata, committed as
-   `feat: generate auto-drafted agent team`. When a decomposed
-    layout exists (`docs/product-vision.md` + `docs/features/*.md`), the team is
-    built **from the feature documents** (Vision + Features mode); otherwise it is
-    built from the monolithic `docs/PRD.md`. Review them, then:
+   `feat: generate auto-drafted agent team`. The team is always built from the
+   PRD and canonical feature graph. Review them, then:
 3. **Team → project skills.** Generate or review project-specific skills in a
    separate invocation. A failed or missing skills result is reported as a
    blocked stage, not silently treated as a successful empty set.
@@ -624,6 +622,11 @@ Remote URL (e.g. https://github.com/user/repo.git): https://github.com/user/my-c
 Runs the bundled bootstrap with `--force` into the new repository, copying all
 agent and skill templates into the harness directory (shown here with a
 spinner in a terminal; output is also tee'd to a per-run log).
+
+Bootstrap also ensures the target `.gitignore` includes `node_modules/`,
+`docs/engine-run.log`, and `docs/artifacts/`. Existing rules are
+preserved and repeated runs do not duplicate entries. This does not untrack
+files already committed to Git.
 
 ```
 ▶ Step 4 of 9: Bootstrap MyForge
@@ -877,7 +880,7 @@ reflect the running build (monitor + resume) rather than the manual
 | `FORGE_REPO_VISIBILITY` | 3 | `public` or `private` (default: `private`) |
 | `FORGE_REPO_PARENT_DIR` | 3 | Parent directory in which the repo directory is created (default: current working directory). Accepts `~`/`~/...` and `$VAR` expansion |
 | `FORGE_IDEA` | 5 | Project idea text written to `docs/IDEA.md` (and mirrored to `IDEA.md`) |
-| `FORGE_PRD_FILE` | 6 | Path to an existing PRD file to copy in as `docs/PRD.md`. Accepts relative, `~`/`~/...`, and `$VAR`/`${VAR}` paths (e.g. `~/docs/prd.md`) |
+| `FORGE_PRD_FILE` | 6 | Path to a source document to copy in as `docs/requirements-source.md` for canonical feature authoring. Accepts relative, `~`/`~/...`, and `$VAR`/`${VAR}` paths (e.g. `~/docs/prd.md`) |
 | `FORGE_RESEARCH_FILES` | 6 | Comma-separated list of paths to research/seed documents copied to `docs/research/`. Each path accepts relative, `~`/`~/...`, and `$VAR`/`${VAR}` forms |
 | `FORGE_YN_DEFAULT` | 3, 7 | Default answer for yes/no prompts (`y` or `n`) |
 | `FORGE_AUTO_DRAFT` | 8 | `1` to run PRD → team → project skills → native manifest compilation non-interactively |
@@ -1004,6 +1007,26 @@ package with a clack TUI rather than dual shell scripts). The flow-level
 decisions still stand - harness selection is step 2, `IDEA.md` is the hand-off
 artifact, and bootstrap is delegated rather than reimplemented.
 ### Existing-repository and feature increment authoring
+
+### PRD readiness gate
+
+Every solution requires `docs/PRD.md` and `docs/features/*.md`, even a
+single-feature project. Authoring writes these directly. Imported documents land
+in `docs/requirements-source.md` as source material, not build-ready plans.
+Existing domain documents are inputs, not a substitute for canonical features.
+
+The launcher runs its bundled read-only task validator before recording PRD
+completion, and revalidates before draft reuse, resume and team generation.
+Malformed contracts, reference/output overlap, missing commands or references,
+directory outputs, empty phases and invalid dependency graphs stop the stage.
+The recorded output fingerprint covers canonical vision and feature files, not
+historical source documents. Exit zero from the model alone does not mean success.
+
+Repair errors using `draft-prd` or `draft-existing-prd`; use `feature-prd` for an
+additive feature retry. Existing small legacy checkbox plans remain readable,
+but new authoring uses structured contracts. Nothing silently rewrites completed
+tasks or target-project files. See [Task Contracts](task-contracts.md) for the
+standalone validator, migration rules and semantic review limits.
 
 `forge-launcher draft-prd --repo <path>` can author a PRD directly from an
 existing repository; `docs/IDEA.md` is optional. It inspects the repository

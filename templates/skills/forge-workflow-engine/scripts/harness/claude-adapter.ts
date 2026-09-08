@@ -4,6 +4,7 @@ import { resolve } from "node:path";
 import { runCommand, extractModelFlags, stripProviderPrefix, canSelectAgentNatively } from "./run.ts";
 import type { HarnessAdapter, TaskAttemptRequest, TaskFailureKind, TaskResult } from "../types.ts";
 import { inlinePersona } from "../request.ts";
+import { executionPrompt } from "../task-execution.ts";
 
 /** Fields the adapter reads from `claude -p --output-format json`. All optional: the CLI may evolve. */
 interface ClaudeResultEnvelope {
@@ -29,12 +30,12 @@ const STDOUT_PREVIEW_CHARS = 500;
  * under the project's `.claude/agents/` directory, the adapter passes
  * `--agent <name>` so the CLI loads the persona itself and the persona is not
  * inlined. For other harness roots (`.agents`, `.github`, `.opencode`) the CLI
- * cannot discover the agent files, so the agent file body is prepended to the
- * user prompt as an inline context block instead.
+ * cannot discover the agent files, so the agent file body is included in the
+ * repository task's execution file instead. Text-only tasks remain inline.
  *
  * Expected CLI shapes:
- *   claude -p "<task prompt>" --output-format json --agent <name> --permission-mode bypassPermissions
- *   claude -p "<agent body + task prompt>" --output-format json --permission-mode bypassPermissions
+ *   claude -p "<short execution-file instruction>" --output-format json --agent <name> --permission-mode bypassPermissions
+ *   claude -p "<short execution-file instruction>" --output-format json --permission-mode bypassPermissions
  *
  * Set CLAUDE_BIN env var to override the claude binary path.
  * Set CLAUDE_EXTRA_FLAGS env var to inject extra flags (e.g. "--model opus").
@@ -63,7 +64,7 @@ export class ClaudeAdapter implements HarnessAdapter {
     const start = Date.now();
     const { agent, task, repoRoot } = request;
     const native = this.canSelectAgent(request);
-    const prompt = native ? request.instructions : [inlinePersona(request), request.instructions].join("\n\n");
+    const prompt = executionPrompt(request, native ? "" : inlinePersona(request));
     const agentFlag = native ? ["--agent", agent.name] : [];
     const modelFlag = request.effectiveModel ? ["--model", stripProviderPrefix(request.effectiveModel)] : [];
     const args = ["-p", prompt, "--output-format", "json", ...agentFlag, ...modelFlag, ...this.extraFlags];

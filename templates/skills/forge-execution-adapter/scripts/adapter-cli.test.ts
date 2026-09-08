@@ -15,8 +15,9 @@ function mixedRootFixture(): string {
     writeFileSync(join(agentRoot, "service-engineer.md"),
       `---\nname: ${harness.slice(1)}-specialist\ndescription: Implements service entry points.\n---\n`);
   }
-  mkdirSync(join(root, "docs"));
-  writeFileSync(join(root, "docs", "PRD.md"),
+  mkdirSync(join(root, "docs/features"), { recursive: true });
+  writeFileSync(join(root, "docs/PRD.md"), "# Vision\n## 14. Features\n| # | Feature | File | Dependencies |\n| 1 | Foundation | features/foundation.md | None |\n");
+  writeFileSync(join(root, "docs/features/foundation.md"),
     "# PRD\n\n## Phase 1: Foundation\n- Create service entry point `src/index.ts`\n");
   return root;
 }

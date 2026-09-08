@@ -1,6 +1,6 @@
 ---
 name: forge-orchestrate-build
-description: "Coordinate specialist agents through PRD implementation phases. Provides the full execution process for PRD full builds, Feature PRD executions, and feature-based builds from decomposed documents. Use this skill when the project-orchestrator agent invokes it, or when you need to drive a build step by step."
+description: "Coordinate specialist agents through canonical feature implementation phases. Use when project-orchestrator invokes it or when driving a build step by step from a product vision and registered features, including additive feature increments."
 ---
 
 # Skill: Orchestrate Project Build
@@ -14,7 +14,7 @@ You are driving a multi-agent project build. Your job is to coordinate specialis
 ### 1. Analyze the PRD and Agent Team
 
 Before starting:
-1. Read the complete PRD -goals, scope, tech stack, all requirements, phases, dependencies.
+1. Require `docs/PRD.md` and `docs/features/*.md` and run `validate-prd`. Read the vision and canonical feature graph; historical source documents are not executable. Resolve version-2 task contracts through the adapter so agents receive all mandatory rules.
 2. Review all agent files in `HARNESS_AGENTS_DIR` — load `forge-build-agent-team/references/detect-harness.md` to determine this path — expertise, collaboration sections, which agents operate in which phases.
 3. Build the execution plan: map each requirement to an owner agent, identify dependencies, determine ordering within and across phases.
 4. Verify tech stack currency -search for latest stable versions of every major technology. Flag deprecated or end-of-life dependencies. Report findings before proceeding with Phase 1.
@@ -23,14 +23,14 @@ Before starting:
 
 When the document is a Feature PRD (F-prefixed phases, "Feature Overview" section):
 1. Read the Feature PRD -scope, impact, new components, phases, Agent Impact Assessment.
-2. Read the original PRD -what's already built, established architecture.
+2. Read the vision and existing features for established architecture and completed work.
 3. Review agent files -identify modified, new, and unchanged agents.
 4. Verify tech stack only for NEW technologies introduced by the feature.
 5. Build the feature execution plan -map FT-FR-* requirements, identify dependencies on existing work.
 
 ### 1c. Analyze Product Vision + Feature Documents (Feature-Based Build Mode)
 
-When building from decomposed features (detected by `docs/product-vision.md` + `docs/features/`):
+Every build uses `docs/PRD.md` + `docs/features/`:
 1. Read the Product Vision -goals, architecture, NFRs, feature list, dependency graph (Section 14).
 2. Read ALL feature documents -scope, user stories, requirements, phases, dependencies.
 3. Review agent files -agents may own requirements from multiple features.

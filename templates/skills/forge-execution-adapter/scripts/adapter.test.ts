@@ -8,11 +8,16 @@ import { compileExecutionManifest, compileExecutionManifestDetailed, validateMan
 import { discoverForgeRepo } from "./discovery.ts";
 import { appendAuditEvent, checkpointTask, parseProgress, writeProgress } from "./progress.ts";
 
+function foundationLayout(root: string): void {
+  mkdirSync(join(root, "docs/features"), { recursive: true });
+  writeFileSync(join(root, "docs/PRD.md"), "# Product Vision\n## Validation\n`npm test`\n## 14. Features\n| # | Feature | File | Dependencies |\n| 1 | Foundation | features/foundation.md | None |\n");
+}
+
 function createFixture(harness = ".agents") {
   const root = mkdtempSync(join(tmpdir(), "forge-execution-adapter-"));
   mkdirSync(join(root, harness, "agents"), { recursive: true });
   mkdirSync(join(root, harness, "skills", "api-contracts", "references"), { recursive: true });
-  mkdirSync(join(root, "docs"), { recursive: true });
+  foundationLayout(root);
 
   writeFileSync(join(root, harness, "agents", "api-engineer.md"), `---
 name: api-engineer
@@ -43,7 +48,7 @@ description: Keep API contracts aligned between backend and frontend.
 
 # Skill
 `, "utf8");
-  writeFileSync(join(root, "docs", "PRD.md"), `# PRD
+  writeFileSync(join(root, "docs", "features", "foundation.md"), `# PRD
 
 ## Validation
 \`npm test\`
@@ -67,15 +72,57 @@ test("discoverForgeRepo resolves canonical harness root", () => {
   assert.equal(repo.skills.length, 1);
 });
 
+test("legacy version numbers and explicit source references are not outputs", () => {
+  const root = createFixture();
+  writeFileSync(join(root, "docs", "features", "foundation.md"), '# PRD\n## Phase 1: Checks\n- Automated WCAG 2.2 AA scanning\n- Compile evaluation report from `docs/EVALUATION.md`\n- Calibrate per `docs/SCENARIO-PROFILES.md`\n');
+  const tasks = compileExecutionManifest(discoverForgeRepo(root)).phases[0]!.tasks;
+  assert.ok(tasks.every((task) => task.expectedOutputs.length === 0));
+  assert.equal(tasks[0]!.title, "Automated WCAG 2.2 AA scanning");
+});
+
+test("phase-opening tasks consume prerequisite phase artifacts", () => {
+  const manifest = compileExecutionManifest(discoverForgeRepo(createFixture()));
+  assert.deepEqual(manifest.phases[1]!.tasks[0]!.inputs, ["work.foundation-1.1", "work.foundation-1.2"]);
+});
+
+test("structured tasks preserve atomic scope and reject unknown or cyclic dependencies", () => {
+  const root = createFixture();
+  const task = { id: "api-one", title: "API 2.2: Upload", description: "Implement upload; verify all boundaries. Preserve valid existing behavior.", ownerAgent: "api-engineer", dependencies: [] as string[], expectedOutputs: ["src/upload.ts"], validationCommands: ["npm test"], contract: { version: 1, kind: "implementation", references: ["docs/features/foundation.md"], requirements: ["FR-1: Upload"], acceptanceCriteria: ["Oversize upload rejected"], constraints: [] } };
+  const write = () => writeFileSync(join(root, "docs", "features", "foundation.md"), '# PRD\n## Phase 1: Upload\n```forge-task\n' + JSON.stringify(task) + '\n```\n');
+  write();
+  assert.equal(compileExecutionManifest(discoverForgeRepo(root)).phases[0]!.tasks.length, 1);
+  task.dependencies = ["missing"]; write();
+  assert.throws(() => compileExecutionManifest(discoverForgeRepo(root)), /unknown dependency/);
+  task.dependencies = [task.id]; write();
+  assert.throws(() => compileExecutionManifest(discoverForgeRepo(root)), /cycle/);
+});
+
+test("compact feature contracts compile complete rules and reject duplicate canonical ownership", () => {
+  const root = createFixture();
+  const definition = '```forge-requirement\n{"id":"FR-1","kind":"requirement","text":"Reject oversized uploads before extraction."}\n```\n';
+  const task = { id: "UPLOAD-1", title: "Validate uploads", description: "Enforce upload limits", ownerAgent: "api-engineer", dependencies: [], expectedOutputs: ["src/upload.ts"], validationCommands: ["npm test"], contract: { version: 2, kind: "implementation", requirements: [], requirementRefs: ["docs/features/foundation.md#FR-1"], constraints: [], constraintRefs: [], acceptanceCriteria: ["Extractor never sees rejected bytes"], references: [] } };
+  writeFileSync(join(root, "docs/features/foundation.md"), '# Feature: Foundation\n' + definition + '\n## Phase 1: Upload\n```forge-task\n' + JSON.stringify(task) + '\n```\n');
+  const manifest = compileExecutionManifest(discoverForgeRepo(root));
+  assert.equal(manifest.sourceLayout, "features");
+  const compiled = manifest.phases[0]!.tasks[0]!;
+  assert.equal(compiled.id, "UPLOAD-1");
+  assert.equal(compiled.contract!.version, 1);
+  assert.deepEqual(compiled.contract!.requirements, ["FR-1: Reject oversized uploads before extraction."]);
+  assert.deepEqual(compiled.contract!.references, ["docs/features/foundation.md#FR-1"]);
+  const vision = join(root, "docs/PRD.md");
+  writeFileSync(vision, readFileSync(vision, "utf8") + definition);
+  assert.throws(() => compileExecutionManifest(discoverForgeRepo(root)), /Duplicate canonical definition/);
+});
+
 test("detailed compilation reports stable task reconciliation", () => {
   const root = createFixture();
   const repo = discoverForgeRepo(root);
   const first = compileExecutionManifest(repo);
   writeFileSync(repo.manifestPath, JSON.stringify(first), "utf8");
-  writeFileSync(join(root, "docs", "PRD.md"), readFileSync(join(root, "docs", "PRD.md"), "utf8") + "\n- Task 1.3: Add API tests in `tests/api.test.ts`\n", "utf8");
+  writeFileSync(join(root, "docs", "features", "foundation.md"), readFileSync(join(root, "docs", "features", "foundation.md"), "utf8") + "\n- Task 1.3: Add API tests in `tests/api.test.ts`\n", "utf8");
   const next = compileExecutionManifestDetailed(repo).manifest;
-  assert.deepEqual(next.reconciliation?.preservedTaskIds, ["1.1", "1.2", "2.1"]);
-  assert.deepEqual(next.reconciliation?.newTaskIds, ["2.2"]);
+  assert.deepEqual(next.reconciliation?.preservedTaskIds, ["FOUNDATION-1.1", "FOUNDATION-1.2", "FOUNDATION-2.1"]);
+  assert.deepEqual(next.reconciliation?.newTaskIds, ["FOUNDATION-2.2"]);
 });
 
 test("discoverForgeRepo supports non-default harness roots", () => {
@@ -112,11 +159,12 @@ test("compileExecutionManifest builds phases, tasks, and owners", () => {
   assert.equal(manifest.validationCommands[0], "npm test");
   assert.equal(manifest.phases[0]?.tasks[0]?.ownerAgent, "api-engineer");
   assert.equal(manifest.phases[0]?.tasks[1]?.ownerAgent, "frontend-engineer");
-  assert.deepEqual(manifest.phases[1]?.dependencies, ["1"]);
+  assert.deepEqual(manifest.phases[1]?.dependencies, ["FOUNDATION-1"]);
 });
 
-test("compileExecutionManifest keeps monolithic additive features independent", () => {
+test("compileExecutionManifest keeps independent features independent", () => {
   const root = createFixture();
+  writeFileSync(join(root, "docs/PRD.md"), readFileSync(join(root, "docs/PRD.md"), "utf8") + "| 2 | notifications | features/notifications.md | None |\n");
   mkdirSync(join(root, "docs", "features"), { recursive: true });
   writeFileSync(join(root, "docs", "features", "notifications.md"), `# Feature: Notifications
 
@@ -128,13 +176,13 @@ test("compileExecutionManifest keeps monolithic additive features independent", 
   const featurePhase = manifest.phases.find((phase) => phase.feature === "notifications");
   assert.ok(featurePhase);
   assert.deepEqual(featurePhase!.dependencies, []);
-  assert.deepEqual(manifest.phases.slice(0, 2).map((phase) => phase.dependencies), [[], ["1"]]);
+  assert.deepEqual(manifest.phases.slice(0, 2).map((phase) => phase.dependencies), [[], ["FOUNDATION-1"]]);
 });
 
 test("manifest safety rejects duplicate global task ids and warns on orphan dependencies", () => {
   const root = createFixture();
   const manifest = compileExecutionManifest(discoverForgeRepo(root));
-  manifest.phases[1]!.tasks[0]!.id = "1.1";
+  manifest.phases[1]!.tasks[0]!.id = "FOUNDATION-1.1";
   assert.throws(() => validateManifestSafety(manifest), /Duplicate global task id/);
 
   const clean = compileExecutionManifest(discoverForgeRepo(root));
@@ -153,20 +201,17 @@ test("compileExecutionManifest auto-declares artifact produces/inputs", () => {
     assert.ok(task.produces, `task ${task.id} should declare a produces type`);
     assert.ok(Array.isArray(task.inputs), `task ${task.id} should declare inputs`);
   }
-  // Linear dependency chain within a phase: each task consumes the previous
-  // task's artifact type. Cross-phase ordering is handled by phase dependencies,
-  // so the first task of a phase starts with no in-phase input artifacts.
-  assert.equal(manifest.phases[0]?.tasks[0]?.produces, "work.1.1");
+  assert.equal(manifest.phases[0]?.tasks[0]?.produces, "work.foundation-1.1");
   assert.deepEqual(manifest.phases[0]?.tasks[0]?.inputs, []);
-  assert.equal(manifest.phases[0]?.tasks[1]?.produces, "work.1.2");
-  assert.deepEqual(manifest.phases[0]?.tasks[1]?.inputs, ["work.1.1"]);
-  assert.equal(manifest.phases[1]?.tasks[0]?.produces, "work.2.1");
-  assert.deepEqual(manifest.phases[1]?.tasks[0]?.inputs, []);
+  assert.equal(manifest.phases[0]?.tasks[1]?.produces, "work.foundation-1.2");
+  assert.deepEqual(manifest.phases[0]?.tasks[1]?.inputs, ["work.foundation-1.1"]);
+  assert.equal(manifest.phases[1]?.tasks[0]?.produces, "work.foundation-2.1");
+  assert.deepEqual(manifest.phases[1]?.tasks[0]?.inputs, ["work.foundation-1.1", "work.foundation-1.2"]);
 });
 
 test("compileExecutionManifest falls back to first agent when no owner matches", () => {
   const root = createFixture();
-  writeFileSync(join(root, "docs", "PRD.md"), `# PRD
+  writeFileSync(join(root, "docs", "features", "foundation.md"), `# PRD
 
 ## Phase 1: Foundation
 - Task 1.1: Zygomorphic flux calibration
@@ -183,7 +228,7 @@ test("compileExecutionManifest falls back to first agent when no owner matches",
 
 test("compileExecutionManifest does not treat framework names like ASP.NET as expected outputs", () => {
   const root = createFixture();
-  writeFileSync(join(root, "docs", "PRD.md"), `# PRD
+  writeFileSync(join(root, "docs", "features", "foundation.md"), `# PRD
 
 ## Phase 1: Foundation
 - Task 1.1: Build ASP.NET Core minimal API with SQLite (WAL mode) schema for conversations, messages, deliveries, artifacts, participants
@@ -209,7 +254,7 @@ name: workflow-orchestrator
 description: Coordinates the build and handles cross-cutting polish.
 ---
 `, "utf8");
-  writeFileSync(join(root, "docs", "PRD.md"), `# PRD
+  writeFileSync(join(root, "docs", "features", "foundation.md"), `# PRD
 
 ## Phase 1: Foundation
 - Task 1.1: Zygomorphic flux calibration
@@ -228,14 +273,14 @@ test("bootstrapped tooling agents cannot displace a generated specialist during 
   const root = mkdtempSync(join(tmpdir(), "forge-bootstrapped-team-"));
   const agentRoot = join(root, ".github", "agents");
   mkdirSync(agentRoot, { recursive: true });
-  mkdirSync(join(root, "docs"), { recursive: true });
+  foundationLayout(root);
   for (const name of ["forge-team-builder", "project-orchestrator", "workflow-orchestrator"]) {
     writeFileSync(join(agentRoot, `${name}.md`),
       `---\nname: ${name}\ndescription: Creates service entry point src/index.ts and coordinates the foundation build.\n---\n`);
   }
   writeFileSync(join(agentRoot, "service-engineer.md"),
     "---\nname: service-engineer\ndescription: Implements application services.\n---\n");
-  writeFileSync(join(root, "docs", "PRD.md"),
+  writeFileSync(join(root, "docs", "features", "foundation.md"),
     "# PRD\n\n## Phase 1: Foundation\n- Create service entry point `src/index.ts`\n- Zygomorphic flux calibration\n");
   const repo = discoverForgeRepo(root, ".github");
   assert.equal(repo.agents.length, 4, "discovery must retain tooling for legacy execution");
@@ -252,13 +297,13 @@ test("bootstrapped tooling agents cannot displace a generated specialist during 
 test("tooling-only compilation leaves implementation work unassigned with an actionable warning", () => {
   const root = mkdtempSync(join(tmpdir(), "forge-tooling-only-"));
   mkdirSync(join(root, ".github", "agents"), { recursive: true });
-  mkdirSync(join(root, "docs"), { recursive: true });
+  foundationLayout(root);
   writeFileSync(join(root, ".github", "agents", "forge-team-builder.md"),
     "---\nname: forge-team-builder\ndescription: Create service entry point.\n---\n");
-  writeFileSync(join(root, "docs", "PRD.md"), "# PRD\n\n## Phase 1: Foundation\n- Create service entry point `src/index.ts`\n");
+  writeFileSync(join(root, "docs", "features", "foundation.md"), "# PRD\n\n## Phase 1: Foundation\n- Create service entry point `src/index.ts`\n");
   const compiled = compileExecutionManifestDetailed(discoverForgeRepo(root, ".github"));
   assert.equal(compiled.manifest.phases[0]?.tasks[0]?.ownerAgent, undefined);
-  assert.deepEqual(compiled.validation.unassignedTasks, ["1.1"]);
+  assert.deepEqual(compiled.validation.unassignedTasks, ["FOUNDATION-1.1"]);
   assert.match(compiled.manifest.warnings.join("\n"), /Generate a project-specific team/);
 });
 
@@ -272,7 +317,7 @@ test("compileExecutionManifest defaults to fine granularity and records it", () 
 
 test("fine granularity expands indented sub-bullets into chained tasks", () => {
   const root = createFixture();
-  writeFileSync(join(root, "docs", "PRD.md"), `# PRD
+  writeFileSync(join(root, "docs", "features", "foundation.md"), `# PRD
 
 ## Phase 1: Foundation
 - Task 1.1: Build the API layer
@@ -285,18 +330,18 @@ test("fine granularity expands indented sub-bullets into chained tasks", () => {
 
   const tasks = manifest.phases[0]!.tasks;
   assert.equal(tasks.length, 2);
-  assert.equal(tasks[0]!.id, "1.1");
-  assert.equal(tasks[1]!.id, "1.2");
+  assert.equal(tasks[0]!.id, "FOUNDATION-1.1");
+  assert.equal(tasks[1]!.id, "FOUNDATION-1.2");
   assert.match(tasks[0]!.description, /Create GET endpoint/);
   assert.match(tasks[0]!.description, /Build the API layer/);
-  assert.deepEqual(tasks[1]!.dependencies, ["1.1"]);
-  assert.deepEqual(tasks[1]!.inputs, ["work.1.1"]);
-  assert.equal(tasks[1]!.produces, "work.1.2");
+  assert.deepEqual(tasks[1]!.dependencies, ["FOUNDATION-1.1"]);
+  assert.deepEqual(tasks[1]!.inputs, ["work.foundation-1.1"]);
+  assert.equal(tasks[1]!.produces, "work.foundation-1.2");
 });
 
 test("fine granularity splits oversized bullets into chained tasks with a warning", () => {
   const root = createFixture();
-  writeFileSync(join(root, "docs", "PRD.md"), `# PRD
+  writeFileSync(join(root, "docs", "features", "foundation.md"), `# PRD
 
 ## Phase 1: Foundation
 - Task 1.1: Implement the auth system end to end. Add token refresh with rotation handling. Wire up role-based access control in \`src/auth.ts\`.
@@ -317,7 +362,7 @@ test("fine granularity splits oversized bullets into chained tasks with a warnin
 
 test("coarse granularity reproduces the legacy one-bullet-per-task output", () => {
   const root = createFixture();
-  writeFileSync(join(root, "docs", "PRD.md"), `# PRD
+  writeFileSync(join(root, "docs", "features", "foundation.md"), `# PRD
 
 ## Phase 1: Foundation
 - Task 1.1: Build the API layer
@@ -341,7 +386,7 @@ test("coarse granularity reproduces the legacy one-bullet-per-task output", () =
 
 test("task ids stay unique when a labelled task follows auto-numbered tasks", () => {
   const root = createFixture();
-  writeFileSync(join(root, "docs", "PRD.md"), `# PRD
+  writeFileSync(join(root, "docs", "features", "foundation.md"), `# PRD
 
 ## Phase 1: Foundation
 - Task 1.1: Build the API layer
@@ -355,7 +400,7 @@ test("task ids stay unique when a labelled task follows auto-numbered tasks", ()
 
   const ids = manifest.phases[0]!.tasks.map((task) => task.id);
   assert.equal(new Set(ids).size, ids.length, "task ids must be unique within a phase");
-  assert.deepEqual(ids, ["1.1", "1.2", "1.3", "1.4", "1.5"]);
+  assert.deepEqual(ids, ["FOUNDATION-1.1", "FOUNDATION-1.2", "FOUNDATION-1.3", "FOUNDATION-1.4", "FOUNDATION-1.5"]);
 });
 
 test("checkpointTask updates PROGRESS.md and audit state", () => {
@@ -363,15 +408,15 @@ test("checkpointTask updates PROGRESS.md and audit state", () => {
   const repo = discoverForgeRepo(root);
   const manifest = compileExecutionManifest(repo);
   const state = parseProgress(repo.progressPath, manifest);
-  const next = checkpointTask(manifest, state, "1.1", ["src/server.ts"], "Foundation task delivered");
+  const next = checkpointTask(manifest, state, "FOUNDATION-1.1", ["src/server.ts"], "Foundation task delivered");
 
   writeProgress(repo.progressPath, manifest, next);
-  appendAuditEvent(repo.auditPath, { timestamp: new Date().toISOString(), action: "task.checkpointed", taskId: "1.1" });
+  appendAuditEvent(repo.auditPath, { timestamp: new Date().toISOString(), action: "task.checkpointed", taskId: "FOUNDATION-1.1" });
 
   const progress = readFileSync(repo.progressPath, "utf8");
   const audit = readFileSync(repo.auditPath, "utf8");
-  assert.match(progress, /Task 1\.1/);
-  assert.match(progress, /Task 1\.2/);
+  assert.match(progress, /Task FOUNDATION-1\.1/);
+  assert.match(progress, /Task FOUNDATION-1\.2/);
   assert.match(audit, /task\.checkpointed/);
 });
 
@@ -383,7 +428,7 @@ function createFeatureFixture() {
   mkdirSync(featuresDir, { recursive: true });
   mkdirSync(join(root, "docs", "features", "sub"), { recursive: true });
 
-  writeFileSync(join(root, "docs", "product-vision.md"), `# Product Vision
+  writeFileSync(join(root, "docs", "PRD.md"), `# Product Vision
 
 ## 14. Features
 
@@ -429,12 +474,33 @@ function createFeatureFixture() {
   return root;
 }
 
+test("structured feature tasks preserve contracts and reject unresolved feature dependencies", () => {
+  const root = createFeatureFixture();
+  const task = { id: "foundation-task", title: "Foundation", description: "Build the foundation", ownerAgent: "api-engineer", dependencies: [], expectedOutputs: ["src/main.ts"], validationCommands: ["npm test"], contract: { version: 1, kind: "implementation", references: ["docs/features/foundation.md"], requirements: ["Foundation"], acceptanceCriteria: ["Tests pass"], constraints: [] } };
+  writeFileSync(join(root, "docs/features/foundation.md"), '# Feature: Foundation\n## 5. Implementation Tasks\n### Phase 1: Foundation\n```forge-task\n' + JSON.stringify(task) + '\n```\n');
+  const manifest = compileExecutionManifest(discoverForgeRepo(root));
+  assert.equal(manifest.phases[0]!.tasks[0]!.id, task.id);
+  assert.deepEqual(manifest.phases[1]!.tasks[0]!.inputs, ["work.foundation-task"]);
+  const vision = join(root, "docs/PRD.md");
+  writeFileSync(vision, readFileSync(vision, "utf8").replace("| Foundation | Must |", "| Missing | Must |"));
+  assert.throws(() => compileExecutionManifest(discoverForgeRepo(root)), /unknown dependency 'Missing'/);
+});
+
 test("discoverForgeRepo detects the decomposed feature layout", () => {
   const root = createFeatureFixture();
   const repo = discoverForgeRepo(root);
   assert.equal(repo.sourceLayout, "features");
   assert.equal(repo.featurePaths.length, 3);
-  assert.equal(normalize(repo.visionPath), normalize(join(root, "docs", "product-vision.md")));
+  assert.equal(normalize(repo.visionPath), normalize(join(root, "docs", "PRD.md")));
+  assert.equal(repo.prdPath, repo.visionPath);
+});
+
+test("historical source documents never supply tasks or validation commands", () => {
+  const root = createFixture();
+  writeFileSync(join(root, "docs/product-vision.md"), "# Historical source\n## Validation\n`npm run obsolete`\n## Phase 1: Retired\n- Run obsolete work\n");
+  const manifest = compileExecutionManifest(discoverForgeRepo(root));
+  assert.equal(manifest.phases.flatMap((phase) => phase.tasks).length, 3);
+  assert.ok(!manifest.validationCommands.includes("npm run obsolete"));
 });
 
 test("compileExecutionManifest compiles features in dependency order with feature-tagged ids", () => {
@@ -462,7 +528,7 @@ test("compileExecutionManifest compiles features in dependency order with featur
 
 test("compileExecutionManifest falls back to lexical order when the vision has no feature table", () => {
   const root = createFeatureFixture();
-  writeFileSync(join(root, "docs", "product-vision.md"), "# Product Vision\n\nNo features table.\n", "utf8");
+  writeFileSync(join(root, "docs", "PRD.md"), "# Product Vision\n\nNo features table.\n", "utf8");
   const repo = discoverForgeRepo(root);
   const manifest = compileExecutionManifest(repo);
 
@@ -480,7 +546,7 @@ description: Builds nothing at all.
 ## Expertise
 - Irrelevant work
 `, "utf8");
-  writeFileSync(join(root, "docs", "PRD.md"), `# PRD
+  writeFileSync(join(root, "docs", "features", "foundation.md"), `# PRD
 
 ## Phase 1: Foundation
 - Task 1.1: Build the API in \`src/shared.ts\`

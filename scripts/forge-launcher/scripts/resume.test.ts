@@ -5,6 +5,7 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import { writeFeatureFixture } from "./feature-fixture.ts";
 
 const CLI = fileURLToPath(new URL("./cli.ts", import.meta.url));
 
@@ -43,6 +44,7 @@ function makeRepo(): string {
 }
 
 function write(repo: string, rel: string, content: string): void {
+  if (rel === "docs/PRD.md") { writeFeatureFixture(repo, content); return; }
   const file = path.join(repo, rel);
   fs.mkdirSync(path.dirname(file), { recursive: true });
   fs.writeFileSync(file, content);
@@ -72,6 +74,18 @@ test("resume with an idea queues PRD drafting", async () => {
   assert.ok(out.includes("No PRD yet"), out);
   assert.ok(out.includes("forge-auto-build-prd"), out);
   assert.match(out, new RegExp(`opencode run --auto --dir "[^"]*[\\\\/]${path.basename(repo)}"`), out);
+});
+
+test("resume with only an imported source queues canonical feature authoring", async (context) => {
+  const repo = makeRepo();
+  context.after(() => fs.rmSync(repo, { recursive: true, force: true }));
+  write(repo, "docs/requirements-source.md", "# Supplied requirements\nBuild a thing.\n");
+  const { code, out } = await runCli(["resume", "--repo", repo, "--non-interactive"]);
+  assert.equal(code, 0, out);
+  assert.match(out, /forge-auto-build-prd/);
+  assert.match(out, /docs\/requirements-source\.md/);
+  assert.doesNotMatch(out, /No idea or PRD captured yet/);
+  assert.equal(fs.existsSync(path.join(repo, "docs/PRD.md")), false);
 });
 
 test("resume with a PRD but no team queues team generation", async () => {

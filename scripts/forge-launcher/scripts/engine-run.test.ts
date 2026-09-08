@@ -5,6 +5,7 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import { writeFeatureFixture } from "./feature-fixture.ts";
 
 const CLI = fileURLToPath(new URL("./cli.ts", import.meta.url));
 
@@ -13,6 +14,7 @@ function tmpRepo(): string {
   fs.mkdirSync(path.join(root, ".git"), { recursive: true });
   fs.mkdirSync(path.join(root, ".agents", "skills", "forge-workflow-engine"), { recursive: true });
   fs.writeFileSync(path.join(root, ".agents", "skills", "forge-workflow-engine", "package.json"), "{}");
+  writeFeatureFixture(root);
   return root;
 }
 
@@ -118,7 +120,7 @@ test("granularity recompilation keeps the manifest-selected team", async (t) => 
     fs.mkdirSync(dir, { recursive: true });
     fs.writeFileSync(path.join(dir, "package.json"), "{}");
   }
-  fs.mkdirSync(path.join(repo, "docs"));
+  fs.mkdirSync(path.join(repo, "docs"), { recursive: true });
   fs.writeFileSync(path.join(repo, "docs", "EXECUTION-MANIFEST.json"), JSON.stringify({ harnessRoot: ".github" }));
   const result = await runCli(["engine-run", "--repo", repo, "--granularity", "fine", "--yes", "--dry-run"]);
   assert.equal(result.code, 0, result.out);

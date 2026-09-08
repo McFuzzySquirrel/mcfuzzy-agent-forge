@@ -63,20 +63,26 @@ async function invokeWith(shim: Shim, agent: AgentDescriptor, root: string): Pro
   }
 }
 
-function recordedPrompt(shim: Shim): string {
+function recordedPrompt(shim: Shim, root: string): string {
   const recorded = JSON.parse(readFileSync(shim.argsFile, "utf8")) as string[];
-  return recorded.slice(recorded.indexOf("-p") + 1).join(" ");
+  const prompt = recorded[recorded.indexOf("-p") + 1]!;
+  const file = prompt.match(/execution file "([^"]+)"/)?.[1];
+  assert.ok(file, prompt);
+  assert.ok(prompt.length < 1000, prompt);
+  return prompt + "\n" + readFileSync(join(root, file), "utf8");
 }
 
-test("prepends /agent for .github-rooted agents and omits the inline persona", async (t) => {
+test("passes --agent for .github-rooted agents and omits the fallback persona", async (t) => {
   const root = tempDir(t, "forge-copilot-repo-");
   const agent = makeAgent(join(root, ".github", "agents", "discovery-engineer.md"));
   const shim = makeShim(t);
 
   await invokeWith(shim, agent, root);
 
-  const prompt = recordedPrompt(shim);
-  assert.ok(prompt.startsWith("/agent discovery-engineer"), prompt);
+  const prompt = recordedPrompt(shim, root);
+  const args = JSON.parse(readFileSync(shim.argsFile, "utf8")) as string[];
+  assert.equal(args[args.indexOf("--agent") + 1], "discovery-engineer");
+  assert.ok(!args[args.indexOf("-p") + 1]!.includes("\n"));
   assert.ok(!prompt.includes("You are a Discovery Engineer"), prompt);
 });
 
@@ -87,7 +93,7 @@ test("falls back to inlining the persona for non-.github harness roots", async (
 
   await invokeWith(shim, agent, root);
 
-  const prompt = recordedPrompt(shim);
+  const prompt = recordedPrompt(shim, root);
   assert.ok(!prompt.includes("/agent "), prompt);
   assert.ok(prompt.includes("You are a Discovery Engineer"), prompt);
 });
@@ -99,7 +105,7 @@ test("never uses /agent when the agent has no name", async (t) => {
 
   await invokeWith(shim, agent, root);
 
-  const prompt = recordedPrompt(shim);
+  const prompt = recordedPrompt(shim, root);
   assert.ok(!prompt.includes("/agent "), prompt);
   assert.ok(prompt.includes("You are a Discovery Engineer"), prompt);
 });
@@ -117,7 +123,7 @@ test("FORGE_ENGINE_NATIVE_AGENT=0 forces the inline-persona fallback for .github
     else process.env.FORGE_ENGINE_NATIVE_AGENT = original;
   }
 
-  const prompt = recordedPrompt(shim);
+  const prompt = recordedPrompt(shim, root);
   assert.ok(!prompt.includes("/agent "), prompt);
   assert.ok(prompt.includes("You are a Discovery Engineer"), prompt);
 });
@@ -127,11 +133,11 @@ test("prompt includes the execute-now directive in both native and inline modes"
   const shim = makeShim(t);
 
   await invokeWith(shim, makeAgent(join(root, ".github", "agents", "discovery-engineer.md")), root);
-  const nativePrompt = recordedPrompt(shim);
+  const nativePrompt = recordedPrompt(shim, root);
   assert.ok(nativePrompt.includes("Perform the task now"), nativePrompt);
 
   await invokeWith(shim, makeAgent(join(root, ".agents", "agents", "discovery-engineer.md")), root);
-  const inlinePrompt = recordedPrompt(shim);
+  const inlinePrompt = recordedPrompt(shim, root);
   assert.ok(inlinePrompt.includes("Perform the task now"), inlinePrompt);
 });
 
@@ -150,7 +156,7 @@ test("prompt surfaces the per-task timeout and retry budget when provided", asyn
     else process.env.COPILOT_BIN = original;
   }
 
-  const prompt = recordedPrompt(shim);
+  const prompt = recordedPrompt(shim, root);
   assert.ok(prompt.includes("Per-task timeout: 30s"), prompt);
   assert.ok(prompt.includes("retried up to 3 time(s)"), prompt);
 });
