@@ -4,6 +4,20 @@ Detailed release and change notes for MyForge.
 
 ---
 
+## September 2026 - Unreleased
+
+### Authoring runner selection
+
+- Restored `opencode` as the default authoring runner for Claude-harness repositories.
+  The Console's model inventory is per runner and had no runner selector, so the `claude`
+  default hid OpenCode's multi-provider models on Claude repos. The Claude runner is
+  selected with `FORGE_RUN_WITH=claude` (ADR-043 amendment).
+- Inheritance now consults the machine: when the inherited runner's CLI is not installed
+  and the harness's own CLI is, the harness's CLI is used. Explicit selections are never
+  substituted.
+
+---
+
 ## September 2026 - v3.73
 
 ### Copilot Names-Only Parser

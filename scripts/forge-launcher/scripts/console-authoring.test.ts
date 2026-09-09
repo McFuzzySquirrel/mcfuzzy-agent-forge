@@ -111,12 +111,23 @@ test("claude model discovery probes /model and lists the stable aliases", async 
   ]);
 });
 
-test("a .claude repo defaults the authoring runner and the engine harness to claude", async (t) => {
+test("a .claude repo defaults the authoring runner to opencode and the engine harness to claude", async (t) => {
   const root = fixture(t, ".claude");
   const previous = process.env.FORGE_RUN_WITH;
   delete process.env.FORGE_RUN_WITH;
   t.after(() => { if (previous === undefined) delete process.env.FORGE_RUN_WITH; else process.env.FORGE_RUN_WITH = previous; });
   assert.equal(inferEngineHarness(root), "claude");
+  const server = await startConsoleServer({ repoRoot: root, port: port++, open: false });
+  t.after(() => server.stop());
+  const inventory = await fetch(`${server.url}/api/authoring-inventory`).then((r) => r.json());
+  assert.equal(inventory.runner, "opencode");
+});
+
+test("FORGE_RUN_WITH=claude selects the claude authoring runner for a .claude repo", async (t) => {
+  const root = fixture(t, ".claude");
+  const previous = process.env.FORGE_RUN_WITH;
+  process.env.FORGE_RUN_WITH = "claude";
+  t.after(() => { if (previous === undefined) delete process.env.FORGE_RUN_WITH; else process.env.FORGE_RUN_WITH = previous; });
   const server = await startConsoleServer({ repoRoot: root, port: port++, open: false });
   t.after(() => server.stop());
   const inventory = await fetch(`${server.url}/api/authoring-inventory`).then((r) => r.json());

@@ -622,31 +622,84 @@ test("settings CLI saves and clears stage values and direct draft argv preserves
   assert.deepEqual(loadAuthoringConfig(repo).models, { skills: "skills-3" });
 });
 
-test("headless draft builds the claude command from the runner, the harness, and debug mode", (t) => {
-  const cli = fileURLToPath(new URL("./cli.ts", import.meta.url));
-  const invoke = (repo: string, env: NodeJS.ProcessEnv = {}) => {
-    const base = { ...process.env, ...env };
-    if (!Object.hasOwn(env, "FORGE_RUN_WITH")) delete base.FORGE_RUN_WITH;
-    delete base.FORGE_PRD_MODEL;
-    return execFileSync(process.execPath, ["--import", "tsx", cli, "draft-prd", "--repo", repo, "--dry-run"], {
-      encoding: "utf8", env: base,
-    });
-  };
-  const claudeCommand = (output: string) => output.split(/\r?\n/).map((line) => line.trim()).find((line) => line.startsWith("claude ")) ?? "";
+const AUTHORING_CLI = fileURLToPath(new URL("./cli.ts", import.meta.url));
 
+/**
+ * Runs `draft-prd --dry-run` in a subprocess so the launcher's own PATH probe
+ * runs for real. Pass `PATH` to decide which authoring CLIs the run can see.
+ */
+function draftPrdDryRun(repo: string, env: NodeJS.ProcessEnv = {}): string {
+  const base = { ...process.env, ...env };
+  if (!Object.hasOwn(env, "FORGE_RUN_WITH")) delete base.FORGE_RUN_WITH;
+  // Windows inherits `Path`, and commandExists reads `PATH ?? Path`, so a caller
+  // pinning PATH must not leave the machine's real one behind for it to find.
+  if (Object.hasOwn(env, "PATH")) delete base.Path;
+  delete base.FORGE_PRD_MODEL;
+  return execFileSync(process.execPath, ["--import", "tsx", AUTHORING_CLI, "draft-prd", "--repo", repo, "--dry-run"], {
+    encoding: "utf8", env: base,
+  });
+}
+
+function commandLine(output: string, binary: string): string {
+  return output.split(/\r?\n/).map((line) => line.trim()).find((line) => line.startsWith(`${binary} `)) ?? "";
+}
+
+/** A PATH directory holding only the named fake executables, so the probe sees exactly these. */
+function fakeBin(t: { after: (fn: () => void) => void }, ...commands: string[]): string {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "forge-bin-"));
+  t.after(() => fs.rmSync(dir, { recursive: true, force: true }));
+  for (const command of commands) {
+    const file = path.join(dir, command);
+    fs.writeFileSync(file, "#!/bin/sh\nexit 0\n");
+    fs.chmodSync(file, 0o755);
+  }
+  return dir;
+}
+
+test("headless draft builds the claude command from the runner, the harness, and debug mode", (t) => {
   const explicit = fixture(t);
-  const chosen = claudeCommand(invoke(explicit, { FORGE_RUN_WITH: "claude" }));
+  const chosen = commandLine(draftPrdDryRun(explicit, { FORGE_RUN_WITH: "claude" }), "claude");
   assert.match(chosen, /^claude -p /);
   assert.match(chosen, /--permission-mode bypassPermissions/);
   assert.equal(chosen.endsWith("--debug"), false);
 
   const debug = fixture(t);
-  const debugged = claudeCommand(invoke(debug, { FORGE_RUN_WITH: "claude", FORGE_LAUNCHER_DEBUG: "1" }));
+  const debugged = commandLine(draftPrdDryRun(debug, { FORGE_RUN_WITH: "claude", FORGE_LAUNCHER_DEBUG: "1" }), "claude");
   assert.match(debugged, /^claude -p /);
   assert.equal(debugged.endsWith("--debug"), true);
 
+  // A .claude harness with FORGE_RUN_WITH unset authors through OpenCode: the
+  // claude runner is opt-in, so the harness alone does not select it. The PATH
+  // is pinned to a fake opencode because inheritance now consults the machine.
   const harnessDefault = fixture(t, ".claude");
-  assert.match(claudeCommand(invoke(harnessDefault)), /^claude -p /);
+  assert.match(commandLine(draftPrdDryRun(harnessDefault, { PATH: fakeBin(t, "opencode") }), "opencode"), /^opencode run /);
+});
+
+test("inherited runner falls back to the harness CLI only when the inherited CLI is missing", (t) => {
+  const withOpencode = fakeBin(t, "opencode");
+  const withClaude = fakeBin(t, "claude");
+  const withNeither = fakeBin(t);
+
+  // The inherited runner is installed, so it stands.
+  assert.match(commandLine(draftPrdDryRun(fixture(t, ".claude"), { PATH: withOpencode }), "opencode"), /^opencode run /);
+
+  // OpenCode is missing and the harness's own CLI is present, so inherit resolves to it.
+  assert.match(commandLine(draftPrdDryRun(fixture(t, ".claude"), { PATH: withClaude }), "claude"), /^claude -p /);
+
+  // Neither is installed: unchanged, so the spawn error still names the configured runner.
+  assert.match(commandLine(draftPrdDryRun(fixture(t, ".claude"), { PATH: withNeither }), "opencode"), /^opencode run /);
+
+  // A harness whose inherited runner is already its native CLI is never substituted,
+  // even with another runner's CLI the only one installed. This pins the outcome, not
+  // the inherited !== native guard: with inherited === native the rest of the
+  // condition is self-contradictory, so the case passes with the guard removed too.
+  assert.match(commandLine(draftPrdDryRun(fixture(t, ".github"), { PATH: withClaude }), "copilot"), /^copilot /);
+
+  // An explicit selection is never substituted: it must still fail loudly later.
+  assert.match(
+    commandLine(draftPrdDryRun(fixture(t, ".claude"), { FORGE_RUN_WITH: "opencode", PATH: withClaude }), "opencode"),
+    /^opencode run /,
+  );
 });
 
 test("candidate validation rejects unsafe paths and malformed handoff rather than assuming no skills", (t) => {
