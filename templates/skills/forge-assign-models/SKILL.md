@@ -65,17 +65,18 @@ command response.
 
 #### 1b. Copilot CLI
 
-Run the non-generative metadata command when the `copilot` executable is
+Run the names-only model listing command when the `copilot` executable is
 available:
 
 ```bash
-copilot --help
+copilot -p "/model list names only"
 ```
 
 Capture its exit status, stdout, and stderr under `copilot_cli.diagnostics`.
-Parse only an explicitly labeled model metadata section, if the installed
-version exposes one, into normalized IDs under `copilot_cli.models`. Never
-submit `/model list` or another generative prompt for inventory discovery.
+Parse only the model names returned by the command into normalized IDs under
+`copilot_cli.models`. Capture output from both stdout and stderr because CLI
+versions differ in which stream they use. Never submit another generative
+prompt for inventory discovery.
 If no authoritative IDs are exposed, preserve the diagnostics and fail closed
 for explicit model selections; inherited runner defaults remain valid.
 

@@ -169,21 +169,91 @@ test("inventory is discoverable before PRD and retains other providers and fresh
   assert.equal(fs.existsSync(path.join(repo, "docs/PRD.md")), false);
 });
 
-test("Copilot inventory uses non-generative help metadata, never a model prompt", async (t) => {
+test("Copilot inventory reads only model names from the non-generative model list table", async (t) => {
   const repo = fixture(t);
   const result = await refreshAuthoringInventory(repo, "copilot", async (runner, args) => {
     assert.equal(runner, "copilot");
-    assert.deepEqual(args, ["--help"]);
-    return { code: 0, stdout: "Models:\n- gpt-6-astra\n- gpt-5.6-luna\n", stderr: "" };
+    assert.deepEqual(args, ["-p", "/model list names only"]);
+    return {
+      code: 0,
+      stdout: [
+        "| Model          | Context Window | Multiplier |",
+        "|----------------|----------------|------------|",
+        "| gpt-6-astra    | 128k           | 1x         |",
+        "| gpt-5.6-luna   | 128k           | 0.5x       |",
+      ].join("\n"),
+      stderr: "",
+    };
   });
   assert.deepEqual(result.models.map((model) => model.id), ["gpt-6-astra", "gpt-5.6-luna"]);
+});
+
+test("Copilot inventory parses box-drawn model tables", async (t) => {
+  const repo = fixture(t);
+  const result = await refreshAuthoringInventory(repo, "copilot", async () => ({
+    code: 0,
+    stdout: [
+      "╭────────────────┬───────────────┬──────────╮",
+      "│ Model          │ Context Window │ Multiplier │",
+      "├────────────────┼───────────────┼──────────┤",
+      "│ gpt-5.6-luna   │ 128k           │ 0.5x     │",
+      "│ claude-sonnet  │ 200k           │ 1x       │",
+      "╰────────────────┴───────────────┴──────────╯",
+    ].join("\n"),
+    stderr: "",
+  }));
+  assert.deepEqual(result.models.map((model) => model.id), ["gpt-5.6-luna", "claude-sonnet"]);
+});
+
+test("Copilot inventory parses the Markdown model list returned by current CLI versions", async (t) => {
+  const repo = fixture(t);
+  const result = await refreshAuthoringInventory(repo, "copilot", async () => ({
+    code: 0,
+    stdout: [
+      "Available models include:",
+      "",
+      "- `gpt-6-astra`",
+      "- `gpt-5.6-luna` **(current)**",
+      "- `claude-sonnet-5`",
+      "",
+      "Use `/model <model-id>` to switch.",
+    ].join("\n"),
+    stderr: "",
+  }));
+  assert.deepEqual(result.models.map((model) => model.id), ["gpt-6-astra", "gpt-5.6-luna", "claude-sonnet-5"]);
+});
+
+test("Copilot inventory reads plain model names from stderr", async (t) => {
+  const repo = fixture(t);
+  const result = await refreshAuthoringInventory(repo, "copilot", async () => ({
+    code: 0,
+    stdout: "",
+    stderr: [
+      "Available models:",
+      "- Claude Sonnet 5",
+      "- GPT-5.6 Luna **(current)**",
+      "- GPT-5.4 mini",
+      "",
+    ].join("\n"),
+  }));
+  assert.deepEqual(result.models.map((model) => model.id), ["claude-sonnet-5", "gpt-5.6-luna", "gpt-5.4-mini"]);
+});
+
+test("Copilot inventory parses names-only output without a heading", async (t) => {
+  const repo = fixture(t);
+  const result = await refreshAuthoringInventory(repo, "copilot", async () => ({
+    code: 0,
+    stdout: "claude-sonnet-5\ngpt-5.6-luna\ngpt-5.4-mini\n",
+    stderr: "",
+  }));
+  assert.deepEqual(result.models.map((model) => model.id), ["claude-sonnet-5", "gpt-5.6-luna", "gpt-5.4-mini"]);
 });
 
 test("Copilot metadata failure is explicit while inherited selection remains unresolved", async (t) => {
   const repo = fixture(t);
   await assert.rejects(
     refreshAuthoringInventory(repo, "copilot", async (_runner, args) => {
-      assert.deepEqual(args, ["--help"]);
+      assert.deepEqual(args, ["-p", "/model list names only"]);
       return { code: 1, stdout: "", stderr: "Copilot is not logged in" };
     }),
     /copilot model discovery failed/,
