@@ -240,13 +240,14 @@ export class RunController {
     return { ok: job.status !== "failed", message: job.message, pid, job };
   }
 
-  bootstrap(req: { path: string; harness?: string; force?: boolean; initGit?: boolean }): ControlResult {
+  bootstrap(req: { path: string; harness?: string; force?: boolean; initGit?: boolean; runner?: string }): ControlResult {
     const target = path.resolve(req.path);
     const logFile = repositoryLogFile(target);
     const args = ["bootstrap", target];
     if (req.harness) args.push("--harness", req.harness);
     if (req.force) args.push("--force");
     if (req.initGit) args.push("--init-git");
+    if (req.runner) args.push("--runner", req.runner);
     const { cmd, args: fullArgs } = engineDetachedCommand(args);
     const job = this.launchJob(
       "bootstrap",
@@ -329,6 +330,7 @@ export class RunController {
     if (req.authoringConfig) {
       const config = validateAuthoringConfig(req.authoringConfig);
       for (const stage of AUTHORING_STAGES) launcherArgs.push(`--${stage}-model`, config.models[stage] ?? "inherit");
+      if (config.runner) launcherArgs.push("--runner", config.runner);
     }
     const { cmd, args } = engineDetachedCommand(launcherArgs);
     const repoDir = path.join(parentDir, req.name);

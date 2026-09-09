@@ -607,6 +607,24 @@ test("createProject rejects a missing PRD path", async () => {
   });
 });
 
+test("bootstrap forwards the chosen authoring runner and rejects an unknown one", async () => {
+  await withServer(async (server, repo, spawned) => {
+    const token = server.token;
+    const res = await postJson(`${server.url}/api/projects/bootstrap`, { path: repo, runner: "claude" }, { "X-Forge-Token": token });
+    assert.equal((res.body as { ok: boolean }).ok, true);
+
+    const call = spawned.calls.at(-1);
+    assert.ok(call);
+    assert.equal(call.args[call.args.indexOf("--runner") + 1], "claude");
+
+    const before = spawned.calls.length;
+    const bad = await postJson(`${server.url}/api/projects/bootstrap`, { path: repo, runner: "gpt" }, { "X-Forge-Token": token });
+    assert.equal(bad.status, 400);
+    assert.match((bad.body as { message: string }).message, /runner must be copilot, opencode, or claude/);
+    assert.equal(spawned.calls.length, before);
+  });
+});
+
 test("createProject rejects non-integer concurrency values", async () => {
   await withServer(async (server) => {
     const token = server.token;

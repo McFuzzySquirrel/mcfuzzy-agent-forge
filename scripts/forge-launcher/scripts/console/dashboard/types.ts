@@ -2,6 +2,8 @@
 //
 // Mirror of scripts/console/types.ts. Keep the two in sync.
 
+import type { AuthoringRunnerName } from "./harness-rules.js";
+
 export interface AuditEvent {
   timestamp: string;
   action: string;
@@ -228,6 +230,8 @@ export type AuthoringStage = "prd" | "team" | "skills";
 export interface AuthoringConfig {
   version: 1;
   models: Partial<Record<AuthoringStage, string>>;
+  /** Explicit authoring runner; absent means "inherit from the harness". */
+  runner?: AuthoringRunnerName;
 }
 
 export interface AuthoringInventory {

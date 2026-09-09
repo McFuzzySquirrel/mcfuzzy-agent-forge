@@ -1,18 +1,31 @@
 import fs from "node:fs";
 import path from "node:path";
 import { randomUUID } from "node:crypto";
+import { authoringRunnerForHarness, harnessCliForHarness, type AuthoringRunnerName } from "./console/dashboard/harness-rules.ts";
 
 export const AUTHORING_STAGES = ["prd", "team", "skills"] as const;
 export type AuthoringStage = typeof AUTHORING_STAGES[number];
 export type AuthoringModels = Partial<Record<AuthoringStage, string>>;
-export interface AuthoringConfig { version: 1; models: AuthoringModels }
-export interface AuthoringOptions { models?: AuthoringModels }
+export const AUTHORING_RUNNER_CHOICES = ["copilot", "opencode", "claude"] as const satisfies readonly AuthoringRunnerName[];
+/** One spelling of the runner union: `harness-rules.ts` owns it. */
+export type AuthoringRunnerChoice = AuthoringRunnerName;
+export interface AuthoringConfig { version: 1; models: AuthoringModels; runner?: AuthoringRunnerChoice }
+export interface AuthoringOptions { models?: AuthoringModels; runner?: string }
 export type ModelSource = "invocation" | "environment" | "project" | "inherit";
+export type RunnerSource = ModelSource;
 export interface AuthoringModelSelection { requestedModel?: string; source: ModelSource }
+/** `stub` is the test-only offline runner; it is reachable from FORGE_RUN_WITH alone. */
+export interface AuthoringRunnerSelection { runner: AuthoringRunnerChoice | "stub"; source: RunnerSource }
+
+export function isRunnerChoice(value: string): value is AuthoringRunnerChoice {
+  return (AUTHORING_RUNNER_CHOICES as readonly string[]).includes(value);
+}
 
 export function authoringConfigPath(repo: string): string {
   return path.join(repo, "docs", "authoring-config.json");
 }
+
+const RUNNER_CONFIG_ERROR = "Invalid authoring runner: use copilot, opencode, claude, or inherit.";
 
 export function validateAuthoringConfig(value: unknown): AuthoringConfig {
   if (!value || typeof value !== "object" || !("version" in value) || value.version !== 1 ||
@@ -27,7 +40,17 @@ export function validateAuthoringConfig(value: unknown): AuthoringConfig {
     }
     if (model.trim() !== "inherit") models[stage as AuthoringStage] = model.trim();
   }
-  return { version: 1, models };
+  let runner: AuthoringRunnerChoice | undefined;
+  if ("runner" in value) {
+    const requested = (value as { runner: unknown }).runner;
+    if (typeof requested !== "string") throw new Error(RUNNER_CONFIG_ERROR);
+    const trimmed = requested.trim();
+    if (trimmed !== "inherit") {
+      if (!isRunnerChoice(trimmed)) throw new Error(RUNNER_CONFIG_ERROR);
+      runner = trimmed;
+    }
+  }
+  return { version: 1, models, ...(runner ? { runner } : {}) };
 }
 
 export function loadAuthoringConfig(repo: string): AuthoringConfig {
@@ -69,4 +92,75 @@ export function selectAuthoringModel(
     return { requestedModel: value.trim(), source };
   }
   return { source: "inherit" };
+}
+
+/**
+ * Authoring runner for a repo, first defined wins: the invocation override, then
+ * FORGE_RUN_WITH, then the persisted project choice, then the harness rule. An
+ * empty or "inherit" value at any level falls straight through to the harness
+ * rule, exactly as `selectAuthoringModel` does for a stage model.
+ *
+ * FORGE_RUN_WITH=stub is the one exception: it is an offline lock, not a
+ * preference, so no other source may override it and spawn a real runner.
+ */
+/**
+ * True when `cmd` is reachable on the PATH carried by `env`. The launcher has an
+ * equivalent probe over its own state; inheritance is resolved here because both
+ * the launcher and the Console go through selectAuthoringRunner.
+ */
+function commandOnPath(env: NodeJS.ProcessEnv, cmd: string): boolean {
+  const pathVar = env.PATH ?? env.Path ?? "";
+  const isWin = process.platform === "win32";
+  const exts = isWin ? ["", ".exe", ".cmd", ".bat"] : [""];
+  for (const dir of pathVar.split(path.delimiter)) {
+    if (!dir) continue;
+    for (const ext of exts) {
+      try {
+        fs.accessSync(path.join(dir, cmd + ext));
+        return true;
+      } catch {
+        // continue
+      }
+    }
+  }
+  return false;
+}
+
+export function selectAuthoringRunner(
+  repo: string,
+  harness: string | null | undefined,
+  overrides: AuthoringOptions = {},
+  env: NodeJS.ProcessEnv = process.env,
+): AuthoringRunnerSelection {
+  if (env.FORGE_RUN_WITH?.trim() === "stub") return { runner: "stub", source: "environment" };
+  const saved = repo ? loadAuthoringConfig(repo) : { version: 1 as const, models: {} };
+  const candidates: Array<[string | undefined, RunnerSource]> = [
+    [overrides.runner, "invocation"],
+    [env.FORGE_RUN_WITH, "environment"],
+    [saved.runner, "project"],
+  ];
+  for (const [value, source] of candidates) {
+    if (value === undefined) continue;
+    const runner = value.trim();
+    if (!runner || runner === "inherit") break;
+    if (!isRunnerChoice(runner)) {
+      throw new Error(`Unsupported authoring runner: ${runner}. Use copilot, opencode, claude, or inherit.`);
+    }
+    return { runner, source };
+  }
+  // Only inheritance consults the machine. A Claude harness inherits the opencode
+  // runner, so on a box with Claude Code but no OpenCode that default cannot run;
+  // fall back to the harness's own CLI. When neither is installed the result is
+  // unchanged so the spawn error still names the runner the operator configured.
+  // The inherited !== native guard keeps every other harness off the filesystem.
+  // It is a cost optimisation, not a correctness control: wherever it short
+  // circuits the rest of the condition is self-contradictory, so dropping it
+  // changes only whether a probe runs, never what this returns. No test can catch
+  // its loss, so keep it when moving this rule.
+  const inherited = authoringRunnerForHarness(harness);
+  const native = harnessCliForHarness(harness).cli;
+  if (inherited !== native && !commandOnPath(env, inherited) && commandOnPath(env, native)) {
+    return { runner: native, source: "inherit" };
+  }
+  return { runner: inherited, source: "inherit" };
 }

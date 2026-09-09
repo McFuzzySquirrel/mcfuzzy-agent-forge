@@ -4,7 +4,7 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { bootstrap, repositoryLogFile } from "./bootstrap.ts";
 import { upsertProject } from "./console/paths.ts";
-import { authoringRunnerForHarness, engineHarnessForHarness, harnessCliForHarness } from "./console/dashboard/harness-rules.ts";
+import { engineHarnessForHarness, harnessCliForHarness } from "./console/dashboard/harness-rules.ts";
 import { command, fail, header, info, link, ok, out, printLogTail, runCommand, runLogged, runWithHeartbeat, spawnDetached, step, warn } from "./format.ts";
 import { detectRepoRoot, expandPath, resolveInputFile } from "./paths.ts";
 import { prompt as defaultPrompt, promptMultiline as defaultPromptMultiline, promptPath as defaultPromptPath, promptPathLoop as defaultPromptPathLoop, promptSelect as defaultPromptSelect, promptYesNo as defaultPromptYesNo, prompts, withPromptSession } from "./prompts.ts";
@@ -12,7 +12,7 @@ import { launchCliInTerminal } from "./terminal.ts";
 import { assertEngineHarnessAvailable, loadEngineConfig, saveEngineConfig } from "./engine-config.ts";
 import { engineRunCli } from "./engine-run.ts";
 import { createSessionScope } from "./launcher-session.ts";
-import { type AuthoringOptions, type AuthoringStage, loadAuthoringConfig, saveAuthoringConfig, selectAuthoringModel } from "./authoring-config.ts";
+import { type AuthoringOptions, type AuthoringRunnerChoice, type AuthoringRunnerSelection, type AuthoringStage, loadAuthoringConfig, saveAuthoringConfig, selectAuthoringModel, selectAuthoringRunner } from "./authoring-config.ts";
 import { authoringArgv, inventoryForRunner, readAuthoringInventory, refreshAuthoringInventory, resolveAuthoringModel, type AuthoringInvocation, type AuthoringRunner, type InventoryProbe } from "./authoring-inventory.ts";
 import { authoringReadiness, authoringStageIsCurrent, fingerprintFiles, readAuthoringState, readSkillCandidates, saveAuthoringStage, stageInputFingerprint, type AuthoringStageState } from "./authoring-state.ts";
 import { selectHarnessRoot, selectProjectHarnessRoot, type HarnessRoot } from "./repo-metadata.ts";
@@ -505,34 +505,20 @@ function headlessSkillMsgForSession(): string {
   return `/forge-auto-build-prd ${PRD_HEADLESS_MSG}`;
 }
 
+function headlessRunnerSelection(): AuthoringRunnerSelection {
+  return selectAuthoringRunner(state.repoDir, state.harness, state.options, state.env);
+}
+
 function headlessRunner(): AuthoringRunner {
-  const runner = state.env.FORGE_RUN_WITH;
-  if (runner) {
-    if (runner !== "copilot" && runner !== "opencode" && runner !== "claude" && runner !== "stub") {
-      throw new Error(`Unsupported authoring runner: ${runner}. Use copilot, opencode, claude, or stub.`);
-    }
-    return runner;
-  }
-  // Only inheritance consults the machine. A Claude harness inherits the opencode
-  // runner, so on a box with Claude Code but no OpenCode that default cannot run;
-  // fall back to the harness's own CLI. When neither is installed the result is
-  // unchanged so the spawn error still names the runner the operator configured.
-  // The inherited !== native guard keeps every other harness off the filesystem.
-  // It is a cost optimisation, not a correctness control: wherever it short
-  // circuits the rest of the condition is self-contradictory, so dropping it
-  // changes only whether a probe runs, never what this returns. No test can catch
-  // its loss, so keep it when moving this rule.
-  const inherited = authoringRunnerForHarness(state.harness);
-  const native = harnessCliForHarness(state.harness).cli;
-  if (inherited !== native && !commandExists(inherited) && commandExists(native)) return native;
-  return inherited;
+  return headlessRunnerSelection().runner;
 }
 
 async function headlessCmdFor(msg: string): Promise<string> {
-  const runner = headlessRunner();
+  const { runner, source: runnerSource } = headlessRunnerSelection();
   const stage = authoringStageForSkill(skillNameFromMsg(msg));
-  const invocation = stage ? await resolveAuthoringModel(state.repoDir, stage, runner, state.options.models, state.env, state.options.dependencies?.inventoryProbe)
-    : { runner, source: "inherit" as const };
+  const invocation: AuthoringInvocation = stage
+    ? { ...await resolveAuthoringModel(state.repoDir, stage, runner, state.options.models, state.env, state.options.dependencies?.inventoryProbe), runnerSource }
+    : { runner, source: "inherit" as const, runnerSource };
   return `${runner} ${authoringArgv(invocation, state.repoDir, msg).map((arg) => /^[a-zA-Z0-9_-]+$/.test(arg) ? arg : JSON.stringify(arg)).join(" ")}`;
 }
 
@@ -602,7 +588,7 @@ async function runSkillHeadless(msg: string, opts: LauncherOptions): Promise<boo
   if (stage === "prd" && !msg.includes(TASK_AUTHORING_CHECK)) msg += TASK_AUTHORING_CHECK;
   if (stage === "prd" && skillName !== "forge-build-feature-prd") msg += " Repair existing canonical feature documents in place. Preserve accepted requirements and completed task IDs. Convert legacy source documents into the vision and features without modifying the historical originals; never treat them as active execution sources.";
   if (stage === "team" && hasPrd() && !await existingPrdIsValid()) return false;
-  const runner = headlessRunner();
+  const { runner, source: runnerSource } = headlessRunnerSelection();
   if (stage && !state.options.nonInteractive && !opts.dryRun && runner !== "stub") {
     const existing = selectAuthoringModel(state.repoDir, stage, state.options.models, state.env);
     let inventory = readAuthoringInventory(state.repoDir);
@@ -618,8 +604,8 @@ async function runSkillHeadless(msg: string, opts: LauncherOptions): Promise<boo
   let invocation: AuthoringInvocation;
   try {
     invocation = stage
-      ? await resolveAuthoringModel(state.repoDir, stage, runner, state.options.models, state.env, state.options.dependencies?.inventoryProbe)
-      : { runner, source: "inherit" as const };
+      ? { ...await resolveAuthoringModel(state.repoDir, stage, runner, state.options.models, state.env, state.options.dependencies?.inventoryProbe), runnerSource }
+      : { runner, source: "inherit" as const, runnerSource };
   } catch (error) {
     if (stage && !opts.dryRun) saveAuthoringStage(state.repoDir, stage, {
       status: "failed", inputFingerprint: stageInputFingerprint(state.repoDir, stage, harnessRootDir()),
@@ -2197,7 +2183,8 @@ async function runDraftSkillsInternal(repoDir: string): Promise<number> {
   }
   if (authoringStageIsCurrent(repoDir, "skills", harnessRootDir())) { out("Project skills already complete."); return 0; }
   if (!candidates.candidates.some((candidate) => candidate.action !== "omit")) {
-    const invocation: AuthoringInvocation = { runner: headlessRunner(), source: "inherit" };
+    const { runner, source: runnerSource } = headlessRunnerSelection();
+    const invocation: AuthoringInvocation = { runner, source: "inherit", runnerSource };
     if (!state.options.dryRun) saveAuthoringStage(repoDir, "skills", {
       status: "complete", inputFingerprint: stageInputFingerprint(repoDir, "skills", harnessRootDir()),
       outputs: [], outputFingerprint: fingerprintFiles(repoDir, []), noSkillsRequired: true, completedAt: new Date().toISOString(), invocation,
@@ -2516,11 +2503,17 @@ async function runLauncherInternal(opts: LauncherOptions = {}): Promise<number> 
     await selectHarness(opts);
     await createRepo(opts);
     assertEngineHarnessAvailable(state.env.FORGE_ENGINE_HARNESS ?? loadEngineConfig(state.repoDir)?.harness ?? state.engineConfig.harness);
-    if (!opts.dryRun && Object.keys(state.options.models ?? {}).length > 0) {
+    if (!opts.dryRun && (Object.keys(state.options.models ?? {}).length > 0 || state.options.runner !== undefined)) {
       const config = loadAuthoringConfig(state.repoDir);
+      const requested = state.options.runner?.trim();
+      // Absent leaves the saved choice alone; "inherit" (or empty) clears it.
+      const runner = requested === undefined
+        ? config.runner
+        : (requested && requested !== "inherit" ? requested as AuthoringRunnerChoice : undefined);
       saveAuthoringConfig(state.repoDir, {
         version: 1,
         models: { ...config.models, ...state.options.models },
+        ...(runner ? { runner } : {}),
       });
     }
     await bootstrapForge(opts);

@@ -2,6 +2,7 @@
 
 import { api } from "../api.js";
 import { el, fmtTime, toast } from "../render/dom.js";
+import { AUTHORING_RUNNER_OPTIONS } from "../runners.js";
 import type { ProjectInfo, ProjectsIndex } from "../types.js";
 
 let select: HTMLSelectElement | null = null;
@@ -60,6 +61,10 @@ function buildBootstrap(): HTMLElement {
     el("option", { value: "claude" }, "claude (.claude)"),
     el("option", { value: "opencode" }, "opencode (.opencode)"),
   ]) as HTMLSelectElement;
+  // Same axis as the wizard's select: `inherit` keeps the harness rule, any
+  // other value is saved into the bootstrapped repository's authoring config.
+  const runner = el("select", { id: "bootstrap-authoring-runner", "aria-label": "Authoring runner" },
+    AUTHORING_RUNNER_OPTIONS.map(([value, label]) => el("option", { value }, label))) as HTMLSelectElement;
   const init = el("input", { type: "checkbox" });
   const force = el("input", { type: "checkbox" });
   const button = el("button", { className: "btn btn-primary" }, "Bootstrap repository");
@@ -69,7 +74,14 @@ function buildBootstrap(): HTMLElement {
     if (!target) { status.textContent = "Repository path is required."; return; }
     button.setAttribute("disabled", "true");
     status.textContent = "Starting bootstrap…";
-    void api.bootstrap({ path: target, harness: harness.value, initGit: (init as HTMLInputElement).checked, force: (force as HTMLInputElement).checked })
+    const chosenRunner = runner.value && runner.value !== "inherit" ? runner.value : undefined;
+    void api.bootstrap({
+      path: target,
+      harness: harness.value,
+      initGit: (init as HTMLInputElement).checked,
+      force: (force as HTMLInputElement).checked,
+      ...(chosenRunner ? { runner: chosenRunner } : {}),
+    })
       .then((r) => {
         status.textContent = r.ok ? `${r.message} Monitor the project stage for completion.` : `Bootstrap failed: ${r.message}`;
         toast(r.message);
@@ -92,7 +104,7 @@ function buildBootstrap(): HTMLElement {
   return el("div", { className: "panel", "data-bootstrap-form": "true" }, [
     el("h4", null, "Bootstrap an existing repository"),
     el("p", { className: "dim small" }, "Copy the Forge harness and skills into a repository. This runs as a tracked background job."),
-    el("div", { className: "dropdown-row" }, [input, harness, button]),
+    el("div", { className: "dropdown-row" }, [input, harness, runner, button]),
     el("label", { className: "checkbox-row" }, [init, el("span", null, "Initialize git if needed")]),
     el("label", { className: "checkbox-row" }, [force, el("span", null, "Overwrite existing Forge files")]),
     status,

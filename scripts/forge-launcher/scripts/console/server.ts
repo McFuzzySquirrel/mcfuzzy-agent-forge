@@ -13,7 +13,7 @@ import { launchCliInTerminal } from "../terminal.ts";
 import { RunController, type ControlDeps } from "./control.ts";
 import { IncrementalLineReader } from "./incremental-reader.ts";
 import { consoleAuthoringInventory } from "./authoring.ts";
-import { loadAuthoringConfig, saveAuthoringConfig, validateAuthoringConfig } from "../authoring-config.ts";
+import { isRunnerChoice, loadAuthoringConfig, saveAuthoringConfig, validateAuthoringConfig } from "../authoring-config.ts";
 import type { InventoryProbe } from "../authoring-inventory.ts";
 import {
   detectHarnessRoot,
@@ -597,8 +597,14 @@ export async function startConsoleServer(options: ConsoleServerOptions = {}): Pr
           if (harness !== undefined && !["agents", "github", "claude", "opencode"].includes(harness)) {
             return sendJson(res, 400, { ok: false, message: "harness must be agents, github, claude, or opencode" });
           }
+          // `inherit` is never sent: the client omits the field instead, so any
+          // value that arrives here has to name a runner the launcher accepts.
+          const runner = typeof body.runner === "string" ? body.runner.trim() : undefined;
+          if (runner !== undefined && !isRunnerChoice(runner)) {
+            return sendJson(res, 400, { ok: false, message: "runner must be copilot, opencode, or claude" });
+          }
           try {
-            const result = controller.bootstrap({ path: target, harness, force: body.force === true, initGit: body.initGit === true });
+            const result = controller.bootstrap({ path: target, harness, force: body.force === true, initGit: body.initGit === true, runner });
             return sendJson(res, result.ok ? 200 : 400, result);
           } catch (err) {
             return sendJson(res, 500, { ok: false, message: err instanceof Error ? err.message : "failed to start bootstrap" });

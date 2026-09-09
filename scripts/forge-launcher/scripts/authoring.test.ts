@@ -5,7 +5,7 @@ import os from "node:os";
 import path from "node:path";
 import { execFileSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
-import { loadAuthoringConfig, saveAuthoringConfig, selectAuthoringModel, writeAuthoringJson } from "./authoring-config.ts";
+import { loadAuthoringConfig, saveAuthoringConfig, selectAuthoringModel, selectAuthoringRunner, writeAuthoringJson, type AuthoringConfig } from "./authoring-config.ts";
 import { authoringArgv, inventoryForRunner, parseClaudeModelOutput, parseModelInventoryOutput, readAuthoringInventory, refreshAuthoringInventory, resolveAuthoringModel, type AuthoringRunner } from "./authoring-inventory.ts";
 import { authoringReadiness, authoringStageIsCurrent, fingerprintFiles, readAuthoringState, readSkillCandidates } from "./authoring-state.ts";
 import { runDraftPrd, runDraftExistingPrd, runDraftSkills, runDraftTeam, runFeaturePrd, runFeatureIncrement, runLauncher, runResume, type LauncherOptions } from "./launcher.ts";
@@ -144,6 +144,65 @@ test("authoring model precedence is invocation then environment then project the
   assert.deepEqual(selectAuthoringModel(repo, "prd", {}, {}), { requestedModel: "saved-1", source: "project" });
   assert.deepEqual(selectAuthoringModel(repo, "prd", { prd: "inherit" }, { FORGE_PRD_MODEL: "env-1" }), { source: "inherit" });
   assert.deepEqual(selectAuthoringModel(repo, "skills", {}, {}), { source: "inherit" });
+});
+
+test("authoring config persists an explicit runner and inherit restores the harness rule", (t) => {
+  const repo = fixture(t);
+  saveAuthoringConfig(repo, { version: 1, models: {}, runner: "claude" });
+  assert.equal(loadAuthoringConfig(repo).runner, "claude");
+  saveAuthoringConfig(repo, { version: 1, models: {}, runner: "inherit" } as AuthoringConfig);
+  assert.equal(loadAuthoringConfig(repo).runner, undefined);
+  assert.throws(() => saveAuthoringConfig(repo, { version: 1, models: {}, runner: "stub" } as AuthoringConfig), /Invalid authoring runner/);
+  assert.throws(() => saveAuthoringConfig(repo, { version: 1, models: {}, runner: "gpt" } as AuthoringConfig), /Invalid authoring runner/);
+});
+
+test("authoring runner precedence is invocation then environment then project then harness", (t) => {
+  const repo = fixture(t);
+  saveAuthoringConfig(repo, { version: 1, models: {}, runner: "claude" });
+  assert.deepEqual(selectAuthoringRunner(repo, ".github", {}, {}), { runner: "claude", source: "project" });
+  assert.deepEqual(selectAuthoringRunner(repo, ".github", {}, { FORGE_RUN_WITH: "opencode" }), { runner: "opencode", source: "environment" });
+  assert.deepEqual(selectAuthoringRunner(repo, ".github", { runner: "copilot" }, { FORGE_RUN_WITH: "opencode" }), { runner: "copilot", source: "invocation" });
+  assert.deepEqual(selectAuthoringRunner(repo, ".github", { runner: "inherit" }, { FORGE_RUN_WITH: "opencode" }), { runner: "copilot", source: "inherit" });
+  assert.deepEqual(selectAuthoringRunner(repo, ".github", {}, { FORGE_RUN_WITH: "stub" }), { runner: "stub", source: "environment" });
+  assert.throws(() => selectAuthoringRunner(repo, ".github", { runner: "stub" }, {}), /Unsupported authoring runner/);
+});
+
+test("FORGE_RUN_WITH=stub is an offline lock that the invocation runner cannot override", async (t) => {
+  const repo = fixture(t);
+  saveAuthoringConfig(repo, { version: 1, models: {}, runner: "claude" });
+  assert.deepEqual(
+    selectAuthoringRunner(repo, ".github", { runner: "claude" }, { FORGE_RUN_WITH: "stub" }),
+    { runner: "stub", source: "environment" },
+  );
+  // Through the launcher seam, with the team stage actually executing: the
+  // stub writes its canned agent and no real runner is ever spawned.
+  write(repo, "docs/PRD.md", "# Fixture PRD");
+  assert.equal(await runDraftTeam(repo, false, {
+    env: { FORGE_RUN_WITH: "stub" }, runner: "claude",
+    dependencies: { runLogged: async () => { throw new Error("stub lock must not spawn a runner"); } },
+  }), 0);
+  assert.equal(fs.existsSync(path.join(repo, ".github/agents/stub-project-agent.md")), true);
+  const invocation = readAuthoringState(repo).stages.team?.invocation;
+  assert.equal(invocation?.runner, "stub");
+  assert.equal(invocation?.runnerSource, "environment");
+});
+
+test("the saved runner's provenance reaches the authoring state file", async (t) => {
+  const repo = fixture(t);
+  saveAuthoringConfig(repo, { version: 1, models: {}, runner: "claude" });
+  const spawned: string[] = [];
+  assert.equal(await runDraftPrd(repo, {
+    env: { FORGE_RUN_WITH: undefined },
+    dependencies: { runLogged: async (cmd) => {
+      spawned.push(cmd);
+      write(repo, "docs/PRD.md", "# Saved runner PRD");
+      return { code: 0, stdout: "", stderr: "" };
+    } },
+  }), 0);
+  assert.deepEqual(spawned, ["claude"]);
+  const invocation = readAuthoringState(repo).stages.prd?.invocation;
+  assert.equal(invocation?.runner, "claude");
+  assert.equal(invocation?.runnerSource, "project");
 });
 
 test("invalid settings and future schemas fail instead of resetting choices", (t) => {
@@ -624,6 +683,17 @@ test("settings CLI saves and clears stage values and direct draft argv preserves
 
 const AUTHORING_CLI = fileURLToPath(new URL("./cli.ts", import.meta.url));
 
+test("settings CLI saves and clears the authoring runner", (t) => {
+  const repo = fixture(t);
+  const invoke = (args: string[]) => execFileSync(process.execPath, ["--import", "tsx", AUTHORING_CLI, ...args], {
+    encoding: "utf8", env: { ...process.env },
+  });
+  invoke(["authoring-config", "--repo", repo, "--runner", "claude"]);
+  assert.equal(loadAuthoringConfig(repo).runner, "claude");
+  invoke(["authoring-config", "--repo", repo, "--runner", "inherit"]);
+  assert.equal(loadAuthoringConfig(repo).runner, undefined);
+});
+
 /**
  * Runs `draft-prd --dry-run` in a subprocess so the launcher's own PATH probe
  * runs for real. Pass `PATH` to decide which authoring CLIs the run can see.
@@ -631,7 +701,7 @@ const AUTHORING_CLI = fileURLToPath(new URL("./cli.ts", import.meta.url));
 function draftPrdDryRun(repo: string, env: NodeJS.ProcessEnv = {}): string {
   const base = { ...process.env, ...env };
   if (!Object.hasOwn(env, "FORGE_RUN_WITH")) delete base.FORGE_RUN_WITH;
-  // Windows inherits `Path`, and commandExists reads `PATH ?? Path`, so a caller
+  // Windows inherits `Path`, and the probe reads `PATH ?? Path`, so a caller
   // pinning PATH must not leave the machine's real one behind for it to find.
   if (Object.hasOwn(env, "PATH")) delete base.Path;
   delete base.FORGE_PRD_MODEL;
@@ -639,6 +709,32 @@ function draftPrdDryRun(repo: string, env: NodeJS.ProcessEnv = {}): string {
     encoding: "utf8", env: base,
   });
 }
+
+test("an unsupported --runner fails at parse time, before any project work", (t) => {
+  const repo = fixture(t);
+  const cli = fileURLToPath(new URL("./cli.ts", import.meta.url));
+  let failure: { status?: number; stdout?: string; stderr?: string } | undefined;
+  try {
+    execFileSync(process.execPath, ["--import", "tsx", cli, "--runner", "gpt", "--non-interactive", "--no-update-check"], {
+      encoding: "utf8", timeout: 60_000, env: {
+        ...process.env,
+        FORGE_RUN_WITH: "stub", FORGE_HARNESS_CHOICE: "1", FORGE_REPO_NAME: "unsupported-runner",
+        FORGE_REPO_PARENT_DIR: repo, FORGE_HOME: path.join(repo, "home"), FORGE_IDEA: "A thing",
+        FORGE_YN_DEFAULT: "n", FORGE_AUTO_DRAFT: "0",
+      },
+    });
+  } catch (error) {
+    failure = error as { status?: number; stdout?: string; stderr?: string };
+  }
+  assert.ok(failure, "expected a non-zero exit");
+  assert.notEqual(failure.status, 0);
+  assert.match(
+    `${failure.stdout ?? ""}${failure.stderr ?? ""}`,
+    /Unsupported authoring runner: gpt\. Use copilot, opencode, claude, or inherit\./,
+  );
+  // Nothing ran: the flag is rejected before the repository is created.
+  assert.equal(fs.existsSync(path.join(repo, "unsupported-runner")), false);
+});
 
 function commandLine(output: string, binary: string): string {
   return output.split(/\r?\n/).map((line) => line.trim()).find((line) => line.startsWith(`${binary} `)) ?? "";
@@ -656,7 +752,7 @@ function fakeBin(t: { after: (fn: () => void) => void }, ...commands: string[]):
   return dir;
 }
 
-test("headless draft builds the claude command from the runner, the harness, and debug mode", (t) => {
+test("headless draft picks the runner from the environment, the saved project choice, then the harness", (t) => {
   const explicit = fixture(t);
   const chosen = commandLine(draftPrdDryRun(explicit, { FORGE_RUN_WITH: "claude" }), "claude");
   assert.match(chosen, /^claude -p /);
@@ -673,6 +769,13 @@ test("headless draft builds the claude command from the runner, the harness, and
   // is pinned to a fake opencode because inheritance now consults the machine.
   const harnessDefault = fixture(t, ".claude");
   assert.match(commandLine(draftPrdDryRun(harnessDefault, { PATH: fakeBin(t, "opencode") }), "opencode"), /^opencode run /);
+
+  // A saved project runner selects claude with FORGE_RUN_WITH unset, and the
+  // environment still outranks the saved choice.
+  const saved = fixture(t, ".claude");
+  saveAuthoringConfig(saved, { version: 1, models: {}, runner: "claude" });
+  assert.match(commandLine(draftPrdDryRun(saved), "claude"), /^claude -p /);
+  assert.match(commandLine(draftPrdDryRun(saved, { FORGE_RUN_WITH: "opencode" }), "opencode"), /^opencode run /);
 });
 
 test("inherited runner falls back to the harness CLI only when the inherited CLI is missing", (t) => {

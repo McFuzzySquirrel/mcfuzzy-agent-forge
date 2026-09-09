@@ -15,6 +15,11 @@ Detailed release and change notes for MyForge.
 - Inheritance now consults the machine: when the inherited runner's CLI is not installed
   and the harness's own CLI is, the harness's CLI is used. Explicit selections are never
   substituted.
+- Made the authoring runner an explicit, persisted choice: an optional `runner` in
+  `docs/authoring-config.json`, a `--runner` flag on the launcher and `authoring-config`,
+  and an **Authoring runner** select in the Console wizard and authoring settings that the
+  stage model dropdowns follow. `FORGE_RUN_WITH` still outranks the saved value, and
+  `FORGE_RUN_WITH=stub` is an offline lock that even `--runner` cannot override (ADR-048).
 
 ---
 
