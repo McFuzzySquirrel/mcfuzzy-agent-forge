@@ -92,8 +92,48 @@ export function parseModelInventoryOutput(text: string, runner: AuthoringRunner)
 }
 
 function parseCopilotMetadataOutput(text: string): string[] {
+  const clean = text.replace(/\x1b(?:\[[0-?]*[ -/]*[@-~]|\][^\x07]*(?:\x07|\x1b\\))/g, "");
+  const tableLines = clean.split(/\r?\n/).map((line) => line.trim()).filter(Boolean);
+  const modelListStart = tableLines.findIndex((line) => /^available models(?: include)?:\s*$/i.test(line));
+  if (modelListStart >= 0) {
+    const ids: string[] = [];
+    for (const line of tableLines.slice(modelListStart + 1)) {
+      if (/^use `\/model\b/i.test(line)) break;
+      const match = line.match(/^[-*]\s+(?:`([^`]+)`|(.+?))(?:\s+\*\*\(current\)\*\*)?$/i);
+      const label = (match?.[1] ?? match?.[2])?.trim();
+      if (!label) continue;
+      // Some CLI versions render friendly names rather than IDs. Convert those
+      // labels to the slug accepted by --model (for example, "GPT-5.6 Luna").
+      const id = label.toLowerCase().replace(/\([^)]*\)/g, "").trim()
+        .replace(/[^a-z0-9.]+/g, "-").replace(/^-+|-+$/g, "");
+      if (id && /^[a-zA-Z0-9][a-zA-Z0-9._:/-]*$/.test(id) && !ids.includes(id)) ids.push(id);
+    }
+    if (ids.length) return ids;
+  }
+  const splitTableRow = (line: string): string[] | undefined => {
+    if (!/[|│┃]/.test(line)) return undefined;
+    return line.split(/[|│┃]/).map((cell) => cell.trim());
+  };
+  const headerIndex = tableLines.findIndex((line) => {
+    const cells = splitTableRow(line);
+    return cells?.some((cell) => cell.toLowerCase() === "model") ?? false;
+  });
+  if (headerIndex >= 0) {
+    const headers = splitTableRow(tableLines[headerIndex]) ?? [];
+    const modelColumn = headers.findIndex((header) => header.toLowerCase() === "model");
+    const ids: string[] = [];
+    for (const line of tableLines.slice(headerIndex + 1)) {
+      const cells = splitTableRow(line);
+      if (!cells || cells.length <= modelColumn || cells.every((cell) => !/[a-z0-9]/i.test(cell))) continue;
+      const id = cells[modelColumn]?.replace(/^['"`]|['"`]$/g, "").trim();
+      if (!id || /^(?:model|name)$/i.test(id) || /\b(?:unavailable|disabled|not supported)\b/i.test(line)) continue;
+      if (/^[a-zA-Z0-9][a-zA-Z0-9._:/-]*$/.test(id) && !ids.includes(id)) ids.push(id);
+    }
+    if (ids.length) return ids;
+  }
+
   try {
-    const value: unknown = JSON.parse(text);
+    const value: unknown = JSON.parse(clean);
     if (record(value) && Array.isArray(value.models)) {
       const ids = value.models.flatMap((model) => {
         if (!record(model)) return [];
@@ -105,7 +145,14 @@ function parseCopilotMetadataOutput(text: string): string[] {
   } catch {
     // Copilot help is text in current releases; JSON metadata is accepted when exposed.
   }
-  const lines = text.split(/\r?\n/);
+
+  // `/model list names only` intentionally omits headings and returns one ID
+  // per line. Keep this fallback strict so surrounding CLI diagnostics are not
+  // mistaken for model names.
+  const namesOnly = parseModelInventoryOutput(clean, "copilot");
+  if (namesOnly.length) return namesOnly;
+
+  const lines = clean.split(/\r?\n/);
   const start = lines.findIndex((line) => /^\s*(?:available\s+)?models?\s*:?\s*$/i.test(line));
   if (start < 0) return [];
   const end = lines.slice(start + 1).findIndex((line) => /^\s*[A-Za-z][A-Za-z ]{2,}:\s*$/.test(line));
@@ -151,7 +198,7 @@ export function parseClaudeModelOutput(text: string): string[] {
 }
 
 const PROBE_ARGS: Record<Exclude<AuthoringRunner, "stub">, string[]> = {
-  copilot: ["--help"],
+  copilot: ["-p", "/model list names only"],
   opencode: ["models"],
   // --bare skips hooks, plugin sync and auto-memory, which a metadata probe has no use for.
   claude: ["-p", "/model", "--bare", "--output-format", "json"],
@@ -159,13 +206,13 @@ const PROBE_ARGS: Record<Exclude<AuthoringRunner, "stub">, string[]> = {
 
 const defaultProbe: InventoryProbe = (runner, args, repo) => runCommand(runner, args, { cwd: repo, capture: true });
 
-/** Uses runner metadata only; Copilot's prompt UI is deliberately not queried. */
+/** Uses runner metadata only; Copilot's model list prompt does not make a generative call. */
 export async function refreshAuthoringInventory(repo: string, runner: AuthoringRunner, probe: InventoryProbe = defaultProbe): Promise<AuthoringInventory> {
   if (runner === "stub") return readAuthoringInventory(repo);
   const args = PROBE_ARGS[runner];
   const result = await probe(runner, args, repo);
   if (result.code !== 0) throw new Error(`${runner} model discovery failed (${result.code}): ${result.stderr.trim() || result.stdout.trim()}`);
-  const ids = runner === "copilot" ? parseCopilotMetadataOutput(result.stdout)
+  const ids = runner === "copilot" ? parseCopilotMetadataOutput(`${result.stdout}\n${result.stderr}`)
     : runner === "claude" ? parseClaudeModelOutput(result.stdout)
     : parseModelInventoryOutput(result.stdout, runner);
   if (!ids.length) throw new Error(`${runner} model discovery returned no unambiguous model IDs. Verify docs/research/model-inventory.json from a trusted runner inventory or select inherit.`);

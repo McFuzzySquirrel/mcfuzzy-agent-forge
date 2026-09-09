@@ -4,6 +4,68 @@ Detailed release and change notes for MyForge.
 
 ---
 
+## September 2026 - v3.73
+
+### Copilot Names-Only Parser
+
+- Fixed model discovery for `/model list names only` responses that contain
+  only one model ID per line and no heading.
+
+---
+
+## September 2026 - v3.72
+
+### Copilot Names-Only Discovery
+
+- Copilot authoring inventory now requests `copilot -p "/model list names only"`
+  so Windows table output and other CLI formatting variations do not affect
+  model discovery.
+
+---
+
+## September 2026 - v3.71
+
+### Copilot Discovery Stream Handling
+
+- Fixed model discovery when Copilot writes its `/model list` response to
+  stderr instead of stdout.
+- Friendly model labels such as `GPT-5.6 Luna` are normalized to selectable
+  model IDs while preserving dotted version components.
+
+---
+
+## September 2026 - v3.70
+
+### Copilot Markdown Model Lists
+
+- Fixed discovery for current Copilot CLI output, which returns models as a
+  Markdown list under `Available models include:` rather than a table.
+- Copilot output is collected from both stdout and stderr because current
+  releases write the model list to stderr.
+
+---
+
+## September 2026 - v3.69
+
+### Copilot Model Table Compatibility
+
+- Fixed Copilot model discovery for box-drawn terminal tables returned by
+  `copilot -p "/model list"`.
+- ANSI and Unicode table formatting is now removed before extracting the
+  `Model` column.
+
+---
+
+## September 2026 - v3.68
+
+### Copilot Model Discovery
+
+- Fixed Copilot authoring model discovery to use `copilot -p "/model list"`.
+- The inventory parser now extracts only model names from the command's `Model`
+  table column instead of treating help output and other table columns as models.
+
+---
+
 ## September 2026 - v3.67
 
 ### Consistent Terminated Process Results

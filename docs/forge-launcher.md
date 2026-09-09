@@ -222,10 +222,11 @@ All authoring entry points accept the three stage model overrides:
 override and resume runner inheritance. `authoring-models` refreshes or reads
 the runner inventory; explicit selections are checked against that inventory
 and fail clearly when unavailable or incompatible.
-Copilot refresh uses the CLI's non-generative `--help` metadata interface; it
-never submits `/model list` or another model-selection prompt. If the installed
-Copilot version does not expose model IDs in its metadata, refresh reports an
-explicit discovery error, while inherited runner defaults remain usable.
+Copilot refresh submits `copilot -p "/model list names only"` and extracts the
+model names from the response. Output is collected from both stdout and stderr
+because CLI versions differ in which stream they use. If the installed Copilot
+version does not return model names, refresh reports an explicit discovery
+error, while inherited runner defaults remain usable.
 Claude refresh uses the CLI's non-generative `/model` command
 (`claude -p "/model" --bare --output-format json`) and records exactly the
 aliases that command lists: `sonnet`, `opus`, `haiku`, `fable`, `sonnet[1m]`,
