@@ -4,6 +4,17 @@ Detailed release and change notes for MyForge.
 
 ---
 
+## September 2026 - v3.76
+
+### Human-review Console styling
+
+- Styled the human-review dialog with the Console's dark theme, including themed
+  surfaces, fields, review criteria, actions, and modal backdrop.
+- Completed human-review tasks now show a disabled green `Human review complete`
+  action after the task refreshes.
+
+---
+
 ## September 2026 - v3.75
 
 ### Team-stage frontmatter enforcement

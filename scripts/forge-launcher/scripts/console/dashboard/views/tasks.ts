@@ -455,14 +455,23 @@ function detail(t: TaskRow): HTMLElement {
 }
 
 function humanReviewAction(t: TaskRow): HTMLElement {
-  const button = el("button", { className: "btn btn-primary" }, "Complete human review");
-  button.addEventListener("click", (event) => {
-    event.stopPropagation();
-    openHumanReview(t);
-  });
+  const complete = t.status === "complete";
+  const button = el("button", {
+    className: complete ? "btn btn-review-complete" : "btn btn-primary",
+    type: "button",
+    disabled: complete ? true : null,
+  }, complete ? "Human review complete" : "Complete human review");
+  if (!complete) {
+    button.addEventListener("click", (event) => {
+      event.stopPropagation();
+      openHumanReview(t);
+    });
+  }
   return el("div", { className: "review-action" }, [
-    el("div", { className: "k" }, "Human review required"),
-    el("p", { className: "dim small" }, `Review the task criteria, record your findings, and approve it as ${t.reviewFile ?? "configured in the manifest"}.`),
+    el("div", { className: "k" }, complete ? "Human review recorded" : "Human review required"),
+    el("p", { className: "dim small" }, complete
+      ? `Approval record: ${t.reviewFile ?? "configured in the manifest"}.`
+      : `Review the task criteria, record your findings, and approve it as ${t.reviewFile ?? "configured in the manifest"}.`),
     button,
   ]);
 }
