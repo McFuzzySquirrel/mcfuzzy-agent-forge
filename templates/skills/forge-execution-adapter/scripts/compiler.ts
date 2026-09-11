@@ -49,7 +49,14 @@ function tokenize(text: string): Set<string> {
   );
 }
 
-function overlapScore(taskText: string, agent: AgentDescriptor): number {
+function includesAllTokens(text: string, query: string): boolean {
+  const queryWords = tokenize(query);
+  if (queryWords.size === 0) return false;
+  const textWords = tokenize(text);
+  return [...queryWords].every((word) => textWords.has(word));
+}
+
+function overlapScore(taskText: string, agent: AgentDescriptor, contextText = ""): number {
   const taskWords = tokenize(taskText);
   const agentWords = tokenize([
     agent.name,
@@ -57,6 +64,7 @@ function overlapScore(taskText: string, agent: AgentDescriptor): number {
     ...agent.expertise,
     ...agent.collaboration,
     ...agent.constraints,
+    agent.rawBody,
   ].join(" "));
 
   let score = 0;
@@ -64,6 +72,7 @@ function overlapScore(taskText: string, agent: AgentDescriptor): number {
     if (agentWords.has(word)) score += 1;
   }
   if (taskText.toLowerCase().includes(agent.name.toLowerCase())) score += 3;
+  if (contextText && includesAllTokens(agent.rawBody, contextText)) score += 4;
   return score;
 }
 
@@ -79,7 +88,7 @@ function isForgeCoordinator(agent: AgentDescriptor): boolean {
     FORGE_COORDINATOR_NAMES.has(basename(agent.path, ".md").toLowerCase());
 }
 
-function chooseOwner(taskText: string, agents: AgentDescriptor[]): { owner?: string; warning?: string } {
+function chooseOwner(taskText: string, agents: AgentDescriptor[], contextText = ""): { owner?: string; warning?: string } {
   const candidates = agents.filter((agent) => !isForgeCoordinator(agent));
   if (candidates.length === 0) {
     return { warning: `No implementation agent available for task '${taskText}'. Generate a project-specific team; Forge coordinator personas are not implementation task owners.` };
@@ -88,7 +97,7 @@ function chooseOwner(taskText: string, agents: AgentDescriptor[]): { owner?: str
   let second = 0;
 
   for (const agent of candidates) {
-    const score = overlapScore(taskText, agent);
+    const score = overlapScore(taskText, agent, contextText);
     if (score > best.score) {
       second = best.score;
       best = { agent, score };
@@ -105,7 +114,7 @@ function chooseOwner(taskText: string, agents: AgentDescriptor[]): { owner?: str
     return { warning: `No confident owner match for task: ${taskText}` };
   }
 
-  if (best.score - second <= 1) {
+  if (best.score === second) {
     return { owner: best.agent.name, warning: `Weak owner match for task '${taskText}' → ${best.agent.name}` };
   }
 
@@ -251,9 +260,10 @@ function pushTask(
   agents: AgentDescriptor[],
   validationCommands: string[],
   warnings: string[],
+  ownerContext = "",
 ): void {
   const taskId = nextUniqueTaskId(phaseId, tasks, scopedTaskId(text, phaseId, tasks.length));
-  const owner = chooseOwner(text, agents);
+  const owner = chooseOwner(text, agents, ownerContext);
   if (owner.warning) warnings.push(owner.warning);
   const previous = tasks[tasks.length - 1];
   tasks.push({
@@ -293,6 +303,7 @@ function extractTasks(
   warnings: string[],
   granularity: "coarse" | "fine",
   repoRoot?: string,
+  ownerContext = "",
 ): ManifestTask[] {
   const structured = parseTaskBlocks(phaseBody, agents, { repoRoot });
   if (structured) return structured;
@@ -306,11 +317,11 @@ function extractTasks(
       if (!/^(-|\*|\d+\.)\s+/.test(line)) continue;
       const cleaned = line.replace(/^(-|\*|\d+\.)\s+/, "").trim();
       if (skipTaskLineRe.test(cleaned)) continue;
-      pushTask(tasks, cleaned, phaseId, agents, validationCommands, warnings);
+      pushTask(tasks, cleaned, phaseId, agents, validationCommands, warnings, ownerContext);
     }
     if (tasks.length === 0) {
       const summary = phaseBody.split(/\r?\n/).find((line) => !/^#+\s+/.test(line))?.trim() ?? phaseTitle;
-      pushTask(tasks, summary, phaseId, agents, validationCommands, warnings);
+      pushTask(tasks, summary, phaseId, agents, validationCommands, warnings, ownerContext);
       warnings.push(`Phase ${phaseId} had no explicit task bullets; created a single synthesized task.`);
     }
     return tasks;
@@ -349,7 +360,7 @@ function extractTasks(
       // (the id label is stripped so taskIdFromText stays unambiguous).
       const context = stripTaskLabel(group.header);
       for (const child of group.children) {
-        pushTask(tasks, `${child} (${context})`, phaseId, agents, validationCommands, warnings);
+        pushTask(tasks, `${child} (${context})`, phaseId, agents, validationCommands, warnings, ownerContext);
         emitted += 1;
       }
     } else {
@@ -357,7 +368,7 @@ function extractTasks(
       if (!source) continue;
       const fragments = splitTaskText(source);
       for (const fragment of fragments) {
-        pushTask(tasks, fragment, phaseId, agents, validationCommands, warnings);
+        pushTask(tasks, fragment, phaseId, agents, validationCommands, warnings, ownerContext);
         emitted += 1;
       }
       if (fragments.length > 1) {
@@ -371,7 +382,7 @@ function extractTasks(
 
   if (emitted === 0) {
     const summary = phaseBody.split(/\r?\n/).find((line) => !/^#+\s+/.test(line))?.trim() ?? phaseTitle;
-    pushTask(tasks, summary, phaseId, agents, validationCommands, warnings);
+    pushTask(tasks, summary, phaseId, agents, validationCommands, warnings, ownerContext);
     warnings.push(`Phase ${phaseId} had no explicit task bullets; created a single synthesized task.`);
   }
 
@@ -389,6 +400,29 @@ export interface FeatureNode {
   name: string;
   file: string;
   dependencies: string[];
+}
+
+function parseFeatureDependencies(value: string, namesByNumber: Map<string, string>): string[] {
+  const normalized = value.trim();
+  if (!normalized || normalized.toLowerCase() === "none") return [];
+
+  const references = normalized.match(/\d+/g) ?? [];
+  const onlyNumberedFeatureAliases = /\bfeatures?\b/i.test(normalized) &&
+    normalized
+      .replace(/\bfeatures?\b/gi, "")
+      .replace(/\band\b/gi, "")
+      .replace(/[\d\s,+.&]+/g, "")
+      .trim() === "";
+  const canonicalized = onlyNumberedFeatureAliases && references.length > 0
+    ? references.map((number) => namesByNumber.get(number) ?? `Feature ${number}`).join(", ")
+    : normalized;
+
+  const ordered = new Set<string>();
+  for (const dependency of canonicalized.split(/\s*(?:\+|,)\s*/)) {
+    const trimmed = dependency.trim().replace(/\.+$/, "");
+    if (trimmed && trimmed.toLowerCase() !== "none") ordered.add(trimmed);
+  }
+  return [...ordered];
 }
 
 /**
@@ -412,6 +446,12 @@ export function parseFeatureGraph(vision: string, featurePaths: string[], repoRo
         if (/^feature$/i.test(name)) return false; // header row
         return true;
       });
+    const namesByNumber = new Map<string, string>();
+    for (const row of tableRows) {
+      const [number, name] = row;
+      const resolvedNumber = number?.match(/\d+/)?.[0];
+      if (resolvedNumber && name) namesByNumber.set(resolvedNumber, name);
+    }
     for (const row of tableRows) {
       const [, name, fileCell, depsCell] = row;
       if (!name || !fileCell) continue;
@@ -421,10 +461,7 @@ export function parseFeatureGraph(vision: string, featurePaths: string[], repoRo
         warnings.push(`Feature '${name}' references unknown file '${href}'; skipping.`);
         continue;
       }
-      const dependencies = (depsCell ?? "None")
-        .split(/\s*(?:\+|,)\s*/)
-        .map((dep) => dep.trim())
-        .filter((dep) => dep && dep.toLowerCase() !== "none");
+      const dependencies = parseFeatureDependencies(depsCell ?? "None", namesByNumber);
       nodes.push({ name, file, dependencies });
     }
   }
@@ -540,7 +577,7 @@ function synthesizeTasksFromFr(
 ): ManifestTask[] {
   const frSection = parseHeadings(doc).find((section) => /^3\.\s*functional requirements/i.test(section.title));
   const body = frSection?.body ?? "";
-  return extractTasks(`Phase 1: ${featureName}`, body, phaseId, agents, validationCommands, warnings, granularity);
+  return extractTasks(`Phase 1: ${featureName}`, body, phaseId, agents, validationCommands, warnings, granularity, undefined, featureName);
 }
 
 /** Feature mode: compile phases from docs/features/*.md ordered by the vision dependency graph. */
@@ -579,7 +616,7 @@ function compileFeatureManifest(repo: ForgeRepo, options: CompileOptions = {}): 
 
     for (const block of phaseBlocks) {
       const phaseId = `${code}-${phaseIdFromTitle(block.title, 0)}`;
-      const tasks = extractTasks(block.title, block.body, phaseId, repo.agents, validationCommands, warnings, granularity, repo.repoRoot);
+      const tasks = extractTasks(block.title, block.body, phaseId, repo.agents, validationCommands, warnings, granularity, repo.repoRoot, feature.name);
       const featurePhases = phaseIdsByFeature.get(feature.name) ?? [];
       pushPhase(phases, phaseId, block.title, feature.name, block.body.split(/\r?\n/).slice(0, 3).join(" ").trim(), tasks, featurePhases.length > 0 ? [featurePhases[featurePhases.length - 1]!] : []);
       featurePhases.push(phaseId);
