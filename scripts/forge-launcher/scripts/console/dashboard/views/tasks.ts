@@ -442,6 +442,7 @@ function detail(t: TaskRow): HTMLElement {
     t.artifactId
       ? el("div", null, [el("div", { className: "k" }, "Artifact"), el("span", { className: "mono" }, t.artifactId)])
       : null,
+    t.contractKind === "human-review" ? humanReviewAction(t) : null,
     el("div", { className: "stats" }, [
       isFinished(t) ? readOnlyTimeout(t) : timeoutEditor(t),
       el("div", { className: "stat" }, [el("div", { className: "k" }, "Started"), el("div", { className: "v" }, fmtTime(t.startedAt))]),
@@ -451,6 +452,67 @@ function detail(t: TaskRow): HTMLElement {
   ];
 
   return el("div", { className: "detail" }, fields.filter(Boolean) as HTMLElement[]);
+}
+
+function humanReviewAction(t: TaskRow): HTMLElement {
+  const button = el("button", { className: "btn btn-primary" }, "Complete human review");
+  button.addEventListener("click", (event) => {
+    event.stopPropagation();
+    openHumanReview(t);
+  });
+  return el("div", { className: "review-action" }, [
+    el("div", { className: "k" }, "Human review required"),
+    el("p", { className: "dim small" }, `Review the task criteria, record your findings, and approve it as ${t.reviewFile ?? "configured in the manifest"}.`),
+    button,
+  ]);
+}
+
+function openHumanReview(t: TaskRow): void {
+  const reviewer = el("input", { type: "text", required: true, placeholder: "Your name" }) as HTMLInputElement;
+  const notes = el("textarea", { required: true, rows: "8", placeholder: "Describe what you reviewed, what you found, and why this task is approved." }) as HTMLTextAreaElement;
+  const confirm = el("input", { type: "checkbox" }) as HTMLInputElement;
+  const close = el("button", { className: "btn", type: "button" }, "Cancel");
+  const submit = el("button", { className: "btn btn-primary", type: "submit" }, "Approve and resume");
+  const dialog = el("dialog", { className: "review-dialog" }, [
+    el("form", { method: "dialog" }, [
+      el("h3", null, `Review ${t.id}`),
+      el("p", null, t.description || t.title),
+      reviewList("Requirements", t.requirements),
+      reviewList("Acceptance criteria", t.acceptanceCriteria),
+      reviewList("Constraints", t.constraints),
+      reviewList("References", t.references),
+      el("p", { className: "dim small" }, `Approval record: ${t.reviewFile ?? "manifest reviewFile"}`),
+      el("label", { className: "field" }, [el("span", null, "Reviewer name"), reviewer]),
+      el("label", { className: "field" }, [el("span", null, "Review notes"), notes]),
+      el("label", { className: "checkbox-row" }, [confirm, el("span", null, "I performed this review and approve this task." )]),
+      el("div", { className: "actions" }, [close, submit]),
+    ]),
+  ]) as HTMLDialogElement;
+  close.addEventListener("click", () => dialog.close());
+  dialog.querySelector("form")!.addEventListener("submit", (event) => {
+    event.preventDefault();
+    if (!reviewer.value.trim() || !notes.value.trim() || !confirm.checked) {
+      toast("Enter your name, review notes, and confirm the attestation.");
+      return;
+    }
+    submit.setAttribute("disabled", "true");
+    void api.completeHumanReview(t.id, reviewer.value, notes.value).then((result) => {
+      toast(result.message ?? "Human review approved.");
+      dialog.close();
+      void refresh();
+    }).catch((error) => {
+      submit.removeAttribute("disabled");
+      toast(error instanceof Error ? error.message : "Human review failed.");
+    });
+  });
+  document.body.appendChild(dialog);
+  dialog.addEventListener("close", () => dialog.remove(), { once: true });
+  dialog.showModal();
+}
+
+function reviewList(title: string, values: string[]): HTMLElement | null {
+  if (values.length === 0) return null;
+  return el("div", null, [el("div", { className: "k" }, title), el("ul", { className: "detail-list" }, values.map((value) => el("li", null, value)))]);
 }
 
 function isFinished(t: TaskRow): boolean {

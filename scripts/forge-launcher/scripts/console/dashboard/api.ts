@@ -187,6 +187,9 @@ export const api = {
   state(): Promise<WorkflowState | null> {
     return request<WorkflowState | null>("/api/state");
   },
+  completeHumanReview(taskId: string, reviewer: string, notes: string, resume = true): Promise<ControlResult & { reviewFile?: string; resumed?: boolean }> {
+    return post("/api/tasks/human-review", { taskId, reviewer, notes, resume });
+  },
 };
 
 export type { ArtifactMeta };

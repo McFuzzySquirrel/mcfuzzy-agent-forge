@@ -4,7 +4,13 @@ Detailed release and change notes for MyForge.
 
 ---
 
-## September 2026 - Unreleased
+## September 2026 - v3.74
+
+### Console human-review completion
+
+- Added a **Complete human review** action to paused human-review tasks in the Forge Console.
+- The review form captures the reviewer, findings, and explicit approval, writes repository-local evidence, records the existing workflow-engine attestation, and resumes the build through the normal background controller.
+- The CLI approval flow remains available, and review fingerprints continue to invalidate stale approvals.
 
 ### Authoring runner selection
 

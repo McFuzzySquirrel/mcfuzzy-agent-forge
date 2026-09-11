@@ -443,6 +443,12 @@ export function tasks(p: RepoPaths): TaskRow[] {
         validationCommands: task.validationCommands ?? [],
         timeoutMs: task.timeoutMs ?? null,
         approvalRequired: task.approvalRequired ?? false,
+        contractKind: task.contract?.kind,
+        requirements: task.contract?.requirements ?? [],
+        acceptanceCriteria: task.contract?.acceptanceCriteria ?? [],
+        constraints: task.contract?.constraints ?? [],
+        references: task.contract?.references ?? [],
+        reviewFile: task.contract?.reviewFile,
       });
     }
   }

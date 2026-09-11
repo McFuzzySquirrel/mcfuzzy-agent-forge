@@ -3,7 +3,7 @@ import test from "node:test";
 import { mkdtempSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { approveHumanTask, humanTaskApproved, taskReferenceContext } from "./task-context.ts";
+import { approveHumanTask, humanTaskApproved, taskReferenceContext, writeHumanReviewEvidence } from "./task-context.ts";
 import { prepareTaskRequest } from "./request.ts";
 import type { ManifestTask, AgentDescriptor } from "./types.ts";
 
@@ -65,4 +65,16 @@ test("scoped human reviews ignore sibling edits but invalidate on selected requi
   assert.equal(humanTaskApproved(root, task), true);
   writeFileSync(join(root, "requirements.md"), source("Reject over 20 MB.", "Changed unrelated task."));
   assert.equal(humanTaskApproved(root, task), false);
+});
+
+test("Console-style review evidence is accepted by the canonical attestation", () => {
+  const { root, task } = fixture();
+  task.contract = { ...task.contract!, kind: "human-review", reviewFile: "reviews/upload.json" };
+  delete task.ownerAgent;
+  task.expectedOutputs = [];
+  task.validationCommands = [];
+  const evidence = writeHumanReviewEvidence(root, task, "Console Reviewer", "Checked the upload workflow and approved the acceptance criteria.");
+  assert.equal(evidence, "docs/reviews/upload-console-review.md");
+  approveHumanTask(root, task, "Console Reviewer", [evidence]);
+  assert.equal(humanTaskApproved(root, task), true);
 });
