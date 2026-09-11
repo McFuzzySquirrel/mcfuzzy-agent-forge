@@ -4,6 +4,19 @@ Detailed release and change notes for MyForge.
 
 ---
 
+## September 2026 - v3.75
+
+### Team-stage frontmatter enforcement
+
+- The launcher now validates generated agent frontmatter immediately after the
+  team-building stage, rejecting folded/literal block scalars and other invalid
+  descriptions before the team is committed.
+- Headless team-generation prompts now explicitly require single-line,
+  double-quoted descriptions and forbid `description: >`, `description: |`, and
+  multiline values.
+
+---
+
 ## September 2026 - v3.74
 
 ### Console human-review completion
