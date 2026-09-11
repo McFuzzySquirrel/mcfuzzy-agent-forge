@@ -526,6 +526,30 @@ test("compileExecutionManifest compiles features in dependency order with featur
   assert.equal(new Set(allIds).size, allIds.length);
 });
 
+test("compileExecutionManifest resolves numbered feature dependencies from the vision table", () => {
+  const root = createFeatureFixture();
+  writeFileSync(join(root, "docs", "PRD.md"), `# Product Vision
+
+## 14. Features
+
+| # | Feature | File | Dependencies | Priority |
+|---|---------|------|-------------|----------|
+| 1 | Foundation | [docs/features/foundation.md](features/foundation.md) | None | Must |
+| 2 | Expenses | [docs/features/expenses.md](features/expenses.md) | Feature 1 | Must |
+| 3 | Budgets | [docs/features/budgets.md](features/budgets.md) | Features 1 and 2 | Must |
+`, "utf8");
+
+  const manifest = compileExecutionManifest(discoverForgeRepo(root));
+
+  assert.deepEqual(manifest.featureOrder, ["Foundation", "Expenses", "Budgets"]);
+  assert.deepEqual(manifest.phases.map((phase) => phase.dependencies), [
+    [],
+    ["FOUNDATION-1"],
+    ["FOUNDATION-1", "EXPENSES-1"],
+  ]);
+  assert.doesNotMatch(manifest.warnings.join("\n"), /depends on 'Feature/i);
+});
+
 test("compileExecutionManifest falls back to lexical order when the vision has no feature table", () => {
   const root = createFeatureFixture();
   writeFileSync(join(root, "docs", "PRD.md"), "# Product Vision\n\nNo features table.\n", "utf8");
@@ -534,6 +558,49 @@ test("compileExecutionManifest falls back to lexical order when the vision has n
 
   assert.deepEqual(manifest.featureOrder, ["budgets", "expenses", "foundation"]);
   assert.match(manifest.warnings.join("\n"), /No feature dependency table found/);
+});
+
+test("compileExecutionManifest uses feature context to break generic owner ties", () => {
+  const root = createFeatureFixture();
+  writeFileSync(join(root, ".agents", "agents", "api-engineer.md"), `---
+name: api-engineer
+description: Implements execution schema output and integration work.
+---
+
+## Expertise
+- Implement execution schema output
+
+You own the Harness Execution Runtime feature end to end.
+`, "utf8");
+  writeFileSync(join(root, ".agents", "agents", "frontend-engineer.md"), `---
+name: frontend-engineer
+description: Implements execution schema output and integration work.
+---
+
+## Expertise
+- Implement execution schema output
+
+You own the Discovery and Registry feature end to end.
+`, "utf8");
+  writeFileSync(join(root, "docs", "PRD.md"), `# Product Vision
+
+## 14. Features
+
+| # | Feature | File | Dependencies | Priority |
+|---|---------|------|-------------|----------|
+| 1 | Discovery and Registry | [docs/features/foundation.md](features/foundation.md) | None | Must |
+`, "utf8");
+  writeFileSync(join(root, "docs", "features", "foundation.md"), `# Feature: Discovery and Registry
+
+## 5. Implementation Tasks
+### Phase 1: Discovery and Registry
+- Task 1.1: Implement execution schema output
+`, "utf8");
+
+  const manifest = compileExecutionManifest(discoverForgeRepo(root));
+
+  assert.equal(manifest.phases[0]!.tasks[0]!.ownerAgent, "frontend-engineer");
+  assert.doesNotMatch(manifest.warnings.join("\n"), /Weak owner match/);
 });
 
 test("validateTeam flags duplicate file owners and orphan agents", () => {
