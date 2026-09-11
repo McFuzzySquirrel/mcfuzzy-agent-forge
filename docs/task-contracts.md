@@ -166,8 +166,12 @@ See [ADR-046](adr/046-task-execution-files.md).
 
 A `human-review` contract is not dispatched to Copilot or another model.
 The engine pauses at the review task, leaving it pending. `--yes` and headless
-PRD approval do not bypass this gate. The Console displays the paused run;
-operator attestation currently uses the engine CLI, not a Console approval form.
+PRD approval do not bypass this gate. The Forge Console task detail now offers
+**Complete human review** for these tasks. The form shows the task criteria,
+captures the reviewer's name and notes, requires an explicit attestation, writes
+repository-local Markdown evidence, records the canonical engine attestation,
+and resumes the build through the normal background engine controller. The CLI
+approval flow remains available as a fallback.
 
 After performing the review, an operator writes a repository-local evidence file
 and runs the following from the installed workflow-engine skill directory:
@@ -184,6 +188,12 @@ the task, references or evidence invalidate approval. A resumed run reopens
 stale completed human gates and their dependents; replay rejects invalid human
 prerequisites. Keep references/evidence narrowly scoped to avoid unnecessary
 invalidation.
+
+When using the Console, expand the paused human-review task on the Tasks view,
+select **Complete human review**, enter the reviewer identity and findings, and
+confirm the attestation. The Console resumes automatically; if the engine is
+already running, it leaves the approval recorded and reports the resume error
+without starting a second run.
 
 This is a local operator attestation, **not authenticated identity or a security
 boundary against an agent with write access to the repository**. Agents are

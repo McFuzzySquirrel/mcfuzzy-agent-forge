@@ -53,6 +53,52 @@ test("authoring settings API is token-gated, validates shape, and clears to inhe
   assert.deepEqual(await fetch(url).then((r) => r.json()), { version: 1, models: {} });
 });
 
+test("human-review Console action records evidence and rejects non-review tasks", async (t) => {
+  const root = fixture(t);
+  const manifestPath = path.join(root, "docs", "EXECUTION-MANIFEST.json");
+  const implementation = {
+    id: "REVIEW-1",
+    title: "Review task",
+    description: "Review the fixture",
+    ownerAgent: "worker",
+    dependencies: [],
+    expectedOutputs: ["result.txt"],
+    validationCommands: ["true"],
+    approvalRequired: false,
+  };
+  const manifest = {
+    version: "1",
+    generatedAt: new Date().toISOString(),
+    repoRoot: root,
+    harnessRoot: ".github",
+    prdPath: "docs/PRD.md",
+    progressPath: "docs/PROGRESS.md",
+    auditPath: "docs/EXECUTION-AUDIT.jsonl",
+    validationCommands: [],
+    approvalGates: { preflight: false, betweenPhases: false },
+    phases: [{ id: "P1", title: "Review", description: "Review", ownerAgents: ["worker"], dependencies: [], approvalRequired: false, tasks: [implementation] }],
+    warnings: [],
+  };
+  implementation.contract = { version: 1, kind: "implementation", requirements: ["Check it"], acceptanceCriteria: ["It is checked"], constraints: [], references: ["docs/PRD.md"] };
+  delete implementation.ownerAgent;
+  implementation.expectedOutputs = [];
+  implementation.validationCommands = [];
+  fs.writeFileSync(manifestPath, `${JSON.stringify(manifest, null, 2)}\n`);
+  const server = await startConsoleServer({ repoRoot: root, port: port++, open: false });
+  t.after(() => server.stop());
+  const post = (body: unknown) => fetch(`${server.url}/api/tasks/human-review`, {
+    method: "POST", headers: { "Content-Type": "application/json", "X-Forge-Token": server.token }, body: JSON.stringify(body),
+  });
+  assert.equal((await post({ taskId: implementation.id, reviewer: "Reviewer", notes: "Approved" })).status, 400);
+  implementation.contract = { ...implementation.contract, kind: "human-review", reviewFile: "docs/reviews/review.json" };
+  fs.writeFileSync(manifestPath, `${JSON.stringify(manifest, null, 2)}\n`);
+  const response = await post({ taskId: implementation.id, reviewer: "Reviewer", notes: "Approved", resume: false });
+  if (response.status !== 200) assert.fail(await response.text());
+  assert.equal(response.status, 200);
+  assert.equal(fs.existsSync(path.join(root, "docs", "reviews", `${implementation.id}-console-review.md`)), true);
+  assert.equal(fs.existsSync(path.join(root, "docs", "reviews", "review.json")), true);
+});
+
 test("model discovery works before a project exists and filters by runner", async (t) => {
   fixture(t);
   let probes = 0;

@@ -35,6 +35,17 @@ export function taskReviewDigest(repoRoot: string, task: ManifestTask): string {
   return createHash("sha256").update(JSON.stringify(task)).update(taskReferenceContext(repoRoot, task)).digest("hex");
 }
 
+export function writeHumanReviewEvidence(repoRoot: string, task: ManifestTask, reviewer: string, notes: string): string {
+  validateTaskContract(task);
+  if (task.contract?.kind !== "human-review") throw new Error("Only human-review tasks accept evidence.");
+  if (!reviewer.trim() || !notes.trim()) throw new Error("Reviewer identity and review notes are required.");
+  const relativePath = `docs/reviews/${task.id}-console-review.md`;
+  const file = localFile(repoRoot, relativePath);
+  mkdirSync(dirname(file), { recursive: true });
+  writeFileSync(file, `# Human Review: ${task.title}\n\nReviewer: ${reviewer.trim()}\nReviewed at: ${new Date().toISOString()}\nDecision: Approved\n\n## Review notes\n\n${notes.trim()}\n`, "utf8");
+  return relativePath;
+}
+
 export function approveHumanTask(repoRoot: string, task: ManifestTask, reviewer: string, evidence: string[]): void {
   validateTaskContract(task);
   if (task.contract?.kind !== "human-review") throw new Error("Only human-review tasks accept attestations.");

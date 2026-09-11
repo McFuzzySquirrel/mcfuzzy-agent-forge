@@ -4,7 +4,37 @@ Detailed release and change notes for MyForge.
 
 ---
 
-## September 2026 - Unreleased
+## September 2026 - v3.76
+
+### Human-review Console styling
+
+- Styled the human-review dialog with the Console's dark theme, including themed
+  surfaces, fields, review criteria, actions, and modal backdrop.
+- Completed human-review tasks now show a disabled green `Human review complete`
+  action after the task refreshes.
+
+---
+
+## September 2026 - v3.75
+
+### Team-stage frontmatter enforcement
+
+- The launcher now validates generated agent frontmatter immediately after the
+  team-building stage, rejecting folded/literal block scalars and other invalid
+  descriptions before the team is committed.
+- Headless team-generation prompts now explicitly require single-line,
+  double-quoted descriptions and forbid `description: >`, `description: |`, and
+  multiline values.
+
+---
+
+## September 2026 - v3.74
+
+### Console human-review completion
+
+- Added a **Complete human review** action to paused human-review tasks in the Forge Console.
+- The review form captures the reviewer, findings, and explicit approval, writes repository-local evidence, records the existing workflow-engine attestation, and resumes the build through the normal background controller.
+- The CLI approval flow remains available, and review fingerprints continue to invalidate stale approvals.
 
 ### Authoring runner selection
 

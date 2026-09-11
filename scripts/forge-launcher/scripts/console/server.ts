@@ -4,7 +4,7 @@ import http from "node:http";
 import type { Server } from "node:http";
 import os from "node:os";
 import path from "node:path";
-import { fileURLToPath } from "node:url";
+import { fileURLToPath, pathToFileURL } from "node:url";
 import { spawn } from "node:child_process";
 
 import { resolveResources } from "../resources.ts";
@@ -24,7 +24,7 @@ import {
 } from "./paths.ts";
 import { harnessCliForHarness } from "./dashboard/harness-rules.ts";
 import * as repo from "./repo.ts";
-import type { ControlAction, CreateProjectRequest } from "./types.ts";
+import type { ControlAction, CreateProjectRequest, ManifestTask } from "./types.ts";
 
 const CLIENT_DIR = fileURLToPath(new URL("../../resources/console/client", import.meta.url));
 
@@ -60,6 +60,23 @@ export interface ConsoleServer {
 function boardDir(): string {
   const { templatesDir } = resolveResources();
   return path.join(templatesDir, "skills", "forge-workflow-engine", "scripts", "viz", "dashboard");
+}
+
+async function approveConsoleHumanReview(repoRoot: string, taskId: string, reviewer: string, notes: string): Promise<string> {
+  const { templatesDir } = resolveResources();
+  const contextPath = path.join(templatesDir, "skills", "forge-workflow-engine", "scripts", "task-context.ts");
+  const context = await import(pathToFileURL(contextPath).href) as {
+    writeHumanReviewEvidence: (repoRoot: string, task: ManifestTask, reviewer: string, notes: string) => string;
+    approveHumanTask: (repoRoot: string, task: ManifestTask, reviewer: string, evidence: string[]) => void;
+  };
+  const manifest = repo.loadManifest(repoPaths(repoRoot));
+  const task = manifest?.phases.flatMap((phase) => phase.tasks).find((entry) => entry.id === taskId);
+  if (!task) throw new Error(`Unknown task '${taskId}'.`);
+  if (task.contract?.kind !== "human-review") throw new Error(`Task '${taskId}' is not a human-review task.`);
+  const evidence = `docs/reviews/${task.id}-console-review.md`;
+  const generatedEvidence = context.writeHumanReviewEvidence(repoRoot, task, reviewer, notes);
+  context.approveHumanTask(repoRoot, task, reviewer, [generatedEvidence]);
+  return task.contract.reviewFile!;
 }
 
 async function findFreePort(start: number, onLog: (m: string) => void): Promise<number> {
@@ -450,6 +467,26 @@ export async function startConsoleServer(options: ConsoleServerOptions = {}): Pr
           }
           if (result.ok) broadcast("snapshot", snapshotEvent());
           return sendJson(res, result.ok ? 200 : 400, result);
+        }
+        if (urlPath === "/api/tasks/human-review") {
+          if (!currentRepo) return sendJson(res, 400, { ok: false, message: "no repo selected" });
+          const taskId = typeof body.taskId === "string" ? body.taskId.trim() : "";
+          const reviewer = typeof body.reviewer === "string" ? body.reviewer.trim() : "";
+          const notes = typeof body.notes === "string" ? body.notes.trim() : "";
+          if (!taskId || !reviewer || !notes) return sendJson(res, 400, { ok: false, message: "taskId, reviewer, and review notes are required." });
+          try {
+            const reviewFile = await approveConsoleHumanReview(currentRepo, taskId, reviewer, notes);
+            let job;
+            if (body.resume !== false) {
+              const result = controller.run("engine-resume");
+              if (!result.ok) return sendJson(res, 400, { ...result, reviewFile });
+              job = result.job;
+            }
+            broadcast("snapshot", snapshotEvent());
+            return sendJson(res, 200, { ok: true, message: job ? "Human review approved; the build is resuming." : "Human review approved.", reviewFile, resumed: Boolean(job), job });
+          } catch (error) {
+            return sendJson(res, 400, { ok: false, message: error instanceof Error ? error.message : String(error) });
+          }
         }
         if (urlPath === "/api/projects/select") {
           const target = String(body.path ?? "");

@@ -77,6 +77,15 @@ export interface ExecutionManifest {
       inputs?: string[];
       produces?: string;
       timeoutMs?: number;
+      contract?: {
+        version: 1;
+        kind: "implementation" | "human-review";
+        requirements: string[];
+        acceptanceCriteria: string[];
+        constraints: string[];
+        references: string[];
+        reviewFile?: string;
+      };
     }>;
   }>;
   warnings: string[];
@@ -173,6 +182,12 @@ export interface TaskRow {
   validationCommands: string[];
   timeoutMs: number | null;
   approvalRequired: boolean;
+  contractKind?: "implementation" | "human-review";
+  requirements: string[];
+  acceptanceCriteria: string[];
+  constraints: string[];
+  references: string[];
+  reviewFile?: string;
 }
 
 export interface ArtifactMeta {

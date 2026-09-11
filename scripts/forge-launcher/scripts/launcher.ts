@@ -442,6 +442,7 @@ export function buildTeamPrompt(prdSource: string, harness: HarnessName): string
   return `/forge-build-agent-team Use ${prdSource} to build the agent team. ` +
     `Write agent files under ${harnessRoot}/agents/. Write docs/SKILL-CANDIDATES.json as ` +
     `{version:1,candidates:[]}, with each candidate containing name, description, consumers (agent-name strings), action (reuse, extend, create, or omit), and reason. ` +
+    `Every agent description must be a single-line, double-quoted YAML value; never use description: >, description: |, or a multiline description. ` +
     `Analyze the PRD for reusable, repeated, or fragile project-specific processes. ` +
     `Add a candidate with action create when a needed process has no suitable package, extend when an existing package needs additive guidance, reuse when an existing package satisfies it, or omit when the responsibility is not justified. ` +
     `Keep candidates empty only when no project skills are required. ` +
@@ -535,7 +536,7 @@ function authoringStageForSkill(skill: string): AuthoringStage | undefined {
   return undefined;
 }
 
-async function validateAuthoringOutputs(stage: AuthoringStage, skill: string, beforeFeatures: Set<string>): Promise<string[]> {
+async function validateAuthoringOutputs(stage: AuthoringStage, skill: string, beforeFeatures: Set<string>, opts: { dryRun?: boolean; runner?: string } = {}): Promise<string[]> {
   if (stage === "prd") {
     if (skill === "forge-build-feature-prd") {
       const dir = path.join(state.repoDir, "docs", "features");
@@ -550,6 +551,11 @@ async function validateAuthoringOutputs(stage: AuthoringStage, skill: string, be
   if (stage === "team") {
     if (!hasGeneratedTeam()) throw new Error("Team authoring exited without generated agents.");
     if (!readSkillCandidates(state.repoDir)) throw new Error("Team authoring must write docs/SKILL-CANDIDATES.json, including an empty candidates list when no skills are required.");
+    if (opts.dryRun || opts.runner === "stub") return [path.join(harnessRootDir(), "agents"), "docs/SKILL-CANDIDATES.json"];
+    const checker = path.join(resolveResources().templatesDir, "skills", "forge-build-agent-team", "scripts", "validate-frontmatter.mjs");
+    const frontmatterCode = await runLoggedStep("Checking generated agent frontmatter", process.execPath,
+      [checker, "--repo", state.repoDir, "--harness-root", path.join(state.repoDir, harnessRootDir()), "--agents-only"], { cwd: state.repoDir });
+    if (frontmatterCode !== 0) throw new Error("Generated agent frontmatter validation failed; descriptions must be single-line and double-quoted.");
     return [path.join(harnessRootDir(), "agents"), "docs/SKILL-CANDIDATES.json"];
   }
   const candidates = readSkillCandidates(state.repoDir);
@@ -661,7 +667,7 @@ async function runSkillHeadless(msg: string, opts: LauncherOptions): Promise<boo
       if (beforeSkills && beforeSkills !== fingerprintFiles(state.repoDir, [path.join(harnessRootDir(), "skills")])) {
         throw new Error("Team authoring modified skill packages; only the separate draft-skills stage may generate skills.");
       }
-      outcome.outputs = await validateAuthoringOutputs(stage, skillName, beforeFeatures);
+      outcome.outputs = await validateAuthoringOutputs(stage, skillName, beforeFeatures, { ...opts, runner });
       if (stage !== "prd" && outcome.inputFingerprint !== stageInputFingerprint(state.repoDir, stage, harnessRootDir())) {
         throw new Error(`${stage} authoring changed its protected inputs; restore the handoff or request a targeted team revision.`);
       }

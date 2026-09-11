@@ -241,6 +241,8 @@ test("team-generation prompt targets the selected harness directories", () => {
   assert.ok(buildTeamPrompt("docs/PRD.md", "github").includes(".github/skills/"));
   assert.match(buildTeamPrompt("docs/PRD.md", "opencode"), /reusable, repeated, or fragile project-specific processes/);
   assert.match(buildTeamPrompt("docs/PRD.md", "opencode"), /action create when a needed process has no suitable package/);
+  assert.match(buildTeamPrompt("docs/PRD.md", "opencode"), /single-line, double-quoted YAML value/);
+  assert.match(buildTeamPrompt("docs/PRD.md", "opencode"), /description: >, description: \|/);
 });
 
 test("auto-draft engine command carries configured granularity/concurrency/timeout/retries", async () => {
