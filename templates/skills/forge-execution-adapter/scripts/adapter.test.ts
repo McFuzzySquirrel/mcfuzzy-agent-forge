@@ -588,12 +588,12 @@ You own the Discovery and Registry feature end to end.
 
 | # | Feature | File | Dependencies | Priority |
 |---|---------|------|-------------|----------|
-| 1 | Discovery and Registry | [docs/features/foundation.md](features/foundation.md) | None | Must |
+| 1 | Discovery & Registry | [docs/features/foundation.md](features/foundation.md) | None | Must |
 `, "utf8");
-  writeFileSync(join(root, "docs", "features", "foundation.md"), `# Feature: Discovery and Registry
+  writeFileSync(join(root, "docs", "features", "foundation.md"), `# Feature: Discovery & Registry
 
 ## 5. Implementation Tasks
-### Phase 1: Discovery and Registry
+### Phase 1: Discovery & Registry
 - Task 1.1: Implement execution schema output
 `, "utf8");
 

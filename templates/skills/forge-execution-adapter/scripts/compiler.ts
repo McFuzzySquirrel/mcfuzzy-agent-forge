@@ -49,6 +49,13 @@ function tokenize(text: string): Set<string> {
   );
 }
 
+function includesAllTokens(text: string, query: string): boolean {
+  const queryWords = tokenize(query);
+  if (queryWords.size === 0) return false;
+  const textWords = tokenize(text);
+  return [...queryWords].every((word) => textWords.has(word));
+}
+
 function overlapScore(taskText: string, agent: AgentDescriptor, contextText = ""): number {
   const taskWords = tokenize(taskText);
   const agentWords = tokenize([
@@ -65,7 +72,7 @@ function overlapScore(taskText: string, agent: AgentDescriptor, contextText = ""
     if (agentWords.has(word)) score += 1;
   }
   if (taskText.toLowerCase().includes(agent.name.toLowerCase())) score += 3;
-  if (contextText && agent.rawBody.toLowerCase().includes(contextText.toLowerCase())) score += 4;
+  if (contextText && includesAllTokens(agent.rawBody, contextText)) score += 4;
   return score;
 }
 
