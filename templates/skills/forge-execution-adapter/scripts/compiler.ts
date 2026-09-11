@@ -399,15 +399,20 @@ function parseFeatureDependencies(value: string, namesByNumber: Map<string, stri
   const normalized = value.trim();
   if (!normalized || normalized.toLowerCase() === "none") return [];
 
-  const canonicalized = normalized.replace(/\bfeatures?\s+([0-9\s,and+]+)\b/gi, (_, refs: string) => (
-    (refs.match(/\d+/g) ?? [])
-      .map((number) => namesByNumber.get(number) ?? `Feature ${number}`)
-      .join(", ")
-  ));
+  const references = normalized.match(/\d+/g) ?? [];
+  const onlyNumberedFeatureAliases = /\bfeatures?\b/i.test(normalized) &&
+    normalized
+      .replace(/\bfeatures?\b/gi, "")
+      .replace(/\band\b/gi, "")
+      .replace(/[\d\s,+.&]+/g, "")
+      .trim() === "";
+  const canonicalized = onlyNumberedFeatureAliases && references.length > 0
+    ? references.map((number) => namesByNumber.get(number) ?? `Feature ${number}`).join(", ")
+    : normalized;
 
   const ordered = new Set<string>();
   for (const dependency of canonicalized.split(/\s*(?:\+|,)\s*/)) {
-    const trimmed = dependency.trim();
+    const trimmed = dependency.trim().replace(/\.+$/, "");
     if (trimmed && trimmed.toLowerCase() !== "none") ordered.add(trimmed);
   }
   return [...ordered];

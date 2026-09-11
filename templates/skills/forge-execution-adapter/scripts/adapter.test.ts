@@ -535,8 +535,8 @@ test("compileExecutionManifest resolves numbered feature dependencies from the v
 | # | Feature | File | Dependencies | Priority |
 |---|---------|------|-------------|----------|
 | 1 | Foundation | [docs/features/foundation.md](features/foundation.md) | None | Must |
-| 2 | Expenses | [docs/features/expenses.md](features/expenses.md) | Feature 1 | Must |
-| 3 | Budgets | [docs/features/budgets.md](features/budgets.md) | Features 1 and 2 | Must |
+| 2 | Expenses | [docs/features/expenses.md](features/expenses.md) | Feature 1. | Must |
+| 3 | Budgets | [docs/features/budgets.md](features/budgets.md) | Features 1 & 2. | Must |
 `, "utf8");
 
   const manifest = compileExecutionManifest(discoverForgeRepo(root));
