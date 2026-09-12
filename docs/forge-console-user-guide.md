@@ -165,6 +165,63 @@ The Overview controls panel offers the same actions you would otherwise issue fr
 - **Reset changed tasks for review**: after feature reconciliation, resets completed or skipped tasks whose contracts changed back to pending. Review the changed task IDs before using this action.
 - **Launch \<harness\> CLI**: opens the project's harness CLI (opencode/copilot/claude) in a new terminal from the project folder, so you can watch the live run and take over manually. Also available on the Tasks header.
 
+### Human review: when it pauses and how to prove approval
+
+Human review is a deliberate workflow gate, not a model task. A task causes a
+human review when its manifest contract has `kind: "human-review"`. These tasks
+are normally generated for work that requires human judgment—such as usability,
+accessibility, rubric scoring, native-language, compliance, or other sign-off
+that an agent must not claim. They depend on the implementation or preparation
+tasks they review, have explicit requirements and acceptance criteria, and name
+an approval record in `contract.reviewFile`. The engine pauses before dispatching
+such a task; `--yes` cannot approve it.
+
+#### Approve from the Console
+
+1. Open **Tasks** and select the paused task labeled **Human review required**.
+2. Read its requirements, acceptance criteria, constraints, and references.
+3. Click **Complete human review**.
+4. Enter your name, record what you checked and found, and select **I performed
+   this review and approve this task.**
+5. Submit the form. The Console writes a readable record at
+   `docs/reviews/<task-id>-console-review.md`, writes the task's configured
+   `reviewFile` attestation with the task fingerprint and evidence hash, and
+   resumes the build when the task is ready.
+
+The completed task changes to **Human review complete**. To prove the approval,
+show both the Markdown review record and the configured JSON approval record.
+The engine verifies the task ID, current task/reference fingerprint, reviewer,
+timestamp, decision, and hashes of every evidence file. Editing the task,
+selected reference content, or evidence after approval makes the attestation
+stale and the task pauses again.
+
+#### Approve from the CLI
+
+Create or identify a repository-relative evidence file containing the review
+notes, then run the installed workflow engine command:
+
+```bash
+cd .agents/skills/forge-workflow-engine
+npm run workflow-engine -- approve-task <task-id> \
+  --repo /path/to/project \
+  --reviewer "Your Name" \
+  --evidence docs/reviews/my-review.md \
+  --confirm-human-review
+```
+
+The command writes the configured `reviewFile` attestation and prints a
+confirmation. Resume the detached build with:
+
+```bash
+forge-launcher engine-run --repo /path/to/project --yes
+```
+
+To prove the CLI approval, show the evidence file, the configured JSON
+`reviewFile`, and the engine status/log confirming that the review task was
+verified and completed. Evidence paths must stay inside the repository and
+contain non-empty review material; agents must never run `approve-task` or
+fabricate an attestation.
+
 ### Authoring stages and model settings
 
 Authoring has three separate stages:
