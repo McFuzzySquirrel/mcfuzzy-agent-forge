@@ -4,6 +4,17 @@ Detailed release and change notes for MyForge.
 
 ---
 
+## September 2026 - v3.77
+
+### Human-review workflow guide
+
+- Documented what creates a human-review task, why the engine pauses, and how
+  to complete and prove review through the Console or CLI.
+- Added ADR-049 for the shared evidence, attestation, fingerprint, and stale
+  approval behavior used by both paths.
+
+---
+
 ## September 2026 - v3.76
 
 ### Human-review Console styling
