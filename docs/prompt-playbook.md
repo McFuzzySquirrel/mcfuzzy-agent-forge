@@ -115,7 +115,7 @@ If you have seed documents (vision, research, architecture notes, specs), list t
 
 ```
 @workspace /forge-build-prd Build a complete PRD for this project using the following source documents:
-- docs/product-vision.md
+- docs/PRD.md
 - docs/research/architecture-options.md
 - docs/specs/event-schema.md
 - docs/specs/privacy-and-redaction.md
@@ -158,7 +158,7 @@ originals and completed task IDs, but do not execute or maintain duplicate tasks
 
 ```
 @workspace /forge-decompose-prd Analyze docs/requirements-source.md and convert it into:
-- A Product Vision document at docs/product-vision.md
+- A Product Vision document at docs/PRD.md
 - Individual Feature documents in docs/features/
 Ensure each feature is self-contained with its own user stories, requirements, phases, and acceptance criteria.
 ```
@@ -181,7 +181,7 @@ Report any gaps or issues.
 
 **From Canonical Product Vision and Features:**
 ```
-@workspace /forge-build-agent-team Analyze docs/product-vision.md and all feature documents in docs/features/.
+@workspace /forge-build-agent-team Analyze docs/PRD.md and all feature documents in docs/features/.
 Generate a complete specialist agent team (`.md` files) in .agents/agents/
 that covers all features holistically without overlap or gaps. Do not create
 project skill packages in this stage.
@@ -306,7 +306,7 @@ and the dependencies between phases. Save the plan to docs/PROGRESS.md.
 
 **For feature-based builds:**
 ```
-@workspace @project-orchestrator Analyze docs/product-vision.md and all feature documents in docs/features/.
+@workspace @project-orchestrator Analyze docs/PRD.md and all feature documents in docs/features/.
 Build a feature dependency graph and produce an execution plan showing which features will be built 
 in which order and why. Save the plan to docs/PROGRESS.md. Do not implement anything yet.
 ```
@@ -490,7 +490,7 @@ Only modify skills I've approved in the audit report.
 | PRD quality pass | `@workspace /forge-build-prd Review docs/PRD.md for gaps...` |
 | Decompose PRD (manual, when needed) | `@workspace /forge-decompose-prd Analyze docs/PRD.md...` |
 | Generate agent team (PRD) | `@workspace /forge-build-agent-team Analyze docs/PRD.md...` |
-| Generate agent team (features) | `@workspace /forge-build-agent-team Analyze docs/product-vision.md...` |
+| Generate agent team (features) | `@workspace /forge-build-agent-team Analyze docs/PRD.md...` |
 | Validate agent team | `@workspace /forge-build-agent-team Validate the agent team...` |
 | Discover available models | `@workspace /forge-assign-models Discover what models are available...` |
 | Recommend per-agent models | `@workspace /forge-assign-models Recommend a per-agent model and write docs/MODEL-PLAN.md...` |

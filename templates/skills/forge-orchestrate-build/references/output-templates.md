@@ -78,7 +78,7 @@ Calling @{agent-name}...
 
 ```markdown
 ## Building Project from Decomposed Features
-**Product Vision**: docs/product-vision.md
+**Product Vision**: docs/PRD.md
 **Features**: {N} features identified
 
 ### Feature Dependency Order

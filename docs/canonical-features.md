@@ -2,6 +2,8 @@
 
 Every Forge solution has `docs/PRD.md` plus one or more
 `docs/features/*.md`. A small solution has one feature, not a different layout.
+`docs/product-vision.md` is a retired legacy filename, not an active second
+source of requirements.
 Existing command names such as `draft-prd` and `validate-prd` remain available,
 but they author and validate this feature-based requirements set.
 
@@ -47,8 +49,15 @@ to relevant rules invalidate approval without invalidating unrelated sections.
    directly. Imported launcher documents use `docs/requirements-source.md`.
 3. Preserve accepted meanings and completed task IDs. Move tasks into owning
    features and register every feature in the vision. Do not duplicate catalogues.
-4. Run `validate-prd`, review ownership/coverage and resolve errors and warnings.
-5. Regenerate the affected team/skills as needed and recompile the manifest.
+4. Layout handling is explicit and fail-closed:
+   - `docs/PRD.md` + features: canonical and executable.
+   - only `docs/product-vision.md`: migrate by moving/copying the same content to
+     `docs/PRD.md`, then validate.
+   - both files: `docs/PRD.md` is authoritative; `docs/product-vision.md` is
+     ignored except as preserved history.
+   - neither file: author requirements before team generation/compilation.
+5. Run `validate-prd`, review ownership/coverage and resolve errors and warnings.
+6. Regenerate the affected team/skills as needed and recompile the manifest.
    Review reconciliation and any changed completed work before resuming.
 
 Old or untagged manifests cannot execute until recompiled with

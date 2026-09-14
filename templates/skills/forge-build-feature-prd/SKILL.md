@@ -19,7 +19,7 @@ This skill supports two modes, auto-detected in Step 0:
 
 | Signal | Mode |
 |---|---|
-| `docs/product-vision.md` exists, no `.md` agent files in `HARNESS_AGENTS_DIR` | Greenfield |
+| `docs/PRD.md` exists with `docs/features/*.md`, no `.md` agent files in `HARNESS_AGENTS_DIR` | Greenfield |
 | `HARNESS_AGENTS_DIR` contains `.md` agent files (beyond forge templates) | Post-project |
 | User says "new project" or "initial decomposition" | Greenfield |
 | User says "add to existing project" | Post-project |
@@ -34,7 +34,7 @@ This skill supports two modes, auto-detected in Step 0:
 
 ### Step 1b: Analyze Product Vision Context (Greenfield Mode)
 
-1. Read the Product Vision (`docs/product-vision.md`) - goals, architecture, tech stack, NFRs, security, accessibility.
+1. Read the Product Vision (`docs/PRD.md`) - goals, architecture, tech stack, NFRs, security, accessibility.
 2. Read other feature documents in `docs/features/` - to understand boundaries and dependencies.
 3. Summarize where this feature fits and confirm before proceeding.
 

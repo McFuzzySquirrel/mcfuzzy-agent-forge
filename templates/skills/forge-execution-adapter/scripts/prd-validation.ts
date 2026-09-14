@@ -29,17 +29,27 @@ export function validatePrd(repoRoot: string, options: { featureFiles?: string[]
     return text;
   };
   const featureDir = join(root, "docs/features");
+  const canonicalVisionPath = join(root, "docs/PRD.md");
+  const legacyVisionPath = join(root, "docs/product-vision.md");
+  const hasCanonicalVision = existsSync(canonicalVisionPath);
+  const hasLegacyVision = existsSync(legacyVisionPath);
   const featureFiles = existsSync(featureDir) ? readdirSync(featureDir).filter((file) => file.endsWith(".md")).map((file) => `docs/features/${file}`) : [];
   let files: string[];
   let features: FeatureNode[] = [];
   try {
-    if (!existsSync(join(root, "docs/PRD.md"))) throw new Error("Missing docs/PRD.md. Every solution requires a product vision and at least one feature.");
+    if (!hasCanonicalVision) {
+      if (hasLegacyVision) throw new Error("Missing docs/PRD.md. Found legacy docs/product-vision.md; move or copy the canonical product vision to docs/PRD.md and keep docs/product-vision.md only as historical source material.");
+      throw new Error("Missing docs/PRD.md. Every solution requires a product vision and at least one feature.");
+    }
     if (!featureFiles.length) throw new Error("Every solution requires non-empty docs/features/*.md files.");
     if (options.featureFiles) {
       if (!options.featureFiles.length || options.featureFiles.some((file) => !/^docs\/features\/[^/]+\.md$/.test(file))) throw new Error("Select at least one canonical docs/features/*.md file.");
       for (const file of options.featureFiles) if (!featureFiles.includes(file)) throw new Error(`Missing selected feature '${file}'.`);
     }
     const vision = read("docs/PRD.md");
+    if (hasLegacyVision) {
+      result.warnings.push("Legacy docs/product-vision.md detected. Validation uses docs/PRD.md and docs/features/*.md only.");
+    }
     const warnings: string[] = [];
     features = parseFeatureGraph(vision, featureFiles.map((file) => join(root, file)), root, join(root, "docs"), warnings);
     if (options.requireContracts !== false) result.errors.push(...warnings);

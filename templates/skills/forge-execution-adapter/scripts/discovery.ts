@@ -124,6 +124,7 @@ export function discoverForgeRepo(start = process.cwd(), preferredHarness?: Harn
   const agentRoot = join(repoRoot, harnessRoot, "agents");
   const skillRoot = join(repoRoot, harnessRoot, "skills");
   const visionPath = join(repoRoot, "docs", "PRD.md");
+  const legacyVisionPath = join(repoRoot, "docs", "product-vision.md");
   const prdPath = visionPath;
   const featuresDir = join(repoRoot, "docs", "features");
   const progressPath = join(repoRoot, "docs", "PROGRESS.md");
@@ -133,14 +134,22 @@ export function discoverForgeRepo(start = process.cwd(), preferredHarness?: Harn
   const featurePaths = isDir(featuresDir)
     ? readdirSync(featuresDir).filter((entry) => entry.endsWith(".md")).sort().map((entry) => join(featuresDir, entry))
     : [];
-  const decomposed = existsSync(visionPath) && featurePaths.length > 0;
+  const hasCanonicalVision = existsSync(visionPath);
+  const hasLegacyVision = existsSync(legacyVisionPath);
+  const decomposed = hasCanonicalVision && featurePaths.length > 0;
   const sourceLayout: ForgeRepo["sourceLayout"] = "features";
 
   if (!decomposed) {
+    if (!hasCanonicalVision && hasLegacyVision) {
+      throw new Error(`Found legacy docs/product-vision.md but missing docs/PRD.md under ${repoRoot}. Move or copy the canonical product vision to docs/PRD.md, keep docs/product-vision.md only as historical source material, then run forge-decompose-prd if feature migration is still needed.`);
+    }
     throw new Error(`Every solution requires docs/PRD.md + docs/features/*.md under ${repoRoot}. Run forge-build-prd, or forge-decompose-prd to convert legacy source documents.`);
   }
 
   const warnings = [...harness.warnings];
+  if (hasLegacyVision) {
+    warnings.push("Legacy docs/product-vision.md detected. Forge compiles from docs/PRD.md and docs/features/*.md; keep the legacy file only as historical source material.");
+  }
 
   const agents = walk(agentRoot, (entry) => entry.endsWith(".md") && !entry.endsWith("SKILL.md")).map((path) => parseAgent(path, repoRoot));
   const skills = walk(skillRoot, (entry) => entry === "SKILL.md").map((path) => parseSkill(path, repoRoot));

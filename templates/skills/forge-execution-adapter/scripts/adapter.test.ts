@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { mkdtempSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { mkdtempSync, mkdirSync, readFileSync, unlinkSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, normalize } from "node:path";
 
@@ -493,6 +493,21 @@ test("discoverForgeRepo detects the decomposed feature layout", () => {
   assert.equal(repo.featurePaths.length, 3);
   assert.equal(normalize(repo.visionPath), normalize(join(root, "docs", "PRD.md")));
   assert.equal(repo.prdPath, repo.visionPath);
+});
+
+test("discoverForgeRepo warns when a legacy product-vision file coexists", () => {
+  const root = createFeatureFixture();
+  writeFileSync(join(root, "docs/product-vision.md"), "# Legacy source\n", "utf8");
+  const repo = discoverForgeRepo(root);
+  assert.match(repo.warnings.join("\n"), /Legacy docs\/product-vision\.md detected/);
+  assert.equal(normalize(repo.visionPath), normalize(join(root, "docs", "PRD.md")));
+});
+
+test("discoverForgeRepo fails closed for product-vision-only repositories", () => {
+  const root = createFixture();
+  writeFileSync(join(root, "docs/product-vision.md"), readFileSync(join(root, "docs/PRD.md"), "utf8"), "utf8");
+  unlinkSync(join(root, "docs/PRD.md"));
+  assert.throws(() => discoverForgeRepo(root), /Found legacy docs\/product-vision\.md but missing docs\/PRD\.md/);
 });
 
 test("historical source documents never supply tasks or validation commands", () => {

@@ -12,7 +12,7 @@ Load this when writing a feature document.
 | US-03 | [Vision](../PRD.md#US-03) | participates |
 | FR-07 | This feature | owns |
 
-**Product Vision:** [docs/product-vision.md](../product-vision.md)
+**Product Vision:** [docs/PRD.md](../PRD.md)
 
 ---
 

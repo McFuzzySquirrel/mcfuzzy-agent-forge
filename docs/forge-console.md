@@ -104,7 +104,7 @@ so you can review each result and come back later:
 
 | Stage | Continue does | Produces |
 |---|---|---|
-| Idea (no PRD) | **Draft PRD** (headless `forge-auto-build-prd`) | `docs/PRD.md` (or `product-vision.md` + `features/`) |
+| Idea (no PRD) | **Draft PRD** (headless `forge-auto-build-prd`) | `docs/PRD.md` + `docs/features/*.md` |
 | PRD (no team) | **Generate team** (headless `forge-build-agent-team`) | agent files and ownership metadata |
 | Team (skills incomplete) | **Generate project skills** | project skill candidates and review result |
 | Skills ready (no manifest) | **Compile manifest** (`forge-execution-adapter`) | `docs/EXECUTION-MANIFEST.json` |

@@ -467,7 +467,7 @@ export function parseFeatureGraph(vision: string, featurePaths: string[], repoRo
   }
 
   if (nodes.length === 0) {
-    warnings.push("No feature dependency table found in product-vision.md; using feature files in lexical order.");
+    warnings.push("No feature dependency table found in docs/PRD.md; using feature files in lexical order.");
     for (const file of featurePaths) {
       nodes.push({ name: basename(file, ".md"), file, dependencies: [] });
     }

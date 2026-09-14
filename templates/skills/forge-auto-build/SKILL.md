@@ -63,7 +63,7 @@ When the user invokes this skill, perform the following before touching any file
    - Do not add any extra confirmation gate here; continue to the normal pre-flight summary and `GO` checkpoint.
 4. **Check repo state** and flag anything that changes the flow:
    - Do `.md` agent files already exist in `HARNESS_AGENTS_DIR` (beyond the forge templates)? If yes, note that Stage 1 (team generation) will run in **Feature Increment Mode**.
-   - Does `docs/product-vision.md` with `docs/features/*.md` exist? If yes, note that Stage 1 will run in **Vision + Features Mode**.
+   - Does `docs/product-vision.md` also exist? If yes, note it is a legacy source filename and Stage 1 still reads `docs/PRD.md` with features.
    - Always use feature-based team generation and execution.
 5. **Present the planned stages** as a numbered list:
    - Stage 1: `forge-build-agent-team` → produce agents and immutable `docs/SKILL-CANDIDATES.json`

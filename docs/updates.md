@@ -4,6 +4,24 @@ Detailed release and change notes for MyForge.
 
 ---
 
+## September 2026 - v3.78
+
+### PRD path normalization
+
+- Accepted ADR-050 and retired `docs/product-vision.md` as an active source.
+  `docs/PRD.md` now exclusively owns the product-level vision contract, with
+  feature requirements and tasks staying in `docs/features/*.md`.
+- Updated active skills/templates, generated output references, and authoring
+  documentation to consistently reference `docs/PRD.md`.
+- Added explicit legacy handling in discovery/validation: repositories with only
+  `docs/product-vision.md` now fail closed with migration guidance; repositories
+  with both files use `docs/PRD.md` and surface a warning that the legacy file is
+  ignored.
+- Added regression coverage for PRD-only, product-vision-only, both-files, and
+  missing-document layouts under execution-adapter validation/discovery tests.
+
+---
+
 ## September 2026 - v3.77
 
 ### Human-review workflow guide

@@ -4,7 +4,7 @@ Complete process for building an agent team from a Product Vision document and a
 
 ## Load Trigger
 
-Load this file when: the source document is a Product Vision (`docs/product-vision.md`) with feature documents in `docs/features/`, and no `.md` agent files exist in `HARNESS_AGENTS_DIR` beyond forge templates.
+Load this file when: the source document is a Product Vision (`docs/PRD.md`) with feature documents in `docs/features/`, and no `.md` agent files exist in `HARNESS_AGENTS_DIR` beyond forge templates.
 
 ## Vision + Features Mode -Building from Decomposed Documents
 
@@ -12,7 +12,7 @@ When Step 0 detects a Product Vision with Feature documents, use the following p
 
 ### Step 1v: Locate and Analyze the Product Vision
 
-Find the product vision document (typically `docs/product-vision.md`) and read it to extract:
+Find the product vision document (`docs/PRD.md`) and read it to extract:
 
 1. **Technology stack** -Languages, frameworks, engines, build tools, package managers (Section 6.1).
 2. **Project structure** -File/folder layout, module boundaries, entry points (Section 6.2).
@@ -73,7 +73,7 @@ Preserve unaffected existing skills.
 
   Always consult the following documents for authoritative project requirements:
 
-  - [Product Vision](../../docs/product-vision.md) -Architecture, tech stack, NFRs, security, accessibility
+  - [Product Vision](../../docs/PRD.md) -Architecture, tech stack, NFRs, security, accessibility
   - [Feature: Authentication](../../docs/features/authentication.md) -Sections 2–3 (user stories, requirements)
   - [Feature: Dashboard](../../docs/features/dashboard.md) -Sections 2–3 (user stories, requirements)
   ```
