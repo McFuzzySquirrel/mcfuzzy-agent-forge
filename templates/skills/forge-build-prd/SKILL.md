@@ -1,6 +1,6 @@
 ---
 name: forge-build-prd
-description: "Author a product vision and canonical feature requirements from an idea, research, or existing repository. Use when asked to create, draft, or formalize a PRD, spec, or requirements; every solution uses features."
+description: "Author a PRD and canonical feature requirements from an idea, research, or existing repository. Use when asked to create, draft, or formalize a PRD, spec, or requirements; every solution uses features."
 ---
 
 # Skill: Build a PRD or Spec from an Idea or Research
@@ -77,7 +77,7 @@ Separate human sign-off from agent preparation. Apply its per-task review in
 both interactive and headless gap checks; document-level completeness alone is
 not sufficient. The compiler does not repair vague instructions.
 
-Load `references/prd-template.md` for the canonical layout, and the sibling `forge-decompose-prd/references/product-vision-template.md` and `feature-document-template.md` for document structure. Identify feature boundaries before writing tasks. The vision owns shared architecture, constraints and cross-feature stories; each feature owns its specific definitions and tasks. Use globally stable IDs, ID-only traceability links and version-2 task contracts. Write each requirement once as a `forge-requirement` definition and resolve references at compilation. Record reasonable default assumptions in Open Questions.
+Load `references/prd-template.md` for the canonical layout, and the sibling `forge-decompose-prd/references/prd-overview-template.md` and `feature-document-template.md` for document structure. Identify feature boundaries before writing tasks. The vision owns shared architecture, constraints and cross-feature stories; each feature owns its specific definitions and tasks. Use globally stable IDs, ID-only traceability links and version-2 task contracts. Write each requirement once as a `forge-requirement` definition and resolve references at compilation. Record reasonable default assumptions in Open Questions.
 
 > Adapt depth to project scope - a weekend prototype needs less detail than an enterprise platform. Keep all section headings for consistency.
 

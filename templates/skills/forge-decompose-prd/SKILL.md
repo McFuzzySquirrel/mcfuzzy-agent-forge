@@ -1,6 +1,6 @@
 ---
 name: forge-decompose-prd
-description: "Convert supplied legacy requirements or specifications into the mandatory product vision and canonical feature layout. Use when importing an older PRD or reorganizing source documents into executable features."
+description: "Convert supplied legacy requirements or specifications into the mandatory PRD and canonical feature layout. Use when importing an older PRD or reorganizing source documents into executable features."
 ---
 
 # Convert Source Requirements to Canonical Features
@@ -20,7 +20,7 @@ task IDs, completion state and human-review evidence before proposing changes.
 ## Step 2: Assign Ownership
 
 Identify shared concerns for the vision and bounded implementable features.
-Load `references/product-vision-template.md`, `references/feature-document-template.md`
+Load `references/prd-overview-template.md`, `references/feature-document-template.md`
 and the sibling `forge-build-prd/references/task-contract.md`.
 
 Give every definition a globally unique canonical ID and one owner. Preserve

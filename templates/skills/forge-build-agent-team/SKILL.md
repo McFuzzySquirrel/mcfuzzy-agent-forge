@@ -1,11 +1,11 @@
 ---
 name: forge-build-agent-team
-description: "Analyze a Product Requirements Document (PRD), Product Vision with Feature documents, or Feature PRD and generate a complete team of custom agents plus a persisted skill-candidate handoff. Use this skill when asked to create, scaffold, or design a development team from requirements documents."
+description: "Analyze a Product Requirements Document (PRD), PRD with Feature documents, or Feature PRD and generate a complete team of custom agents plus a persisted skill-candidate handoff. Use this skill when asked to create, scaffold, or design a development team from requirements documents."
 ---
 
 # Skill: Build a Custom Agent Team from a PRD
 
-Build specialist agent files from a PRD, product vision, or feature PRD. This
+Build specialist agent files from a PRD, PRD, or feature PRD. This
 stage writes agents and `docs/SKILL-CANDIDATES.json`; it does not create skill
 packages or an execution manifest.
 

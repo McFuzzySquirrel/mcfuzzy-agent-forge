@@ -4,7 +4,7 @@ Every solution uses `docs/PRD.md` and at least one
 `docs/features/*.md`. Author these directly, including for a one-task solution.
 There is no intermediate or executable monolithic requirements document.
 
-Load the sibling `forge-decompose-prd/references/product-vision-template.md`
+Load the sibling `forge-decompose-prd/references/prd-overview-template.md`
 for the vision structure and `feature-document-template.md` for feature structure.
 Load `task-contract.md` for canonical definitions and compact executable tasks.
 

@@ -1,6 +1,6 @@
 ---
 name: forge-orchestrate-build
-description: "Coordinate specialist agents through canonical feature implementation phases. Use when project-orchestrator invokes it or when driving a build step by step from a product vision and registered features, including additive feature increments."
+description: "Coordinate specialist agents through canonical feature implementation phases. Use when project-orchestrator invokes it or when driving a build step by step from a PRD and registered features, including additive feature increments."
 ---
 
 # Skill: Orchestrate Project Build
@@ -28,14 +28,14 @@ When the document is a Feature PRD (F-prefixed phases, "Feature Overview" sectio
 4. Verify tech stack only for NEW technologies introduced by the feature.
 5. Build the feature execution plan -map FT-FR-* requirements, identify dependencies on existing work.
 
-### 1c. Analyze Product Vision + Feature Documents (Feature-Based Build Mode)
+### 1c. Analyze PRD + Feature Documents (Feature-Based Build Mode)
 
 Every build uses `docs/PRD.md` + `docs/features/`:
-1. Read the Product Vision -goals, architecture, NFRs, feature list, dependency graph (Section 14).
+1. Read the PRD -goals, architecture, NFRs, feature list, dependency graph (Section 14).
 2. Read ALL feature documents -scope, user stories, requirements, phases, dependencies.
 3. Review agent files -agents may own requirements from multiple features.
 4. Build the feature dependency graph -verify a valid DAG, determine execution order (dependencies first), identify parallel opportunities.
-5. Verify tech stack currency for the product vision.
+5. Verify tech stack currency for the PRD.
 6. Build the execution plan -order features by dependency, order tasks by feature phases.
 
 ### 2. Execute Phase by Phase

@@ -29,10 +29,10 @@ We adopt a **hybrid approach** that keeps the monolithic PRD as the default for 
 
 A new skill that takes an existing monolithic PRD and decomposes it into:
 
-- A **Product Vision** document - lightweight overview containing goals, personas, technical architecture, tech stack, non-functional requirements, security, accessibility, and glossary (the cross-cutting concerns that span all features)
+- A **PRD** document - lightweight overview containing goals, personas, technical architecture, tech stack, non-functional requirements, security, accessibility, and glossary (the cross-cutting concerns that span all features)
 - Individual **Feature documents** - each containing its own user stories, functional requirements, acceptance criteria, implementation tasks, and testing strategy (self-contained units of work)
 
-Output goes to `docs/product-vision.md` and `docs/features/*.md`.
+Output goes to `docs/PRD.md` and `docs/features/*.md`.
 
 ### 2. Extended `forge-build-feature-prd` Skill
 
@@ -40,7 +40,7 @@ The existing Feature PRD skill is extended to support **greenfield features** (d
 
 ### 3. Extended `forge-build-agent-team` Skill
 
-A new **Vision + Features Mode** is added alongside the existing Full Build Mode and Feature Increment Mode. This mode reads a product vision document plus all feature documents, aggregates requirements across features, and generates the agent team from the unified view.
+A new **Vision + Features Mode** is added alongside the existing Full Build Mode and Feature Increment Mode. This mode reads a PRD document plus all feature documents, aggregates requirements across features, and generates the agent team from the unified view.
 
 ### 4. Extended `project-orchestrator` Agent
 
@@ -73,7 +73,7 @@ Feature-based execution is promoted from a secondary mode to a co-equal primary 
 ### Negative
 
 - **More documents** - The decomposed approach produces N+1 documents (vision + N features) instead of 1. This is more coordination overhead for small projects (mitigated by keeping the monolithic option as default).
-- **Cross-cutting concern management** - NFRs, security, and accessibility live in the product vision and must be referenced (not duplicated) by features. This requires discipline.
+- **Cross-cutting concern management** - NFRs, security, and accessibility live in the PRD and must be referenced (not duplicated) by features. This requires discipline.
 - **Inter-feature dependencies** - Features may depend on each other (e.g., feature B needs feature A's data model). Explicit dependency declarations add overhead but prevent execution conflicts.
 - **Three modes in team builder** - The `forge-build-agent-team` skill now has three modes (Full Build, Feature Increment, Vision + Features). This increases complexity but each mode is self-contained.
 
@@ -81,7 +81,7 @@ Feature-based execution is promoted from a secondary mode to a co-equal primary 
 
 - **No bootstrap script changes** - Scripts auto-discover skills via glob patterns, so the new `forge-decompose-prd` skill is picked up automatically.
 - **ID scheme compatibility** - Feature IDs use `{PREFIX}-US-01`, `{PREFIX}-FR-01` format, compatible with the existing `FT-` prefix convention for Feature PRDs.
-- **Product vision is optional** - The system works with or without a product vision document. When absent, the team builder and orchestrator fall back to the monolithic PRD behavior.
+- **PRD overview is optional** - The system works with or without a PRD document. When absent, the team builder and orchestrator fall back to the monolithic PRD behavior.
 
 ---
 

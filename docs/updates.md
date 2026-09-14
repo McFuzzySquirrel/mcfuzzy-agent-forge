@@ -8,16 +8,16 @@ Detailed release and change notes for MyForge.
 
 ### PRD path normalization
 
-- Accepted ADR-050 and retired `docs/product-vision.md` as an active source.
+- Accepted ADR-050 and retired `docs/PRD.md` as an active source.
   `docs/PRD.md` now exclusively owns the product-level vision contract, with
   feature requirements and tasks staying in `docs/features/*.md`.
 - Updated active skills/templates, generated output references, and authoring
   documentation to consistently reference `docs/PRD.md`.
 - Added explicit legacy handling in discovery/validation: repositories with only
-  `docs/product-vision.md` now fail closed with migration guidance; repositories
+  `docs/PRD.md` now fail closed with migration guidance; repositories
   with both files use `docs/PRD.md` and surface a warning that the legacy file is
   ignored.
-- Added regression coverage for PRD-only, product-vision-only, both-files, and
+- Added regression coverage for PRD-only, legacy-layout-only, both-files, and
   missing-document layouts under execution-adapter validation/discovery tests.
 
 ---
@@ -204,7 +204,7 @@ Detailed release and change notes for MyForge.
 
 ### Canonical PRD Discovery for Execution
 
-- Fixed execution-adapter discovery reading the retired `docs/product-vision.md`
+- Fixed execution-adapter discovery reading the retired `docs/PRD.md`
   filename while reporting that `docs/PRD.md` was required. Repositories with a
   canonical PRD and feature documents can now compile their execution manifest.
 - Aligned discovery and authoring-validator regression fixtures with
@@ -219,12 +219,12 @@ Detailed release and change notes for MyForge.
 
 ### Console PRD Completion Detection
 
-- Fixed the console checking the retired `docs/product-vision.md` filename
+- Fixed the console checking the retired `docs/PRD.md` filename
   instead of the canonical `docs/PRD.md`. After PRD and feature authoring,
   the overview can now advance from "Author project PRD" to "Generate team".
-- Updated the Plan & Team Product Vision link to open `docs/PRD.md`.
+- Updated the Plan & Team PRD link to open `docs/PRD.md`.
 - Added regression coverage for detecting newly authored requirements without
-  a legacy Product Vision file or an existing agent team.
+  a legacy PRD file or an existing agent team.
 
 ---
 
@@ -346,7 +346,7 @@ Detailed release and change notes for MyForge.
 
 ### Canonical Features and Compact Requirements
 
-- Every solution now requires a product vision and at least one feature, with no
+- Every solution now requires a PRD and at least one feature, with no
   size threshold or monolithic authoring/compilation fallback. Imported documents
   remain source material; historical originals are preserved, not executed.
 - New authoring writes canonical features directly. ID-only traceability and
@@ -1577,7 +1577,7 @@ prompt-driven path (`forge-orchestrate-build` + `forge-build-agent-team`)
 performs. It now matches the original flow:
 
 - **Feature-based compile mode (auto-detected).** When
-  `docs/product-vision.md` + `docs/features/*.md` exist, the adapter reads the
+  `docs/PRD.md` + `docs/features/*.md` exist, the adapter reads the
   vision's `## 14. Features` dependency table, orders features topologically
   (dependencies first; cycles or a missing table fall back to document order
   with a warning), and compiles each feature's `## 5. Implementation Tasks` /
@@ -1831,7 +1831,7 @@ for getting from an idea to a reviewable PRD/team to an engine run.
   - **PRD → team:** runs `forge-build-agent-team` headless, commits
     `feat: generate auto-drafted agent team`, then points you at the generated
     agents/skills for review. When a decomposed layout exists, the team is built
-    from `docs/product-vision.md` + `docs/features/*.md` (Vision + Features
+    from `docs/PRD.md` + `docs/features/*.md` (Vision + Features
     mode); otherwise from `docs/PRD.md`.
   - **Engine decision:** after the team, choose to run the workflow engine now
     (detached via `forge-engine-run.sh --repo <repo> --harness <h> --yes`), print
@@ -1883,7 +1883,7 @@ Implements CR-001. Two principles: automate deterministic mechanical gates, pres
 - **`forge-build-prd` absorbs the PRD review checklist.** The review gate from the retired `forge-bootstrap-project` (Scope & intent, Requirements, Technical choices, Plan, Open items) is now part of `forge-build-prd` Step 4.
 - **`forge-bootstrap-project` is retired** and its skill directory removed. Its idea-confirmation pattern is reused by the new `forge-auto-build-prd` skill; its PRD review checklist is reused by `forge-build-prd`.
 - **New `forge-auto-build-prd` skill.** A meta-skill that confirms an idea, invokes `forge-build-prd` (review + automatic decomposition), verifies the outputs, and stops before team generation - the PRD-creation fast path.
-- **`forge-auto-build` requires an existing PRD.** It no longer generates a PRD or interviews for a one-line idea. Its pre-flight check requires `docs/PRD.md` or the decomposed `docs/product-vision.md` + `docs/features/*.md`; if neither exists it stops and directs the user to `forge-auto-build-prd` / `forge-build-prd`. Stages are reduced to team generation → optional model assignment → build execution (`forge-orchestrate-build` or `--workflow-engine`).
+- **`forge-auto-build` requires an existing PRD.** It no longer generates a PRD or interviews for a one-line idea. Its pre-flight check requires `docs/PRD.md` or the decomposed `docs/PRD.md` + `docs/features/*.md`; if neither exists it stops and directs the user to `forge-auto-build-prd` / `forge-build-prd`. Stages are reduced to team generation → optional model assignment → build execution (`forge-orchestrate-build` or `--workflow-engine`).
 - **Launcher handoff updated.** `forge-launcher` (Bash + PowerShell) queues `forge-auto-build` when a PRD was captured in Step 6, or `forge-auto-build-prd` when it was not, so the build pipeline (agent team + build execution, including the workflow-engine path) runs once the PRD exists.
 - **`detect-harness.md` relocated** from `forge-bootstrap-project/references/` to `forge-build-agent-team/references/`; all referencing skills updated.
 

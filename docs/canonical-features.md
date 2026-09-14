@@ -2,7 +2,7 @@
 
 Every Forge solution has `docs/PRD.md` plus one or more
 `docs/features/*.md`. A small solution has one feature, not a different layout.
-`docs/product-vision.md` is a retired legacy filename, not an active second
+`docs/PRD.md` is a retired legacy filename, not an active second
 source of requirements.
 Existing command names such as `draft-prd` and `validate-prd` remain available,
 but they author and validate this feature-based requirements set.
@@ -51,9 +51,9 @@ to relevant rules invalidate approval without invalidating unrelated sections.
    features and register every feature in the vision. Do not duplicate catalogues.
 4. Layout handling is explicit and fail-closed:
    - `docs/PRD.md` + features: canonical and executable.
-   - only `docs/product-vision.md`: migrate by moving/copying the same content to
+   - only `docs/PRD.md`: migrate by moving/copying the same content to
      `docs/PRD.md`, then validate.
-   - both files: `docs/PRD.md` is authoritative; `docs/product-vision.md` is
+   - both files: `docs/PRD.md` is authoritative; `docs/PRD.md` is
      ignored except as preserved history.
    - neither file: author requirements before team generation/compilation.
 5. Run `validate-prd`, review ownership/coverage and resolve errors and warnings.

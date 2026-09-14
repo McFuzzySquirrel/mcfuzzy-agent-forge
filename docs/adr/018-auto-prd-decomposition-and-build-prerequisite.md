@@ -9,7 +9,7 @@
 
 MyForge had several points where the user is asked to make decisions that are either mechanically derivable from project artifacts, or that let the build pipeline proceed without sufficient PRD review:
 
-1. **PRD decomposition was unnecessarily opt-in.** ADR-002 introduced `forge-decompose-prd` as an opt-in, manually invoked skill. A user had to recognize that their PRD was large and separately run it after `forge-build-prd` completed. The qualifying criteria are objective (15+ functional requirements, or 3+ implementation phases) and calculable directly from the PRD, and decomposition is non-destructive -`docs/PRD.md` is preserved and `docs/product-vision.md` + `docs/features/*.md` are generated alongside it. Asking the user to confirm a mechanical threshold added friction without meaningful safety.
+1. **PRD decomposition was unnecessarily opt-in.** ADR-002 introduced `forge-decompose-prd` as an opt-in, manually invoked skill. A user had to recognize that their PRD was large and separately run it after `forge-build-prd` completed. The qualifying criteria are objective (15+ functional requirements, or 3+ implementation phases) and calculable directly from the PRD, and decomposition is non-destructive -`docs/PRD.md` is preserved and `docs/PRD.md` + `docs/features/*.md` are generated alongside it. Asking the user to confirm a mechanical threshold added friction without meaningful safety.
 
 2. **`forge-auto-build` could bypass meaningful PRD review.** It chained PRD generation, team generation, optional model assignment, and build execution behind a single pre-flight confirmation. A user could type "GO" once and receive a fully built project from a thin, unreviewed PRD. Its flat stage structure also made the required starting state unclear -whether it needed an existing PRD or created one itself.
 
@@ -48,7 +48,7 @@ A PRD-creation fast-path meta-skill: it confirms a project idea, invokes `forge-
 `forge-auto-build` no longer generates a PRD. Its pre-flight check must find one of:
 
 - `docs/PRD.md`, or
-- `docs/product-vision.md` together with `docs/features/*.md`.
+- `docs/PRD.md` together with `docs/features/*.md`.
 
 If neither exists, it stops immediately and directs the user to run `forge-auto-build-prd` or `forge-build-prd`. It does **not** fall back to interviewing the user for a one-line idea. Its stages are reduced to:
 

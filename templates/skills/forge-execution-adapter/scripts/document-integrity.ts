@@ -39,7 +39,7 @@ export function documentIntegrity(repoRoot: string, documents: Map<string, strin
     const body = text.replace(/```[^\n]*\n[\s\S]*?```/g, "");
     for (const raw of body.split(/\r?\n/)) {
       const line = raw.trim().replace(/\s+/g, " ");
-      if (line.length < 100 || line.startsWith("#") || /^\*\*(Product Vision|Original PRD):/.test(line)) continue;
+      if (line.length < 100 || line.startsWith("#") || /^\*\*(PRD|Original PRD):/.test(line)) continue;
       if (prose.has(line)) repeats++;
       else prose.set(line, file);
     }

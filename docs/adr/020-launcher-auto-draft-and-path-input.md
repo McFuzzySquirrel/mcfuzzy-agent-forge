@@ -42,7 +42,7 @@ non-interactively through the harness CLI, stopping for review between stages:
 - **PRD → team.** When a PRD exists, ask whether to run `forge-build-agent-team`
   headless. Commit `feat: generate auto-drafted agent team`, then point the user
   at the generated agents/skills for review. When a decomposed layout exists
-  (`docs/product-vision.md` + `docs/features/*.md`), the skill is explicitly
+  (`docs/PRD.md` + `docs/features/*.md`), the skill is explicitly
   pointed at the decomposed representation so it runs in **Vision + Features
   mode** and builds the team from the features; otherwise it uses `docs/PRD.md`.
 - **Engine decision.** After the team, offer to run the workflow engine now
@@ -97,7 +97,7 @@ reviewable at every boundary. The existing `--headless` single-shot behavior and
   eliminating the "file not found" confusion for home-dir or env-var paths.
 - The decomposed layout is reliably honoured by the team auto-draft (team built
   from the features), removing the ambiguity when both `docs/PRD.md` and
-  `docs/product-vision.md` + `docs/features/*.md` exist.
+  `docs/PRD.md` + `docs/features/*.md` exist.
 - `--dry-run` makes the whole auto-draft path scriptable and testable without a
   harness CLI.
 

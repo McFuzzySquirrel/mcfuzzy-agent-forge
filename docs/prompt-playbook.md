@@ -60,7 +60,7 @@ git commit -m "chore: bootstrap MyForge agent and skill templates"
 ## Fast Path - Build a Reviewed PRD in One Prompt (Optional)
 
 To go from a one-line idea to reviewed requirements, use `forge-auto-build-prd`.
-It confirms the idea and invokes `forge-build-prd` to author product vision and
+It confirms the idea and invokes `forge-build-prd` to author PRD and
 features directly, including one-feature solutions. It stops before team generation.
 
 ```
@@ -158,7 +158,7 @@ originals and completed task IDs, but do not execute or maintain duplicate tasks
 
 ```
 @workspace /forge-decompose-prd Analyze docs/requirements-source.md and convert it into:
-- A Product Vision document at docs/PRD.md
+- A PRD document at docs/PRD.md
 - Individual Feature documents in docs/features/
 Ensure each feature is self-contained with its own user stories, requirements, phases, and acceptance criteria.
 ```
@@ -179,7 +179,7 @@ Report any gaps or issues.
 
 ### 4a. Build the team
 
-**From Canonical Product Vision and Features:**
+**From Canonical PRD and Features:**
 ```
 @workspace /forge-build-agent-team Analyze docs/PRD.md and all feature documents in docs/features/.
 Generate a complete specialist agent team (`.md` files) in .agents/agents/

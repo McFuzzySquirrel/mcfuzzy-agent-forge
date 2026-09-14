@@ -1,18 +1,18 @@
 # Vision + Features Mode
 
-Complete process for building an agent team from a Product Vision document and associated Feature documents in `docs/features/`.
+Complete process for building an agent team from a PRD document and associated Feature documents in `docs/features/`.
 
 ## Load Trigger
 
-Load this file when: the source document is a Product Vision (`docs/PRD.md`) with feature documents in `docs/features/`, and no `.md` agent files exist in `HARNESS_AGENTS_DIR` beyond forge templates.
+Load this file when: the source document is a PRD (`docs/PRD.md`) with feature documents in `docs/features/`, and no `.md` agent files exist in `HARNESS_AGENTS_DIR` beyond forge templates.
 
 ## Vision + Features Mode -Building from Decomposed Documents
 
-When Step 0 detects a Product Vision with Feature documents, use the following process instead of Steps 1–8. The goal is to build a complete agent team from a product vision document and its associated feature documents, considering requirements across all features holistically.
+When Step 0 detects a PRD with Feature documents, use the following process instead of Steps 1–8. The goal is to build a complete agent team from a PRD document and its associated feature documents, considering requirements across all features holistically.
 
-### Step 1v: Locate and Analyze the Product Vision
+### Step 1v: Locate and Analyze the PRD
 
-Find the product vision document (`docs/PRD.md`) and read it to extract:
+Find the PRD document (`docs/PRD.md`) and read it to extract:
 
 1. **Technology stack** -Languages, frameworks, engines, build tools, package managers (Section 6.1).
 2. **Project structure** -File/folder layout, module boundaries, entry points (Section 6.2).
@@ -22,7 +22,7 @@ Find the product vision document (`docs/PRD.md`) and read it to extract:
 
 ### Step 2v: Read All Feature Documents
 
-Read every feature document listed in the product vision's Features section (typically in `docs/features/`). For each feature, extract:
+Read every feature document listed in the PRD's Features section (typically in `docs/features/`). For each feature, extract:
 
 1. **Feature name and ID prefix** -From the Feature Overview section.
 2. **User stories** -All user stories with their IDs.
@@ -39,7 +39,7 @@ copy requirement descriptions or task catalogues into another document.
 Using the unified requirements view, map domains to specialist agent roles. Apply the heuristics from Step 2 of the parent skill:
 
 - **Required agents** -Project Architect, QA/Test Engineer (always created).
-- **Domain agents** -Based on the tech stack from the product vision.
+- **Domain agents** -Based on the tech stack from the PRD.
 - **Feature agents** -Based on functional requirement groups across all features.
 
 When the same domain appears across multiple features, assign one specialist
@@ -67,13 +67,13 @@ candidate handoff. The independent `forge-build-project-skills` stage owns
 skill creation and review, including headless authorization and model routing.
 Preserve unaffected existing skills.
 
-- **Key Reference sections** should list both the product vision and the specific feature documents relevant to each agent:
+- **Key Reference sections** should list both the PRD and the specific feature documents relevant to each agent:
   ```markdown
   ## Key Reference
 
   Always consult the following documents for authoritative project requirements:
 
-  - [Product Vision](../../docs/PRD.md) -Architecture, tech stack, NFRs, security, accessibility
+  - [PRD](../../docs/PRD.md) -Architecture, tech stack, NFRs, security, accessibility
   - [Feature: Authentication](../../docs/features/authentication.md) -Sections 2–3 (user stories, requirements)
   - [Feature: Dashboard](../../docs/features/dashboard.md) -Sections 2–3 (user stories, requirements)
   ```
@@ -96,7 +96,7 @@ Follow the validation checklist in Step 7 of the parent skill, plus:
 
 - [ ] Every feature document's functional requirements map to exactly one agent.
 - [ ] Agents that own requirements from multiple features reference all relevant feature documents.
-- [ ] The product vision is referenced for cross-cutting concerns (NFRs, security, accessibility).
+- [ ] The PRD is referenced for cross-cutting concerns (NFRs, security, accessibility).
 - [ ] No feature document is left unrepresented in the agent team.
 
 ### Step 8v: Present the Team

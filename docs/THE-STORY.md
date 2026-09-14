@@ -357,17 +357,17 @@ The research document (leading to ADR-002) explored the fundamental question: **
 
 The answer was a new skill: `forge-decompose-prd`. It takes a monolithic PRD and breaks it into two types of documents:
 
-1. **Product Vision**: everything that's cross-cutting. The project overview, goals, personas, tech stack, architecture decisions, security requirements, accessibility standards, NFRs. The things every feature needs to know about but no single feature owns.
+1. **PRD**: everything that's cross-cutting. The project overview, goals, personas, tech stack, architecture decisions, security requirements, accessibility standards, NFRs. The things every feature needs to know about but no single feature owns.
 
 2. **Feature Documents**: self-contained units of work. Each feature gets its own document with its own user stories, functional requirements, tasks, testing strategy, and acceptance criteria. Each requirement gets a prefixed ID (`AUTH-FR-01`, `PAY-FR-02`) that's unique across the entire project. Each feature declares its dependencies on other features. And each feature includes a traceability table mapping back to the original PRD, so you can always see where things came from.
 
-The decomposition process itself follows seven steps: analyze the PRD, identify natural feature groupings (using heuristics like persona+workflow, UI screens, subsystems), present a decomposition plan for human approval, write the Product Vision, write each Feature document, validate everything (traceability, completeness, no circular dependencies, unique IDs), and present the result.
+The decomposition process itself follows seven steps: analyze the PRD, identify natural feature groupings (using heuristics like persona+workflow, UI screens, subsystems), present a decomposition plan for human approval, write the PRD, write each Feature document, validate everything (traceability, completeness, no circular dependencies, unique IDs), and present the result.
 
 But creating new documents wasn't enough. The entire downstream pipeline needed to understand them.
 
-The **Feature PRD Builder** gained a greenfield mode. It auto-detects whether it's looking at a project that's already been built (post-project mode, the original behavior) or one that's still being planned (greenfield mode, where a Product Vision exists but no specialist agents do yet). In greenfield mode, it drops the sections about existing system state and agent impact assessment, because there's no existing system to assess.
+The **Feature PRD Builder** gained a greenfield mode. It auto-detects whether it's looking at a project that's already been built (post-project mode, the original behavior) or one that's still being planned (greenfield mode, where a PRD exists but no specialist agents do yet). In greenfield mode, it drops the sections about existing system state and agent impact assessment, because there's no existing system to assess.
 
-The **Team Builder** gained a Vision + Features Mode. Instead of reading one monolithic PRD, it reads the Product Vision plus all Feature documents, aggregates every requirement across every feature, and then applies the same team design heuristics. The result is a team that understands the entire project holistically, with each agent's definition referencing the specific Product Vision and Feature documents relevant to its role.
+The **Team Builder** gained a Vision + Features Mode. Instead of reading one monolithic PRD, it reads the PRD plus all Feature documents, aggregates every requirement across every feature, and then applies the same team design heuristics. The result is a team that understands the entire project holistically, with each agent's definition referencing the specific PRD and Feature documents relevant to its role.
 
 The **Orchestrator** gained feature-based execution. It reads dependency declarations from feature documents, validates the dependency graph is acyclic, and determines a safe execution order. New commands appeared: `Execute all features`, `Execute feature docs/features/auth.md`, `Execute features in order`, `Execute next feature`. The progress tracking file extended to show feature-level status alongside phase-level status.
 
@@ -376,7 +376,7 @@ The most important design decision was making decomposition **optional and addit
 ```
 Monolithic:   Idea → PRD → Agent Team → Orchestrated Build
 
-Decomposed:   Idea → PRD → Decompose → Product Vision + Feature Docs
+Decomposed:   Idea → PRD → Decompose → PRD + Feature Docs
                                               ↓
                                     Agent Team (Vision + Features Mode)
                                               ↓
@@ -439,7 +439,7 @@ Let's zoom out and see the whole picture.
  └─────────────┘     └──────────────┘     │  + Features)   │     └──────────────────┘     └─────────────────┘
                                            └───────────────┘            │                        │
                                                   │                Agent Files +           Feature-by-Feature
-                                           Product Vision +        Skill Files             Execution with
+                                           PRD +        Skill Files             Execution with
                                            Feature Docs            (Holistic Team)         Dependency Ordering
                                            (Self-contained)
 ```
@@ -462,7 +462,7 @@ The components:
 | Component | What It Does | Why It Exists |
 |-----------|-------------|---------------|
 | `forge-build-prd` skill | Creates PRDs through AI-guided interviews | A team needs a single source of truth |
-| `forge-decompose-prd` skill | Breaks monolithic PRDs into Product Vision + Feature docs | Large projects need independent, shippable units |
+| `forge-decompose-prd` skill | Breaks monolithic PRDs into PRD + Feature docs | Large projects need independent, shippable units |
 | `forge-build-feature-prd` skill | Creates feature PRDs (greenfield or post-project) | Iteration needs structure, whether it's day one or day 100 |
 | `forge-build-agent-team` skill | Transforms PRDs into agent team definitions (3 modes) | Manual agent creation doesn't scale or validate |
 | `forge-bootstrap-project` skill | Meta-skill that chains PRD → review → team → review → optional model assignment from a one-liner idea | Removes copy-paste between steps without removing the human review gates |

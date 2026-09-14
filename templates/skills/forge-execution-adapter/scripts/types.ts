@@ -26,10 +26,10 @@ export interface ForgeRepo {
   harnessRoot: HarnessRoot;
   agentRoot: string;
   skillRoot: string;
-  /** Every solution compiles its product vision and canonical features. */
+  /** Every solution compiles its PRD and canonical features. */
   sourceLayout: "features";
   prdPath: string;
-  /** Canonical product-vision document path (`docs/PRD.md`). */
+  /** Canonical PRD document path (`docs/PRD.md`). */
   visionPath: string;
   /** `docs/features/*.md` in lexical order when the repo is decomposed. */
   featurePaths: string[];
@@ -108,7 +108,7 @@ export interface ExecutionManifest {
   harnessRoot: HarnessRoot;
   /** The document the build is compiled from (PRD, or vision when decomposed). */
   prdPath: string;
-  /** Canonical product-vision document path (`docs/PRD.md`) in feature mode. */
+  /** Canonical PRD document path (`docs/PRD.md`) in feature mode. */
   visionPath?: string;
   /** Feature names in dependency (execution) order, feature mode only. */
   featureOrder?: string[];
