@@ -128,6 +128,9 @@ error code listings, etc.}
 
 ## Notes for Using This Template
 
+- **Write the name as a YAML value, not a JSON-encoded string.** Replace
+  `{skill-name}` with the bare kebab-case name. For example, emit
+  `name: deploy-service`; never emit `name: '"deploy-service"'`.
 - **Load triggers must be specific.** "Load `references/api-errors.md` if the API returns a non-200 status code" is correct. "See `references/` for details" scores a 1 on progressive disclosure.
 - **Don't over-reference.** If a section is under 30 lines and always needed, keep it inline. References are for content that is situationally needed or would bulk up SKILL.md past 500 lines.
 - **Max one level of reference chain.** A reference file should not load another reference file. All chaining must be explicit from `SKILL.md`.

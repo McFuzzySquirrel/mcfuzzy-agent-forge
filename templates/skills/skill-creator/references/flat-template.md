@@ -74,6 +74,9 @@ If any item fails: {specific recovery action}.
 
 ## Notes for Using This Template
 
+- **Write the name as a YAML value, not a JSON-encoded string.** Replace
+  `{skill-name}` with the bare kebab-case name. For example, emit
+  `name: deploy-service`; never emit `name: '"deploy-service"'`.
 - **Context economy:** Remove any placeholder sections that genuinely do not apply. An empty `## Gotchas` with no real content scores worse than omitting the section.
 - **Procedural clarity:** Each step must describe *how to approach* the work, not just *what to produce*. "Generate the migration file" is a declaration. "Run `npm run db:diff`, inspect the output for unintended drops, then save to `migrations/`" is procedural.
 - **Calibration:** For destructive steps, include the exact command. For creative steps, give a default approach and an escape hatch.

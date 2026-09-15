@@ -4,6 +4,17 @@ Detailed release and change notes for MyForge.
 
 ---
 
+## September 2026 - v3.79
+
+### Generated skill name quoting
+
+- Clarified that skill candidate names must be written as YAML values rather
+  than copied with JSON delimiter quotes.
+- Added an explicit preflight repair for generated frontmatter names whose
+  parsed value contains accidental wrapping quote characters.
+
+---
+
 ## September 2026 - v3.78
 
 ### PRD path normalization
