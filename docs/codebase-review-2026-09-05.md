@@ -282,7 +282,7 @@ These results were captured during the preceding code review. They are a baselin
 
 Failure details retained from the review:
 
-- Execution adapter: `discoverForgeRepo detects the decomposed feature layout` failed on `repo.visionPath.endsWith("docs/product-vision.md")`. This assertion is Windows-sensitive because native separators differ.
+- Execution adapter: `discoverForgeRepo detects the decomposed feature layout` failed on `repo.visionPath.endsWith("docs/PRD.md")`. This assertion is Windows-sensitive because native separators differ.
 - Workflow engine: `output gate: a passing manifest validation command allows completion` expected `complete` but received `failed`.
 - Workflow engine: `runTaskValidation requires every command to pass` expected `true` but received `false`. The underlying command failures need diagnosis; this review did not establish their root cause.
 - Launcher: two assertion failures were observed. Their individual names and complete diagnostics were not retained; rerun and capture them before remediation.

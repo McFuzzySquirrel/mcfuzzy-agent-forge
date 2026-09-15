@@ -723,7 +723,7 @@ async function runStubSkill(msg: string, opts: LauncherOptions): Promise<boolean
   if (skillName.includes("forge-auto-build-prd") || skillName.includes("forge-build-prd")) {
     const prd = path.join(state.repoDir, "docs", "features", "stub.md");
     fs.mkdirSync(path.dirname(prd), { recursive: true });
-    fs.writeFileSync(path.join(state.repoDir, "docs", "PRD.md"), "# Product Vision\n\n## 14. Features\n| # | Feature | File | Dependencies |\n| 1 | Stub | features/stub.md | None |\n");
+    fs.writeFileSync(path.join(state.repoDir, "docs", "PRD.md"), "# PRD\n\n## 14. Features\n| # | Feature | File | Dependencies |\n| 1 | Stub | features/stub.md | None |\n");
     fs.writeFileSync(prd, [
       "# PRD",
       "",
@@ -2035,7 +2035,7 @@ async function runFeaturePrdInternal(repoDir: string, featurePrompt?: string): P
     featurePrompt = await prompt("What feature should be added?", "");
   }
   if (!featurePrompt.trim()) return 1;
-  const message = `/forge-build-feature-prd I want to add ${featurePrompt.trim()} to this project. Analyze the existing vision, features, codebase and team. Author the new canonical feature under docs/features/ and register it in the product-vision feature table with exact dependency names. Preserve existing feature definitions and task IDs; reuse shared canonical requirements via version-2 contracts. Do not generate agents or skills, compile a manifest, or start the workflow engine.` + (retryFiles.length ? ` Repair the failed feature documents in place: ${retryFiles.join(", ")}. Preserve unrelated existing features.` : "");
+  const message = `/forge-build-feature-prd I want to add ${featurePrompt.trim()} to this project. Analyze the existing PRD, features, codebase and team. Author the new canonical feature under docs/features/ and register it in the PRD feature table with exact dependency names. Preserve existing feature definitions and task IDs; reuse shared canonical requirements via version-2 contracts. Do not generate agents or skills, compile a manifest, or start the workflow engine.` + (retryFiles.length ? ` Repair the failed feature documents in place: ${retryFiles.join(", ")}. Preserve unrelated existing features.` : "");
   const ran = await runSkillHeadless(message, { nonInteractive: true });
   if (state.options.dryRun) return 0;
   if (!ran) {

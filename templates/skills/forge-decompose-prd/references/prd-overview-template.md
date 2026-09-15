@@ -1,6 +1,6 @@
-# Product Vision Template
+# PRD Template
 
-Load this when writing a product vision document.
+Load this when writing a PRD document.
 
 Use this structure for direct authoring or legacy conversion. Source-section
 placeholders below describe where to find existing decisions during conversion;
@@ -10,7 +10,7 @@ of repeating definition text. Feature-owned requirements and tasks stay in their
 features; this vision has no executable task catalogue.
 
 ```markdown
-# Product Vision: [Product Name]
+# PRD: [Product Name]
 
 ## 1. Overview
 
@@ -26,7 +26,7 @@ features; this vision has no executable task catalogue.
 
 | Version | Date | Author | Changes |
 |---------|------|--------|---------|
-| 1.0 | YYYY-MM-DD | -| Initial product vision (decomposed from PRD) |
+| 1.0 | YYYY-MM-DD | -| Initial PRD (decomposed from PRD) |
 
 ---
 
@@ -123,7 +123,7 @@ features; this vision has no executable task catalogue.
 
 ## 14. Features
 
-Summary of all features decomposed from this product vision:
+Summary of all features decomposed from this PRD:
 
 | # | Feature | File | Dependencies | Priority |
 |---|---------|------|-------------|----------|

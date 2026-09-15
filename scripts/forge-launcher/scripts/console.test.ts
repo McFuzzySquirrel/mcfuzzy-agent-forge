@@ -249,8 +249,6 @@ async function withServer<T>(
 
 test("summary detects newly authored canonical requirements for team generation", async () => {
   await withServer(async (server, repo) => {
-    const legacyVision = join(repo, "docs", "product-vision.md");
-    if (existsSync(legacyVision)) renameSync(legacyVision, `${legacyVision}.bak`);
     renameSync(join(repo, ".agents", "agents"), join(repo, ".agents", "agents-backup"));
     const prd = join(repo, "docs", "PRD.md");
     renameSync(prd, `${prd}.bak`);

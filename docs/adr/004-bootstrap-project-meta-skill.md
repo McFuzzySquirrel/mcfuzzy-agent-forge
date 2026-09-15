@@ -97,7 +97,7 @@ Before invoking any underlying skill, the meta-skill inspects repo state:
 - Existing agents in `.agents/agents/` (beyond the forge templates) cause
   the meta-skill to warn that `forge-build-agent-team` will run in
   **Feature Increment Mode** rather than Full Build.
-- An existing `docs/product-vision.md` + `docs/features/*.md` layout causes
+- An existing `docs/PRD.md` + `docs/features/*.md` layout causes
   it to warn that `forge-build-agent-team` will run in
   **Vision + Features Mode**.
 

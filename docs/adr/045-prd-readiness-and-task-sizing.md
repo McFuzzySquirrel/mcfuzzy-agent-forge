@@ -17,7 +17,7 @@ Size-based layout selection left two authoring and execution paths to maintain.
 
 ## Decision
 
-Every solution, new or existing, uses a product vision and at least one canonical
+Every solution, new or existing, uses a PRD and at least one canonical
 feature. New authoring writes that layout directly, including for one-feature
 projects. Legacy documents remain historical source material and require
 conversion; they do not supply executable tasks or validation commands.

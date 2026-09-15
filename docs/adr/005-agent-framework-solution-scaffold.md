@@ -56,7 +56,7 @@ project on disk.
 
 The skill is responsible for:
 
-- Reading an existing PRD (Full Build Mode), product-vision + features (Vision + Features
+- Reading an existing PRD (Full Build Mode), PRD + features (Vision + Features
   Mode), or a Feature PRD (Feature Increment Mode).
 - Extracting agents, tools, orchestration topology, hosting surface, model providers, and
   non-functional requirements from that document.

@@ -27,7 +27,7 @@ Each forge skill that had large inline templates (>50 lines of reference materia
 | Skill | Content moved to `references/` |
 |---|---|
 | `forge-build-prd` | `references/prd-template.md` - 220-line PRD output format |
-| `forge-decompose-prd` | `references/product-vision-template.md`, `references/feature-document-template.md` |
+| `forge-decompose-prd` | `references/prd-overview-template.md`, `references/feature-document-template.md` |
 | `forge-build-feature-prd` | `references/feature-prd-template.md` |
 | `forge-assign-models` | `references/model-inventory-schema.md` - JSON schema + Copilot tier catalog |
 | `forge-build-agent-framework-solution` | `references/dotnet-layout.md`, `references/python-layout.md`, `references/package-references.md` |

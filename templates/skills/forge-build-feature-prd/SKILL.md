@@ -1,6 +1,6 @@
 ---
 name: forge-build-feature-prd
-description: "Build a Feature PRD that captures a feature - either as a new addition to an existing project, or as part of initial project decomposition from a Product Vision. Use this skill when you need a self-contained feature document with user stories, requirements, and implementation tasks."
+description: "Build a Feature PRD that captures a feature - either as a new addition to an existing project, or as part of initial project decomposition from a PRD. Use this skill when you need a self-contained feature document with user stories, requirements, and implementation tasks."
 ---
 
 # Skill: Build a Feature PRD
@@ -9,7 +9,7 @@ You are a product requirements analyst specializing in **feature-level requireme
 
 This skill supports two modes, auto-detected in Step 0:
 - **Post-project mode** - Adding to an existing project with a completed PRD, agents, and codebase.
-- **Greenfield mode** - Part of initial project decomposition from a Product Vision.
+- **Greenfield mode** - Part of initial project decomposition from a PRD.
 
 ---
 
@@ -19,7 +19,7 @@ This skill supports two modes, auto-detected in Step 0:
 
 | Signal | Mode |
 |---|---|
-| `docs/product-vision.md` exists, no `.md` agent files in `HARNESS_AGENTS_DIR` | Greenfield |
+| `docs/PRD.md` exists with `docs/features/*.md`, no `.md` agent files in `HARNESS_AGENTS_DIR` | Greenfield |
 | `HARNESS_AGENTS_DIR` contains `.md` agent files (beyond forge templates) | Post-project |
 | User says "new project" or "initial decomposition" | Greenfield |
 | User says "add to existing project" | Post-project |
@@ -27,14 +27,14 @@ This skill supports two modes, auto-detected in Step 0:
 
 ### Step 1a: Analyze Existing Project (Post-Project Mode)
 
-1. Read the product vision and existing canonical features for goals, architecture, tech stack and completed tasks. Require this layout before authoring an increment.
+1. Read the PRD and existing canonical features for goals, architecture, tech stack and completed tasks. Require this layout before authoring an increment.
 2. Review existing agent files in `HARNESS_AGENTS_DIR` — load `forge-build-agent-team/references/detect-harness.md` to determine this path — (`.md` files) — domains, responsibilities, collaboration patterns.
 3. Scan the codebase structure - key directories, entry points, existing tests, conventions.
 4. Summarize the current state back to the user and confirm before proceeding.
 
-### Step 1b: Analyze Product Vision Context (Greenfield Mode)
+### Step 1b: Analyze PRD Context (Greenfield Mode)
 
-1. Read the Product Vision (`docs/product-vision.md`) - goals, architecture, tech stack, NFRs, security, accessibility.
+1. Read the PRD (`docs/PRD.md`) - goals, architecture, tech stack, NFRs, security, accessibility.
 2. Read other feature documents in `docs/features/` - to understand boundaries and dependencies.
 3. Summarize where this feature fits and confirm before proceeding.
 
@@ -104,9 +104,9 @@ Iterate until confirmed.
 ## Gotchas
 
 - **FT- prefix collisions.** All Feature PRDs use `FT-` prefixed IDs (`FT-US-01`, `FT-FR-01`, `FT-NF-01`). In greenfield mode, the feature may use a custom prefix (`AUTH-`, `SRCH-`) assigned during decomposition. Check against other features to avoid collisions.
-- **Mode detection order matters.** Always check greenfield signals first (Product Vision + no agents) before post-project signals. Getting this wrong produces a Feature PRD with the wrong context section.
+- **Mode detection order matters.** Always check greenfield signals first (PRD + no agents) before post-project signals. Getting this wrong produces a Feature PRD with the wrong context section.
 - **Agent Impact Assessment is the most critical section** in post-project mode. It directly drives `forge-build-agent-team` Feature Increment Mode. Invest time here - wrong agent assignments cascade.
-- **Don't restate the product vision or original PRD.** Reference them. Only document what's specific to this feature.
+- **Don't restate the PRD or original PRD.** Reference them. Only document what's specific to this feature.
 - **Feature increments are additive.** Register new features in the vision's feature table, preserving existing decisions, feature content and completed task IDs.
 
 ---

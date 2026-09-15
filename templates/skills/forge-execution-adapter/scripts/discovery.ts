@@ -133,7 +133,8 @@ export function discoverForgeRepo(start = process.cwd(), preferredHarness?: Harn
   const featurePaths = isDir(featuresDir)
     ? readdirSync(featuresDir).filter((entry) => entry.endsWith(".md")).sort().map((entry) => join(featuresDir, entry))
     : [];
-  const decomposed = existsSync(visionPath) && featurePaths.length > 0;
+  const hasCanonicalVision = existsSync(visionPath);
+  const decomposed = hasCanonicalVision && featurePaths.length > 0;
   const sourceLayout: ForgeRepo["sourceLayout"] = "features";
 
   if (!decomposed) {

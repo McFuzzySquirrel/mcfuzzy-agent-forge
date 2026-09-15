@@ -17,7 +17,7 @@ forge-execution-adapter compile → docs/EXECUTION-MANIFEST.json → forge-workf
 When the engine path was introduced it compiled the manifest **only** from the
 monolithic `docs/PRD.md` - `forge-execution-adapter` read a single `prdPath`,
 parsed `## Phase N` headings, and assigned owners by token overlap. Repos that
-had been decomposed into `docs/product-vision.md` + `docs/features/*.md` (the
+had been decomposed into `docs/PRD.md` + `docs/features/*.md` (the
 recommended flow since CR-001 / ADR-018) therefore lost their features: the
 adapter emitted an explicit *"Feature/decomposition mode is not compiled by
 this MVP"* warning and compiled the monolithic PRD instead.
@@ -41,7 +41,7 @@ checked it, with the autonomous path being the weaker one.
 1. **`forge-execution-adapter compile` auto-detects the PRD representation.**
    - Monolithic `docs/PRD.md` → compile `## Phase N` headings exactly as before
      (byte-for-byte backward compatible).
-   - Decomposed `docs/product-vision.md` + `docs/features/*.md` → parse the
+   - Decomposed `docs/PRD.md` + `docs/features/*.md` → parse the
      vision's `## 14. Features` dependency table, topologically order features
      (dependencies first), and compile each feature's
      `## 5. Implementation Tasks` / `### Phase N:` blocks into manifest phases.

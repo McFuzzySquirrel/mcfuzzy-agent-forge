@@ -131,7 +131,7 @@ function quickHelp(): HTMLElement {
     ])]),
     helpSection("Key terms", [dl([
       ["PRD", "Product Requirements Document - the review gate before building."],
-      ["Product vision / feature", "the canonical requirements layout: shared overview plus one or more owning features."],
+      ["PRD / feature", "the canonical requirements layout: shared overview plus one or more owning features."],
       ["Agent", "a specialist persona that does a job (e.g. qa-engineer)."],
       ["Skill", "a reusable instruction set an agent follows."],
       ["Manifest", "the compiled task list the engine executes."],

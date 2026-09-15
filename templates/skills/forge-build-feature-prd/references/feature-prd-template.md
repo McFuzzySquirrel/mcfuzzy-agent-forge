@@ -12,7 +12,7 @@ Use compact version-2 task contracts and register this feature in the vision.
 ## 1. Feature Overview
 
 **Feature Name:** ...
-**Parent Document:** [Product Vision](../PRD.md)
+**Parent Document:** [PRD](../PRD.md)
 **Status:** Draft | In Review | Approved | In Progress | Implemented
 **Summary:** A concise description of what this feature does and why it matters.
 **Scope:** What's included in this feature and what's explicitly excluded.
@@ -22,7 +22,7 @@ Use compact version-2 task contracts and register this feature in the vision.
 
 ## 2. Context: Existing System State
 
-> **Note:** This section is required in **post-project mode** (adding to an existing project). In **greenfield mode** (initial project decomposition), replace with a brief note: "Greenfield feature -no existing system. See Product Vision at [path]."
+> **Note:** This section is required in **post-project mode** (adding to an existing project). In **greenfield mode** (initial project decomposition), replace with a brief note: "Greenfield feature -no existing system. See PRD at [path]."
 
 **Completed Feature Tasks:** Reference existing completed task IDs and owning features.
 **Relevant Existing Components:** Which parts of the existing system this feature touches (files, modules, services).

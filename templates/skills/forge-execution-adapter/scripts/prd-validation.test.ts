@@ -18,9 +18,9 @@ function fixture(text = document()) {
 test("even a single-task solution requires canonical features and ignores historical PRDs", () => {
   const root = mkdtempSync(join(tmpdir(), "features-required-"));
   mkdirSync(join(root, "docs/features"), { recursive: true });
-  writeFileSync(join(root, "docs/product-vision.md"), document());
+  writeFileSync(join(root, "docs/legacy-source.md"), document());
   writeFileSync(join(root, "docs/requirements.md"), "Upload limits");
-  assert.match(validatePrd(root).errors.join("\n"), /Missing docs\/PRD/);
+  assert.match(validatePrd(root).errors.join("\n"), /Missing docs\/PRD\.md/);
   writeFileSync(join(root, "docs/PRD.md"), "# Vision\n## 14. Features\n| # | Feature | File | Dependencies |\n| 1 | Upload | features/upload.md | None |\n");
   assert.match(validatePrd(root).errors.join("\n"), /features/);
   writeFileSync(join(root, "docs/features/upload.md"), document());

@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { mkdtempSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { mkdtempSync, mkdirSync, readFileSync, unlinkSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, normalize } from "node:path";
 
@@ -10,7 +10,7 @@ import { appendAuditEvent, checkpointTask, parseProgress, writeProgress } from "
 
 function foundationLayout(root: string): void {
   mkdirSync(join(root, "docs/features"), { recursive: true });
-  writeFileSync(join(root, "docs/PRD.md"), "# Product Vision\n## Validation\n`npm test`\n## 14. Features\n| # | Feature | File | Dependencies |\n| 1 | Foundation | features/foundation.md | None |\n");
+  writeFileSync(join(root, "docs/PRD.md"), "# PRD\n## Validation\n`npm test`\n## 14. Features\n| # | Feature | File | Dependencies |\n| 1 | Foundation | features/foundation.md | None |\n");
 }
 
 function createFixture(harness = ".agents") {
@@ -428,7 +428,7 @@ function createFeatureFixture() {
   mkdirSync(featuresDir, { recursive: true });
   mkdirSync(join(root, "docs", "features", "sub"), { recursive: true });
 
-  writeFileSync(join(root, "docs", "PRD.md"), `# Product Vision
+  writeFileSync(join(root, "docs", "PRD.md"), `# PRD
 
 ## 14. Features
 
@@ -495,12 +495,10 @@ test("discoverForgeRepo detects the decomposed feature layout", () => {
   assert.equal(repo.prdPath, repo.visionPath);
 });
 
-test("historical source documents never supply tasks or validation commands", () => {
+test("discoverForgeRepo fails closed for repositories missing docs/PRD.md", () => {
   const root = createFixture();
-  writeFileSync(join(root, "docs/product-vision.md"), "# Historical source\n## Validation\n`npm run obsolete`\n## Phase 1: Retired\n- Run obsolete work\n");
-  const manifest = compileExecutionManifest(discoverForgeRepo(root));
-  assert.equal(manifest.phases.flatMap((phase) => phase.tasks).length, 3);
-  assert.ok(!manifest.validationCommands.includes("npm run obsolete"));
+  unlinkSync(join(root, "docs/PRD.md"));
+  assert.throws(() => discoverForgeRepo(root), /Every solution requires docs\/PRD\.md \+ docs\/features\/\*\.md/);
 });
 
 test("compileExecutionManifest compiles features in dependency order with feature-tagged ids", () => {
@@ -528,7 +526,7 @@ test("compileExecutionManifest compiles features in dependency order with featur
 
 test("compileExecutionManifest resolves numbered feature dependencies from the vision table", () => {
   const root = createFeatureFixture();
-  writeFileSync(join(root, "docs", "PRD.md"), `# Product Vision
+  writeFileSync(join(root, "docs", "PRD.md"), `# PRD
 
 ## 14. Features
 
@@ -552,7 +550,7 @@ test("compileExecutionManifest resolves numbered feature dependencies from the v
 
 test("compileExecutionManifest falls back to lexical order when the vision has no feature table", () => {
   const root = createFeatureFixture();
-  writeFileSync(join(root, "docs", "PRD.md"), "# Product Vision\n\nNo features table.\n", "utf8");
+  writeFileSync(join(root, "docs", "PRD.md"), "# PRD\n\nNo features table.\n", "utf8");
   const repo = discoverForgeRepo(root);
   const manifest = compileExecutionManifest(repo);
 
@@ -582,7 +580,7 @@ description: Implements execution schema output and integration work.
 
 You own the Discovery and Registry feature end to end.
 `, "utf8");
-  writeFileSync(join(root, "docs", "PRD.md"), `# Product Vision
+  writeFileSync(join(root, "docs", "PRD.md"), `# PRD
 
 ## 14. Features
 

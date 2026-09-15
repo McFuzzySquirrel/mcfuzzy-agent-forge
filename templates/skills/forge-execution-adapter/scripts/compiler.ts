@@ -426,7 +426,7 @@ function parseFeatureDependencies(value: string, namesByNumber: Map<string, stri
 }
 
 /**
- * Parse the feature dependency table from the product vision (## 14. Features).
+ * Parse the feature dependency table from the PRD (## 14. Features).
  * Falls back to the sorted feature file list when no table is found.
  */
 export function parseFeatureGraph(vision: string, featurePaths: string[], repoRoot: string, docsDir: string, warnings: string[]): FeatureNode[] {
@@ -467,7 +467,7 @@ export function parseFeatureGraph(vision: string, featurePaths: string[], repoRo
   }
 
   if (nodes.length === 0) {
-    warnings.push("No feature dependency table found in product-vision.md; using feature files in lexical order.");
+    warnings.push("No feature dependency table found in docs/PRD.md; using feature files in lexical order.");
     for (const file of featurePaths) {
       nodes.push({ name: basename(file, ".md"), file, dependencies: [] });
     }
@@ -672,7 +672,7 @@ function compileFeatureManifest(repo: ForgeRepo, options: CompileOptions = {}): 
 
 /** Compile a runnable execution manifest from the repo's PRD representation. */
 export function compileExecutionManifest(repo: ForgeRepo, options: CompileOptions = {}): ExecutionManifest {
-  if (repo.sourceLayout !== "features") throw new Error("Only product vision + feature sources can be compiled. Convert legacy source documents first.");
+  if (repo.sourceLayout !== "features") throw new Error("Only PRD + feature sources can be compiled. Convert legacy source documents first.");
   const manifest = compileFeatureManifest(repo, options);
   const tasks = manifest.phases.flatMap((phase) => phase.tasks);
   const sources = new Map([repo.visionPath, ...repo.featurePaths].map((file) => [relative(repo.repoRoot, file).replace(/\\/g, "/"), readFileSync(file, "utf8")]));

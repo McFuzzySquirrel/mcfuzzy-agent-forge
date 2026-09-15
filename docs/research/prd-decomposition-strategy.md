@@ -21,7 +21,7 @@ The framework operates on a **single-PRD, single-team-generation model** for ini
 |-----------|-----------------|------------|
 | `forge-build-prd` skill | Creates one comprehensive PRD with embedded user stories, requirements, and phases | No decomposition into independent features; all requirements in flat tables |
 | `forge-build-feature-prd` skill | Creates Feature PRDs for post-project additions | Assumes project is already complete; requires "Context: Existing System State" |
-| `forge-build-agent-team` skill | Full Build Mode from single PRD, or Feature Increment Mode from Feature PRDs | No support for building a team from a product vision + multiple feature docs |
+| `forge-build-agent-team` skill | Full Build Mode from single PRD, or Feature Increment Mode from Feature PRDs | No support for building a team from a PRD + multiple feature docs |
 | `project-orchestrator` agent | Executes PRD phases or Feature PRD phases | Feature execution is a secondary mode; no dependency ordering between features |
 | `forge-team-builder` agent | Routes to PRD skill or feature PRD skill | No awareness of decomposition workflow |
 
@@ -29,7 +29,7 @@ The framework operates on a **single-PRD, single-team-generation model** for ini
 
 1. **No decomposition path** - Users with a monolithic PRD cannot break it into features without manually splitting the document.
 2. **Feature PRDs assume completion** - The `forge-build-feature-prd` skill requires a completed project context, making it unsuitable for initial feature decomposition.
-3. **No product vision concept** - Cross-cutting concerns (architecture, tech stack, NFRs, security, accessibility) have no standalone home outside the monolithic PRD.
+3. **No PRD concept** - Cross-cutting concerns (architecture, tech stack, NFRs, security, accessibility) have no standalone home outside the monolithic PRD.
 4. **No feature dependency tracking** - Features reference the original PRD but not each other.
 5. **Single-document assumption** - Both `forge-build-agent-team` and `project-orchestrator` assume a single authoritative PRD document.
 
@@ -41,7 +41,7 @@ The framework operates on a **single-PRD, single-team-generation model** for ini
 |------|-----------|--------|------------|
 | Breaking existing monolithic PRD workflow | Low | High | All changes are additive; `forge-build-prd` remains unchanged |
 | Feature decomposition creating too many small documents | Medium | Medium | Provide guidance on when decomposition is appropriate vs. overkill |
-| Cross-cutting concerns lost in decomposition | Medium | High | Product Vision document explicitly owns NFRs, architecture, security, accessibility |
+| Cross-cutting concerns lost in decomposition | Medium | High | PRD document explicitly owns NFRs, architecture, security, accessibility |
 | Inter-feature dependency conflicts | Medium | Medium | Explicit dependency declarations in feature docs; orchestrator validates before execution |
 | Agent boundary conflicts across features | Low | Medium | Agent team builder aggregates all feature requirements before generating boundaries |
 
@@ -60,15 +60,15 @@ The most pragmatic approach is to keep the monolithic PRD as an option for simpl
 **File:** `templates/skills/forge-decompose-prd/SKILL.md`
 
 Creates a new skill that takes an existing monolithic PRD and decomposes it into:
-- A **Product Vision** document (overview, goals, personas, architecture, tech stack, NFRs, security, accessibility, glossary)
+- A **PRD** document (overview, goals, personas, architecture, tech stack, NFRs, security, accessibility, glossary)
 - Individual **Feature documents** (user stories, functional requirements, acceptance criteria, implementation tasks, testing)
 
 Key design decisions:
-- Product Vision retains Sections 1–7 and 9–13 from the PRD format (the cross-cutting concerns)
+- PRD retains Sections 1–7 and 9–13 from the PRD format (the cross-cutting concerns)
 - Features are extracted from Sections 4.2 (User Stories), 8 (Functional Requirements), and 14 (Implementation Phases)
 - Feature IDs use the format `{FEATURE-PREFIX}-US-01`, `{FEATURE-PREFIX}-FR-01` to avoid collision
 - Each feature includes a dependency declaration for inter-feature ordering
-- The skill outputs files to `docs/product-vision.md` and `docs/features/*.md`
+- The skill outputs files to `docs/PRD.md` and `docs/features/*.md`
 
 #### 2. Extend: `forge-build-feature-prd` (modify existing)
 
@@ -85,9 +85,9 @@ Changes:
 **File:** `templates/skills/forge-build-agent-team/SKILL.md`
 
 Changes:
-- Add a third mode to Step 0: **Vision + Features Mode** - detected when a product vision document exists alongside feature documents in `docs/features/`
+- Add a third mode to Step 0: **Vision + Features Mode** - detected when a PRD document exists alongside feature documents in `docs/features/`
 - Add Steps 1v–8v for Vision + Features Mode:
-  - Step 1v: Read the product vision for architecture, tech stack, and cross-cutting concerns
+  - Step 1v: Read the PRD for architecture, tech stack, and cross-cutting concerns
   - Step 2v: Read all feature documents and aggregate requirements
   - Step 3v: Identify specialist roles across all features (same heuristics as Step 2)
   - Step 4v–8v: Follow existing Steps 3–8 but sourcing requirements from multiple feature docs
@@ -98,7 +98,7 @@ Changes:
 **File:** `templates/agents/project-orchestrator.md`
 
 Changes:
-- Add a new Section 1c: "Analyze Product Vision and Feature Documents" - for when the project uses decomposed features instead of a monolithic PRD
+- Add a new Section 1c: "Analyze PRD and Feature Documents" - for when the project uses decomposed features instead of a monolithic PRD
 - Add feature dependency ordering: read dependency declarations from each feature doc and build a dependency graph to determine execution order
 - Add new commands: `Execute all features`, `Execute feature docs/features/auth.md`, `Execute features in order`
 - Extend the `docs/PROGRESS.md` format to track feature-level progress in addition to phase-level

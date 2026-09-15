@@ -1,9 +1,9 @@
 ---
 name: forge-auto-build-prd
-description: "Author reviewed product vision and feature requirements from an idea, then stop before team generation. Use when starting a project, drafting requirements, or repairing incomplete canonical feature documents."
+description: "Author reviewed PRD and feature requirements from an idea, then stop before team generation. Use when starting a project, drafting requirements, or repairing incomplete canonical feature documents."
 ---
 
-# Author Product Vision and Features
+# Author PRD and Features
 
 This is the requirements-authoring stage, not the build stage. Invoke
 `forge-build-prd`; do not duplicate its interview, drafting or review logic.
@@ -41,7 +41,7 @@ evidence, native-language review, or any later human gate.
 Load `forge-build-prd/references/task-contract.md`. Run the sibling adapter's
 read-only `validate-prd` command without `--allow-legacy`. Require:
 
-- A nonempty product vision and a feature table listing every feature file.
+- A nonempty PRD and a feature table listing every feature file.
 - At least one feature with bounded executable tasks and exact dependency IDs.
 - One owning definition per requirement/story/constraint; ID-only traceability.
 - Version-2 authoring contracts resolving all mandatory rules, task-specific
