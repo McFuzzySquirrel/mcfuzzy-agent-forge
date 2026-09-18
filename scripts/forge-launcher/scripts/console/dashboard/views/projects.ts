@@ -57,7 +57,7 @@ function buildBootstrap(): HTMLElement {
   const input = el("input", { type: "text", placeholder: "/path/to/existing repository" });
   const harness = el("select", null, [
     el("option", { value: "agents" }, "agents (.agents)"),
-    el("option", { value: "github" }, "github (.github)"),
+    el("option", { value: "github" }, "copilot (.github)"),
     el("option", { value: "claude" }, "claude (.claude)"),
     el("option", { value: "opencode" }, "opencode (.opencode)"),
   ]) as HTMLSelectElement;
