@@ -54,6 +54,19 @@ Use `skill-creator`'s interview/template/preflight flow for `create` and
 substantial `extend` work. Do not copy a generated package over an unaffected
 file.
 
+When writing YAML frontmatter, copy the candidate name as the YAML string value,
+not as a JSON-encoded string. For a candidate whose JSON contains
+`"name": "geometry-evidence-fixtures"`, write exactly:
+
+```yaml
+name: geometry-evidence-fixtures
+```
+
+Do not write `name: '"geometry-evidence-fixtures"'` or otherwise preserve JSON
+quote characters inside the value. Before review, parse the frontmatter and
+remove accidental wrapping quote characters if the resulting value then
+exactly matches the parent directory.
+
 ### Step 3: Review and enforce quality
 
 Run `skill-review` against the changed package set with structural and per-axis
@@ -98,6 +111,9 @@ affected candidates.
 - **No-skills is success only when explicit.** Missing or malformed handoffs
   fail; only an empty candidate list or all-omit list completes without model
   generation.
+- **JSON quotes are not name content.** The quotes around a candidate name in
+  `docs/SKILL-CANDIDATES.json` delimit the JSON string; copying them into the
+  YAML value makes the skill name differ from its directory.
 - **References are files.** A Markdown link to a missing reference is a
   structural failure, not an advisory warning.
 
@@ -106,6 +122,8 @@ affected candidates.
 - [ ] Handoff exists and validates as immutable version 1.
 - [ ] Full/headless/incremental/reconciliation mode was recorded.
 - [ ] Every changed candidate has a stable name and valid action.
+- [ ] Each frontmatter `name` parses to the exact parent directory name with no
+      embedded wrapping quote characters.
 - [ ] Unaffected packages and manifest IDs are byte-for-byte unchanged.
 - [ ] `skill-review` passes with `--fail-axis-below --fail-structural`.
 - [ ] No execution manifest was created or modified.

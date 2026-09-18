@@ -51,7 +51,7 @@ Generate the skill files using the loaded template and the interview answers. Bu
 
 | Section | Quality axis | What to do |
 |---------|-------------|------------|
-| YAML frontmatter | - | `name` must match directory name; `description` must include trigger keywords |
+| YAML frontmatter | - | `name` must match the directory name after YAML parsing. Emit `name: deploy-service`; never copy JSON delimiters into the value as `name: '"deploy-service"'`. `description` must include trigger keywords. |
 | Opening paragraph | Context economy | State exactly what the skill does and when to use it. No generic preamble. |
 | `## Process` steps | Procedural clarity | Write *how to approach* each step, not just *what to produce*. Include decision criteria. |
 | `## Gotchas` | Gotchas coverage | Add at least two concrete, project-specific edge cases. Use exact pattern: `**{Failure name}.** {What goes wrong and the concrete fix.}` - never generic advice. |
@@ -106,7 +106,7 @@ After passing, confirm the install path and remind the user to copy the skill to
 
 ## Gotchas
 
-- **`name` must exactly match the directory name.** A mismatch breaks skill activation. Check this before Step 5.
+- **`name` must exactly match the directory name.** A mismatch breaks skill activation. JSON quote characters delimit an input string and are not part of the name. Emit `name: deploy-service`, not `name: '"deploy-service"'`. If parsed frontmatter contains wrapping quote characters, remove them before Step 5.
 - **Load triggers must say *when*, not just *what*.** "Load `references/api-errors.md` if the API returns a non-200" is good. "See references/ for more" is useless and will score a 1 on progressive disclosure.
 - **Do not move the first ~100 lines of SKILL.md to references/.** That content defines the skill's purpose and trigger conditions - it must stay inline even if it is verbose.
 - **Gotchas must be concrete.** "Handle errors appropriately" scores a 1. "If the `users` table uses soft deletes, queries must include `WHERE deleted_at IS NULL`" scores a 3.

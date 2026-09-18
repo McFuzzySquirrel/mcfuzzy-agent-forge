@@ -11,6 +11,9 @@ Work through every item. For each failure: state what is wrong, fix it immediate
 - [ ] `SKILL.md` exists in the skill directory **[BLOCKER]**
 - [ ] YAML frontmatter is present and valid (no parse errors) **[BLOCKER]**
 - [ ] `name` in frontmatter exactly matches the parent directory name **[BLOCKER]**
+- [ ] Parsed `name` contains no embedded wrapping quote characters copied from
+      JSON input; use `name: deploy-service`, not
+      `name: '"deploy-service"'` **[BLOCKER]**
 - [ ] `description` is present, single-line, double-quoted, and at least one sentence long (no YAML block scalars like `>`) **[BLOCKER]**
 - [ ] If modular: `references/` directory exists with at least one `.md` file
 - [ ] No circular references (a reference file does not load another reference file)
