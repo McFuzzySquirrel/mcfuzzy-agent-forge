@@ -37,6 +37,12 @@ Detailed release and change notes for MyForge.
   document opens a wide modal dialog that uses the available space, replacing the
   narrow split-pane detail view.
 
+### Security
+
+- Updated the transitive `js-yaml` dependency in the `forge-execution-adapter`
+  lockfile from 3.15.1 to 3.15.2, addressing GHSA-2883-xcg3-v3hh
+  (`maxTotalMergeKeys` unbounded CPU). No `package.json` change.
+
 ---
 
 ## September 2026 - v3.79
