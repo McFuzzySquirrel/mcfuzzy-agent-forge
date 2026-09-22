@@ -53,14 +53,17 @@ Uploaded files must be plain text or Markdown (`.md` or `.txt`) because the
 browser staging path reads text directly. Existing PRDs are copied to
 `docs/PRD.md`; research/seed files are copied to `docs/research/` and inform
 the PRD build,
-- and whether setup should run automatically after creation (draft the PRD and generate the agent team).
+- and whether setup should run automatically after creation. The auto-draft
+  checkbox is the **headless** path (draft the PRD and generate the agent team
+  with no questions); leave it off to author the PRD interactively.
 - **Concurrency preference** (optional): a stored engine setting carried into
   `docs/engine-config.json` and later runs. Leave blank to use the engine
   default or adjust it later from the Overview Controls panel.
 
-Once it finishes, the console opens that project's Overview view. If creation
-continues in the background, the wizard now shows a live status card so you can
-tell when the repo is ready to open.
+Once it finishes, the console opens that project's Overview view, where the
+interactive PRD authoring options live. If creation continues in the background,
+the wizard shows a live status card with a **Select this project** button so you
+can open Overview as soon as the repository is ready.
 
 ---
 
@@ -76,11 +79,20 @@ The Overview is the main control center for a project. It shows:
 - the pipeline status,
 - and the run controls.
 
-When a project is still at an earlier stage, the **Continue** button advances the workflow one step at a time. The same actions are available from the terminal launcher, but the console lets you review the generated artifacts before moving on.
+When a project is still at an earlier stage, the pipeline card advances the workflow one step at a time. The same actions are available from the terminal launcher, but the console lets you review the generated artifacts before moving on.
+
+The PRD and Feature PRD steps lead with the **interactive** path on the Overview
+pipeline card: the primary button opens your authoring runner in a new terminal
+with the skill queued, so the skill interviews you before drafting. The headless
+alternative sits beside it and drafts without questions. Interactive sessions run
+outside the Console, so use **Refresh** on the pipeline card (or reopen the view)
+once the terminal finishes. Once a PRD exists, the pipeline card also offers
+**Validate PRD**, which runs the read-only validation for documents authored
+outside the Console.
 
 Typical progression:
 
-1. **Idea → PRD**: draft the PRD.
+1. **Idea → PRD**: **Author PRD (interactive)** interviews you, or **Auto-draft PRD (headless)** drafts directly. If `docs/IDEA.md` exists you can also **Grill the idea first (interactive)** to sharpen it before authoring.
 2. **PRD → team**: generate the agent team and ownership metadata.
 3. **Team → project skills**: generate or review project-specific skills.
 4. **Skills → manifest**: compile `docs/EXECUTION-MANIFEST.json`.
@@ -99,9 +111,11 @@ application files are preserved, and Forge files are overwritten only when
 **Authoring runner**, which defaults to inheriting the runner from the harness;
 picking one saves it into the repository's `docs/authoring-config.json`.
 
-After a build completes, use **Add a feature** on Overview. This runs
-`forge-build-feature-prd` against the existing codebase and team, writes an
-additive document under `docs/features/`, and leaves the original PRD intact.
+After a build completes, use **Add a feature** on Overview. **Author Feature
+PRD (interactive)** interviews you in the terminal, while **Auto-build feature
+(headless)** runs `forge-build-feature-prd` against the existing codebase and
+team directly. Both write an additive document under `docs/features/` and leave
+the original PRD intact.
 Choose **Prepare increment** to update affected agents and reconcile the manifest,
 or enable **Run new feature tasks** to execute only tasks emitted by that feature.
 The Overview reconciliation panel lists preserved, new, changed, and removed task
@@ -122,11 +136,12 @@ Once the build starts, switch between the views to follow the work:
 - **Board**: a live kanban view for tasks in To Do, In Progress, Done, and Failed.
 - **Tasks**: a sortable, filterable task table with a detail drawer for each task.
 - **Logs**: the engine and authoring log tail plus the live audit event stream.
-- **Plan & Team**: the project documents and the generated agent/skill files.
-  Documents open in a detail pane with an **Open externally** button; skills are
-  shown as cards grouped into **Forge skills** and **Project skills**. Agent
-  cards also expose primary and fallback model selectors when a model inventory
-  has been discovered.
+- **Plan & Team**: the project documents as a table (kind, title, path, status)
+  and the generated agent/skill files. Selecting a document opens it in a wide
+  popup with an **Open externally** button; `forge-requirement` and `forge-task`
+  blocks render as tables instead of code. Skills are shown as cards grouped
+  into **Forge skills** and **Project skills**. Agent cards also expose primary
+  and fallback model selectors when a model inventory has been discovered.
 
 The Console uses the selected harness root for team, report, and model-override
 operations. It does not merge agents with the same identity from other harness

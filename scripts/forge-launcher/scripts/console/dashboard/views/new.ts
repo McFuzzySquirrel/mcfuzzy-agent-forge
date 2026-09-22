@@ -77,7 +77,8 @@ function buildForm(): HTMLElement {
       el("p", { className: "dim small" }, "Research and seed docs (design specs, market research, technical notes) are copied to docs/research/ and give the PRD build extra context. An existing PRD is used as-is instead of drafting from the idea."),
     ]),
     authoring.root,
-    el("label", { className: "checkbox-row" }, [autoDraft, el("span", null, "Auto-run setup after creation (draft PRD + generate team)")]),
+    el("label", { className: "checkbox-row" }, [autoDraft, el("span", null, "Auto-draft PRD + team after creation (headless, skips the interview)")]),
+    el("p", { className: "dim small" }, "Recommended: leave this off, then select the project and author the PRD interactively from Overview so the skill can interview you first."),
     el("div", { className: "actions" }, [submit, cancel]),
   ]);
   const project = store.projectKey();
@@ -356,19 +357,16 @@ async function renderCreateStatus(host: HTMLElement, repoDir: string): Promise<v
       ]),
       el("p", { className: "create-status-message dim" }, `${project?.stage ?? "creating"} — ${message}`),
       el("div", { className: "actions" }, [
-        el("button", { className: "btn btn-primary", disabled: project ? null : true }, "Select this project"),
+        el("button", { className: "btn btn-primary", "data-action": "select", disabled: project ? null : true }, "Select this project"),
         el("a", { className: "btn", href: "#/projects" }, "View projects"),
       ]),
     ]);
-    const selectBtn = panel.querySelector<HTMLElement>("button");
-    if (selectBtn) {
-      selectBtn.addEventListener("click", () => {
-        void api.selectRepo(repoDir).then((r) => {
-          if (r.ok) location.hash = "#/overview";
-          else toast(r.message ?? "select failed");
-        });
+    panel.querySelector<HTMLElement>('[data-action="select"]')?.addEventListener("click", () => {
+      void api.selectRepo(repoDir).then((r) => {
+        if (r.ok) location.hash = "#/overview";
+        else toast(r.message ?? "select failed");
       });
-    }
+    });
     host.textContent = "";
     host.appendChild(panel);
   }
@@ -376,14 +374,13 @@ async function renderCreateStatus(host: HTMLElement, repoDir: string): Promise<v
   const title = panel.querySelector<HTMLElement>(".create-status-title");
   const status = panel.querySelector<HTMLElement>(".create-status-message");
   const spinner = panel.querySelector<HTMLElement>(".create-status-spinner");
-  const selectBtn = panel.querySelector<HTMLButtonElement>("button");
   if (title) title.textContent = running ? "Background progress" : "Background result";
   if (status) {
     status.className = project?.job?.status === "failed" ? "create-status-message error-text" : "create-status-message dim";
     status.textContent = `${project?.stage ?? "creating"} — ${message}`;
   }
   if (spinner) spinner.style.display = running ? "" : "none";
-  if (selectBtn) selectBtn.disabled = !project;
+  for (const btn of panel.querySelectorAll<HTMLButtonElement>("[data-action]")) btn.disabled = !project;
 
   if (createPoll !== undefined) window.clearInterval(createPoll);
   if (running) {

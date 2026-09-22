@@ -8,6 +8,11 @@ capture set is archived under `images/forge-console/current/`. Start with
 `forge-launcher console`.
 
 > See [forge-console.md](forge-console.md) for the full reference.
+>
+> **Capture note (v3.80):** the Overview pipeline now leads with interactive
+> authoring, and **Plan & Team** renders documents as a table that opens in a
+> wide popup. Screenshots taken before v3.80 show the earlier headless-first
+> pipeline and split-pane document view.
 
 ---
 

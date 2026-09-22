@@ -25,6 +25,7 @@ import type {
   ModelInventory,
   AuthoringConfig,
   AuthoringInventory,
+  AuthoringSessionTarget,
   TimeoutUpdateResult,
   UploadResult,
   WorkflowState,
@@ -113,6 +114,12 @@ export const api = {
   },
   launchModelTerminal(provider: "opencode" | "copilot" | "claude", message: string): Promise<LaunchCliResult> {
     return post<LaunchCliResult>("/api/model-plan/terminal", { provider, message });
+  },
+  startAuthoringSession(target: AuthoringSessionTarget, prompt?: string): Promise<LaunchCliResult> {
+    return post<LaunchCliResult>("/api/authoring/session", { target, prompt });
+  },
+  validateAuthoring(): Promise<{ ok: boolean; message: string }> {
+    return post<{ ok: boolean; message: string }>("/api/authoring/validate", {});
   },
   teamContent(relPath: string): Promise<FileContent> {
     return request<FileContent>(`/api/team/content?path=${encodeURIComponent(relPath)}`);

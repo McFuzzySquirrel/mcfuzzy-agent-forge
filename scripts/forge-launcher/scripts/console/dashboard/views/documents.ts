@@ -8,7 +8,8 @@ import { AUTHORING_RUNNER_OPTIONS, effectiveRunner } from "../runners.js";
 import type { AgentInfo, AuthoringConfig, AuthoringInventory, AuthoringStage, AuthoringStageState, DocEntry, DocsIndex, SkillInfo, TeamIndex } from "../types.js";
 
 let unsub: Array<() => void> = [];
-let detailHost: HTMLElement | null = null;
+let docsHost: HTMLElement | null = null;
+let docDialog: HTMLDialogElement | null = null;
 let generation = 0;
 let authoringStagesHost: HTMLElement | null = null;
 let agentsHost: HTMLElement | null = null;
@@ -17,7 +18,9 @@ let skillsHost: HTMLElement | null = null;
 export function unmountDocuments(): void {
   for (const u of unsub) u();
   unsub = [];
-  detailHost = null;
+  docsHost = null;
+  docDialog?.close();
+  docDialog = null;
   authoringStagesHost = null;
   agentsHost = null;
   skillsHost = null;
@@ -48,12 +51,12 @@ export function renderDocuments(container: HTMLElement): void {
 
   // ── Documents ─────────────────────────────────────────────────────────────
   const docsSection = section("Documents");
-  const grid = el("div", { className: "grid-2" });
-  const list = el("div", { className: "panel list-pane" });
-  detailHost = el("div", { className: "panel detail-pane" });
-  grid.appendChild(list);
-  grid.appendChild(detailHost);
-  docsSection.body.appendChild(grid);
+  const list = el("div", { className: "docs-host" });
+  docsSection.body.appendChild(
+    el("p", { className: "dim small" }, "Select a document to read it in a wide popup. Authoring stays on disk and is never edited here."),
+  );
+  docsSection.body.appendChild(list);
+  docsHost = list;
   container.appendChild(docsSection.root);
 
   const myGeneration = generation;
@@ -87,8 +90,24 @@ export function renderDocuments(container: HTMLElement): void {
     .catch(() => skillsSection.body.appendChild(el("div", { className: "dim" }, "Failed to load skills.")));
   unsub.push(store.subscribe(() => {
     void refreshGeneratedListings();
+    void refreshDocList();
     refreshDocuments();
   }));
+}
+
+let docsGeneration = 0;
+
+/** Re-reads the document index so an externally authored document appears. */
+async function refreshDocList(): Promise<void> {
+  if (!docsHost) return;
+  const current = ++docsGeneration;
+  try {
+    const docs = await api.docs();
+    if (current !== docsGeneration || !docsHost) return;
+    renderDocList(docsHost, docs);
+  } catch {
+    // Keep the last document index visible while the snapshot catches up.
+  }
 }
 
 export function refreshDocuments(): void {
@@ -341,36 +360,78 @@ function renderDocList(list: HTMLElement, docs: DocsIndex): void {
     list.appendChild(el("div", { className: "dim" }, "No documents."));
     return;
   }
-  const ul = el("ul", { className: "doc-list" });
+  const tbody = el("tbody", null);
   for (const entry of docs.entries) {
-    const item = el("li", { className: entry.exists ? "doc-item" : "doc-item missing" }, [
-      el("span", { className: "kind" }, entry.kind),
-      el("span", null, entry.title),
-      entry.exists ? null : el("span", { className: "dim" }, "— not created yet"),
+    const read = entry.exists ? el("button", { className: "btn btn-sm", type: "button" }, "Read") : el("span", { className: "dim" }, "—");
+    const tr = el("tr", { className: entry.exists ? "clickable" : null }, [
+      el("td", null, el("span", { className: "badge badge-doc" }, entry.kind)),
+      el("td", null, entry.title),
+      el("td", { className: "mono small" }, entry.relPath),
+      el("td", null, entry.exists ? "available" : "not created yet"),
+      el("td", null, read),
     ]);
-    if (entry.exists) item.addEventListener("click", () => void openDoc(entry));
-    ul.appendChild(item);
+    if (entry.exists) {
+      tr.addEventListener("click", () => openDocDialog(entry));
+      read.addEventListener("click", (event) => {
+        event.stopPropagation();
+        openDocDialog(entry);
+      });
+    }
+    tbody.appendChild(tr);
   }
-  list.appendChild(ul);
+  list.appendChild(
+    el("div", { className: "table-scroll" }, [
+      el("table", null, [
+        el("thead", null, [
+          el("tr", null, [
+            el("th", null, "Kind"),
+            el("th", null, "Title"),
+            el("th", null, "Path"),
+            el("th", null, "Status"),
+            el("th", null, ""),
+          ]),
+        ]),
+        tbody,
+      ]),
+    ]),
+  );
 }
 
-async function openDoc(entry: DocEntry): Promise<void> {
-  if (!detailHost) return;
-  detailHost.textContent = "";
-  detailHost.appendChild(el("div", { className: "dim" }, "Loading…"));
-  try {
-    const file = await api.docContent(entry.relPath);
-    detailHost.textContent = "";
-    const openBtn = el("button", { className: "btn btn-sm" }, "Open externally");
-    openBtn.addEventListener("click", () => void openExternal(entry.relPath));
-    detailHost.appendChild(
-      el("div", { className: "row between" }, [el("h3", null, entry.title), openBtn]),
-    );
-    detailHost.appendChild(el("div", { className: "md" }, [el("div", { html: renderMarkdown(file.content) })]));
-  } catch {
-    detailHost.textContent = "";
-    detailHost.appendChild(el("div", { className: "dim" }, "Could not load document."));
-  }
+/** Opens a document in a wide modal, leaving the page width free for the table. */
+function openDocDialog(entry: DocEntry): void {
+  docDialog?.close();
+  const body = el("div", { className: "md doc-dialog-body" }, el("div", { className: "dim" }, "Loading…"));
+  const external = el("button", { className: "btn btn-sm", type: "button" }, "Open externally");
+  external.addEventListener("click", () => void openExternal(entry.relPath));
+  const close = el("button", { className: "btn btn-sm", type: "button" }, "Close");
+  const dialog = el("dialog", { className: "doc-dialog" }, [
+    el("div", { className: "doc-dialog-header" }, [
+      el("div", { className: "doc-dialog-title" }, [
+        el("span", { className: "badge badge-doc" }, entry.kind),
+        el("h3", { className: "no-margin" }, entry.title),
+      ]),
+      el("div", { className: "row gap" }, [external, close]),
+    ]),
+    body,
+  ]) as HTMLDialogElement;
+  close.addEventListener("click", () => dialog.close());
+  dialog.addEventListener("click", (event) => {
+    if (event.target === dialog) dialog.close();
+  });
+  dialog.addEventListener("close", () => {
+    dialog.remove();
+    if (docDialog === dialog) docDialog = null;
+  }, { once: true });
+  docDialog = dialog;
+  document.body.appendChild(dialog);
+  dialog.showModal();
+  void api.docContent(entry.relPath)
+    .then((file) => {
+      body.replaceChildren(el("div", { html: renderMarkdown(file.content) }));
+    })
+    .catch(() => {
+      body.replaceChildren(el("div", { className: "dim" }, "Could not load document."));
+    });
 }
 
 async function openExternal(relPath: string): Promise<void> {

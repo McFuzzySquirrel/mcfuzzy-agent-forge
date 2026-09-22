@@ -4,6 +4,41 @@ Detailed release and change notes for MyForge.
 
 ---
 
+## September 2026 - v3.80
+
+### Interactive authoring in the Forge Console
+
+- The Overview pipeline now leads with interactive authoring for the PRD and
+  Feature PRD phases. The primary action opens the configured authoring runner in
+  a terminal with the skill queued, so `forge-build-prd` / `forge-auto-build-prd`
+  interview the user before drafting. The headless auto-draft path remains
+  available as a secondary action. These interactive actions live only on the
+  Overview page.
+- New `POST /api/authoring/session` endpoint launches an interactive
+  `idea`, `prd`, or `feature-prd` session, resolving the authoring runner and the
+  PRD-stage model. New `POST /api/authoring/validate` runs the read-only PRD
+  validation; the Overview pipeline exposes it as **Validate PRD** once a PRD
+  exists.
+- New `forge-grill-idea` skill: a stateful adaptation of the `grill-me` /
+  `grilling` technique that interviews the user in rounds of the frontier, then
+  rewrites and commits `docs/IDEA.md`. It is offered as **Grill the idea
+  (interactive)** on the Overview page.
+- The new-project wizard's auto-draft checkbox is relabeled as the headless path
+  and defaults off; interactive authoring happens from the Overview page after
+  selecting the project.
+
+### Plan & Team document rendering
+
+- `forge-requirement` and `forge-task` blocks render as tables instead of code.
+  Requirements show ID / kind / text; tasks show ID / title / owner /
+  dependencies / outputs with an expandable detail row. This is UI-only; the
+  authored documents are unchanged.
+- Documents now render as a table (kind, title, path, status). Selecting a
+  document opens a wide modal dialog that uses the available space, replacing the
+  narrow split-pane detail view.
+
+---
+
 ## September 2026 - v3.79
 
 ### Generated skill name quoting

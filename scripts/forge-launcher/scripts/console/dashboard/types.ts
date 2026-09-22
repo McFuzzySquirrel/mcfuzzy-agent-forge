@@ -329,6 +329,9 @@ export interface FileContent {
 
 export type ControlAction = "run" | "resume" | "pause" | "stop" | "replay" | "reset-changed" | "draft-prd" | "draft-existing-prd" | "draft-team" | "draft-skills" | "compile-manifest" | "feature-prd" | "feature-increment";
 
+/** Interactive authoring entry points that open a pre-seeded harness terminal. */
+export type AuthoringSessionTarget = "idea" | "prd" | "feature-prd";
+
 export type ExecutionMode = "auto" | "manual";
 export type SelectionScope = "single" | "range" | "list";
 
