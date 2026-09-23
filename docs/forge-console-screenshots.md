@@ -1,18 +1,19 @@
 # Forge Console - Visual Tour
 
 A screenshot walkthrough of the Forge Console. These images were captured from
-the current Console build in Chrome against a deterministic local fixture;
-no external authoring or paid model execution was used. Desktop captures use
-the stable numbered filenames below. The complete desktop and responsive
-capture set is archived under `images/forge-console/current/`. Start with
+the current Console build in Chrome against a deterministic local fixture; no
+external authoring or paid model execution was used. Desktop captures use the
+stable numbered filenames below. The complete desktop and responsive capture
+set is archived under `images/forge-console/current/`. Start with
 `forge-launcher console`.
 
 > See [forge-console.md](forge-console.md) for the full reference.
 >
-> **Capture note (v3.80):** the Overview pipeline now leads with interactive
-> authoring, and **Plan & Team** renders documents as a table that opens in a
-> wide popup. Screenshots taken before v3.80 show the earlier headless-first
-> pipeline and split-pane document view.
+> **Capture note (v3.81):** the Overview captures show the whole page, including
+> the **Controls** panel with the new **Log harness activity** toggle. Plan &
+> Team opens documents in a wide popup (introduced in v3.80); screenshots taken
+> before then show the earlier headless-first pipeline and split-pane document
+> view.
 
 ---
 
@@ -28,8 +29,11 @@ dropdown for one-click return to a prior project.
 
 The dashboard puts project identity, the next pipeline action, and blockers
 first. PRD, team, and project-skill authoring have separate status and model
-summaries. Authoring retries are distinct from native execution controls;
-legacy projects do not need to regenerate a team just to resume a build.
+summaries. The **Controls** panel holds run controls, per-task timeouts, the
+**Auto-commit** and **Log harness activity** toggles, concurrency, and the
+feature-increment form. Authoring retries are distinct from native execution
+controls; legacy projects do not need to regenerate a team just to resume a
+build. (The Overview capture is full-page so the Controls are visible.)
 
 ![Overview - run status + pipeline + controls](images/forge-console/current/overview-1024.png)
 
@@ -82,7 +86,8 @@ overrides separate from authoring settings.
 
 ## 9. Plan & Team - a document
 
-Expanding **Documents** and selecting the PRD renders it as Markdown, with an
+Expanding **Documents** and selecting the PRD opens it in a wide popup as
+rendered Markdown (requirement and task blocks become tables), with an
 **Open externally** button to edit it in your editor.
 
 ![Plan & Team - rendered document detail](images/forge-console/current/documents-detail-1440.png)
@@ -124,9 +129,10 @@ keyboard focus into the dialog; Escape closes it and returns focus to Help.
 
 ## Responsive current captures
 
-The current build was captured at 1024px, 720px, 390px, and 320px for every
-route. Detail-state captures (expanded task, rendered PRD, artifact detail,
-and audit log) are also included in `images/forge-console/current/`.
+The current build was captured at 1440px, 1024px, 720px, 390px, and 320px for
+every route. Detail-state captures (expanded task, rendered PRD, rendered
+feature, artifact detail, and audit log) are also included in
+`images/forge-console/current/`.
 
 | View | 1024px | 720px | 390px | 320px |
 | --- | --- | --- | --- | --- |
@@ -139,3 +145,23 @@ and audit log) are also included in `images/forge-console/current/`.
 | Timeline | [image](images/forge-console/current/timeline-1024.png) | [image](images/forge-console/current/timeline-720.png) | [image](images/forge-console/current/timeline-390.png) | [image](images/forge-console/current/timeline-320.png) |
 | Projects | [image](images/forge-console/current/projects-1024.png) | [image](images/forge-console/current/projects-720.png) | [image](images/forge-console/current/projects-390.png) | [image](images/forge-console/current/projects-320.png) |
 | New project | [image](images/forge-console/current/new-1024.png) | [image](images/forge-console/current/new-720.png) | [image](images/forge-console/current/new-390.png) | [image](images/forge-console/current/new-320.png) |
+
+## Regenerating these captures
+
+The images are produced by the `tools/console-screenshots` developer tool. It
+builds the launcher, writes a deterministic fixture repository, starts the
+Console against it, and drives the installed Chrome with `puppeteer-core`. No
+model or external authoring runs; every timestamp in the fixture is fixed.
+
+```bash
+cd tools/console-screenshots
+npm install         # first time; installs puppeteer-core (no bundled browser)
+npm run capture     # builds the launcher, captures, then writes images + GIF
+```
+
+Requirements: `google-chrome` (or set `CHROME_PATH`), `ffmpeg` on `PATH`, and
+Node 18+. The tool writes the responsive set to
+`docs/images/forge-console/current/`, derives the numbered tour images and the
+640px thumbnails, and rebuilds `console-walkthrough.gif`. Pass `--headed` to
+watch it run (useful if headless WebGL ever renders the Board blank).
+
