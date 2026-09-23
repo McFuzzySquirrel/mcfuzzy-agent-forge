@@ -945,6 +945,53 @@ test("model planning endpoint launches claude with the message as a positional p
   });
 });
 
+test("authoring session endpoint launches an interactive grill session", async () => {
+  await withServer(async (server, repo) => {
+    const calls: Array<{ cli: string; dir: string; args: string[] }> = [];
+    await server.stop();
+    const replacement = await startConsoleServer({
+      repoRoot: repo,
+      port: nextPort(),
+      open: false,
+      onLog: () => {},
+      allowExternalOpen: true,
+      launchCli: async (cli, dir, args) => { calls.push({ cli, dir, args }); return true; },
+    });
+    try {
+      const idea = await postJson(`${replacement.url}/api/authoring/session`, { target: "idea" }, { "X-Forge-Token": replacement.token });
+      assert.equal((idea.body as { ok: boolean }).ok, true);
+      assert.equal(calls[0]?.cli, "opencode");
+      assert.equal(calls[0]?.args[0], "--prompt");
+      assert.match(calls[0]?.args[1] ?? "", /forge-grill-idea/);
+
+      const prd = await postJson(`${replacement.url}/api/authoring/session`, { target: "prd" }, { "X-Forge-Token": replacement.token });
+      assert.equal((prd.body as { ok: boolean }).ok, true);
+      assert.match(calls[1]?.args[1] ?? "", /forge-auto-build-prd/);
+
+      const missingPrompt = await postJson(`${replacement.url}/api/authoring/session`, { target: "feature-prd" }, { "X-Forge-Token": replacement.token });
+      assert.equal(missingPrompt.status, 400);
+
+      const feature = await postJson(`${replacement.url}/api/authoring/session`, { target: "feature-prd", prompt: "add billing" }, { "X-Forge-Token": replacement.token });
+      assert.equal((feature.body as { ok: boolean }).ok, true);
+      assert.match(calls[2]?.args[1] ?? "", /forge-build-feature-prd/);
+      assert.match(calls[2]?.args[1] ?? "", /add billing/);
+
+      const unknown = await postJson(`${replacement.url}/api/authoring/session`, { target: "nope" }, { "X-Forge-Token": replacement.token });
+      assert.equal(unknown.status, 400);
+    } finally {
+      await replacement.stop();
+    }
+  });
+});
+
+test("authoring session endpoint is disabled without external open", async () => {
+  await withServer(async (server) => {
+    const res = await postJson(`${server.url}/api/authoring/session`, { target: "idea" }, { "X-Forge-Token": server.token });
+    assert.equal(res.status, 200);
+    assert.equal((res.body as { ok: boolean }).ok, false);
+  });
+});
+
 test("model inventory and overrides preserve provider-qualified IDs", async () => {
   const root = makeRepo();
   const docsResearch = join(root, "docs", "research");

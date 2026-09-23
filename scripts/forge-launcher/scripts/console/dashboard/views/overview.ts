@@ -3,7 +3,7 @@
 import { api } from "../api.js";
 import { Epoch, store } from "../state.js";
 import { el, fmtDuration, fmtTime, minutesToTimeoutMs, statusBadge, toast } from "../render/dom.js";
-import type { Actions, AuthoringStageState, BackgroundJob, ControlAction, ExecutionMode, RunSummary, Summary, TaskRow } from "../types.js";
+import type { Actions, AuthoringSessionTarget, AuthoringStageState, BackgroundJob, ControlAction, ExecutionMode, RunSummary, Summary, TaskRow } from "../types.js";
 
 const renderEpoch = new Epoch();
 let unsub: Array<() => void> = [];
@@ -159,6 +159,7 @@ function renderFeatureIncrement(container: HTMLElement): HTMLElement {
   input.addEventListener("input", () => store.setDraft(project, "featurePrompt", (input as HTMLTextAreaElement).value));
   run.addEventListener("change", () => store.setDraft(project, "featureRun", String(run.checked)));
   const button = el("button", { className: "btn btn-primary" }, "Run Feature Increment");
+  const interactive = el("button", { className: "btn" }, "Author feature PRD (interactive)");
   button.addEventListener("click", () => {
     const prompt = (input as HTMLTextAreaElement).value.trim();
     if (!prompt) { toast("Describe the feature first."); return; }
@@ -169,7 +170,12 @@ function renderFeatureIncrement(container: HTMLElement): HTMLElement {
       .catch((e) => toast(e instanceof Error ? e.message : "feature increment failed"))
       .finally(() => button.removeAttribute("disabled"));
   });
-  return el("div", { className: "panel" }, [el("h4", null, "Increment the project"), el("p", { className: "dim small" }, "Authors the feature, updates affected agents, recompiles the manifest, and optionally runs it."), input, el("label", { className: "checkbox-row" }, [run, el("span", null, "Run the workflow after preparing")]), el("div", { className: "actions" }, [button])]);
+  interactive.addEventListener("click", () => {
+    const prompt = (input as HTMLTextAreaElement).value.trim();
+    if (!prompt) { toast("Describe the feature first."); return; }
+    void startSession(container, "feature-prd", prompt);
+  });
+  return el("div", { className: "panel" }, [el("h4", null, "Increment the project"), el("p", { className: "dim small" }, "Authors the feature, updates affected agents, recompiles the manifest, and optionally runs it. Use the interactive option to interview and author just the feature PRD first."), input, el("label", { className: "checkbox-row" }, [run, el("span", null, "Run the workflow after preparing")]), el("div", { className: "actions" }, [button, interactive])]);
 }
 
 function renderAuthoringStatus(summary: Summary): HTMLElement {
@@ -217,18 +223,23 @@ function renderFeaturePrd(container: HTMLElement): HTMLElement {
   const input = el("textarea", { rows: "3", placeholder: "Describe the feature to add…", "aria-label": "Feature description" });
   input.textContent = store.getDraft(project, "featurePrompt", "");
   input.addEventListener("input", () => store.setDraft(project, "featurePrompt", (input as HTMLTextAreaElement).value));
-  const button = el("button", { className: "btn btn-primary" }, "Author Feature PRD");
-  button.addEventListener("click", () => {
+  const interactive = el("button", { className: "btn btn-primary" }, "Author Feature PRD (interactive)");
+  const headless = el("button", { className: "btn" }, "Auto-build feature (headless)");
+  interactive.addEventListener("click", () => {
     const prompt = (input as HTMLTextAreaElement).value.trim();
     if (!prompt) { toast("Describe the feature first."); return; }
-    button.setAttribute("disabled", "true");
-    button.setAttribute("disabled", "");
+    void startSession(container, "feature-prd", prompt);
+  });
+  headless.addEventListener("click", () => {
+    const prompt = (input as HTMLTextAreaElement).value.trim();
+    if (!prompt) { toast("Describe the feature first."); return; }
+    headless.setAttribute("disabled", "");
     void api.featurePrd(prompt)
       .then((r) => toast(r.message))
       .catch((e) => toast(e instanceof Error ? e.message : "feature PRD failed"))
-      .finally(() => button.removeAttribute("disabled"));
+      .finally(() => headless.removeAttribute("disabled"));
   });
-  return el("div", { className: "panel" }, [el("h4", null, "Add a feature"), el("p", { className: "dim small" }, "Authoring writes a new document under docs/features/ and does not start the workflow engine."), input, el("div", { className: "actions" }, [button])]);
+  return el("div", { className: "panel" }, [el("h4", null, "Add a feature"), el("p", { className: "dim small" }, "The interactive path interviews you in a terminal before authoring; the headless path writes the feature document directly. Neither starts the workflow engine."), input, el("div", { className: "actions" }, [interactive, headless])]);
 }
 
 function renderHeader(summary: Summary): HTMLElement {
@@ -351,17 +362,26 @@ interface PipelineStep {
   label: string;
   action: ControlAction;
   hint: string;
+  /** When set, the primary button opens an interactive session instead of running `action`. */
+  session?: AuthoringSessionTarget;
+  /** Label for the optional headless alternative that runs `action`. */
+  autoLabel?: string;
+  /** Also offer grilling the idea before authoring the PRD. */
+  ideaSession?: boolean;
 }
 
 /** Determines the next pipeline step, or null when there's nothing to advance. */
 function nextStep(summary: Summary, actions: Actions): PipelineStep | null {
   if (!summary.hasPrd) {
     return {
-      label: summary.hasIdea ? "Draft PRD" : "Author project PRD",
+      label: "Author PRD (interactive)",
       action: summary.hasIdea ? "draft-prd" : "draft-existing-prd",
+      session: "prd",
+      autoLabel: summary.hasIdea ? "Auto-draft PRD (headless)" : "Author project PRD (headless)",
+      ideaSession: summary.hasIdea,
       hint: summary.hasIdea
-        ? "Turns docs/IDEA.md into a reviewed PRD (headless). Review it in Plan & Team, then come back to continue."
-        : "Inspects this existing repository and authors docs/PRD.md using forge-build-prd semantics.",
+        ? "Opens your harness in a terminal with the PRD skill queued so it interviews you first. Use the headless path to draft without questions."
+        : "Opens your harness to interview you against the existing repository. The headless path inspects the repo and authors docs/PRD.md without questions.",
     };
   }
   if (!summary.hasTeam) {
@@ -424,6 +444,39 @@ async function continuePipeline(container: HTMLElement, step: PipelineStep): Pro
   startPoll(container);
 }
 
+/** Opens an interactive authoring session in a terminal and refreshes when it is done. */
+async function startSession(container: HTMLElement, target: AuthoringSessionTarget, prompt?: string): Promise<void> {
+  try {
+    const res = await api.startAuthoringSession(target, prompt);
+    toast(res.message || (res.ok ? "interactive session requested" : "launch failed"));
+  } catch (err) {
+    toast(err instanceof Error ? err.message : "interactive session failed");
+  }
+  // The session runs in an external terminal, so poll for its committed output.
+  for (const delay of [5000, 15000, 30000]) {
+    window.setTimeout(() => void renderOverview(container), delay);
+  }
+}
+
+function refreshButton(container: HTMLElement): HTMLButtonElement {
+  const button = el("button", { className: "btn btn-sm", type: "button" }, "Refresh") as HTMLButtonElement;
+  button.addEventListener("click", () => void renderOverview(container));
+  return button;
+}
+
+/** Re-runs the read-only PRD validation for documents authored outside the Console. */
+function validatePrdButton(): HTMLButtonElement {
+  const button = el("button", { className: "btn btn-sm", type: "button" }, "Validate PRD") as HTMLButtonElement;
+  button.addEventListener("click", () => {
+    button.disabled = true;
+    void api.validateAuthoring()
+      .then((result) => toast(result.message))
+      .catch((error) => toast(error instanceof Error ? error.message : "validation failed"))
+      .finally(() => { button.disabled = false; });
+  });
+  return button;
+}
+
 function renderGuidance(container: HTMLElement, summary: Summary, actions: Actions): HTMLElement {
   const step = nextStep(summary, actions);
   const working = summary.job?.status === "running";
@@ -431,7 +484,7 @@ function renderGuidance(container: HTMLElement, summary: Summary, actions: Actio
   let text: string;
   let hint: string;
   if (!summary.hasPrd) {
-    text = summary.hasIdea ? "Draft a PRD to get started." : "Author a project PRD from this existing repository.";
+    text = summary.hasIdea ? "Author the PRD interactively, or auto-draft it headless." : "Author a project PRD interactively from this existing repository.";
   } else if (!summary.hasTeam) {
     text = "Generate the agent team.";
   } else if (!summary.hasManifest && summary.executionMode === "manual") {
@@ -454,17 +507,32 @@ function renderGuidance(container: HTMLElement, summary: Summary, actions: Actio
 
   if (step) {
     hint = step.hint;
-    const btn = el("button", { className: "btn btn-primary" }, step.label);
+    const primary = el("button", { className: "btn btn-primary" }, step.label);
+    const secondary = step.autoLabel ? el("button", { className: "btn" }, step.autoLabel) : null;
+    const idea = step.ideaSession ? el("button", { className: "btn" }, "Grill the idea first (interactive)") : null;
     if (!working) {
-      btn.addEventListener("click", () => void continuePipeline(container, step));
+      primary.addEventListener("click", () => {
+        if (step.session) void startSession(container, step.session);
+        else void continuePipeline(container, step);
+      });
+      secondary?.addEventListener("click", () => void continuePipeline(container, step));
+      idea?.addEventListener("click", () => void startSession(container, "idea"));
     }
-    if (!working) children.push(el("div", { className: "actions", style: "margin-top:10px" }, [btn]));
+    if (!working) {
+      children.push(el("div", { className: "actions", style: "margin-top:10px" }, [primary, secondary, idea].filter(Boolean) as HTMLElement[]));
+    }
   } else if (!summary.hasPrd && !summary.hasIdea) {
     hint = "Add docs/IDEA.md to describe the project idea, then come back.";
   } else if (summary.hasManifest) {
     hint = "Use the Controls panel below to choose tasks, run, resume, or stop the build.";
   } else {
     hint = "Pipeline setup is complete.";
+  }
+
+  if (!working) {
+    const tools: HTMLElement[] = [refreshButton(container)];
+    if (summary.hasPrd) tools.push(validatePrdButton());
+    children.push(el("div", { className: "row gap wrap", style: "margin-top:6px" }, tools));
   }
 
   if (working && summary.job) {

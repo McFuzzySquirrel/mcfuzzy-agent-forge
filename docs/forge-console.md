@@ -104,7 +104,7 @@ so you can review each result and come back later:
 
 | Stage | Continue does | Produces |
 |---|---|---|
-| Idea (no PRD) | **Draft PRD** (headless `forge-auto-build-prd`) | `docs/PRD.md` + `docs/features/*.md` |
+| Idea (no PRD) | **Author PRD (interactive)** opens `forge-auto-build-prd` in a terminal; **Auto-draft PRD (headless)** drafts without questions | `docs/PRD.md` + `docs/features/*.md` |
 | PRD (no team) | **Generate team** (headless `forge-build-agent-team`) | agent files and ownership metadata |
 | Team (skills incomplete) | **Generate project skills** | project skill candidates and review result |
 | Skills ready (no manifest) | **Compile manifest** (`forge-execution-adapter`) | `docs/EXECUTION-MANIFEST.json` |
@@ -123,7 +123,33 @@ edit them in your editor.
 Completed projects remain extensible. Use **Add a feature** on Overview to run
 `forge-build-feature-prd`. The skill inspects the existing codebase, PRD, and
 agent team and writes an additive document under `docs/features/`; it does not
-replace the original PRD or start the engine.
+replace the original PRD or start the engine. **Author Feature PRD
+(interactive)** interviews you first; **Auto-build feature (headless)** writes
+the document directly.
+
+### Interactive authoring
+
+The **Overview** pipeline card leads with the interactive interview that the
+pre-Console workflow was built around; these actions live only there. The primary
+PRD and Feature PRD actions open your configured authoring runner in a new
+terminal with the skill already queued, so the skill asks its clarifying
+questions before drafting. Backed by `POST /api/authoring/session`, which
+resolves the authoring runner and the PRD-stage model and falls back to printing
+the manual command when no desktop terminal is available.
+
+- **Grill the idea first (interactive)** runs the `forge-grill-idea` skill,
+  which interviews you in rounds to sharpen `docs/IDEA.md` before PRD authoring,
+  then rewrites and commits it.
+- **Author PRD (interactive)** runs `forge-auto-build-prd` (or
+  `forge-build-prd` for an existing repository) with the interview enabled.
+- **Validate PRD** runs the read-only `validate-prd` check and reports the
+  result, for documents authored outside the Console. It appears on the pipeline
+  card once a PRD exists.
+
+Interactive sessions run outside the Console, so they are not tracked background
+jobs: the skill validates and commits its own output, and the Console picks the
+result up from the repository. Use **Refresh** on the pipeline card, or reopen
+the view, to see newly authored documents.
 
 The terminal counterparts are the new `draft-prd` / `draft-team` subcommands:
 
@@ -183,7 +209,7 @@ button shows the exact command to run manually.
 | **Board** | the PixiJS Forge Board - a live kanban (To Do · In Progress · Done · Failed). |
 | **Tasks** | every task in a filterable/sortable table with a detail drawer, editable per-task timeout, explicit/range selection controls for manual mode, and a **Launch \<harness\> CLI** button. |
 | **Logs** | `docs/engine-run.log` tail + the audit event stream (live via SSE). |
-| **Plan & Team** | the project documents (IDEA, PRD, vision, features, progress, model plan) + agents and skills, in collapsible sections. |
+| **Plan & Team** | the project documents (IDEA, PRD, features, progress, model plan) as a table that opens a document in a wide popup, plus agents and skills in collapsible card sections. Requirement and task blocks render as tables. |
 | **Artifacts** | the structured outputs tasks produced (`docs/artifacts/`), browsable by type/task with previews. |
 | **Timeline** | chronological audit events, failures highlighted. |
 | **Projects** | switch projects or add a folder. |

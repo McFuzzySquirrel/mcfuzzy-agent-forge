@@ -44,6 +44,101 @@ function renderTable(rows: string[][]): string {
   return `<table>${headHtml}${bodyHtml}</table>`;
 }
 
+// ─── Structured forge blocks ─────────────────────────────────────────────────
+//
+// Requirements and tasks are authored as JSON inside fenced `forge-requirement`
+// and `forge-task` blocks. Rendering them as tables is a Console-only concern:
+// the source documents are never rewritten. Malformed JSON falls back to the
+// ordinary code block so nothing is silently lost.
+
+type ForgeRecord = Record<string, unknown>;
+
+/**
+ * Reverses `escapeHtml` for forge JSON blocks. The markdown source is escaped
+ * before block parsing, so the JSON has to be decoded before `JSON.parse`.
+ * `&amp;` is replaced last so an escaped entity is not double-decoded.
+ */
+function unescapeHtml(value: string): string {
+  return value
+    .replace(/&quot;/g, '"')
+    .replace(/&#39;/g, "'")
+    .replace(/&lt;/g, "<")
+    .replace(/&gt;/g, ">")
+    .replace(/&amp;/g, "&");
+}
+
+function asText(value: unknown): string {
+  if (typeof value === "string") return value;
+  if (value === null || value === undefined) return "";
+  return String(value);
+}
+
+function asList(value: unknown): string[] {
+  return Array.isArray(value) ? value.map(asText).filter((entry) => entry.length > 0) : [];
+}
+
+/** Renders a JSON-derived cell/paragraph value with markdown inline formatting. */
+function rich(value: unknown): string {
+  return inline(escapeHtml(asText(value)));
+}
+
+function listHtml(values: string[]): string {
+  if (values.length === 0) return "";
+  return `<ul>${values.map((value) => `<li>${inline(escapeHtml(value))}</li>`).join("")}</ul>`;
+}
+
+function formatCell(value: unknown): string {
+  const list = asList(value);
+  if (list.length === 0) {
+    const text = asText(value);
+    return text ? rich(text) : "—";
+  }
+  return list.map((entry) => rich(entry)).join("<br>");
+}
+
+function renderRequirementTable(items: ForgeRecord[]): string {
+  const head = `<thead><tr><th>ID</th><th>Kind</th><th>Requirement</th></tr></thead>`;
+  const body = items.map((item) => `<tr>`
+    + `<td class="mono small">${rich(item.id)}</td>`
+    + `<td>${rich(item.kind)}</td>`
+    + `<td>${rich(item.text)}</td>`
+    + `</tr>`).join("");
+  return `<table class="forge-table forge-requirements">${head}<tbody>${body}</tbody></table>`;
+}
+
+function renderTaskTable(items: ForgeRecord[]): string {
+  const head = `<thead><tr><th>ID</th><th>Task</th><th>Owner</th><th>Depends on</th><th>Outputs</th></tr></thead>`;
+  const body = items.map((item) => {
+    const contract = (item.contract && typeof item.contract === "object" && !Array.isArray(item.contract))
+      ? item.contract as ForgeRecord
+      : {};
+    const requirements = [...asList(contract.requirements), ...asList(contract.requirementRefs)];
+    const constraints = [...asList(contract.constraints), ...asList(contract.constraintRefs)];
+    const detail = [
+      asText(item.description) ? `<div><div class="k">Description</div><p>${rich(item.description)}</p></div>` : "",
+      requirements.length ? `<div><div class="k">Requirements</div>${listHtml(requirements)}</div>` : "",
+      asList(contract.acceptanceCriteria).length ? `<div><div class="k">Acceptance criteria</div>${listHtml(asList(contract.acceptanceCriteria))}</div>` : "",
+      constraints.length ? `<div><div class="k">Constraints</div>${listHtml(constraints)}</div>` : "",
+      asList(item.validationCommands).length ? `<div><div class="k">Validation</div>${listHtml(asList(item.validationCommands))}</div>` : "",
+      asList(contract.references).length ? `<div><div class="k">References</div>${listHtml(asList(contract.references))}</div>` : "",
+      asText(contract.kind) === "human-review" ? `<div><div class="k">Human review</div><p>${rich(contract.reviewFile ?? "review file configured in the manifest")}</p></div>` : "",
+    ].filter(Boolean).join("");
+    const owner = asText(item.ownerAgent) || (asText(contract.kind) === "human-review" ? "human review" : "—");
+    const main = `<tr>`
+      + `<td class="mono small">${rich(item.id)}</td>`
+      + `<td>${rich(item.title)}</td>`
+      + `<td>${rich(owner)}</td>`
+      + `<td class="mono small">${formatCell(item.dependencies)}</td>`
+      + `<td class="mono small">${formatCell(item.expectedOutputs)}</td>`
+      + `</tr>`;
+    const detailRow = detail
+      ? `<tr class="forge-detail"><td colspan="5"><details><summary>Details</summary>${detail}</details></td></tr>`
+      : "";
+    return main + detailRow;
+  }).join("");
+  return `<table class="forge-table forge-tasks">${head}<tbody>${body}</tbody></table>`;
+}
+
 export function renderMarkdown(src: string): string {
   return renderBlocks(escapeHtml(src).replace(/\r\n?/g, "\n"));
 }
@@ -54,6 +149,13 @@ function renderBlocks(src: string): string {
   let i = 0;
   let listOpen: "ul" | "ol" | null = null;
   let para: string[] = [];
+  let pendingForge: { type: "requirement" | "task"; items: ForgeRecord[] } | null = null;
+
+  const flushForge = (): void => {
+    if (!pendingForge) return;
+    out.push(pendingForge.type === "requirement" ? renderRequirementTable(pendingForge.items) : renderTaskTable(pendingForge.items));
+    pendingForge = null;
+  };
 
   const closeList = (): void => {
     if (listOpen) {
@@ -78,16 +180,34 @@ function renderBlocks(src: string): string {
   while (i < lines.length) {
     const line = lines[i]!;
 
-    if (/^```/.test(line)) {
+    const fence = /^```\s*([\w-]*)\s*$/.exec(line);
+    if (fence) {
       flushPara();
       closeList();
       const buf: string[] = [];
       i += 1;
-      while (i < lines.length && !/^```/.test(lines[i]!)) {
+      while (i < lines.length && !/^```\s*$/.test(lines[i]!)) {
         buf.push(lines[i]!);
         i += 1;
       }
       i += 1;
+      const language = fence[1] ?? "";
+      if (language === "forge-requirement" || language === "forge-task") {
+        const type = language === "forge-requirement" ? "requirement" : "task";
+        let parsed: unknown;
+        try {
+          parsed = JSON.parse(unescapeHtml(buf.join("\n")));
+        } catch {
+          parsed = undefined;
+        }
+        if (parsed && typeof parsed === "object" && !Array.isArray(parsed)) {
+          if (pendingForge && pendingForge.type !== type) flushForge();
+          if (!pendingForge) pendingForge = { type, items: [] };
+          pendingForge.items.push(parsed as ForgeRecord);
+          continue;
+        }
+      }
+      flushForge();
       out.push(`<pre><code>${buf.join("\n")}</code></pre>`);
       continue;
     }
@@ -101,6 +221,7 @@ function renderBlocks(src: string): string {
 
     const heading = /^(#{1,6})\s+(.*)$/.exec(line);
     if (heading) {
+      flushForge();
       flushPara();
       closeList();
       const level = heading[1]!.length;
@@ -110,6 +231,7 @@ function renderBlocks(src: string): string {
     }
 
     if (/^\s*([-*_])\s*(\1\s*){2,}$/.test(line)) {
+      flushForge();
       flushPara();
       closeList();
       out.push("<hr/>");
@@ -118,6 +240,7 @@ function renderBlocks(src: string): string {
     }
 
     if (/^\s*>\s?/.test(line)) {
+      flushForge();
       flushPara();
       closeList();
       const buf: string[] = [];
@@ -130,6 +253,7 @@ function renderBlocks(src: string): string {
     }
 
     if (line.trim().startsWith("|") && i + 1 < lines.length && isTableSeparator(lines[i + 1]!)) {
+      flushForge();
       flushPara();
       closeList();
       const rows: string[][] = [splitRow(line)];
@@ -144,6 +268,7 @@ function renderBlocks(src: string): string {
 
     const ul = /^\s*[-*+]\s+(.*)$/.exec(line);
     if (ul) {
+      flushForge();
       flushPara();
       openList("ul");
       out.push(`<li>${inline(ul[1]!)}</li>`);
@@ -153,6 +278,7 @@ function renderBlocks(src: string): string {
 
     const ol = /^\s*\d+[.)]\s+(.*)$/.exec(line);
     if (ol) {
+      flushForge();
       flushPara();
       openList("ol");
       out.push(`<li>${inline(ol[1]!)}</li>`);
@@ -160,10 +286,12 @@ function renderBlocks(src: string): string {
       continue;
     }
 
+    flushForge();
     para.push(line.trim());
     i += 1;
   }
 
+  flushForge();
   flushPara();
   closeList();
   return out.join("\n");

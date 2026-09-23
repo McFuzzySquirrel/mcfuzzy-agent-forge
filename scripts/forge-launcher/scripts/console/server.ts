@@ -12,9 +12,10 @@ import { resolveInputFile } from "../paths.ts";
 import { launchCliInTerminal } from "../terminal.ts";
 import { RunController, type ControlDeps } from "./control.ts";
 import { IncrementalLineReader } from "./incremental-reader.ts";
-import { consoleAuthoringInventory } from "./authoring.ts";
+import { consoleAuthoringInventory, selectedAuthoringRunner } from "./authoring.ts";
 import { isRunnerChoice, loadAuthoringConfig, saveAuthoringConfig, validateAuthoringConfig } from "../authoring-config.ts";
-import type { InventoryProbe } from "../authoring-inventory.ts";
+import { resolveAuthoringModel, type AuthoringRunner, type InventoryProbe } from "../authoring-inventory.ts";
+import { validateAuthoredPrd } from "../prd-validation.ts";
 import {
   detectHarnessRoot,
   loadRegistry,
@@ -143,6 +144,50 @@ function openPath(filePath: string): void {
 /** Chooses the harness CLI + launch args for a forge repo (github → copilot, claude → claude, else opencode). */
 function harnessCli(repoRoot: string): { cli: string; args: string[] } {
   return harnessCliForHarness(detectHarnessRoot(repoRoot));
+}
+
+// ─── Interactive authoring sessions ──────────────────────────────────────────
+//
+// The Console cannot interview a user in the browser, so the interactive path
+// opens the authoring runner in a terminal with the skill already queued. The
+// headless path remains available through /api/control.
+
+type AuthoringSessionTarget = "idea" | "prd" | "feature-prd";
+
+interface AuthoringSessionSpec {
+  /** Authoring stage used to resolve the configured model for this session. */
+  stage: "prd";
+  skill: string;
+  /** Builds the pre-seeded prompt; `prompt` is only set for feature-prd. */
+  message: (prompt: string) => string;
+}
+
+const AUTHORING_SESSIONS: Record<AuthoringSessionTarget, AuthoringSessionSpec> = {
+  idea: {
+    stage: "prd",
+    skill: "forge-grill-idea",
+    message: () => "/forge-grill-idea Read docs/IDEA.md and any docs/research/*.md, then grill me in rounds to sharpen the idea. After I confirm shared understanding, rewrite docs/IDEA.md (and the root IDEA.md copy) and commit. Do not author the PRD, generate the team, or start a build.",
+  },
+  prd: {
+    stage: "prd",
+    skill: "forge-auto-build-prd",
+    message: () => "/forge-auto-build-prd Use docs/IDEA.md and any docs/requirements-source.md as source material when present; otherwise inspect the existing repository (code, docs, tests, git history). Interactive mode: do NOT skip the interview. Ask your clarifying questions in rounds and wait for my answers, then author docs/PRD.md plus docs/features/*.md. Run validate-prd and commit. Do not generate the team or project skills, compile a manifest, or start a build.",
+  },
+  "feature-prd": {
+    stage: "prd",
+    skill: "forge-build-feature-prd",
+    message: (prompt) => `/forge-build-feature-prd I want to add ${prompt} to this project. Analyze the existing PRD, features, codebase and team, interview me for any gaps, then author the new canonical feature under docs/features/ and register it in the PRD feature table. Run validate-prd and commit. Do not generate agents or skills, compile a manifest, or start the engine.`,
+  },
+};
+
+/** Interactive CLI args that queue a prompt and optional model. */
+function interactiveAuthoringArgs(runner: Exclude<AuthoringRunner, "stub">, message: string, model?: string): string[] {
+  const modelArgs = model ? ["--model", model] : [];
+  switch (runner) {
+    case "copilot": return ["-i", message, "--yolo", ...modelArgs];
+    case "claude": return [...modelArgs, message];
+    default: return ["--prompt", message, ...modelArgs];
+  }
 }
 
 /** Staging dir for browser-uploaded PRD/research files (needed before the new repo exists). */
@@ -572,6 +617,45 @@ export async function startConsoleServer(options: ConsoleServerOptions = {}): Pr
               ? `${cli} launched in a new terminal (cwd: ${currentRepo}).`
               : `No supported terminal emulator found - run it manually: ${command}`,
           });
+        }
+        if (urlPath === "/api/authoring/session") {
+          if (!options.allowExternalOpen) return sendJson(res, 200, { ok: false, message: "interactive sessions not enabled" });
+          if (!currentRepo) return sendJson(res, 400, { ok: false, message: "no repo selected" });
+          const target = typeof body.target === "string" ? body.target : "";
+          const spec = AUTHORING_SESSIONS[target as AuthoringSessionTarget];
+          if (!spec) return sendJson(res, 400, { ok: false, message: "target must be idea, prd, or feature-prd" });
+          const prompt = typeof body.prompt === "string" ? body.prompt.trim() : "";
+          if (target === "feature-prd" && !prompt) return sendJson(res, 400, { ok: false, message: "prompt is required" });
+          const runner = selectedAuthoringRunner(currentRepo);
+          if (runner === "stub") return sendJson(res, 400, { ok: false, message: "Interactive sessions are unavailable for the stub runner." });
+          let model: string | undefined;
+          try {
+            model = (await resolveAuthoringModel(currentRepo, spec.stage, runner)).effectiveModel;
+          } catch (error) {
+            return sendJson(res, 400, { ok: false, message: error instanceof Error ? error.message : String(error) });
+          }
+          const message = spec.message(prompt);
+          const args = interactiveAuthoringArgs(runner, message, model);
+          const launched = await launchCli(runner, currentRepo, args);
+          const command = `${runner} ${args.map((arg) => JSON.stringify(arg)).join(" ")}`;
+          return sendJson(res, 200, {
+            ok: true,
+            launched,
+            cli: runner,
+            command,
+            message: launched
+              ? `${runner} launched in a new terminal for interactive ${target} authoring.`
+              : `No supported terminal emulator found - run it manually: cd "${currentRepo}" && ${command}`,
+          });
+        }
+        if (urlPath === "/api/authoring/validate") {
+          if (!currentRepo) return sendJson(res, 400, { ok: false, message: "no repo selected" });
+          try {
+            const outputs = await validateAuthoredPrd(currentRepo);
+            return sendJson(res, 200, { ok: true, message: `PRD validated (${outputs.length} output${outputs.length === 1 ? "" : "s"}).` });
+          } catch (error) {
+            return sendJson(res, 200, { ok: false, message: error instanceof Error ? error.message : String(error) });
+          }
         }
         if (urlPath === "/api/model-plan/override") {
           if (!currentRepo) return sendJson(res, 400, { ok: false, message: "no repo selected" });

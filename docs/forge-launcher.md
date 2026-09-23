@@ -704,6 +704,11 @@ to `docs/IDEA.md` (with a compatibility copy at repo root `IDEA.md`).
   ✔  Idea saved to: /home/user/projects/my-cool-app/docs/IDEA.md
 ```
 
+If the idea is still loose, run the optional `forge-grill-idea` skill before
+PRD authoring. It interviews you in rounds to sharpen `docs/IDEA.md`, then
+rewrites and commits it. The Forge Console exposes the same session on the
+**Overview** page as **Grill the idea first (interactive)**.
+
 ### Step 6 -Add PRD and research / seed documents *(optional -recommended)*
 
 This step is optional but strongly recommended. Starting the pipeline with a well-defined PRD produces significantly better results than starting from an idea alone. Research and seed documents (design specs, market research, technical notes, etc.) give every downstream stage additional context.
