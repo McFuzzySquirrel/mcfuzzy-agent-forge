@@ -665,6 +665,37 @@ test("engine-config toggles auto-commit and flows into engine-run args", async (
   });
 });
 
+test("engine-config toggles harness activity logging and flows into engine-run args", async () => {
+  await withServer(async (server, repo, spawned) => {
+    const token = server.token;
+    assert.equal((await getJson(`${server.url}/api/summary`) as { logHarnessActivity: boolean }).logHarnessActivity, false);
+
+    const on = await postJson(`${server.url}/api/engine-config`, { logHarnessActivity: true }, { "X-Forge-Token": token });
+    assert.equal((on.body as { ok: boolean }).ok, true);
+    assert.equal(JSON.parse(readFileSync(join(repo, "docs", "engine-config.json"), "utf8")).logHarnessActivity, true);
+    assert.equal((await getJson(`${server.url}/api/summary`) as { logHarnessActivity: boolean }).logHarnessActivity, true);
+
+    const run = await postJson(`${server.url}/api/control`, { action: "run" }, { "X-Forge-Token": token });
+    assert.equal((run.body as { ok: boolean }).ok, true);
+    assert.ok(spawned.calls.at(-1)!.args.includes("--log-harness-activity"), "engine-run should pass --log-harness-activity");
+    assert.ok(!spawned.calls.at(-1)!.args.includes("--no-log-harness-activity"), "enabled run must not pass the off flag");
+
+    const off = await postJson(`${server.url}/api/engine-config`, { logHarnessActivity: false }, { "X-Forge-Token": token });
+    assert.equal((off.body as { ok: boolean }).ok, true);
+    const run2 = await postJson(`${server.url}/api/control`, { action: "run" }, { "X-Forge-Token": token });
+    assert.ok((run2.body as { ok: boolean }).ok);
+    assert.ok(spawned.calls.at(-1)!.args.includes("--no-log-harness-activity"), "disabled run should pass the off flag");
+  });
+});
+
+test("engine-config rejects a non-boolean harness activity value", async () => {
+  await withServer(async (server, _repo) => {
+    const res = await postJson(`${server.url}/api/engine-config`, { logHarnessActivity: "yes" }, { "X-Forge-Token": server.token });
+    assert.equal(res.status, 400);
+    assert.match((res.body as { message: string }).message, /logHarnessActivity must be a boolean/);
+  });
+});
+
 test("engine-config sets concurrency and flows into engine-run args", async () => {
   await withServer(async (server, repo, spawned) => {
     const token = server.token;

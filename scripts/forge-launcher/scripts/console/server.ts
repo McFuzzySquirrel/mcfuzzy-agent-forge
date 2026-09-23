@@ -594,6 +594,14 @@ export async function startConsoleServer(options: ConsoleServerOptions = {}): Pr
             broadcast("snapshot", snapshotEvent());
             return sendJson(res, result.ok ? 200 : 400, result);
           }
+          if (body.logHarnessActivity !== undefined) {
+            if (typeof body.logHarnessActivity !== "boolean") {
+              return sendJson(res, 400, { ok: false, message: "logHarnessActivity must be a boolean." });
+            }
+            const result = repo.setLogHarnessActivity(currentPaths()!, body.logHarnessActivity);
+            broadcast("snapshot", snapshotEvent());
+            return sendJson(res, result.ok ? 200 : 400, result);
+          }
           const autoCommit = body.autoCommit;
           if (typeof autoCommit !== "boolean") {
             return sendJson(res, 400, { ok: false, message: "autoCommit must be a boolean." });

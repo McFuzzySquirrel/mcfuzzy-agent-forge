@@ -131,6 +131,19 @@ export function setAutoCommit(p: RepoPaths, enabled: boolean): { ok: boolean; me
   return { ok: true, message: `Auto-commit ${enabled ? "enabled" : "disabled"}.` };
 }
 
+/** Persists the harness-activity logging toggle in docs/engine-config.json. */
+export function setLogHarnessActivity(p: RepoPaths, enabled: boolean): { ok: boolean; message: string } {
+  const existing = loadEngineConfig(p.repoRoot);
+  const cfg = nextEngineConfig(p, existing, { logHarnessActivity: enabled });
+  saveEngineConfig(p.repoRoot, cfg);
+  return {
+    ok: true,
+    message: enabled
+      ? "Harness activity logging enabled for subsequently started runs (may contain sensitive content and increase log volume)."
+      : "Harness activity logging disabled for subsequently started runs. Command logging stays on.",
+  };
+}
+
 /** Reset completed tasks whose contract changed during manifest reconciliation. */
 export function resetChangedCompletedTasks(p: RepoPaths): { ok: boolean; message: string; affected: number; taskIds: string[] } {
   const manifest = loadManifest(p);
@@ -259,6 +272,7 @@ function nextEngineConfig(
     keepAlive: existing?.keepAlive ?? false,
     attach: existing?.attach ?? "",
     autoCommit: existing?.autoCommit,
+    logHarnessActivity: existing?.logHarnessActivity,
     executionMode: normaliseExecutionMode(existing?.executionMode),
     selectionScope: normaliseSelectionScope(existing?.selectionScope, normaliseSelectedTaskIds(existing?.selectedTaskIds)) ?? undefined,
     selectedTaskIds: normaliseSelectedTaskIds(existing?.selectedTaskIds),
@@ -383,6 +397,7 @@ export function summary(p: RepoPaths): Summary {
     logExists: fs.existsSync(p.logPath),
     defaultTimeoutMs,
     autoCommit: engineCfg?.autoCommit !== false,
+    logHarnessActivity: engineCfg?.logHarnessActivity === true,
     concurrency: Math.max(0, Number(engineCfg?.concurrency) || 0),
     executionMode: selection.executionMode,
     selectionScope: selection.selectionScope,

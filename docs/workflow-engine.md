@@ -234,6 +234,7 @@ npm run workflow-engine -- run     [--repo <path>] [--harness <name>] [--max-ret
                                    [--retry-delay-ms <ms>] [--heartbeat-ms <ms>]
                                    [--concurrency <n>] [--task-timeout-ms <ms>] [--yes]
                                    [--allow-noop] [--run-validation]
+                                   [--log-harness-activity|--no-log-harness-activity]
                                    [--auto-commit|--no-auto-commit] [--commit-message-template <tmpl>]
                                    [--execution-mode <auto|manual>] [--selection-scope <single|range|list>]
                                    [--selected-tasks <id,id,...>]
@@ -264,6 +265,8 @@ npm run workflow-engine -- viz     [--repo <path>] [--port <n>] [--no-open]
 | `--no-open` | *(off)* | Do not auto-open the browser (the URL is still printed) |
 | `--allow-noop` | *(off)* | Relax the output-verification no-op gate (missing/trivial output still fails) |
 | `--run-validation` | *(off for legacy tasks)* | Execute legacy manifest `validationCommands`; structured implementation tasks always require passing validation |
+| `--log-harness-activity` | *(off)* | Stream harness CLI stdout/stderr into the engine log as it arrives (see *Harness invocation and activity logging* below). May contain sensitive repository content and increase log volume |
+| `--no-log-harness-activity` | *(off)* | Force activity logging off, overriding `FORGE_ENGINE_LOG_HARNESS_ACTIVITY` and any persisted Console setting |
 | `--auto-commit` | **on** | Commit the working tree after each completed task (one commit per task; see *Auto-commit* below) |
 | `--no-auto-commit` | *(off)* | Disable per-task auto-commit (e.g. mid-rebase or with a dirty working tree) |
 | `--commit-message-template <tmpl>` | *(built-in)* | Commit message with `{taskId}` / `{taskTitle}` placeholders; default `feat(forge-engine): complete task {taskId} - {taskTitle}` |
@@ -287,6 +290,64 @@ the engine prints a heartbeat line every `--heartbeat-ms`:
 ```
 [engine] …still working on task 1.1 (@project-architect, 45s elapsed)
 ```
+
+### Harness invocation and activity logging
+
+**Every** CLI harness invocation is logged before the process is launched, and
+again when platform-specific launcher resolution rewrites it (the Windows
+`.cmd` > Node shim rewrite). Each record carries the timestamp, harness, run ID,
+task ID, attempt, working directory, executable, and the complete argument list.
+Argument boundaries stay unambiguous on POSIX and Windows: each argument is
+JSON-escaped, so paths with spaces and multiline prompts remain a single line
+(the referenced execution file is named, never expanded).
+
+```
+[engine] harness invocation [requested] at=… harness=copilot run=… task=1.1 attempt=1 cwd="/repo" exec="copilot" args=["-p","…","--agent","x","--yolo"]
+[engine] harness invocation [effective] at=… harness=copilot run=… task=1.1 attempt=1 … exec="/usr/bin/node" args=["/repo/node_modules/.bin/copilot",…]
+```
+
+This command logging is always on and is not affected by the activity toggle.
+
+**Opt-in activity logging** (`--log-harness-activity` /
+`FORGE_ENGINE_LOG_HARNESS_ACTIVITY=1`, default off) mirrors harness stdout and
+stderr into the same stream as lines arrive, so `docs/engine-run.log` and the
+Forge Console log view show active work instead of a silent invocation:
+
+```
+[engine] harness activity stdout task=1.1 attempt=1 at=… <line>
+[engine] harness activity stderr task=1.1 attempt=1 at=… <line>
+[engine] harness completed at=… harness=copilot run=… task=1.1 attempt=1 status=0 durationMs=12345
+```
+
+Activity is tagged with the task and attempt, and the completion record includes
+the exit status or the timeout/cancellation kind, so output stays attributable
+after a failure, timeout, or cancellation. Terminal control sequences are
+stripped; a single line longer than 4000 characters and total activity beyond
+2 MB per attempt are truncated with an explicit marker. Activity never changes
+captured-result parsing, timeouts, cancellation, or task outcomes.
+
+**Precedence** (highest first): explicit CLI flag (`--log-harness-activity` /
+`--no-log-harness-activity`; the off switch wins if both appear) >
+`FORGE_ENGINE_LOG_HARNESS_ACTIVITY` (`1`/`0`) > the persisted
+`docs/engine-config.json` setting written by `forge-launcher` / the Forge Console
+> the default (off). `forge-launcher` and the Console forward the saved setting
+as an explicit flag, so a Console-started run applies it deterministically.
+
+**Redaction:** recognized credentials are replaced with `[REDACTED]` and marked
+explicitly. This covers secret-bearing flags (`--token`, `--api-key`,
+`--password`, `--secret`, `--auth`, `--access-key`, …) and inline token shapes
+(`sk-…`, `ghp_…`, `github_pat_…`, `xox[baprs]-…`, `AKIA…`, JWTs, `Bearer …`).
+Environment variables are never dumped.
+
+> **Warning:** activity logs can contain source code, prompts, tool results, or
+> other sensitive repository content, and increase log volume. Keep the toggle
+> off unless you are actively troubleshooting.
+
+**Harness limitation:** the Claude adapter uses `claude -p --output-format json`,
+which emits its result envelope at completion; live activity for Claude is
+therefore limited to whatever the CLI writes before that. Copilot and OpenCode
+stream progressively. Keeping the JSON envelope unchanged preserves structured
+result parsing.
 
 ### Keep-alive attach mode (opencode harness)
 
@@ -580,6 +641,7 @@ To start fresh (e.g. after recompiling the manifest), delete `docs/WORKFLOW-STAT
 | `FORGE_ENGINE_ATTACH_URL` | *(unset)* | Attach tasks to an existing `opencode serve` URL (same as `--attach`) |
 | `FORGE_ENGINE_ALLOW_NOOP` | *(unset)* | `1` relaxes the no-op output gate (same as `--allow-noop`) |
 | `FORGE_ENGINE_RUN_VALIDATION` | *(unset)* | `1` enables legacy validation; structured implementation validation is always required |
+| `FORGE_ENGINE_LOG_HARNESS_ACTIVITY` | *(unset)* | `1` streams harness CLI stdout/stderr into the engine log as it arrives; `0` forces it off. Explicit `--log-harness-activity` / `--no-log-harness-activity` overrides this. Command invocation logging is always on |
 | `FORGE_ENGINE_AUTO_COMMIT` | `1` | `0` disables auto-commit after each completed task (same as `--no-auto-commit`); default on |
 | `FORGE_ENGINE_COMMIT_MESSAGE_TEMPLATE` | *(built-in)* | Commit message template with `{taskId}` / `{taskTitle}` placeholders |
 | `OPENCODE_BIN` | `opencode` | Path to the opencode binary |

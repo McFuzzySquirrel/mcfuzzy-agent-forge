@@ -27,6 +27,8 @@ export interface EngineRunOptions {
   attach?: string;
   allowNoop?: boolean;
   runValidation?: boolean;
+  logHarnessActivity?: boolean;
+  noLogHarnessActivity?: boolean;
   autoCommit?: boolean;
   noAutoCommit?: boolean;
   commitMessageTemplate?: string;
@@ -63,6 +65,14 @@ export async function engineRun(opts: EngineRunOptions = {}): Promise<number> {
   const attach = opts.attach ?? process.env.FORGE_ENGINE_ATTACH_URL ?? "";
   const allowNoop = opts.allowNoop ?? process.env.FORGE_ENGINE_ALLOW_NOOP === "1";
   const runValidation = opts.runValidation ?? process.env.FORGE_ENGINE_RUN_VALIDATION === "1";
+  const envLogHarnessActivity = process.env.FORGE_ENGINE_LOG_HARNESS_ACTIVITY === "1"
+    ? true
+    : process.env.FORGE_ENGINE_LOG_HARNESS_ACTIVITY === "0"
+      ? false
+      : undefined;
+  const logHarnessActivity = opts.noLogHarnessActivity
+    ? false
+    : opts.logHarnessActivity ?? envLogHarnessActivity ?? false;
   const autoCommit = opts.autoCommit ?? !(process.env.FORGE_ENGINE_AUTO_COMMIT === "0");
   const commitMessageTemplate = opts.commitMessageTemplate ?? process.env.FORGE_ENGINE_COMMIT_MESSAGE_TEMPLATE ?? "";
   const executionMode = opts.executionMode ?? "auto";
@@ -134,7 +144,7 @@ export async function engineRun(opts: EngineRunOptions = {}): Promise<number> {
 
   const manifest = path.join(repo, "docs", "EXECUTION-MANIFEST.json");
 
-  out(`forge-engine-run: repo=${repo} harness=${harness}${granularity ? ` granularity=${granularity}` : ""}${concurrency ? ` concurrency=${concurrency}` : ""}${taskTimeoutMs ? ` task-timeout=${taskTimeoutMs}` : ""}${maxRetries ? ` max-retries=${maxRetries}` : ""}${viz ? ` viz=${vizPort || "default"}` : ""}${keepAlive ? ` keep-alive${keepAlivePort ? `=${keepAlivePort}` : ""}` : ""}${noKeepAlive ? ` no-keep-alive` : ""}${attach ? ` attach=${attach}` : ""}${autoCommit === false ? " no-auto-commit" : ""}${commitMessageTemplate ? " commit-message-template=<custom>" : ""}`);
+  out(`forge-engine-run: repo=${repo} harness=${harness}${granularity ? ` granularity=${granularity}` : ""}${concurrency ? ` concurrency=${concurrency}` : ""}${taskTimeoutMs ? ` task-timeout=${taskTimeoutMs}` : ""}${maxRetries ? ` max-retries=${maxRetries}` : ""}${viz ? ` viz=${vizPort || "default"}` : ""}${keepAlive ? ` keep-alive${keepAlivePort ? `=${keepAlivePort}` : ""}` : ""}${noKeepAlive ? ` no-keep-alive` : ""}${attach ? ` attach=${attach}` : ""}${autoCommit === false ? " no-auto-commit" : ""}${commitMessageTemplate ? " commit-message-template=<custom>" : ""}${logHarnessActivity ? " log-harness-activity" : " no-log-harness-activity"}`);
   out(`  engine : ${engineDir}`);
   out(`  adapter: ${adapterDir || "<not bootstrapped; manifest must already exist>"}`);
 
@@ -193,6 +203,7 @@ export async function engineRun(opts: EngineRunOptions = {}): Promise<number> {
   if (attach) engineFlags.push("--attach", attach);
   if (allowNoop) engineFlags.push("--allow-noop");
   if (runValidation) engineFlags.push("--run-validation");
+  engineFlags.push(logHarnessActivity ? "--log-harness-activity" : "--no-log-harness-activity");
   if (autoCommit === false) engineFlags.push("--no-auto-commit");
   if (commitMessageTemplate) engineFlags.push("--commit-message-template", commitMessageTemplate);
   if (executionMode === "manual") {
@@ -236,6 +247,8 @@ export function engineRunCli(args: string[]): Promise<number> {
       case "--attach": opts.attach = args[++i]; break;
       case "--allow-noop": opts.allowNoop = true; break;
       case "--run-validation": opts.runValidation = true; break;
+      case "--log-harness-activity": opts.logHarnessActivity = true; opts.noLogHarnessActivity = false; break;
+      case "--no-log-harness-activity": opts.noLogHarnessActivity = true; opts.logHarnessActivity = false; break;
       case "--auto-commit": opts.autoCommit = true; break;
       case "--no-auto-commit": opts.noAutoCommit = true; opts.autoCommit = false; break;
       case "--commit-message-template": opts.commitMessageTemplate = args[++i]; break;

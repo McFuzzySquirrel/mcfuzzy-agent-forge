@@ -145,6 +145,8 @@ export interface Summary {
   defaultTimeoutMs: number | null;
   /** Auto-commit after each completed task (engine-config; default on). */
   autoCommit: boolean;
+  /** Stream harness CLI activity into docs/engine-run.log (engine-config; default off). */
+  logHarnessActivity: boolean;
   /** Max agents to run in parallel (engine-config; 0 means engine default). */
   concurrency: number;
   executionMode: ExecutionMode;

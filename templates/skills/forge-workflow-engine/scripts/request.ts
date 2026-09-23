@@ -30,6 +30,7 @@ export function prepareTaskRequest(options: {
   previousFailure?: string;
   previousResultPath?: string;
   signal?: AbortSignal;
+  logHarnessActivity?: boolean;
 }): TaskAttemptRequest {
   const task = structuredClone(options.task);
   if (task.contract?.kind === "human-review") throw new Error(`Human review '${task.id}' must not be sent to a model.`);
@@ -71,6 +72,7 @@ export function prepareTaskRequest(options: {
     requiredCapabilities: Object.freeze(capabilities),
     attempt: Object.freeze({ number: options.attempt ?? 1, maxRetries, runId: options.runId ?? "" }),
     budget: Object.freeze({ timeoutMs }), instructions, signal: options.signal,
+    logHarnessActivity: options.logHarnessActivity === true,
   });
 }
 

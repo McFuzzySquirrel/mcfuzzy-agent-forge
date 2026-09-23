@@ -219,3 +219,88 @@ test("FORGE_ENGINE_NATIVE_AGENT=0 forces the inline-persona fallback for every h
     else process.env["FORGE_ENGINE_NATIVE_AGENT"] = saved;
   }
 });
+
+const invocation = {
+  harness: "copilot",
+  runId: "run-42",
+  taskId: "2.1",
+  attempt: 1,
+  cwd: process.cwd(),
+};
+
+function captureLog(): { log: (line: string) => void; lines: string[] } {
+  const lines: string[] = [];
+  return { log: (line) => lines.push(line), lines };
+}
+
+test("runCommand logs the invocation before launch and completion after exit", async () => {
+  const { log, lines } = captureLog();
+  const result = await runCommand(process.execPath, ["-e", "console.log('done')"], {
+    ...options, invocation, log,
+  });
+  assert.equal(result.status, 0);
+  assert.match(lines[0]!, /\[engine] harness invocation \[requested]/);
+  assert.match(lines.at(-1)!, /\[engine] harness completed/);
+  assert.match(lines.at(-1)!, /status=0/);
+  assert.match(lines.at(-1)!, /task=2\.1 attempt=1/);
+});
+
+test("runCommand redacts secret-bearing invocation arguments", async () => {
+  const { log, lines } = captureLog();
+  await runCommand(process.execPath, ["-e", "process.exit(0)", "--token", "super-secret-value"], {
+    ...options, invocation, log,
+  });
+  const invocationLine = lines.find((line) => line.includes("harness invocation"))!;
+  assert.ok(invocationLine.includes("[REDACTED]"), invocationLine);
+  assert.ok(!invocationLine.includes("super-secret-value"), invocationLine);
+});
+
+test("activity logging mirrors stdout/stderr as lines arrive before the process exits", async () => {
+  const { log, lines } = captureLog();
+  const start = Date.now();
+  let firstSeenAt = Number.POSITIVE_INFINITY;
+  const capturing = (line: string): void => {
+    if (line.includes("first-chunk")) firstSeenAt = Date.now();
+    log(line);
+  };
+  const script = "process.stdout.write('first-chunk\\n'); setTimeout(() => { process.stderr.write('second-chunk\\n'); process.exit(0); }, 400);";
+  const result = await runCommand(process.execPath, ["-e", script], {
+    ...options, invocation, activity: true, log: capturing,
+  });
+  assert.equal(result.status, 0);
+  assert.ok(firstSeenAt - start < 350, `first activity line must arrive before the delayed exit (took ${firstSeenAt - start}ms)`);
+  assert.ok(lines.some((line) => line.includes("harness activity stdout") && line.includes("first-chunk")), lines.join("\n"));
+  assert.ok(lines.some((line) => line.includes("harness activity stderr") && line.includes("second-chunk")), lines.join("\n"));
+  assert.ok(lines.at(-1)!.includes("harness completed"));
+});
+
+test("activity logging is off by default", async () => {
+  const { log, lines } = captureLog();
+  await runCommand(process.execPath, ["-e", "process.stdout.write('hidden\\n')"], { ...options, invocation, log });
+  assert.ok(!lines.some((line) => line.includes("harness activity")), lines.join("\n"));
+});
+
+test("runCommand logs a timeout completion with kind and no exit status", async () => {
+  const { log, lines } = captureLog();
+  await runCommand(process.execPath, ["-e", "setInterval(() => {}, 1000)"], {
+    ...options, timeoutMs: 300, invocation, log,
+  });
+  const completion = lines.find((line) => line.includes("harness completed"))!;
+  assert.match(completion, /status=none/);
+  assert.match(completion, /kind=timeout/);
+});
+
+test("runCommand logs a cancellation completion with kind=cancelled", async () => {
+  const { log, lines } = captureLog();
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), 300);
+  try {
+    await runCommand(process.execPath, ["-e", "process.stdout.write(String(process.pid)); setInterval(() => {}, 1000)"], {
+      ...options, invocation, log, signal: controller.signal,
+    });
+  } finally {
+    clearTimeout(timer);
+  }
+  const completion = lines.find((line) => line.includes("harness completed"))!;
+  assert.match(completion, /kind=cancelled/);
+});

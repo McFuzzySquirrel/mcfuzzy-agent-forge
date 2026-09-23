@@ -151,6 +151,9 @@ export const api = {
   setAutoCommit(enabled: boolean): Promise<{ ok: boolean; message: string }> {
     return post<{ ok: boolean; message: string }>("/api/engine-config", { autoCommit: enabled });
   },
+  setLogHarnessActivity(enabled: boolean): Promise<{ ok: boolean; message: string }> {
+    return post<{ ok: boolean; message: string }>("/api/engine-config", { logHarnessActivity: enabled });
+  },
   setConcurrency(value: number): Promise<{ ok: boolean; message: string }> {
     return post<{ ok: boolean; message: string }>("/api/engine-config", { concurrency: value });
   },

@@ -4,6 +4,53 @@ Detailed release and change notes for MyForge.
 
 ---
 
+## September 2026 - v3.81
+
+### Harness invocation and activity logging
+
+- Every CLI harness invocation now logs the executable, complete argument list,
+  working directory, timestamp, harness name, run ID, task ID, and attempt before
+  the process launches. Arguments are JSON-escaped per element, so paths with
+  spaces, quotes, and multiline prompts stay unambiguous across POSIX and
+  Windows; the referenced execution file is named, never expanded. When
+  platform-specific launcher resolution rewrites the invocation (Windows
+  `.cmd` > Node shims), the effective invocation is logged as well.
+- New opt-in activity logging, off by default: `--log-harness-activity` /
+  `FORGE_ENGINE_LOG_HARNESS_ACTIVITY=1` streams harness stdout/stderr into
+  `docs/engine-run.log` as it arrives (each line tagged with stream, task, and
+  attempt, followed by a completion record with exit status, timeout, or
+  cancellation). `--no-log-harness-activity` forces it off. Precedence is
+  explicit CLI flag > environment variable > persisted Console setting > default
+  off.
+- Recognized credentials (secret-bearing flags and inline token shapes) are
+  redacted and explicitly marked `[REDACTED]`; environment variables are never
+  dumped. Activity is bounded and truncated with explicit markers, and it never
+  changes captured-result parsing, timeouts, cancellation, or task outcomes.
+- The Forge Console's Overview **Controls** panel gains a default-off
+  **Log harness activity** checkbox that persists the choice, restores it after a
+  reload, forwards it to Console-started runs as an explicit flag, and warns that
+  activity logs can contain sensitive repository content and increase log volume.
+  Command invocation logging is always on, independent of the toggle.
+- Documented limitation: the Claude adapter keeps `--output-format json` for
+  structured parsing, so its live activity is limited to whatever the CLI writes
+  before the completion envelope. See
+  [ADR-052](adr/052-harness-invocation-activity-logging.md) and
+  [workflow-engine.md](workflow-engine.md#harness-invocation-and-activity-logging).
+
+### Forge Console visual tour refresh
+
+- The [Forge Console visual tour](forge-console-screenshots.md) and all of its
+  images (numbered tour, responsive `current/` set, thumbnails, and the
+  walkthrough GIF) were regenerated from a deterministic fixture. The Overview
+  captures are now full-page so the **Controls** panel - including the new
+  **Log harness activity** toggle - and the wide document popup are visible.
+- New `tools/console-screenshots` developer tool regenerates the captures
+  repeatably (`npm run capture`): it builds the launcher, starts the Console
+  against a fixed fixture, drives the installed Chrome via `puppeteer-core`, and
+  writes the images with `ffmpeg`. No model or external authoring runs.
+
+---
+
 ## September 2026 - v3.80
 
 ### Interactive authoring in the Forge Console

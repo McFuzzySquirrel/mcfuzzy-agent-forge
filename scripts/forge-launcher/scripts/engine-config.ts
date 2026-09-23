@@ -21,6 +21,8 @@ export interface PersistedEngineConfig {
   attach: string;
   /** Auto-commit after each completed task; absent means the engine default (on). */
   autoCommit?: boolean;
+  /** Stream harness CLI activity into docs/engine-run.log; absent means the engine default (off). */
+  logHarnessActivity?: boolean;
   /** Execution mode for future run/resume commands. */
   executionMode?: ExecutionMode;
   /** How the selected task set was chosen for manual execution. */

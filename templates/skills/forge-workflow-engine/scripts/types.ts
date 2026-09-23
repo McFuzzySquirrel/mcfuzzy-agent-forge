@@ -98,6 +98,11 @@ export interface TaskAttemptRequest {
   readonly budget: Readonly<{ timeoutMs: number }>;
   readonly instructions: string;
   readonly signal?: AbortSignal;
+  /**
+   * When true, CLI harness adapters stream stdout/stderr activity into the
+   * engine log as it arrives. Command invocation logging is always on.
+   */
+  readonly logHarnessActivity?: boolean;
 }
 
 export interface HarnessRunContext {
@@ -161,6 +166,12 @@ export interface EngineOptions {
    * harness call and require them to pass before the task is marked complete.
    */
   runValidation: boolean;
+  /**
+   * When true (`--log-harness-activity` / `FORGE_ENGINE_LOG_HARNESS_ACTIVITY=1`),
+   * CLI harness stdout/stderr is streamed into the engine log as it arrives.
+   * Defaults to `false`; command invocation logging is always enabled.
+   */
+  logHarnessActivity: boolean;
   /**
    * Auto-commit the working tree after each task completes (one commit per task,
    * completed before starting the next task). Defaults to

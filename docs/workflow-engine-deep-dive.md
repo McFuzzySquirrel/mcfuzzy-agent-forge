@@ -233,6 +233,27 @@ cleanup still waits for both. Failure reasons and classifications remain intact,
 and processes that exit without runner-initiated termination retain their real
 exit codes, including nonzero codes.
 
+### Harness invocation and activity logging
+
+`runCommand` is the single process-execution seam, so all CLI adapters share one
+logging path (`harness/invocation-log.ts`). Before spawning, it emits a
+single-line invocation record (timestamp, harness, run ID, task ID, attempt,
+working directory, executable, and JSON-escaped argv). It emits a second
+"effective" record only when the Windows `.cmd` > Node shim rewrite changes the
+executable or argv, so the resolved command is auditable without duplicating
+unchanged records.
+
+Activity logging is a separate, opt-in concern. When
+`logHarnessActivity` is set on the attempt request (from
+`--log-harness-activity` / `FORGE_ENGINE_LOG_HARNESS_ACTIVITY=1`, or the persisted
+Console setting), the data handlers feed each stdout/stderr chunk through an
+`ActivityLineBuffer` that sanitises control sequences, splits complete lines,
+bounds line length and total volume with explicit truncation markers, and redacts
+recognized credentials. It is purely additive: the captured buffers used for
+structured-result parsing and verification are untouched, and the completion
+record reports the same exit status / timeout / cancellation classification the
+adapter sees. See ADR-052.
+
 ### State is always saved before the next loop iteration
 
 The engine persists state at three important boundaries:

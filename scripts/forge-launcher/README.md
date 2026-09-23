@@ -47,6 +47,7 @@ forge-launcher engine-run --harness opencode --concurrency 3 --yes # parallel di
 forge-launcher engine-run --harness opencode --keep-alive --yes    # one warm server, no per-task cold boot
 forge-launcher engine-run --harness opencode --task-timeout-ms 900000 --yes  # 15-min task budget
 forge-launcher engine-run --harness opencode --viz --yes           # live Forge Board dashboard
+forge-launcher engine-run --harness opencode --log-harness-activity # stream harness output to the engine log
 forge-launcher engine-run --stop    # stop a detached run after the current task
 forge-launcher engine-run --pause   # pause a detached run after the current task
 ```

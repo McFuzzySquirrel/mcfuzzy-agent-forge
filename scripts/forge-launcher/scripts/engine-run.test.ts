@@ -107,6 +107,40 @@ test("engine-run forwards manual execution flags", async () => {
   assert.ok(out.includes("--selected-tasks 1.1,1.2"), out);
 });
 
+test("engine-run defaults harness activity logging off and can enable it with the flag", async () => {
+  const repo = tmpRepo();
+
+  const off = await runCli(["engine-run", "--repo", repo, "--harness", "opencode", "--yes", "--dry-run"]);
+  assert.equal(off.code, 0, off.out);
+  assert.ok(off.out.includes("--no-log-harness-activity"), off.out);
+
+  const on = await runCli([
+    "engine-run", "--repo", repo, "--harness", "opencode", "--log-harness-activity", "--yes", "--dry-run",
+  ]);
+  assert.equal(on.code, 0, on.out);
+  assert.ok(on.out.includes("--log-harness-activity"), on.out);
+  assert.ok(!on.out.includes("--no-log-harness-activity"), on.out);
+});
+
+test("engine-run reads activity logging from FORGE_ENGINE_LOG_HARNESS_ACTIVITY and lets --no override it", async () => {
+  const repo = tmpRepo();
+
+  const viaEnv = await runCli(
+    ["engine-run", "--repo", repo, "--harness", "opencode", "--yes", "--dry-run"],
+    { FORGE_ENGINE_LOG_HARNESS_ACTIVITY: "1" },
+  );
+  assert.equal(viaEnv.code, 0, viaEnv.out);
+  assert.ok(viaEnv.out.includes("--log-harness-activity"), viaEnv.out);
+  assert.ok(!viaEnv.out.includes("--no-log-harness-activity"), viaEnv.out);
+
+  const overridden = await runCli(
+    ["engine-run", "--repo", repo, "--harness", "opencode", "--no-log-harness-activity", "--yes", "--dry-run"],
+    { FORGE_ENGINE_LOG_HARNESS_ACTIVITY: "1" },
+  );
+  assert.equal(overridden.code, 0, overridden.out);
+  assert.ok(overridden.out.includes("--no-log-harness-activity"), overridden.out);
+});
+
 test("granularity recompilation keeps the manifest-selected team", async (t) => {
   const repo = tmpRepo();
   t.after(() => fs.rmSync(repo, { recursive: true, force: true }));
