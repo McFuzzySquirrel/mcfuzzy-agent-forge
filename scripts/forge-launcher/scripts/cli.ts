@@ -25,6 +25,7 @@ Usage:
                             [--viz [--viz-port <n>]] [--no-open]
                             [--keep-alive [--keep-alive-port <n>]] [--no-keep-alive] [--attach <url>]
                             [--allow-noop] [--run-validation]
+                            [--log-harness-activity|--no-log-harness-activity]
                             [--auto-commit|--no-auto-commit] [--commit-message-template <tmpl>]
                             [--execution-mode <auto|manual>] [--selection-scope <single|range|list>]
                             [--selected-tasks <id,id,...>] [--stop] [--pause]
@@ -68,6 +69,13 @@ engine-run auto-commit:
   --auto-commit       Commit the working tree after each completed task (default: on).
   --no-auto-commit    Disable per-task auto-commit.
   --commit-message-template <tmpl>  Commit message with {taskId}/{taskTitle} placeholders.
+
+engine-run harness activity:
+  --log-harness-activity     Stream harness CLI stdout/stderr into docs/engine-run.log as it
+                             arrives (default: off). May contain sensitive repository content
+                             and increase log volume. Command invocation logging is always on.
+  --no-log-harness-activity  Force activity logging off, overriding
+                             FORGE_ENGINE_LOG_HARNESS_ACTIVITY and any saved Console setting.
 
 Resume options:
   --repo <path>       Repository to resume (default: current directory).

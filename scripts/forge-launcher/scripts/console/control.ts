@@ -71,6 +71,7 @@ function engineRunArgs(repoRoot: string): string[] {
   if (cfg?.keepAlive) args.push("--keep-alive");
   if (cfg?.attach) args.push("--attach", cfg.attach);
   if (cfg?.autoCommit === false) args.push("--no-auto-commit");
+  args.push(cfg?.logHarnessActivity ? "--log-harness-activity" : "--no-log-harness-activity");
   const selectedTaskIds = normaliseSelectedTaskIds(cfg?.selectedTaskIds);
   const executionMode = normaliseExecutionMode(cfg?.executionMode);
   const selectionScope = normaliseSelectionScope(cfg?.selectionScope, selectedTaskIds);

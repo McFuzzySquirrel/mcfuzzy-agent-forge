@@ -205,7 +205,7 @@ button shows the exact command to run manually.
 | View | What it shows |
 |---|---|
 | **Home** | create a new project or open an existing one (landing), including live status labels for detached work. |
-| **Overview** | run status, progress + counts, blockers, the pipeline next-step card with a **Manual build** checkbox, background-job status, run controls, an **auto-commit** toggle, and a **Launch \<harness\> CLI** button. |
+| **Overview** | run status, progress + counts, blockers, the pipeline next-step card with a **Manual build** checkbox, background-job status, run controls, an **auto-commit** toggle, a **Log harness activity** toggle, and a **Launch \<harness\> CLI** button. |
 | **Board** | the PixiJS Forge Board - a live kanban (To Do · In Progress · Done · Failed). |
 | **Tasks** | every task in a filterable/sortable table with a detail drawer, editable per-task timeout, explicit/range selection controls for manual mode, and a **Launch \<harness\> CLI** button. |
 | **Logs** | `docs/engine-run.log` tail + the audit event stream (live via SSE). |
@@ -262,6 +262,17 @@ command passes to the engine. It defaults to **on** (see
 [ADR-035](adr/035-auto-commit-after-task.md)); the engine commits one commit per
 completed task. Disable it if the working tree is dirty and you don't want agent
 output mixed with your uncommitted changes.
+
+The **Log harness activity** checkbox (Controls panel) toggles
+`logHarnessActivity` in `docs/engine-config.json`. It defaults to **off** and
+applies to subsequently started runs; the Console's run/resume command passes it
+to the engine as `--log-harness-activity` or `--no-log-harness-activity`, so it
+takes precedence over `FORGE_ENGINE_LOG_HARNESS_ACTIVITY`. When enabled, harness
+CLI stdout/stderr streams into `docs/engine-run.log` and appears live in the
+**Logs** view. It can contain sensitive repository content and increase log
+volume; command invocation logging is always on regardless of this setting (see
+[workflow-engine.md](workflow-engine.md#harness-invocation-and-activity-logging)
+and [ADR-052](adr/052-harness-invocation-activity-logging.md)).
 
 ### Task timeouts
 

@@ -24,6 +24,16 @@ const task: ManifestTask = {
   approvalRequired: false, sourceLines: [], requiredCapabilities: ["text"],
 };
 
+test("prepareTaskRequest defaults harness activity logging off and carries it when enabled", () => {
+  const root = mkdtempSync(join(tmpdir(), "forge-request-activity-"));
+  try {
+    assert.equal(prepareTaskRequest({ agent, task, repoRoot: root }).logHarnessActivity, false);
+    assert.equal(prepareTaskRequest({ agent, task, repoRoot: root, logHarnessActivity: true }).logHarnessActivity, true);
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
 for (const transport of ["copilot", "opencode", "claude", "openai", "stub"] as const) {
   test(`${transport} preserves normalized model precedence and task semantics`, async () => {
     const root = mkdtempSync(join(tmpdir(), "forge-conformance "));

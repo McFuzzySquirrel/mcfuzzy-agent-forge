@@ -176,6 +176,7 @@ The Overview controls panel offers the same actions you would otherwise issue fr
   workflow, or **manual** to run only the saved task selection from the Tasks
   view. Manual mode requires at least one selected task.
 - **Auto-commit after each task**: toggles one-commit-per-task git history (on by default).
+- **Log harness activity**: streams harness CLI stdout/stderr into `docs/engine-run.log`, where the Logs view shows it live while the run is active. Off by default; the saved choice is applied to subsequently started runs and restored after a reload. Activity logs can contain sensitive repository content and increase log volume, and command invocation logging is always on regardless. Turning it off stops activity capture for later runs without disabling command logging.
 - **Concurrency preference**: stores the engine concurrency value in `docs/engine-config.json`. Enter a positive integer (e.g. `3`) and click **Set**; enter `0` to return to the engine default. The value is shown in later Run/Resume summaries, but current repo-task execution remains serialized while output attribution is repo-wide.
 - **Reset changed tasks for review**: after feature reconciliation, resets completed or skipped tasks whose contracts changed back to pending. Review the changed task IDs before using this action.
 - **Launch \<harness\> CLI**: opens the project's harness CLI (opencode/copilot/claude) in a new terminal from the project folder, so you can watch the live run and take over manually. Also available on the Tasks header.

@@ -95,6 +95,7 @@ interface LauncherState {
     keepAlive: boolean;
     attach: string;
     autoCommit: boolean;
+    logHarnessActivity: boolean;
     executionMode: "auto" | "manual";
     selectionScope?: "single" | "range" | "list";
     selectedTaskIds: string[];
@@ -130,6 +131,7 @@ function createLauncherState(options: LauncherOptions = {}): LauncherState {
       keepAlive: env.FORGE_ENGINE_ATTACH === "1",
       attach: env.FORGE_ENGINE_ATTACH_URL ?? "",
       autoCommit: env.FORGE_ENGINE_AUTO_COMMIT !== "0",
+      logHarnessActivity: env.FORGE_ENGINE_LOG_HARNESS_ACTIVITY === "1",
       executionMode: "auto",
       selectionScope: undefined,
       selectedTaskIds: [],
@@ -961,6 +963,7 @@ function engineRunArgs(): string[] {
   if (cfg.keepAlive) args.push("--keep-alive");
   if (cfg.attach) args.push("--attach", cfg.attach);
   if (cfg.autoCommit === false) args.push("--no-auto-commit");
+  args.push(cfg.logHarnessActivity ? "--log-harness-activity" : "--no-log-harness-activity");
   if (cfg.executionMode === "manual") {
     args.push("--execution-mode", "manual");
     if (cfg.selectionScope) args.push("--selection-scope", cfg.selectionScope);
@@ -1044,6 +1047,12 @@ async function configureEngineOptions(opts: LauncherOptions): Promise<void> {
       cfg.autoCommit ? "y" : "y",
     );
     cfg.autoCommit = autoCommitAnswer === "y";
+
+    const activityAnswer = await promptYesNo(
+      "Stream harness CLI activity into docs/engine-run.log? (may contain sensitive content and grow the log)",
+      cfg.logHarnessActivity ? "y" : "n",
+    );
+    cfg.logHarnessActivity = activityAnswer === "y";
   } catch {
     info("Engine options cancelled; using the current defaults.");
   }
@@ -1771,6 +1780,7 @@ function setupStateForRepo(repoDir: string): void {
   state.engineConfig.keepAlive = envFlagOrUndefined("FORGE_ENGINE_ATTACH") ?? persisted?.keepAlive ?? false;
   state.engineConfig.attach = state.env.FORGE_ENGINE_ATTACH_URL ?? persisted?.attach ?? "";
   state.engineConfig.autoCommit = envFlagOrUndefined("FORGE_ENGINE_AUTO_COMMIT") ?? persisted?.autoCommit ?? true;
+  state.engineConfig.logHarnessActivity = envFlagOrUndefined("FORGE_ENGINE_LOG_HARNESS_ACTIVITY") ?? persisted?.logHarnessActivity ?? false;
   state.engineConfig.executionMode = persisted?.executionMode === "manual" ? "manual" : "auto";
   state.engineConfig.selectionScope = persisted?.selectionScope === "single" || persisted?.selectionScope === "range" || persisted?.selectionScope === "list"
     ? persisted.selectionScope
@@ -2108,6 +2118,7 @@ async function engineRunCliForIncrement(repoDir: string, featureNames: string[])
     if (cfg.keepAlive) args.push("--keep-alive");
     if (cfg.attach) args.push("--attach", cfg.attach);
     if (cfg.autoCommit === false) args.push("--no-auto-commit");
+    args.push(cfg.logHarnessActivity ? "--log-harness-activity" : "--no-log-harness-activity");
     return engineRunCli(args);
   } catch {
     fail("Cannot run feature increment: execution manifest is missing or invalid.");

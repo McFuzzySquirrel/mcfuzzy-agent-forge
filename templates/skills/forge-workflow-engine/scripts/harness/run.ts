@@ -5,6 +5,13 @@ import { dirname, relative, resolve as resolvePath } from "node:path";
 import readCmdShim from "read-cmd-shim";
 import which from "which";
 import type { TaskAttemptRequest, TaskFailureKind } from "../types.ts";
+import {
+  ActivityLineBuffer,
+  formatActivityLine,
+  formatCompletionLine,
+  formatInvocationLine,
+  type HarnessInvocationContext,
+} from "./invocation-log.ts";
 
 const CLEANUP_TIMEOUT_MS = 1000;
 
@@ -16,6 +23,12 @@ export interface RunCommandOptions {
   /** Extra environment variables merged over `process.env`. */
   env?: NodeJS.ProcessEnv;
   signal?: AbortSignal;
+  /** When present, the invocation (and effective invocation) is logged before launch. */
+  invocation?: HarnessInvocationContext;
+  /** When true, mirror stdout/stderr into the log as it arrives. Off by default. */
+  activity?: boolean;
+  /** Log sink; defaults to `console.log` so lines reach docs/engine-run.log. */
+  log?: (line: string) => void;
 }
 
 export interface RunCommandResult {
@@ -47,6 +60,11 @@ export function runCommand(
   opts: RunCommandOptions,
 ): Promise<RunCommandResult> {
   if (opts.signal?.aborted) return Promise.resolve({ stdout: "", stderr: "", status: null, error: "Task cancelled", failureKind: "cancelled" });
+  const log = opts.log ?? ((line: string) => console.log(line));
+  const ctx = opts.invocation;
+  const requestedBin = bin;
+  const requestedArgs = [...args];
+  if (ctx) log(formatInvocationLine(ctx, requestedBin, requestedArgs, "requested"));
   return new Promise((resolve) => {
     if (process.platform === "win32" && !opts.shell) {
       try {
@@ -63,6 +81,16 @@ export function runCommand(
         // Non-npm launchers retain cross-spawn's executable resolution.
       }
     }
+    // Record the effective invocation when launcher resolution rewrote it.
+    if (ctx && (bin !== requestedBin || args.length !== requestedArgs.length || args.some((arg, index) => arg !== requestedArgs[index]))) {
+      log(formatInvocationLine(ctx, bin, args, "effective"));
+    }
+    const activity = ctx && opts.activity
+      ? {
+          stdout: new ActivityLineBuffer((line) => log(formatActivityLine(ctx, "stdout", line))),
+          stderr: new ActivityLineBuffer((line) => log(formatActivityLine(ctx, "stderr", line))),
+        }
+      : undefined;
     // A dedicated POSIX process group lets cancellation include descendants
     // inheriting the output pipes. This remains attached: no unref during work.
     const child = spawn(bin, args, {
@@ -90,8 +118,19 @@ export function runCommand(
       clearTimeout(timer);
       clearTimeout(cleanupTimer);
       opts.signal?.removeEventListener("abort", cancel);
+      activity?.stdout.flush();
+      activity?.stderr.flush();
+      const resolvedStatus = terminating ? null : status;
+      if (ctx) {
+        log(formatCompletionLine(ctx, {
+          status: resolvedStatus,
+          error: failure?.error ?? error,
+          failureKind: failure?.failureKind,
+          durationMs: Date.now() - startedAt,
+        }));
+      }
       const bootMs = firstOutputAt === undefined ? Date.now() - startedAt : firstOutputAt - startedAt;
-      resolve({ stdout, stderr, status: terminating ? null : status, error: failure?.error ?? error, failureKind: failure?.failureKind, bootMs });
+      resolve({ stdout, stderr, status: resolvedStatus, error: failure?.error ?? error, failureKind: failure?.failureKind, bootMs });
     };
 
     const terminate = (error: string, failureKind: TaskFailureKind) => {
@@ -147,6 +186,7 @@ export function runCommand(
 
     const append = (target: "stdout" | "stderr", chunk: Buffer) => {
       if (firstOutputAt === undefined) firstOutputAt = Date.now();
+      activity?.[target].write(chunk);
       const text = chunk.toString("utf8");
       if (target === "stdout") {
         if (stdout.length + text.length > opts.maxBufferBytes) {

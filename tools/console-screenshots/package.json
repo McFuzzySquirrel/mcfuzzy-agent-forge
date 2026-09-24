@@ -1,0 +1,17 @@
+{
+  "name": "console-screenshots",
+  "private": true,
+  "version": "0.0.0",
+  "type": "module",
+  "description": "Developer tool that regenerates the Forge Console screenshots and visual-tour assets from a deterministic fixture.",
+  "scripts": {
+    "typecheck": "tsc --noEmit",
+    "capture": "npm --prefix ../../scripts/forge-launcher run build && tsx src/index.ts"
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.0",
+    "puppeteer-core": "^25.12.0",
+    "tsx": "^4.19.0",
+    "typescript": "^5.7.0"
+  }
+}

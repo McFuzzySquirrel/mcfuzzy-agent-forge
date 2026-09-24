@@ -149,6 +149,7 @@ test("resume carries persisted engine config (concurrency/keep-alive/retries/viz
     vizPort: "4300",
     keepAlive: true,
     attach: "",
+    logHarnessActivity: true,
   }));
   const { code, out } = await runCli(["resume", "--repo", repo, "--non-interactive"]);
   assert.equal(code, 0, out);
@@ -158,6 +159,7 @@ test("resume carries persisted engine config (concurrency/keep-alive/retries/viz
   assert.ok(out.includes("--max-retries 3"), out);
   assert.ok(out.includes("--task-timeout-ms 300000"), out);
   assert.ok(out.includes("--viz"), out);
+  assert.ok(out.includes("--log-harness-activity"), out);
 });
 
 test("explicit env overrides persisted engine config on resume", async () => {
@@ -186,10 +188,12 @@ test("explicit env overrides persisted engine config on resume", async () => {
   const { code, out } = await runCli(["resume", "--repo", repo, "--non-interactive"], {
     FORGE_ENGINE_CONCURRENCY: "2",
     FORGE_ENGINE_ATTACH: "0",
+    FORGE_ENGINE_LOG_HARNESS_ACTIVITY: "1",
   });
   assert.equal(code, 0, out);
   assert.ok(out.includes("--concurrency 2"), out);
   assert.ok(!out.includes("--keep-alive"), out);
+  assert.ok(out.includes("--log-harness-activity"), out);
 });
 
 test("resume with a complete engine run suggests monitoring, not a resume", async () => {

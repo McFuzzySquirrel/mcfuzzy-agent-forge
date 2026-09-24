@@ -2,6 +2,7 @@ import { existsSync, readFileSync } from "node:fs";
 import { resolve } from "node:path";
 
 import { runCommand, extractModelFlags, canSelectAgentNatively } from "./run.ts";
+import { harnessInvocationContext } from "./invocation-log.ts";
 import type { AgentDescriptor, HarnessAdapter, HarnessRunContext, TaskAttemptRequest, TaskResult } from "../types.ts";
 import { inlinePersona } from "../request.ts";
 import { executionPrompt } from "../task-execution.ts";
@@ -103,6 +104,8 @@ export class OpenCodeAdapter implements HarnessAdapter {
       timeoutMs: request.budget.timeoutMs,
       signal: request.signal,
       maxBufferBytes: 10 * 1024 * 1024,
+      invocation: harnessInvocationContext(this.name, request),
+      activity: request.logHarnessActivity === true,
     });
     const durationMs = Date.now() - start;
 

@@ -599,6 +599,7 @@ function renderActions(container: HTMLElement, summary: Summary, actions: Action
   const timeouts = renderTimeoutControls(container, tasks);
   const mode = renderBuildModeControl(container, summary.executionMode, summary.selectedTaskCount);
   const commit = renderAutoCommitToggle(container, store.summary?.autoCommit ?? true);
+  const activity = renderLogHarnessActivityToggle(container, store.summary?.logHarnessActivity ?? false);
   const concurrency = renderConcurrencyControl(container, store.summary?.concurrency ?? 0);
   const reset = el("button", { className: "btn btn-sm" }, "Reset changed tasks for review");
   reset.addEventListener("click", () => {
@@ -618,6 +619,7 @@ function renderActions(container: HTMLElement, summary: Summary, actions: Action
     replay,
     timeouts,
     commit,
+    activity,
     concurrency,
     el("div", { style: "margin-top:10px" }, [reset, el("span", { className: "dim small" }, " Re-run completed tasks whose manifest contract changed.")]),
   ]);
@@ -681,6 +683,30 @@ function renderAutoCommitToggle(container: HTMLElement, enabled: boolean): HTMLE
     })();
   });
   return el("div", { style: "margin-top:10px" }, [label]);
+}
+
+function renderLogHarnessActivityToggle(container: HTMLElement, enabled: boolean): HTMLElement {
+  const cb = el("input", { type: "checkbox", checked: enabled ? true : null });
+  const label = el("label", { className: "checkbox-row" }, [
+    cb,
+    el("span", null, "Log harness activity (stream harness CLI output into the engine log)"),
+  ]);
+  cb.addEventListener("change", () => {
+    const value = (cb as HTMLInputElement).checked;
+    void (async () => {
+      try {
+        const res = await api.setLogHarnessActivity(value);
+        toast(res.message || (res.ok ? "updated" : "update failed"));
+      } catch (err) {
+        toast(err instanceof Error ? err.message : "update failed");
+      }
+      void renderOverview(container);
+    })();
+  });
+  return el("div", { style: "margin-top:10px" }, [
+    label,
+    el("p", { className: "dim small", role: "note" }, "Off by default. Applies to subsequently started runs; the current run is unchanged. Activity logs can contain sensitive repository content and increase log volume. Command logging is always on."),
+  ]);
 }
 
 function renderConcurrencyControl(container: HTMLElement, current: number): HTMLElement {

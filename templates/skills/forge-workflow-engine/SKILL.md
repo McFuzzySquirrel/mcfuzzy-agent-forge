@@ -254,6 +254,24 @@ verifies a successful call before marking the task complete:
 The pre-run summary prints the gate mode. The final summary and `status` also
 flag tasks completed with no recorded output files, so a hollow run is visible.
 
+### Harness invocation and activity logging
+
+Every CLI harness invocation is logged before launch - and again when Windows
+launcher resolution rewrites it - with the timestamp, harness, run ID, task ID,
+attempt, working directory, executable, and the complete argument list
+(JSON-escaped per argument, so paths with spaces and multiline prompts stay
+unambiguous; execution files are named, never expanded). Recognized credentials
+are replaced with `[REDACTED]`; environment variables are never dumped.
+
+Activity logging is **off by default**. Enable `--log-harness-activity` /
+`FORGE_ENGINE_LOG_HARNESS_ACTIVITY=1` (or the Console **Log harness activity**
+toggle) to stream harness stdout/stderr into `docs/engine-run.log` as it
+arrives, each line tagged with stream, task, and attempt, followed by a
+completion record with the exit status, timeout, or cancellation. `--no-log-harness-activity`
+forces it off. Activity can contain sensitive repository content and increase log
+volume, is bounded/truncated with explicit markers, and never changes captured
+result parsing or task outcomes.
+
 ### Attempt diagnostics and retry feedback
 
 Each settled invocation updates `docs/artifacts/<task-id>.result.json`, with

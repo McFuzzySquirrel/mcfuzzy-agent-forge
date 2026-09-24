@@ -30,6 +30,7 @@ Usage:
   npm run workflow-engine -- run     [--repo <path>] [--harness opencode|copilot|claude|openai|stub]
                                      [--max-retries <n>] [--retry-delay-ms <ms>] [--heartbeat-ms <ms>] [--concurrency <n>] [--task-timeout-ms <ms>] [--yes]
                                      [--allow-noop] [--run-validation]
+                                     [--log-harness-activity|--no-log-harness-activity]
                                      [--auto-commit|--no-auto-commit] [--commit-message-template <tmpl>]
                                      [--execution-mode <auto|manual>] [--selection-scope <single|range|list>] [--selected-tasks <id,id,...>]
                                      [--viz [port]] [--no-open]
@@ -50,6 +51,10 @@ Environment variables:
                                  trivial agent output to count as complete (bypasses the no-op output gate)
   FORGE_ENGINE_RUN_VALIDATION    "1" to execute each task's manifest validationCommands and require them to pass
                                  before the task is marked complete
+  FORGE_ENGINE_LOG_HARNESS_ACTIVITY  "1" to stream harness CLI stdout/stderr into the engine log as it
+                                 arrives (default off; --log-harness-activity, --no-log-harness-activity
+                                 override). Command invocation logging is always on. Activity logs may
+                                 contain sensitive repository content and grow the log volume.
   FORGE_ENGINE_AUTO_COMMIT        "0" to disable auto-commit after each completed task (default: 1)
   FORGE_ENGINE_COMMIT_MESSAGE_TEMPLATE  Commit message template with {taskId}/{taskTitle} placeholders
                                  (default: feat(forge-engine): complete task {taskId} - {taskTitle})
@@ -90,6 +95,21 @@ function flag(args: string[], name: string): string | undefined {
 
 function hasFlag(args: string[], name: string): boolean {
   return args.includes(name);
+}
+
+/**
+ * Resolves opt-in harness activity logging. Precedence: explicit CLI flag
+ * (the off switch wins if both are present) over FORGE_ENGINE_LOG_HARNESS_ACTIVITY
+ * over the default (off). Persisted Console/launcher settings arrive as an
+ * explicit CLI flag, so they sit at the CLI tier.
+ */
+function resolveLogHarnessActivity(args: string[]): boolean {
+  if (hasFlag(args, "--no-log-harness-activity")) return false;
+  if (hasFlag(args, "--log-harness-activity")) return true;
+  const env = process.env["FORGE_ENGINE_LOG_HARNESS_ACTIVITY"];
+  if (env === "1") return true;
+  if (env === "0") return false;
+  return false;
 }
 
 /**
@@ -195,6 +215,7 @@ function buildOptions(
     taskTimeoutMs: Number(flag(args, "--task-timeout-ms") ?? process.env["FORGE_ENGINE_TASK_TIMEOUT_MS"] ?? String(DEFAULT_TASK_TIMEOUT_MS)),
     allowNoop: hasFlag(args, "--allow-noop") || process.env["FORGE_ENGINE_ALLOW_NOOP"] === "1",
     runValidation: hasFlag(args, "--run-validation") || process.env["FORGE_ENGINE_RUN_VALIDATION"] === "1",
+    logHarnessActivity: resolveLogHarnessActivity(args),
     autoCommit: !(hasFlag(args, "--no-auto-commit") || process.env["FORGE_ENGINE_AUTO_COMMIT"] === "0"),
     commitMessageTemplate: flag(args, "--commit-message-template") ?? process.env["FORGE_ENGINE_COMMIT_MESSAGE_TEMPLATE"],
     executionMode: flag(args, "--execution-mode") === "manual" ? "manual" : "auto",

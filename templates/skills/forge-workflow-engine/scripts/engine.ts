@@ -424,6 +424,7 @@ async function executeTask(
         maxRetries: opts.maxRetries, attempt: currentState.tasks[task.id]!.attempt,
         previousFailure, previousResultPath,
         runId: currentState.runId, signal: opts.signal,
+        logHarnessActivity: opts.logHarnessActivity,
       }));
     } catch (error) {
       const message = `Adapter exception: ${error instanceof Error ? error.message : String(error)}`;

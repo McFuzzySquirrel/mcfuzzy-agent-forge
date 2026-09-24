@@ -403,6 +403,7 @@ function engineOptionsFor(
     // so the output-verification gate is relaxed unless a test opts into it.
     allowNoop: true,
     runValidation: false,
+    logHarnessActivity: false,
     pauseRequested: false,
     ...overrides,
   };

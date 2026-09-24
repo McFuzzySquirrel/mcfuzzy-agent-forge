@@ -160,3 +160,65 @@ test("prompt surfaces the per-task timeout and retry budget when provided", asyn
   assert.ok(prompt.includes("Per-task timeout: 30s"), prompt);
   assert.ok(prompt.includes("retried up to 3 time(s)"), prompt);
 });
+
+async function captureConsole<T>(fn: () => Promise<T>): Promise<{ result: T; lines: string[] }> {
+  const lines: string[] = [];
+  const original = console.log;
+  console.log = (...args: unknown[]) => lines.push(args.map((arg) => String(arg)).join(" "));
+  try {
+    return { result: await fn(), lines };
+  } finally {
+    console.log = original;
+  }
+}
+
+test("logs the harness invocation with run/task/attempt identifiers and no activity by default", async (t) => {
+  const root = tempDir(t, "forge-copilot-log-repo-");
+  const agent = makeAgent(join(root, ".github", "agents", "discovery-engineer.md"));
+  const shim = makeShim(t);
+  const original = process.env.COPILOT_BIN;
+  process.env.COPILOT_BIN = shim.bin;
+  let lines: string[] = [];
+  try {
+    const { lines: captured } = await captureConsole(async () => {
+      await new CopilotAdapter().invoke(prepareTaskRequest({ agent, task: makeTask(), repoRoot: root, runId: "run-9", attempt: 2 }));
+    });
+    lines = captured;
+  } finally {
+    if (original === undefined) delete process.env.COPILOT_BIN;
+    else process.env.COPILOT_BIN = original;
+  }
+
+  const invocation = lines.find((line) => line.includes("harness invocation"));
+  assert.ok(invocation, lines.join("\n"));
+  assert.match(invocation, /harness=copilot/);
+  assert.match(invocation, /run=run-9/);
+  assert.match(invocation, /task=t1/);
+  assert.match(invocation, /attempt=2/);
+  assert.match(invocation, /\[requested]/);
+  assert.ok(!lines.some((line) => line.includes("harness activity")), "activity must stay off by default");
+});
+
+test("streams harness activity when logHarnessActivity is enabled", async (t) => {
+  const root = tempDir(t, "forge-copilot-activity-repo-");
+  const agent = makeAgent(join(root, ".github", "agents", "discovery-engineer.md"));
+  const bin = makeNodeShim(tempDir(t, "forge-copilot-activity-"), "fake-copilot", 'process.stderr.write("activity-line\\n"); process.exit(0);');
+  const original = process.env.COPILOT_BIN;
+  process.env.COPILOT_BIN = bin;
+  let lines: string[] = [];
+  try {
+    const { lines: captured } = await captureConsole(async () => {
+      const result = await new CopilotAdapter().invoke(prepareTaskRequest({
+        agent, task: makeTask(), repoRoot: root, runId: "run-10", attempt: 1, logHarnessActivity: true,
+      }));
+      assert.equal(result.success, true);
+    });
+    lines = captured;
+  } finally {
+    if (original === undefined) delete process.env.COPILOT_BIN;
+    else process.env.COPILOT_BIN = original;
+  }
+
+  assert.ok(lines.some((line) => line.includes("harness activity stderr") && line.includes("activity-line")), lines.join("\n"));
+  assert.ok(lines.some((line) => line.includes("harness completed")), lines.join("\n"));
+});

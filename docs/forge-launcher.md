@@ -106,6 +106,7 @@ npx forge-launcher@beta engine-run [--repo <path>] [--harness <h>] [--concurrenc
                               [--task-timeout-ms <ms>] [--yes] [--dry-run]
                               [--keep-alive [--keep-alive-port <n>]] [--no-keep-alive] [--attach <url>]
                               [--allow-noop] [--run-validation]
+                              [--log-harness-activity|--no-log-harness-activity]
                               [--auto-commit|--no-auto-commit] [--commit-message-template <tmpl>]
 npx forge-launcher@beta resume [--repo <path>] [--non-interactive] [--dry-run]
 npx forge-launcher@beta console [--repo <path>] [--port <n>] [--no-open]
@@ -522,6 +523,11 @@ step - a set of defaults you can press Enter through:
   (default on). A port prompt follows (blank = `4299`). The dashboard starts
   when the engine starts - after the manifest is prepared - and its URL is
   printed in `docs/engine-run.log`.
+- **Harness activity logging** - stream harness CLI stdout/stderr into
+  `docs/engine-run.log` (default **off**). Off by default because activity logs
+  can contain sensitive repository content and increase log volume; command
+  invocation logging is always on regardless. The choice is persisted and
+  applied to subsequently started runs.
 
 Esc/Ctrl+C keeps the current defaults. The configured values are written into
 both the detached run and the printed command, and persisted to
@@ -530,7 +536,8 @@ them (env vars still win over the persisted file). All options also have
 env-var equivalents (`FORGE_ENGINE_HARNESS`, `FORGE_ENGINE_GRANULARITY`,
 `FORGE_ENGINE_CONCURRENCY`, `FORGE_ENGINE_TASK_TIMEOUT_MS`,
 `FORGE_ENGINE_MAX_RETRIES`, `FORGE_ENGINE_RETRY_DELAY_MS`,
-`FORGE_ENGINE_HEARTBEAT_MS`, `FORGE_ENGINE_VIZ`, `FORGE_ENGINE_VIZ_PORT`). The
+`FORGE_ENGINE_HEARTBEAT_MS`, `FORGE_ENGINE_VIZ`, `FORGE_ENGINE_VIZ_PORT`,
+`FORGE_ENGINE_LOG_HARNESS_ACTIVITY`). The
 same config file now also stores the console's manual-run selection
 (`executionMode`, `selectionScope`, `selectedTaskIds`) so **Run selected** and
 **Resume selected** use the same scoped task set later.
@@ -956,6 +963,7 @@ reflect the running build (monitor + resume) rather than the manual
   | `FORGE_ENGINE_VIZ_PORT` | 8 | Dashboard port when `FORGE_ENGINE_VIZ=1` (default `4299`) |
   | `FORGE_ENGINE_ALLOW_NOOP` | 8 | `1` to relax the engine's output-verification no-op heuristic (`engine-run --allow-noop`) |
   | `FORGE_ENGINE_RUN_VALIDATION` | 8 | `1` to run each task's manifest `validationCommands` before marking it complete (`engine-run --run-validation`) |
+  | `FORGE_ENGINE_LOG_HARNESS_ACTIVITY` | 8 | `1` to stream harness CLI stdout/stderr into `docs/engine-run.log` as it arrives (`engine-run --log-harness-activity`; `--no-log-harness-activity` overrides). Default off; may contain sensitive content |
 
 All other step inputs (repo name, description, visibility, parent directory) use their defaults in non-interactive mode. Override them by setting the variables before running:
 
