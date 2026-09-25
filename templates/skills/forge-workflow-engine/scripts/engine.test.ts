@@ -515,6 +515,10 @@ test("structured caveats allow completion while blockers retain evidence and rea
   assert.equal(events.filter((event) => event.action === "task.attempt.finished").length, 2);
   assert.equal(events.find((event) => event.action === "task.retrying").resultPath, history[0]!.resultPath);
   assert.equal(loadState(options.statePath)!.tasks["1.1"]!.attemptHistory!.length, 2);
+  assert.deepEqual(state.tasks["1.1"]!.validationLimitations, ["Optional hosted CI has not run"]);
+  const progress = readFileSync(options.progressPath, "utf8");
+  assert.match(progress, /\*\*Status\*\*: Complete\n\*\*Validation Gaps\*\*: 1 unverified check/);
+  assert.match(progress, /## Validation Gaps\n- Task 1\.1: Optional hosted CI has not run/);
 });
 
 test("structured blockers remain failed after retries and preserve every report", async () => {

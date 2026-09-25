@@ -89,6 +89,30 @@ Human rubric scores, native-language approval, and stakeholder judgments belong
 only to dependent human-review tasks. Implementation produces reviewable evidence;
 it cannot claim "native-reviewed" or human-approved before that gate runs.
 
+## Reachability and live integration
+
+Executors edit only the files a task names, so work that no task wires in stays
+unreachable while every component test still passes.
+
+- **Composition root.** When a task creates a component, service, handler or
+  endpoint that is consumed elsewhere, that task (or an explicit dependent wiring
+  task) must list the composition root that mounts it — for example `App.tsx`,
+  the router, `Program.cs` or DI registration — in `expectedOutputs`, with an
+  acceptance criterion and a named test that exercises the behavior through that
+  entry point. A component test alone does not prove a user can reach it.
+- **Live external integration.** Every feature that calls an external service
+  (cloud management APIs, SaaS APIs, identity providers, databases you do not
+  run) needs a dependent integration task that exercises the real service with a
+  repository script, asserting a non-empty successful result for each supported
+  call shape. Mocked HTTP handlers cannot prove api-versions, query parameters,
+  response formats or which credential the runtime resolves. If the engine cannot
+  hold the credentials, make it a `human-review` task whose acceptance criteria
+  are the exact live checks. Record the required environment (login, variables)
+  in the task description.
+- **Unverified external contracts.** An external API detail (api-version, query
+  parameter, payload format) that was assumed rather than verified against
+  official documentation must be exercised by that live integration task.
+
 ## Canonical Definitions and Compact Contracts
 
 Every solution has a vision and at least one feature. Write each requirement,
@@ -175,13 +199,22 @@ preparation/implementation tasks. Never represent a rehearsal or native-language
 review as autonomous code generation. Headless PRD approval does not approve
 later human work. Agents must never run `approve-task` or fabricate attestations.
 
+A human review of a user-facing feature must include, as an acceptance criterion,
+that the reviewer completed the primary user journey against the running system
+(live backend where one exists), and its notes must state what was exercised.
+Subjective criteria such as visual polish never stand alone: a polished app that
+does nothing must fail review. Reviewers see upstream tasks' reported validation
+gaps in the Console and should verify them before approving.
+
 ## Review before saving
 
 Check every task independently: can a fresh specialist identify its requirements,
 scope, exact owner, prerequisite interfaces, files, and observable completion?
 Does the union of task requirements cover the PRD without dropping safety rules?
 Are test commands meaningful (not placeholders such as `echo passed`)? Are human
-gates explicit? If not, repair the task before approving the plan. Preserve these
+gates explicit? Is every new component reachable from a composition root named in
+some task's outputs, and does every external integration have a live check? If
+not, repair the task before approving the plan. Preserve these
 fields and IDs during decomposition, review, and incremental changes.
 
 The compiler validates structure, owners, dependencies and required evidence

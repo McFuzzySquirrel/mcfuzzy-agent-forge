@@ -1093,6 +1093,12 @@ but new authoring uses structured contracts. Nothing silently rewrites completed
 tasks or target-project files. See [Task Contracts](task-contracts.md) for the
 standalone validator, migration rules and semantic review limits.
 
+Launcher authoring prompts also require a composition root in some task's
+outputs for each new component and a dependent live check for every
+external-service integration. These are semantic authoring requirements, not
+claims that the structural validator proves reachability or tests real services.
+See the [authoring contract](../templates/skills/forge-build-prd/references/task-contract.md#reachability-and-live-integration).
+
 `forge-launcher draft-prd --repo <path>` can author a PRD directly from an
 existing repository; `docs/IDEA.md` is optional. It inspects the repository
 context through the selected harness. For additive work use:

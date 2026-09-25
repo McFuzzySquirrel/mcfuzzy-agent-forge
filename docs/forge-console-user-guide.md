@@ -197,8 +197,12 @@ such a task; `--yes` cannot approve it.
 1. Open **Tasks** and select the paused task labeled **Human review required**.
 2. Read its requirements, acceptance criteria, constraints, and references.
 3. Click **Complete human review**.
-4. Enter your name, record what you checked and found, and select **I performed
-   this review and approve this task.**
+4. Read **Unverified upstream checks**, which includes transitive task and
+   prerequisite-phase dependencies. Exercise the primary user journey against
+   the running system for user-facing features and perform the applicable live
+   integration checks. Enter your name, record what you exercised and found
+   (at least 40 characters after trimming), and select **I performed this review
+   and approve this task.**
 5. Submit the form. The Console writes a readable record at
    `docs/reviews/<task-id>-console-review.md`, writes the task's configured
    `reviewFile` attestation with the task fingerprint and evidence hash, and
@@ -210,6 +214,13 @@ The engine verifies the task ID, current task/reference fingerprint, reviewer,
 timestamp, decision, and hashes of every evidence file. Editing the task,
 selected reference content, or evidence after approval makes the attestation
 stale and the task pauses again.
+
+Validation gaps are historical reports of non-required checks not run, not
+automatic blockers or proof that review resolved them. Approval does not remove
+them from the originating task or progress document. Older state files without
+reported gaps remain readable; an empty list does not establish full coverage.
+The minimum note length applies to the Console evidence-writing path, not to
+existing evidence files submitted through the CLI.
 
 #### Approve from the CLI
 
