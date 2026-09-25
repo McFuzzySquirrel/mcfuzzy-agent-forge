@@ -112,6 +112,7 @@ export function markTaskComplete(
   agentOutput: string,
   artifactId?: string,
   inputArtifactIds?: string[],
+  validationLimitations?: string[],
 ): WorkflowState {
   const task = state.tasks[taskId];
   if (!task) throw new Error(`Unknown task: ${taskId}`);
@@ -129,6 +130,7 @@ export function markTaskComplete(
         agentOutput,
         errorMessage: undefined,
         failureKind: undefined,
+        validationLimitations: validationLimitations?.length ? [...validationLimitations] : undefined,
         ...(artifactId !== undefined ? { artifactId } : {}),
         ...(inputArtifactIds !== undefined ? { inputArtifactIds } : {}),
       },
@@ -249,6 +251,18 @@ export function syncProgressMd(
     ? state.blockers.map((b) => `- ${b}`)
     : ["- None"];
 
+  // Surface nonblocking "not run" checks so a Complete run cannot silently hide
+  // untested integration boundaries (e.g. mocked-only external services).
+  const gapLines: string[] = [];
+  for (const phase of manifest.phases) {
+    for (const task of phase.tasks) {
+      if (!inScope(task.id)) continue;
+      const record = state.tasks[task.id];
+      if (record?.status !== "complete") continue;
+      for (const limitation of record.validationLimitations ?? []) gapLines.push(`- Task ${task.id}: ${limitation}`);
+    }
+  }
+
   const statusLabel = state.status === "complete" ? "Complete"
     : state.status === "paused" ? "Paused"
     : state.status === "failed" ? "Failed"
@@ -260,6 +274,7 @@ export function syncProgressMd(
     "## Current State",
     `**Phase**: ${state.currentPhase ?? "Not Started"}`,
     `**Status**: ${statusLabel}`,
+    ...(gapLines.length > 0 ? [`**Validation Gaps**: ${gapLines.length} unverified check(s) - see "Validation Gaps"`] : []),
     `**Last Updated**: ${now}`,
     `**Run ID**: ${state.runId}`,
     `**Harness**: ${state.harness}`,
@@ -279,6 +294,9 @@ export function syncProgressMd(
     "",
     "## Blockers",
     ...blockerLines,
+    "",
+    "## Validation Gaps",
+    ...(gapLines.length > 0 ? gapLines : ["- None reported"]),
     "",
     "## Notes",
     `- Workflow engine run ${state.runId}`,

@@ -426,6 +426,30 @@ export function tasks(p: RepoPaths): TaskRow[] {
   }]));
 
   const rows: TaskRow[] = [];
+  const phasesById = new Map(manifest.phases.map((phase) => [phase.id, phase]));
+  const dependenciesByTask = new Map(manifest.phases.flatMap((phase) => {
+    const phaseDependencies = (phase.dependencies ?? []).flatMap((id) =>
+      (phasesById.get(id)?.tasks ?? []).map((task) => task.id));
+    return (phase.tasks ?? []).map((task) =>
+      [task.id, [...(task.dependencies ?? []), ...phaseDependencies]] as const);
+  }));
+  const ownGaps = (taskId: string) => (state?.tasks?.[taskId]?.validationLimitations ?? []).map((gap) => `${taskId}: ${gap}`);
+  // A human reviewer must see every "not run" check the reviewed work depends on,
+  // not only the review task's own record (which never has any).
+  const upstreamGaps = (taskId: string): string[] => {
+    const seen = new Set<string>([taskId]);
+    const gaps: string[] = [];
+    const visit = (id: string) => {
+      for (const dependency of dependenciesByTask.get(id) ?? []) {
+        if (seen.has(dependency)) continue;
+        seen.add(dependency);
+        visit(dependency);
+        gaps.push(...ownGaps(dependency));
+      }
+    };
+    visit(taskId);
+    return gaps;
+  };
   for (const phase of manifest.phases) {
     for (const task of phase.tasks ?? []) {
       const rec = state?.tasks?.[task.id];
@@ -464,6 +488,7 @@ export function tasks(p: RepoPaths): TaskRow[] {
         constraints: task.contract?.constraints ?? [],
         references: task.contract?.references ?? [],
         reviewFile: task.contract?.reviewFile,
+        validationGaps: task.contract?.kind === "human-review" ? upstreamGaps(task.id) : ownGaps(task.id),
       });
     }
   }

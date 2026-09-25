@@ -4,6 +4,28 @@ Detailed release and change notes for MyForge.
 
 ---
 
+## September 2026 - v3.82
+
+### Reachability, live integration and validation-gap visibility
+
+- The task authoring contract (`forge-build-prd/references/task-contract.md`)
+  now requires the composition root (`App.tsx`, router, `Program.cs`, DI) in the
+  outputs of the task that wires a new component, a dependent live integration
+  task for every external-service integration, and a primary-user-journey
+  criterion on human reviews of user-facing features. `forge-build-prd` adds
+  matching validation items and a gotcha against guessing external API contracts
+  (api-versions, query parameters, formats).
+- The workflow engine persists each task's `validationLimitations` and lists them
+  in a new `## Validation Gaps` section of `docs/PROGRESS.md`; `**Status**` values
+  are unchanged.
+- The Forge Console human-review dialog lists unverified checks reported by every
+  upstream task and prerequisite-phase dependency without duplicating shared
+  prerequisites. Review notes must be at least 40 characters after trimming.
+- Existing state files and reports without limitations remain compatible; the
+  display does not prove that checks ran or bypass required completion gates.
+  See [ADR-053](adr/053-reachability-and-validation-gaps.md) for the decision,
+  compatibility guidance, and branch review findings.
+
 ## September 2026 - v3.81
 
 ### Harness invocation and activity logging

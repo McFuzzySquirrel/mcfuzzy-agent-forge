@@ -217,6 +217,13 @@ button shows the exact command to run manually.
 A **Help** button (top-right) explains the UI, the pipeline, each view, and key
 terms.
 
+For human-review tasks, **Complete human review** lists unverified checks from
+all upstream task and prerequisite-phase dependencies, including transitive
+ones. Exercise the required journey and applicable live checks before approving,
+and record what you checked and found in at least 40 characters after trimming.
+These reported gaps are advisory, not proof of validation; see the
+[human-review walkthrough](forge-console-user-guide.md#human-review-when-it-pauses-and-how-to-prove-approval).
+
 ---
 
 ## Run controls

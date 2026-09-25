@@ -29,6 +29,7 @@ export interface TaskRecord {
   errorMessage?: string;
   artifactId?: string;
   inputArtifactIds?: string[];
+  validationLimitations?: string[];
 }
 
 export interface WorkflowState {
@@ -200,6 +201,8 @@ export interface TaskRow {
   constraints: string[];
   references: string[];
   reviewFile?: string;
+  /** Checks reported as not run by this task or, for human reviews, by any upstream dependency. */
+  validationGaps: string[];
 }
 
 export interface ArtifactMeta {

@@ -29,6 +29,11 @@ See the [authoring contract and example](../templates/skills/forge-build-prd/ref
 - Required acceptance criteria are included in the task execution instructions; they are not a
   formal proof. A vacuous test can still pass, so command relevance and coverage
   remain authoring/review responsibilities.
+- Authors must name the composition root that makes new behavior reachable in
+  a task's outputs and test through that entry point. External-service features
+  require dependent live integration checks; when credentials are unavailable
+  to the engine, put those checks in an explicit human-review task. Cite official
+  API documentation or record unverified assumptions in Open Questions.
 - Structured tasks must return a fenced `forge-result` JSON report containing
   only two required fields: `summary` and `unresolved`. Summary is a nonempty
   string or nonempty list of strings (normalized to one string). `unresolved`
@@ -42,6 +47,14 @@ See the [authoring contract and example](../templates/skills/forge-build-prd/ref
   string arrays preserve nonblocking observations and non-required checks not run.
   Older reports omitting these two fields remain valid. Caveats are retained in
   artifacts and downstream projections; they do not bypass any completion gate.
+  `validationLimitations` are also persisted on the task record, listed under
+  `## Validation Gaps` in `docs/PROGRESS.md` (with a `**Validation Gaps**` count
+  beside an unchanged `**Status**`), and shown to reviewers of every dependent
+  human-review task in the Forge Console, including transitive task and
+  prerequisite-phase dependencies.
+- Human-review notes recorded through the Console must be at least 40 characters
+  after trimming and should state what was exercised. User-facing feature reviews
+  must include the primary journey against the running system.
 - Artifacts carry actual outcome reports and changed files rather than repeating
   the task specification. No default confidence score is manufactured.
 - Copilot/OpenCode repository tasks use short, single-line CLI prompts pointing
