@@ -147,13 +147,23 @@ L0/L1.
 Unresolved, and for the team rather than for this record.
 
 1. **Windows and CI.** Validation runs on ubuntu *and* windows
-   (`.github/workflows/validation.yml:14-20`) while podman is linux-only. Does
-   container isolation remain optional with the uncontainerized path as
-   first-class, or is a stated reduction in portability acceptable? This
-   constrains L4 adoption and any future forge-side container work.
+   (`.github/workflows/validation.yml:14-20`). Podman **does** work on Windows
+   via a VM-backed `podman machine` (WSL2 by default, Hyper-V on Pro/Enterprise/
+   Education), so this is not an availability blocker and an earlier draft of
+   this record was wrong to say otherwise. The open question is cost:
+   `podman machine init`/`start` per environment, a ~6 GB RAM floor, Hyper-V
+   unavailable on Home, and — most importantly — **WSL2 exposes Windows drives
+   over Plan9/9P at `/mnt/c/…`**, which is a poor substrate for a bind-mounted
+   repo running `tsc` and `node --test` with a populated `node_modules`. GitHub
+   hosted `windows-latest` now ships WSL2 on a nested-virtualization-capable VM
+   size but does **not** preinstall podman, and Azure Pipelines hosted agents
+   cannot support it at all. Measure the 9P penalty before deciding whether
+   container isolation stays optional with the uncontainerized path as
+   first-class.
 2. **Version pin policy.** Which tag, and at what upgrade cadence?
 3. **Which depth is the ceiling worth building?** L0+L1 is cheap and safe; L4 is
-   expensive and may be foreclosed by question 1.
+   expensive, and its Windows story carries an unmeasured 9P performance risk
+   (question 1).
 4. **Where does the L3 boundary sit?** Hermes treating the engine as its model
    means two orchestrators with overlapping authority. That failure mode has to
    be designed against before, not after, any code exists.

@@ -283,6 +283,52 @@ isolation inside the Hermes integration. It is recorded here because it is the
 better long-term answer, and because leaving it out means the concurrency
 roadmap stays blocked.
 
+### Correction: podman is not Linux-only
+
+An earlier draft of this document asserted that "podman is linux-only" and
+treated Windows as excluded from container isolation. **That was wrong**, and the
+error was mine — it was inferred rather than checked.
+
+Podman ships an official Windows client and MSI installer. On Windows it runs
+via a **podman machine**: a Linux VM, managed with `podman machine init` /
+`podman machine start`, and reachable from PowerShell as if it were local.
+`podman machine` is backed by either:
+
+- **WSL2** (the default) — all Windows editions including Home, Windows 10
+  build 19043+ or Windows 11, and WSL2 permits multiple concurrent machines.
+- **Hyper-V** — Enterprise/Pro/Education only (**not Home**), requires
+  administrator rights for the first `init` and membership of the Hyper-V
+  Administrators group. WSL and Hyper-V machines cannot run simultaneously.
+
+Requirements: hardware virtualization, **nested virtualization if Windows is
+itself a VM**, and roughly 6 GB of RAM for the machine. With the WSL2 provider
+the CLI needs no `gvproxy`; WSL2 supplies its own networking.
+
+So the corrected constraint is not availability. It is **cost**, and it is
+concrete:
+
+- **Startup cost.** Every environment needs `podman machine init` + `start`
+  before the first `podman run`. In CI that is a per-job setup step, not a
+  given.
+- **Bind-mount performance — the one that actually worries us.** WSL2 exposes
+  Windows drives to the guest at `/mnt/c/…` over Plan9/9P. A bind-mounted repo
+  plus `node_modules` I/O over 9P is the classic pathological case for Node
+  tooling. Our engine runs `validationCommands` (`tsc`, `node --test`) against
+  exactly that mounted tree, so this is a first-order risk to *any* Windows
+  container path — arguably more consequential than the nested-virtualization
+  question, and it deserves its own spike.
+- **CI is host-dependent.** GitHub-hosted `windows-latest` now runs Windows
+  Server 2025 (image `20260922`) with WSL2 `2.7.14.0` enabled, and the
+  underlying Dadsv5 VM size reports nested virtualization as supported — so
+  WSL2 and therefore a podman machine are [inference] plausible there. Two
+  caveats: podman is **not** preinstalled (only Docker 29.7.2 and Compose are),
+  and runner-images history on this is rocky — maintainers previously stated
+  standard runners lacked nested virtualization, and WSL2 on those images broke
+  across image updates. Azure Pipelines hosted agents are documented as
+  `Standard_DS2_v2`, which does **not** support nested virtualization, so
+  WSL2 there fails with `HCS_E_HYPERV_NOT_INSTALLED`. This must be measured
+  before it is relied on.
+
 ## Risks
 
 - **Upstream velocity is the dominant integration risk.** 460 PRs and +164k
@@ -320,10 +366,10 @@ roadmap stays blocked.
 Recorded rather than guessed, for team resolution.
 
 1. **Windows and CI.** The forge's validation workflow runs ubuntu *and* windows
-   (`.github/workflows/validation.yml:14-20`). Podman is linux-only. Does
-   container isolation stay optional, with the uncontainerized path as
-   first-class? Or is a stated reduction in portability acceptable? This
-   constrains any forge-side container work and any L4 adoption.
+   (`.github/workflows/validation.yml:14-20`). Podman **does** run on Windows —
+   see the correction below — so the question is not "is it possible" but
+   "what does a VM-backed podman machine cost us". The real open items are
+   startup cost, the RAM floor, and bind-mount performance.
 2. **Version pin policy.** Which tag, and what is the upgrade cadence?
 3. **Which depth is the ceiling worth building?** L0+L1 is cheap and safe; L4 is
    expensive and may be foreclosed by question 1.
