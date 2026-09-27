@@ -71,3 +71,82 @@ test("calibration recognizes fenced command blocks and fallbacks", () => {
   assert.equal(calibrationScore?.score, 3);
   assert.equal(audit.reviewerStyleProxy, 3);
 });
+
+const PROJECT_GOTCHAS = [
+  "- PostgreSQL implicit commits can break rollback assumptions",
+  "- SQLite foreign key enforcement must be enabled per connection",
+  "- MySQL identifier quoting differs between ANSI and default modes",
+];
+
+function gotchasScore(skillMd: string): number | undefined {
+  return makeAudit(skillMd).scores.find((score) => score.axis === "Gotchas coverage")?.score;
+}
+
+test("gotchas coverage does not depend on where the Gotchas section sits", () => {
+  const middle = [
+    "# Regression skill",
+    "",
+    "## Gotchas",
+    ...PROJECT_GOTCHAS,
+    "",
+    "## Validation",
+    "- [x] Run the build command",
+  ].join("\n");
+  const last = [
+    "# Regression skill",
+    "",
+    "## Validation",
+    "- [x] Run the build command",
+    "",
+    "## Gotchas",
+    ...PROJECT_GOTCHAS,
+  ].join("\n");
+
+  assert.equal(gotchasScore(middle), 3);
+  assert.equal(
+    gotchasScore(last),
+    3,
+    "a last-position Gotchas section must not read as empty",
+  );
+});
+
+test("a capital Z inside the last section does not truncate it", () => {
+  const skillMd = [
+    "# Regression skill",
+    "",
+    "## Validation",
+    "- [x] Run the build command",
+    "",
+    "## Gotchas",
+    "- Zod schemas reject unknown keys at the boundary",
+    ...PROJECT_GOTCHAS.slice(0, 2),
+  ].join("\n");
+
+  assert.equal(
+    gotchasScore(skillMd),
+    3,
+    "content after a capital Z in a last section must still be counted",
+  );
+});
+
+test("the reviewer-style proxy counts gotchas in a last-position section", () => {
+  // Tuned so the gotcha point is decisive: 4 points with it, 3 without.
+  const skillMd = [
+    "# Regression skill",
+    "",
+    "## Process",
+    "### Step 1: Inspect the current state",
+    "### Step 2: Apply the change",
+    "",
+    "Load `references/notes.md` when the long form is needed.",
+    "",
+    "## Validation",
+    "- [x] Run the standard command",
+    "- [x] Check the generated output",
+    "",
+    "## Gotchas",
+    ...PROJECT_GOTCHAS,
+  ].join("\n");
+
+  assert.equal(makeAudit(skillMd).reviewerStyleProxy, 3);
+});

@@ -11,7 +11,7 @@ The audit report includes a deterministic reviewer-style proxy score when no exp
 
 ## Embedded Tooling (Portable Install)
 
-This skill package is self-contained. If this directory is installed as `.agents/skills/skill-review/`, the helper scripts are available at:
+This skill package is self-contained. If this directory is installed as `.opencode/skills/skill-review/`, the helper scripts are available at:
 
 - `./scripts/skill-review.ts`
 - `./scripts/rubric.ts`

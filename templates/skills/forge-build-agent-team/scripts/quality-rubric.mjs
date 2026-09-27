@@ -34,8 +34,12 @@ function hasSection(text, name) {
 }
 
 function sectionContent(text, name) {
+  // `\Z` is not a JavaScript anchor (it compiles to a literal "Z", which both
+  // truncates at stray capitals and never matches at end of input). Bare `$` is
+  // also wrong: the `m` flag makes it match at every line end. `$(?![\s\S])` is a
+  // true end-of-input assertion that still coexists with `^` under `m`.
   const re = new RegExp(
-    `^#{2,}\\s+${name.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}[^\\n]*\\n([\\s\\S]*?)(?=^#{2,}\\s|\\Z)`,
+    `^#{2,}\\s+${name.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}[^\\n]*\\n([\\s\\S]*?)(?=^#{2,}\\s|$(?![\\s\\S]))`,
     "im",
   );
   return re.exec(text)?.[1]?.trim() ?? "";

@@ -4,6 +4,33 @@ Detailed release and change notes for MyForge.
 
 ---
 
+## September 2026 - v3.84
+
+### Skill section extraction no longer truncates a last-position section
+
+- The quality rubric's section reader used `\Z` to mean "end of input". JavaScript
+  has no `\Z` — it compiles to a literal `Z` — so a `##` section that was the
+  **last** section in a `SKILL.md` read as empty, and a section containing a
+  capital `Z` (`Zod`, `Zen`, …) was truncated at that letter. The correct
+  end-of-input assertion is `$(?![\s\S])`; bare `$` is not a fix, because the
+  reader's `m` flag makes it match at every line end. Fixed in both copies:
+  `forge-build-agent-team/scripts/quality-rubric.mjs` and
+  `skill-review/scripts/rubric.ts`.
+- **User-visible effect:** a skill whose `## Gotchas` is its final section scored
+  **1/3** on the blocking Gotchas-coverage axis no matter how many gotchas it
+  contained, so the project-skill stage could hard-fail it under
+  `--min-axis 2 --fail-axis-below`. The bundled `forge-auto-build` skill is one
+  such case: 8 concrete gotchas scored 1, and now score 3. Section *order* no
+  longer affects any score.
+- The same fix restores the reviewer-style proxy and long-section detection,
+  which read sections through the same helper and could never see a final
+  section.
+- Added regression tests covering a last-position `## Gotchas` section, a capital
+  `Z` inside a final section, and the reviewer-style proxy for a last-position
+  section. All three fail against the previous `\Z` reader.
+- Reverted a duplicated entry in the `skill-review` discovery list, which had
+  dropped `.agents/skills/` and listed `.opencode/skills/` twice.
+
 ## September 2026 - v3.83
 
 ### `reuse` skill candidates are no longer treated as authored outputs
