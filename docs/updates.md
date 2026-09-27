@@ -4,6 +4,35 @@ Detailed release and change notes for MyForge.
 
 ---
 
+## September 2026 - v3.83
+
+### `reuse` skill candidates are no longer treated as authored outputs
+
+- The project-skill stage now requires a project package only for `create` and
+  `extend` candidates. A `reuse` candidate names a package that resolves outside
+  the repository (a global install or an upstream package), so the stage no
+  longer requires, authors, or validates a project-local copy of it. Previously
+  any project whose team legitimately reused an existing package could not
+  complete the skills stage, failing with `Planned project skill is missing or
+  empty: <harness-root>/skills/<name>/SKILL.md`. The validator now agrees with
+  the offline stub runner, which already skipped `omit` and `reuse`.
+- `noSkillsRequired` is derived from the handoff rather than from the output
+  count. It is true only for an empty candidate list or an all-`omit` list,
+  matching the no-model fast path. An all-`reuse` handoff now completes as a
+  normal `complete` stage instead of being reported as "no skills required" —
+  those skills *are* required, they are just not authored here.
+- The skills stage records reused candidate names in a new optional
+  `reusedSkills` field in `docs/authoring-state.json`, so an all-`reuse`
+  completion is distinguishable from an all-`omit` one.
+- Reuse targets are deliberately not verified: the launcher cannot enumerate
+  every harness's global skill roots, so a `reuse` name that resolves nowhere
+  passes silently. Documented as a known limit in `docs/forge-launcher.md` and
+  `forge-build-project-skills`; teams that need a package actually validated
+  should choose `extend`. See
+  [ADR-054](adr/054-reuse-candidates-are-not-authored-outputs.md).
+- An all-`reuse` handoff still invokes the model, because the stage's
+  reconciliation mode adopts and checks existing packages.
+
 ## September 2026 - v3.82
 
 ### Reachability, live integration and validation-gap visibility

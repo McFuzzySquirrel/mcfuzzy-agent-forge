@@ -22,6 +22,8 @@ export interface AuthoringStageState {
   error?: string;
   invocation?: AuthoringInvocation;
   noSkillsRequired?: boolean;
+  /** Skills-stage candidates with `action: "reuse"`, satisfied outside this repo. */
+  reusedSkills?: string[];
 }
 export interface AuthoringState { version: 1; stages: Partial<Record<AuthoringStage, AuthoringStageState>> }
 export const authoringStatePath = (repo: string) => path.join(repo, "docs", "authoring-state.json");

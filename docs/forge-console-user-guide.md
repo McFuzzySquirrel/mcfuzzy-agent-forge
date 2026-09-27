@@ -259,7 +259,10 @@ Authoring has three separate stages:
    execution adapter compiles the manifest.
 
 Each stage has its own output and review boundary. A missing or failed skills
-stage is not equivalent to a successful "no skills required" result.
+stage is not equivalent to a successful "no skills required" result. A handoff
+of `reuse` candidates also is not: those skills are required but resolved outside
+the repository, so the stage completes normally with no authored outputs and
+projects as `complete` rather than `not required`.
 The backend persists stage status, input fingerprints, outputs, timestamps,
 errors, and model provenance in versioned `docs/authoring-state.json`; the
 Console should project those states rather than infer readiness from whether a

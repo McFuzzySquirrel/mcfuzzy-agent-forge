@@ -267,6 +267,7 @@ export interface AuthoringStageState {
   outputFingerprint?: string;
   outputs: string[];
   noSkillsRequired?: boolean;
+  reusedSkills?: string[];
   startedAt?: string;
   completedAt?: string;
   error?: string;

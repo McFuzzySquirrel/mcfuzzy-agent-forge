@@ -251,6 +251,24 @@ no authoring markers remain eligible, but readiness must still be combined with
 the real PRD, team, and manifest prerequisites. Harness-root selection uses the
 manifest pin before the shared fallback selector.
 
+Only `create` and `extend` candidates are authored outputs. They are the entries
+that must produce a non-empty `<harness-root>/skills/<name>/SKILL.md` and are
+passed to the structural and quality checkers. `omit` and `reuse` are not: a
+`reuse` candidate names a package that already resolves outside this repository
+(a global install or an upstream package), so the stage neither requires nor
+authors a project-local copy, and vendoring one would reintroduce the version
+drift `reuse` exists to prevent. Reuse targets are therefore **not verified** —
+the launcher cannot enumerate every harness's global skill roots, so a name that
+resolves nowhere passes silently. Treat `reuse` as a team-owned assertion, and
+prefer `extend` when a project-local package must actually be checked.
+
+An all-`reuse` handoff is **not** a no-skills result. The stage still runs,
+because its reconciliation mode adopts and checks existing packages; it
+completes with `status: "complete"`, `outputs: []`, `noSkillsRequired: false`,
+and the reused names in `reusedSkills`. `no-skills-required` is true only for an
+empty candidate list or an all-`omit` list, matching the no-model fast path and
+the `forge-build-project-skills` contract.
+
 All authoring entry points accept the three stage model overrides:
 `--prd-model`, `--team-model`, and `--skills-model`. Use `inherit` to clear an
 override and resume runner inheritance. `authoring-models` refreshes or reads

@@ -562,8 +562,11 @@ async function validateAuthoringOutputs(stage: AuthoringStage, skill: string, be
   }
   const candidates = readSkillCandidates(state.repoDir);
   if (!candidates) throw new Error("Missing docs/SKILL-CANDIDATES.json; run draft-team first.");
-  const planned = candidates.candidates.filter((candidate) => candidate.action !== "omit");
-  const outputs = planned.map((candidate) => path.join(harnessRootDir(), "skills", candidate.name, "SKILL.md"));
+  // Only `create`/`extend` produce a project package. A `reuse` candidate names a
+  // package that already resolves elsewhere (global install or upstream), so this
+  // stage must neither require nor author it; the offline stub skips it too.
+  const authored = candidates.candidates.filter((candidate) => candidate.action === "create" || candidate.action === "extend");
+  const outputs = authored.map((candidate) => path.join(harnessRootDir(), "skills", candidate.name, "SKILL.md"));
   for (const output of outputs) {
     if (!fs.existsSync(path.join(state.repoDir, output)) || !fs.readFileSync(path.join(state.repoDir, output), "utf8").trim()) {
       throw new Error(`Planned project skill is missing or empty: ${output}`);
@@ -676,7 +679,11 @@ async function runSkillHeadless(msg: string, opts: LauncherOptions): Promise<boo
       outcome.outputFingerprint = fingerprintFiles(state.repoDir, outcome.outputs);
       outcome.status = "complete";
       outcome.completedAt = new Date().toISOString();
-      if (stage === "skills") outcome.noSkillsRequired = outcome.outputs.length === 0;
+      if (stage === "skills") {
+        const skills = readSkillCandidates(state.repoDir)?.candidates ?? [];
+        outcome.reusedSkills = skills.filter((candidate) => candidate.action === "reuse").map((candidate) => candidate.name);
+        outcome.noSkillsRequired = skills.every((candidate) => candidate.action === "omit");
+      }
       saveAuthoringStage(state.repoDir, stage, outcome);
       if (stage === "team") saveAuthoringStage(state.repoDir, "skills", {
         status: "pending", inputFingerprint: stageInputFingerprint(state.repoDir, "skills", harnessRootDir()), outputs: [],

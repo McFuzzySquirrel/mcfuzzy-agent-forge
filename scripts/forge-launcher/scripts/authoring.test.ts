@@ -620,13 +620,14 @@ test("planned missing or structurally invalid skills fail the durable gate", asy
   const repo = fixture(t);
   write(repo, "docs/PRD.md", "# Existing PRD");
   write(repo, ".github/agents/project-agent.md", '---\nname: project-agent\ndescription: "Project agent"\n---\n');
-  writeAuthoringJson(path.join(repo, "docs/SKILL-CANDIDATES.json"), {
-    ...candidates, candidates: candidates.candidates.map((candidate) => ({ ...candidate, action: "reuse" })),
-  });
-  await assert.rejects(runDraftSkills(repo, stub), /Planned project skill is missing/);
+  writeAuthoringJson(path.join(repo, "docs/SKILL-CANDIDATES.json"), candidates);
+  // The stage authors nothing: the packages below are supplied by the test, so the
+  // gate is judged on what it finds on disk rather than on the stub's own output.
+  const silent = { ...stub, env: { ...stub.env, FORGE_STUB_NOOP: "1" } };
+  await assert.rejects(runDraftSkills(repo, silent), /Planned project skill is missing/);
   assert.equal(readAuthoringState(repo).stages.skills?.status, "failed");
   write(repo, ".github/skills/project-fixture/SKILL.md", "# Missing frontmatter\n");
-  await assert.rejects(runDraftSkills(repo, stub), /structural validation failed/);
+  await assert.rejects(runDraftSkills(repo, silent), /structural validation failed/);
   assert.equal(readAuthoringState(repo).stages.skills?.status, "failed");
   write(repo, ".github/skills/project-fixture/SKILL.md", [
     "---",
@@ -660,7 +661,43 @@ test("planned missing or structurally invalid skills fail the durable gate", asy
     "",
   ].join("\n"));
   write(repo, ".github/skills/project-fixture/references/details.md", "Extended fixture details.\n");
+  assert.equal(await runDraftSkills(repo, silent), 0);
+  assert.equal(authoringReadiness(repo, ".github").ready, true);
+});
+
+test("reuse candidates need no project package and are recorded apart from no-skills-required", async (t) => {
+  const repo = fixture(t);
+  write(repo, "docs/PRD.md", "# Existing PRD");
+  write(repo, ".github/agents/project-agent.md", '---\nname: project-agent\ndescription: "Project agent"\n---\n');
+  const reused = { name: "global-helper", description: "Satisfied by a global install.", consumers: ["project-agent"], action: "reuse", reason: "Already resolvable outside this repository." };
+  writeAuthoringJson(path.join(repo, "docs/SKILL-CANDIDATES.json"), { version: 1, candidates: [reused] });
   assert.equal(await runDraftSkills(repo, stub), 0);
+  const allReuse = readAuthoringState(repo).stages.skills;
+  assert.equal(allReuse?.status, "complete");
+  assert.equal(allReuse?.noSkillsRequired, false, "reused skills are required, just not authored here");
+  assert.deepEqual(allReuse?.reusedSkills, ["global-helper"]);
+  assert.equal(fs.existsSync(path.join(repo, ".github/skills/global-helper")), false, "reuse must not vendor a project package");
+  assert.equal(authoringReadiness(repo, ".github").ready, true);
+});
+
+test("a mixed handoff authors only its create and extend candidates", async (t) => {
+  const repo = fixture(t);
+  write(repo, "docs/PRD.md", "# Existing PRD");
+  write(repo, ".github/agents/project-agent.md", '---\nname: project-agent\ndescription: "Project agent"\n---\n');
+  writeAuthoringJson(path.join(repo, "docs/SKILL-CANDIDATES.json"), {
+    version: 1,
+    candidates: [
+      candidates.candidates[0],
+      { name: "global-helper", description: "Satisfied by a global install.", consumers: ["project-agent"], action: "reuse", reason: "Already resolvable outside this repository." },
+      { name: "dropped", description: "No longer justified.", consumers: ["project-agent"], action: "omit", reason: "Responsibility retired." },
+    ],
+  });
+  assert.equal(await runDraftSkills(repo, stub), 0);
+  const stage = readAuthoringState(repo).stages.skills;
+  assert.deepEqual(stage?.outputs, [path.join(".github", "skills", "project-fixture", "SKILL.md")]);
+  assert.deepEqual(stage?.reusedSkills, ["global-helper"]);
+  assert.equal(stage?.noSkillsRequired, false);
+  assert.equal(fs.existsSync(path.join(repo, ".github/skills/global-helper")), false);
   assert.equal(authoringReadiness(repo, ".github").ready, true);
 });
 
