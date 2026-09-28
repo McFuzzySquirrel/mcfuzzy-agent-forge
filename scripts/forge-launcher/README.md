@@ -38,6 +38,12 @@ the queued command it prints.
 | `forge-launcher draft-prd \| draft-team [--repo <path>]` | Headless authoring stages (idea → PRD, PRD → agent team). |
 | `forge-launcher compile-manifest [--repo <path>]` | Headless build-prep stage: install the adapter if needed and write `docs/EXECUTION-MANIFEST.json` without starting the engine. |
 
+In the Console's **Projects** view, use **Remove from Forge** for one project or
+**Remove selected (N)** for several. Confirmation is required. Only Forge
+registration, Console job history, and verified external job-result files are
+removed; no files inside project folders are changed or deleted. Active jobs
+block removal. Existing folders can be added again without bootstrapping.
+
 ### Autonomous build
 
 ```bash

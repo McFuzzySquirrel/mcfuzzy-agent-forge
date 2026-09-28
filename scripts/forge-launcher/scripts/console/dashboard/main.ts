@@ -11,7 +11,7 @@ import { renderLogs, unmountLogs } from "./views/logs.js";
 import { refreshDocuments, renderDocuments, unmountDocuments } from "./views/documents.js";
 import { renderArtifacts, unmountArtifacts } from "./views/artifacts.js";
 import { renderTimeline, unmountTimeline } from "./views/timeline.js";
-import { renderProjects, unmountProjects } from "./views/projects.js";
+import { refreshProjectList, renderProjects, unmountProjects } from "./views/projects.js";
 import { renderNew, unmountNew } from "./views/new.js";
 import { openHelp } from "./views/help.js";
 
@@ -115,7 +115,14 @@ async function init(): Promise<void> {
       return;
     }
     if (store.projectKey() !== activeProject) {
-      render();
+      // Registry actions can change the current repo via SSE before their HTTP
+      // response arrives. Keep this repo-independent view and its outcomes alive.
+      if (active?.id === "projects" && route === "projects") {
+        activeProject = store.projectKey();
+        refreshProjectList();
+      } else {
+        render();
+      }
       return;
     }
     active?.refresh?.();
