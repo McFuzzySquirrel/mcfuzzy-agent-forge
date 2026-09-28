@@ -45,15 +45,24 @@ export function jobResultPath(id: string): string {
   return path.join(path.dirname(jobsPath()), "job-results", `${id}.json`);
 }
 
-export function loadJobs(): BackgroundJob[] {
+export function loadJobs(strict = false): BackgroundJob[] {
   const file = jobsPath();
-  if (!fs.existsSync(file)) return [];
+  if (!strict && !fs.existsSync(file)) return [];
   try {
     const parsed = JSON.parse(fs.readFileSync(file, "utf8"));
+    if (strict && (!Array.isArray(parsed) || !parsed.every((job) =>
+      job && typeof job.id === "string" && typeof job.repoPath === "string" && path.isAbsolute(job.repoPath)
+      && typeof job.type === "string" && ["running", "complete", "failed", "paused"].includes(job.status)
+      && (job.pid === undefined || (Number.isInteger(job.pid) && job.pid > 0))
+      && (job.resultPath === undefined || typeof job.resultPath === "string")))) {
+      throw new Error("Invalid Console job history; removal requires intact job records.");
+    }
     if (!Array.isArray(parsed)) return [];
     return parsed.filter((job): job is BackgroundJob =>
       Boolean(job && typeof job.id === "string" && typeof job.repoPath === "string" && typeof job.type === "string"));
-  } catch {
+  } catch (error) {
+    if (strict && error instanceof Error && "code" in error && error.code === "ENOENT") return [];
+    if (strict) throw error;
     return [];
   }
 }

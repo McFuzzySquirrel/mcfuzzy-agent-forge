@@ -25,6 +25,7 @@ import {
 } from "./paths.ts";
 import { harnessCliForHarness } from "./dashboard/harness-rules.ts";
 import * as repo from "./repo.ts";
+import { removeProjects, sameProjectPath } from "./remove-projects.ts";
 import type { ControlAction, CreateProjectRequest, ManifestTask } from "./types.ts";
 
 const CLIENT_DIR = fileURLToPath(new URL("../../resources/console/client", import.meta.url));
@@ -532,6 +533,20 @@ export async function startConsoleServer(options: ConsoleServerOptions = {}): Pr
           } catch (error) {
             return sendJson(res, 400, { ok: false, message: error instanceof Error ? error.message : String(error) });
           }
+        }
+        if (urlPath === "/api/projects/remove") {
+          if (!body || !Array.isArray(body.paths) || body.paths.length === 0
+            || !body.paths.every((entry): entry is string => typeof entry === "string" && entry.length > 0 && !entry.includes("\0"))) {
+            return sendJson(res, 400, { ok: false, message: "paths must be a non-empty array of registered project paths." });
+          }
+          const results = removeProjects(body.paths, currentRepo);
+          if (currentRepo && results.some((result) => result.status === "removed" && sameProjectPath(result.path, currentRepo!))) {
+            currentRepo = null;
+            controller.repoRoot = "";
+            resetOffsets();
+          }
+          broadcast("snapshot", snapshotEvent());
+          return sendJson(res, 200, { results, current: currentRepo });
         }
         if (urlPath === "/api/projects/select") {
           const target = String(body.path ?? "");

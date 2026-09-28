@@ -323,6 +323,18 @@ export interface ProjectsIndex {
   current: string | null;
 }
 
+export interface ProjectRemovalResult {
+  path: string;
+  name: string;
+  status: "removed" | "blocked" | "failed";
+  message: string;
+}
+
+export interface RemoveProjectsResult {
+  results: ProjectRemovalResult[];
+  current: string | null;
+}
+
 export interface LogsResponse {
   lines: string[];
   truncated: boolean;

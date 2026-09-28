@@ -367,6 +367,30 @@ You can also set the same timeout for every task at once from the Tasks header o
 
 If you are working across several repos, use the **Projects** view or the project picker to switch contexts. This keeps the current workspace and run state separate while preserving your recent-project history.
 
+The Projects list shows **project name**, **state**, and **last accessed**
+date/time, not filesystem paths. Click **Open** in the desired row.
+
+### Remove one or more projects from Forge
+
+1. Use **Remove from Forge** in a project row, or check individual projects
+   (or use the header checkbox to select all) and click **Remove selected (N)**.
+2. Review the selected rows and confirmation. **No files inside project folders
+   will be changed or deleted.** Cancel to leave everything as it is.
+3. Confirm, then review each project's result: **removed**, **blocked**, or
+   **failed**. Active jobs block removal; the Console does not stop them for you.
+   Wait for those jobs to finish and retry. Failure details remain visible.
+
+This removes the Forge registration, associated Console job history, and
+verified external Forge job-result files only. Source, Git history, docs,
+configuration, agents, skills, logs, and Forge-generated repository files stay
+intact. Shared settings and other projects are not removed. Unverified or shared
+result files are left untouched.
+
+Stale entries can be removed even when their folders no longer exist. If you
+remove the current project, the Console clears its selection. To bring back a
+removed project, use **Add folder** with its existing folder; you do not need to
+bootstrap it again.
+
 ---
 
 ## 9. Troubleshoot common issues

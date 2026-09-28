@@ -14,6 +14,12 @@ set is archived under `images/forge-console/current/`. Start with
 > Team opens documents in a wide popup (introduced in v3.80); screenshots taken
 > before then show the earlier headless-first pipeline and split-pane document
 > view.
+>
+> **Projects layout (v3.85):** the Projects captures below predate the selectable
+> project table. The current view shows name, state, and last accessed date/time,
+> aligned selection checkboxes with a header select-all checkbox, per-row **Remove from Forge**,
+> and **Remove selected (N)**. Removal requires confirmation and displays an
+> outcome for each project; see the [user guide](forge-console-user-guide.md#remove-one-or-more-projects-from-forge).
 
 ---
 
@@ -164,4 +170,3 @@ Node 18+. The tool writes the responsive set to
 `docs/images/forge-console/current/`, derives the numbered tour images and the
 640px thumbnails, and rebuilds `console-walkthrough.gif`. Pass `--headed` to
 watch it run (useful if headless WebGL ever renders the Board blank).
-

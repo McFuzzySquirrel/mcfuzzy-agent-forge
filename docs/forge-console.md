@@ -85,14 +85,66 @@ Projects you create or open are remembered in a registry at
   auto-drafting the PRD). It also lets you **add an existing PRD and
   research/seed documents** (see *Adding a PRD and research/seed documents*
   below), mirroring the CLI's Step 6.
-- **Open an existing project** - a dropdown of your projects plus an
+- **Open an existing project** - a table of your projects plus an
   "Add folder" input for a forge repo you have on disk but haven't opened yet.
 - **Bootstrap an existing repo** - copies MyForge into an existing application
   repository. Existing files are preserved unless overwrite is explicitly
   selected. A non-Git folder requires the explicit **Initialize git if needed**
   option.
 
-The **Projects** tab has the same dropdown + add-folder flow.
+The **Projects** tab shows project name, state, and last accessed date/time,
+without filesystem paths in the list. Use a row's **Open** action to switch
+projects. Individual selection checkboxes and the header select-all checkbox
+occupy the same column.
+
+### Remove from Forge
+
+Use a row's **Remove from Forge** action, or check projects and choose
+**Remove selected (N)**. Review the selected rows and confirm the operation.
+**No files inside project folders will be changed or deleted.**
+
+Removal deletes the selected projects' registry entries and associated Console
+job history, plus only verified Forge-owned job-result receipts outside project
+repositories. It does not uninstall Forge or remove source code, Git data,
+documentation, configuration, agents, skills, logs, or generated artifacts from
+a repository. Shared Forge settings and other projects' data are preserved.
+
+Each selected project receives its own **removed**, **blocked**, or **failed**
+result; one blocked or failed project does not stop the rest. Unfinished
+(running or paused) Console jobs with a live process, or a live engine PID,
+block removal; no processes are terminated. Completed and failed jobs never
+block, because the operating system may have reused their old PIDs for
+unrelated programs. A running job without a verifiable PID also blocks removal
+rather than guessing. Wait for work to finish before retrying. Corrupt
+registry/history or unsafe storage locations produce failures rather than
+discarding data.
+
+Registry records with legacy relative paths (for example `.` from an older
+`forge-launcher console --repo .`) do not block removal of other projects and
+are kept as-is. They appear in the list and can be removed themselves; because
+their real location is unknown, they match only their exact recorded text and
+are never resolved against the Console's working directory. New registry
+entries are always stored as absolute paths.
+
+Missing project folders can still be removed. Removing the current project
+clears the Console selection. To return later, use **Add folder** with the
+existing folder; no new bootstrap is needed and repository history remains
+intact.
+
+The token-gated `POST /api/projects/remove` accepts `{ "paths": ["<registered
+project path>"] }` (the path exactly as listed by `GET /api/projects`) and
+returns `{ "results": [{ "path": "...", "name": "...",
+"status": "removed|blocked|failed", "message": "..." }], "current": null }`
+(`current` remains the selected path when it was not removed). Mixed outcomes
+use HTTP 200; invalid request shapes use HTTP 400.
+
+Receipts must match the Console's `job-results/<job-id>.json` location and
+contain a matching terminal job ID. Linked, shared, missing, or unverified
+receipts are left untouched and reported. If cleanup or persistence fails,
+registration is retained and the failure is reported; already deleted verified
+external receipts cannot be restored. Storage inside a project (including
+through a filesystem link) is refused instead of breaking the repository
+preservation guarantee.
 
 ---
 
@@ -212,7 +264,7 @@ button shows the exact command to run manually.
 | **Plan & Team** | the project documents (IDEA, PRD, features, progress, model plan) as a table that opens a document in a wide popup, plus agents and skills in collapsible card sections. Requirement and task blocks render as tables. |
 | **Artifacts** | the structured outputs tasks produced (`docs/artifacts/`), browsable by type/task with previews. |
 | **Timeline** | chronological audit events, failures highlighted. |
-| **Projects** | switch projects or add a folder. |
+| **Projects** | switch projects, add a folder, or remove one or more projects from Forge. |
 
 A **Help** button (top-right) explains the UI, the pipeline, each view, and key
 terms.

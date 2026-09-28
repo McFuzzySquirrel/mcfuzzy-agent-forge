@@ -4,6 +4,31 @@ Detailed release and change notes for MyForge.
 
 ---
 
+## September 2026 - v3.85
+
+### Remove projects from Forge without changing their repositories
+
+- The Console Projects view now shows names, states, and last-accessed date/time
+  in a table instead of a dropdown. Individual checkboxes and the header select-all checkbox
+  share one column; use **Remove from Forge** or **Remove selected (N)**.
+- Removal requires confirmation and reports a separate removed, blocked, or
+  failed outcome for each project. Unfinished jobs with a live process block
+  removal and are never terminated automatically. Finished jobs never block,
+  even if the operating system has reused their old process IDs.
+- Legacy registry records with relative paths (such as `.` from
+  `console --repo .`) no longer make the registry "invalid"; they are preserved
+  and can be removed individually. New registry entries are stored as absolute
+  paths.
+- Only Forge registry entries, associated Console job history, and verified
+  Forge-owned external job-result files are removed. Repository files, Git data,
+  agents, skills, generated artifacts, shared settings, and other projects are
+  preserved. Unverified or shared result files are left untouched.
+- Missing project folders can be forgotten. Removing the current project clears
+  the selection; **Add folder** can register an existing folder again without
+  bootstrap or loss of repository content.
+- See [Forge Console](forge-console.md#remove-from-forge) and
+  [ADR-055](adr/055-console-project-removal.md).
+
 ## September 2026 - v3.84
 
 ### Skill section extraction no longer truncates a last-position section

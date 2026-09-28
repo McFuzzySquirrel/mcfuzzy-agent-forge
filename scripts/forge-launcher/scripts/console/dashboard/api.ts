@@ -17,6 +17,7 @@ import type {
   LogsResponse,
   OpenResult,
   ProjectsIndex,
+  RemoveProjectsResult,
   SelectionScope,
   SelectResult,
   Summary,
@@ -141,6 +142,9 @@ export const api = {
   },
   addRepo(path: string): Promise<SelectResult> {
     return post<SelectResult>("/api/projects/add", { path });
+  },
+  removeProjects(paths: string[]): Promise<RemoveProjectsResult> {
+    return post<RemoveProjectsResult>("/api/projects/remove", { paths });
   },
   createProject(req: CreateProjectRequest): Promise<CreateProjectResult> {
     return post<CreateProjectResult>("/api/projects/create", req);

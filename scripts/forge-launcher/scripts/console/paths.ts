@@ -29,14 +29,23 @@ export function registryPath(): string {
   return path.join(registryDir(), "projects.json");
 }
 
-export function loadRegistry(): RegistryProject[] {
+export function loadRegistry(strict = false): RegistryProject[] {
   const file = registryPath();
-  if (!fs.existsSync(file)) return [];
+  if (!strict && !fs.existsSync(file)) return [];
   try {
     const parsed = JSON.parse(fs.readFileSync(file, "utf8"));
+    // Strict mode guards against rewriting an unreadable/corrupt file. Legacy
+    // records (relative paths, missing names) are still intact and preserved.
+    if (strict && (!Array.isArray(parsed) || !parsed.every((p) =>
+      p && typeof p === "object" && typeof p.path === "string" && p.path.length > 0
+      && (p.name === undefined || typeof p.name === "string")))) {
+      throw new Error("Invalid project registry; removal requires an intact registry.");
+    }
     if (!Array.isArray(parsed)) return [];
     return parsed.filter((p): p is RegistryProject => Boolean(p && typeof p.path === "string"));
-  } catch {
+  } catch (error) {
+    if (strict && error instanceof Error && "code" in error && error.code === "ENOENT") return [];
+    if (strict) throw error;
     return [];
   }
 }
@@ -49,7 +58,9 @@ export function saveRegistry(projects: RegistryProject[]): void {
 
 export function upsertProject(entry: Partial<RegistryProject> & { path: string }): RegistryProject[] {
   const projects = loadRegistry();
-  const existing = projects.find((p) => p.path === entry.path);
+  // Store absolute paths so entries do not depend on the launch directory.
+  const repoPath = path.resolve(entry.path);
+  const existing = projects.find((p) => p.path === repoPath);
   const now = new Date().toISOString();
   if (existing) {
     existing.name = entry.name ?? existing.name;
@@ -57,8 +68,8 @@ export function upsertProject(entry: Partial<RegistryProject> & { path: string }
     existing.lastOpenedAt = now;
   } else {
     projects.push({
-      path: entry.path,
-      name: entry.name ?? path.basename(entry.path),
+      path: repoPath,
+      name: entry.name ?? path.basename(repoPath),
       harness: entry.harness,
       createdAt: entry.createdAt ?? now,
       lastOpenedAt: now,
