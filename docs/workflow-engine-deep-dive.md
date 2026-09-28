@@ -441,9 +441,21 @@ The engine maintains three output files and keeps them in sync across running, w
 
 Every task has a full record: status, attempt count, start/end timestamps, output files, agent output text, and error message. The engine reads this file to decide what to run next. It also carries the `runId` (a UUID) which ties together all audit events for a single run.
 
+Successful structured completion copies `forge-result.validationLimitations`
+onto the task record. A subsequent successful attempt replaces that list or
+clears it when no limitations are reported. The field is optional for older
+state files; no historical backfill is performed.
+
 ### `docs/PROGRESS.md` - the human's source of truth
 
 Regenerated at durable checkpoints during the run. It mirrors what a human operator would want to see: what's done, what's running, what's remaining, any blockers. It also happens to be the same format used by `forge-orchestrate-build`, so both execution modes produce compatible progress files.
+
+The **Validation Gaps** section lists limitations from completed tasks in the
+current selection scope, or `None reported`. A nonzero count also appears in
+**Current State**, without changing the status vocabulary or completion gates.
+The Console separately walks task and prerequisite-phase dependencies to show
+each upstream task's limitations once in a dependent human-review dialog.
+These reports are not automatically cleared when a reviewer approves the work.
 
 ### `docs/EXECUTION-AUDIT.jsonl` - the append-only record
 

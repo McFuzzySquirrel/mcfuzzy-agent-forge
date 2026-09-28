@@ -495,12 +495,14 @@ async function executeTask(
       setGate("outputs", verified.ok ? "passed" : "failed", verified.reason);
       let failReason = verified.ok ? undefined : verified.reason;
       let validationEvidence: string[] | undefined;
+      let validationLimitations: string[] | undefined;
       if (!failReason && task.contract) {
         const report = readTaskHandoff(result.stdout);
         const handoff = report.handoff;
         if (!handoff) failReason = report.error;
         setGate("handoff", handoff ? "passed" : "failed", handoff ? undefined : failReason);
         if (handoff) {
+          validationLimitations = handoff.validationLimitations;
           if (handoff.unresolved.length) failReason = `Unresolved task requirements: ${handoff.unresolved.join("; ")}`;
           setGate("requirements", failReason ? "failed" : "passed", failReason);
         }
@@ -578,6 +580,7 @@ async function executeTask(
         result.stdout,
         artifactId,
         inputArtifactIds.length > 0 ? inputArtifactIds : undefined,
+        validationLimitations,
       );
       writeAuditEvent(opts.auditPath, {
         timestamp: new Date().toISOString(),

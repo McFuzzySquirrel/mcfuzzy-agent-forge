@@ -161,6 +161,10 @@ After writing the PRD, run this self-check before presenting it to the user:
 - [ ] Implementation phases are ordered and each phase is independently shippable
 - [ ] Each phase contains execution-sized tasks, with acceptance-to-check mappings and concrete output/test files; it is not one task per roadmap increment
 - [ ] UI, domain, infrastructure and documentation checks cover their respective deliverables; human judgments are separate review tasks
+- [ ] Every new component, service or endpoint is wired into a composition root (`App.tsx`, router, `Program.cs`, DI) named in some task's `expectedOutputs`, with a test through that entry point
+- [ ] Every external-service integration has a dependent live integration task (or human-review task with explicit live checks); mocked tests alone do not satisfy it
+- [ ] Every external API detail (api-version, query parameter, payload format) cites official documentation or is listed in Open Questions and exercised by the live integration task
+- [ ] Human reviews of user-facing features require the primary user journey against the running system, not only subjective criteria
 - [ ] The deterministic `validate-prd` gate passes without `--allow-legacy`
 - [ ] Open Questions are populated with every unresolved decision, each with a default assumption
 - [ ] The document references any existing project docs rather than duplicating them
@@ -173,6 +177,8 @@ If any checkbox is unchecked, fix the gap before presenting to the user.
 ## Gotchas
 
 - **Never fabricate version numbers.** Search for the latest stable release of every technology. If you cannot verify, note "version unverified" and flag it in Open Questions.
+- **Never fabricate external API contracts either.** REST api-versions, query parameters and response formats are as easy to guess wrong as package versions, and mocked tests will then enforce the wrong value. Cite the official documentation for each one; if unverifiable, flag it in Open Questions and require the feature's live integration task to exercise it.
+- **Component tests do not prove reachability.** Agents edit only listed outputs, so a component no task mounts in the composition root ships unreachable while all tests pass. Name the composition root in a task's outputs.
 - **MoSCoW is the default priority scheme.** Don't invent a new one unless the user asks.
 - **Existing project docs are authoritative.** If the repo has a prior PRD, architecture docs, or research notes, review them first. Build on them rather than contradicting or duplicating existing decisions.
 - **Features are mandatory.** There is no size threshold, monolithic fallback, or authoring-only exemption.

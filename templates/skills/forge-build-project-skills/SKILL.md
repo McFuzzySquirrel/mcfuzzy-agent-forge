@@ -22,11 +22,13 @@ invalidates an existing candidate.
 Load and validate the immutable team-owned handoff. A missing or malformed
 handoff fails. Only a valid `{ "version": 1, "candidates": [] }` handoff, or a
 valid candidate list whose actions are all `omit`, completes explicitly as
-`no-skills-required` without model generation. Legacy projects without a
-handoff keep the old build path until an explicit draft-team stage adopts them.
-Resolve explicit harness, headless, authorization, supplied-answer, and
-skills-model arguments before invoking a runner. Explicit incompatible settings
-fail with diagnostics; do not silently substitute a model or harness.
+`no-skills-required` without model generation. Every other handoff — including
+one whose actions are all `reuse` — runs the stage and completes as a normal
+`complete` stage. Legacy projects without a handoff keep the old build path
+until an explicit draft-team stage adopts them. Resolve explicit harness,
+headless, authorization, supplied-answer, and skills-model arguments before
+invoking a runner. Explicit incompatible settings fail with diagnostics; do not
+silently substitute a model or harness.
 
 Support these modes:
 
@@ -44,7 +46,9 @@ For each changed candidate, inspect the existing package and its references.
 Choose the handoff action deterministically:
 
 1. `reuse` when the existing package satisfies the responsibility and review
-   gate.
+   gate. The package resolves outside this repository (a global install or an
+   upstream package), so `reuse` authors nothing here: do not vendor a
+   project-local copy, and do not treat the absence of one as a failure.
 2. `extend` when it satisfies the identity but needs additive guidance.
 3. `create` when no suitable package exists.
 4. `omit` when the team responsibility is no longer justified; preserve the
@@ -109,8 +113,13 @@ affected candidates.
 - **Average-only review is unsafe.** One axis below threshold or one structural
   error blocks even when the overall score is high.
 - **No-skills is success only when explicit.** Missing or malformed handoffs
-  fail; only an empty candidate list or all-omit list completes without model
-  generation.
+  fail; only an empty candidate list or all-`omit` list completes without model
+  generation. An all-`reuse` handoff is not a no-skills result: it completes as
+  `complete` with no authored outputs.
+- **Reuse is a team assertion, not a checked fact.** The launcher cannot
+  enumerate every harness's global skill roots, so a `reuse` name that resolves
+  nowhere is not caught here. If a project-local package must actually be
+  validated, the team should have chosen `extend`.
 - **JSON quotes are not name content.** The quotes around a candidate name in
   `docs/SKILL-CANDIDATES.json` delimit the JSON string; copying them into the
   YAML value makes the skill name differ from its directory.

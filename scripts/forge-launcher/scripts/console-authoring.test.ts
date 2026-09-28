@@ -7,7 +7,7 @@ import { get } from "node:http";
 import { startConsoleServer } from "./console/server.ts";
 import { RunController, type SpawnOptions } from "./console/control.ts";
 import { inferEngineHarness, repoPaths } from "./console/paths.ts";
-import { actions, setModelOverride, summary } from "./console/repo.ts";
+import { actions, setModelOverride, summary, tasks } from "./console/repo.ts";
 import { currentJobForRepo } from "./console/jobs.ts";
 import { authoringConfigPath, saveAuthoringConfig } from "./authoring-config.ts";
 import { fingerprintFiles, saveAuthoringStage, stageInputFingerprint } from "./authoring-state.ts";
@@ -92,11 +92,55 @@ test("human-review Console action records evidence and rejects non-review tasks"
   assert.equal((await post({ taskId: implementation.id, reviewer: "Reviewer", notes: "Approved" })).status, 400);
   implementation.contract = { ...implementation.contract, kind: "human-review", reviewFile: "docs/reviews/review.json" };
   fs.writeFileSync(manifestPath, `${JSON.stringify(manifest, null, 2)}\n`);
-  const response = await post({ taskId: implementation.id, reviewer: "Reviewer", notes: "Approved", resume: false });
+  const tooShort = await post({ taskId: implementation.id, reviewer: "Reviewer", notes: "Done", resume: false });
+  assert.equal(tooShort.status, 400);
+  assert.match((await tooShort.json()).message, /at least 40 characters/);
+  const response = await post({ taskId: implementation.id, reviewer: "Reviewer", notes: "Exercised the fixture end to end and every acceptance criterion held.", resume: false });
   if (response.status !== 200) assert.fail(await response.text());
   assert.equal(response.status, 200);
   assert.equal(fs.existsSync(path.join(root, "docs", "reviews", `${implementation.id}-console-review.md`)), true);
   assert.equal(fs.existsSync(path.join(root, "docs", "reviews", "review.json")), true);
+});
+
+test("human-review task rows surface transitive upstream validation gaps", (t) => {
+  const root = fixture(t);
+  const task = (id: string, dependencies: string[], kind: "implementation" | "human-review" = "implementation") => ({
+    id, title: id, description: id, dependencies, expectedOutputs: [], validationCommands: [], approvalRequired: false,
+    ...(kind === "implementation" ? { ownerAgent: "worker" } : {}),
+    contract: { version: 1, kind, requirements: ["r"], acceptanceCriteria: ["a"], constraints: [], references: ["docs/PRD.md"], ...(kind === "human-review" ? { reviewFile: "docs/reviews/r.json" } : {}) },
+  });
+  const manifest = {
+    version: "1", generatedAt: new Date().toISOString(), repoRoot: root, harnessRoot: ".github", prdPath: "docs/PRD.md",
+    progressPath: "docs/PROGRESS.md", auditPath: "docs/EXECUTION-AUDIT.jsonl", validationCommands: [],
+    approvalGates: { preflight: false, betweenPhases: false }, warnings: [],
+    phases: [{ id: "P1", title: "P1", description: "P1", ownerAgents: ["worker"], dependencies: [], approvalRequired: false,
+      tasks: [task("API-1", []), task("UI-1", ["API-1"]), task("REVIEW-1", ["UI-1"], "human-review")] }],
+  };
+  fs.writeFileSync(path.join(root, "docs", "EXECUTION-MANIFEST.json"), JSON.stringify(manifest));
+  const record = (taskId: string, validationLimitations?: string[]) => ({ taskId, status: "complete", attempt: 1, outputFiles: [], ...(validationLimitations ? { validationLimitations } : {}) });
+  fs.writeFileSync(path.join(root, "docs", "WORKFLOW-STATE.json"), JSON.stringify({
+    runId: "run", startedAt: "", lastUpdatedAt: "", manifestPath: "", manifestVersion: "1", harness: "stub", status: "running", blockers: [],
+    tasks: { "API-1": record("API-1", ["Not run against the live service"]), "UI-1": record("UI-1"), "REVIEW-1": { taskId: "REVIEW-1", status: "pending", attempt: 0, outputFiles: [] } },
+  }));
+  const rows = new Map(tasks(repoPaths(root)).map((row) => [row.id, row]));
+  assert.deepEqual(rows.get("API-1")!.validationGaps, ["API-1: Not run against the live service"]);
+  assert.deepEqual(rows.get("UI-1")!.validationGaps, []);
+  assert.deepEqual(rows.get("REVIEW-1")!.validationGaps, ["API-1: Not run against the live service"]);
+
+  const phase = manifest.phases[0]!;
+  manifest.phases = [
+    { ...phase, tasks: [task("API-1", [])] },
+    { ...phase, id: "P2", dependencies: ["P1"], tasks: [task("UI-1", [])] },
+    { ...phase, id: "P3", dependencies: ["P2"], tasks: [task("REVIEW-1", [], "human-review")] },
+  ];
+  fs.writeFileSync(path.join(root, "docs", "EXECUTION-MANIFEST.json"), JSON.stringify(manifest));
+  assert.deepEqual(tasks(repoPaths(root)).find((row) => row.id === "REVIEW-1")!.validationGaps,
+    ["API-1: Not run against the live service"], "phase-only prerequisites must expose transitive gaps");
+
+  manifest.phases[2]!.tasks[0]!.dependencies = ["API-1", "UI-1"];
+  fs.writeFileSync(path.join(root, "docs", "EXECUTION-MANIFEST.json"), JSON.stringify(manifest));
+  assert.deepEqual(tasks(repoPaths(root)).find((row) => row.id === "REVIEW-1")!.validationGaps,
+    ["API-1: Not run against the live service"], "overlapping task and phase dependencies must not duplicate gaps");
 });
 
 test("model discovery works before a project exists and filters by runner", async (t) => {

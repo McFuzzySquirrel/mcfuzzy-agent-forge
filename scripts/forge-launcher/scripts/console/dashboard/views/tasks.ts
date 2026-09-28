@@ -478,7 +478,7 @@ function humanReviewAction(t: TaskRow): HTMLElement {
 
 function openHumanReview(t: TaskRow): void {
   const reviewer = el("input", { type: "text", required: true, placeholder: "Your name" }) as HTMLInputElement;
-  const notes = el("textarea", { required: true, rows: "8", placeholder: "Describe what you reviewed, what you found, and why this task is approved." }) as HTMLTextAreaElement;
+  const notes = el("textarea", { required: true, rows: "8", placeholder: "Describe what you exercised (e.g. the primary user journey against the live system), what you found, and why this task is approved." }) as HTMLTextAreaElement;
   const confirm = el("input", { type: "checkbox" }) as HTMLInputElement;
   const close = el("button", { className: "btn", type: "button" }, "Cancel");
   const submit = el("button", { className: "btn btn-primary", type: "submit" }, "Approve and resume");
@@ -490,6 +490,7 @@ function openHumanReview(t: TaskRow): void {
       reviewList("Acceptance criteria", t.acceptanceCriteria),
       reviewList("Constraints", t.constraints),
       reviewList("References", t.references),
+      reviewList("Unverified upstream checks (validate these yourself before approving)", t.validationGaps ?? []),
       el("p", { className: "dim small" }, `Approval record: ${t.reviewFile ?? "manifest reviewFile"}`),
       el("label", { className: "field" }, [el("span", null, "Reviewer name"), reviewer]),
       el("label", { className: "field" }, [el("span", null, "Review notes"), notes]),
@@ -502,6 +503,10 @@ function openHumanReview(t: TaskRow): void {
     event.preventDefault();
     if (!reviewer.value.trim() || !notes.value.trim() || !confirm.checked) {
       toast("Enter your name, review notes, and confirm the attestation.");
+      return;
+    }
+    if (notes.value.trim().length < 40) {
+      toast("Review notes must describe what you exercised and found (at least 40 characters).");
       return;
     }
     submit.setAttribute("disabled", "true");

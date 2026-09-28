@@ -463,7 +463,7 @@ const PRD_HEADLESS_MSG =
 const EXISTING_PROJECT_PRD_MSG =
   "Author the project's requirements using forge-build-prd. Inspect existing code, documentation, tests, configuration and git history as source material. Headless mode: ask no questions and record assumptions. Produce docs/PRD.md plus docs/features/*.md directly, even for one feature. Feature-based authoring is mandatory for every solution; there is no size threshold or monolithic execution path. Preserve accepted requirement meanings and stable task IDs, but keep each definition and task in one canonical document. Use compact version-2 contracts and ID-only traceability. Supplied legacy documents are historical source material, never active task catalogues. Do not implement code, generate agents or skills, compile a manifest, or start the workflow engine.";
 
-const TASK_AUTHORING_CHECK = " Author bounded executable tasks inside Phase N headings, not one task per roadmap increment. Separate independently testable behaviors and ownership boundaries; retain atomic safety invariants together. Name concrete output files and validation commands covering every touched surface, including UI and infrastructure. Separate human rubric scores and sign-off into dependent human-review tasks. References and outputs must not overlap. Review each task against forge-build-prd/references/task-contract.md.";
+const TASK_AUTHORING_CHECK = " Author bounded executable tasks inside Phase N headings, not one task per roadmap increment. Separate independently testable behaviors and ownership boundaries; retain atomic safety invariants together. Name concrete output files and validation commands covering every touched surface, including UI and infrastructure. Separate human rubric scores and sign-off into dependent human-review tasks. Name the composition root that mounts each new component in some task's outputs, and give every external-service integration a dependent live integration check. References and outputs must not overlap. Review each task against forge-build-prd/references/task-contract.md.";
 
 /**
  * In-harness command to queue when the launcher opens the CLI (or prints
@@ -562,8 +562,11 @@ async function validateAuthoringOutputs(stage: AuthoringStage, skill: string, be
   }
   const candidates = readSkillCandidates(state.repoDir);
   if (!candidates) throw new Error("Missing docs/SKILL-CANDIDATES.json; run draft-team first.");
-  const planned = candidates.candidates.filter((candidate) => candidate.action !== "omit");
-  const outputs = planned.map((candidate) => path.join(harnessRootDir(), "skills", candidate.name, "SKILL.md"));
+  // Only `create`/`extend` produce a project package. A `reuse` candidate names a
+  // package that already resolves elsewhere (global install or upstream), so this
+  // stage must neither require nor author it; the offline stub skips it too.
+  const authored = candidates.candidates.filter((candidate) => candidate.action === "create" || candidate.action === "extend");
+  const outputs = authored.map((candidate) => path.join(harnessRootDir(), "skills", candidate.name, "SKILL.md"));
   for (const output of outputs) {
     if (!fs.existsSync(path.join(state.repoDir, output)) || !fs.readFileSync(path.join(state.repoDir, output), "utf8").trim()) {
       throw new Error(`Planned project skill is missing or empty: ${output}`);
@@ -676,7 +679,11 @@ async function runSkillHeadless(msg: string, opts: LauncherOptions): Promise<boo
       outcome.outputFingerprint = fingerprintFiles(state.repoDir, outcome.outputs);
       outcome.status = "complete";
       outcome.completedAt = new Date().toISOString();
-      if (stage === "skills") outcome.noSkillsRequired = outcome.outputs.length === 0;
+      if (stage === "skills") {
+        const skills = readSkillCandidates(state.repoDir)?.candidates ?? [];
+        outcome.reusedSkills = skills.filter((candidate) => candidate.action === "reuse").map((candidate) => candidate.name);
+        outcome.noSkillsRequired = skills.every((candidate) => candidate.action === "omit");
+      }
       saveAuthoringStage(state.repoDir, stage, outcome);
       if (stage === "team") saveAuthoringStage(state.repoDir, "skills", {
         status: "pending", inputFingerprint: stageInputFingerprint(state.repoDir, "skills", harnessRootDir()), outputs: [],

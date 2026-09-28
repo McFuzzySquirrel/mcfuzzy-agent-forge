@@ -241,7 +241,9 @@ verifies a successful call before marking the task complete:
   or acceptance criteria and must be empty to complete. An unverified required
   check remains a blocker. Optional string arrays `warnings` and
   `validationLimitations` retain nonblocking observations and non-required checks
-  not run. Leaving changes for engine auto-commit is not a blocker. Never relabel
+  not run; the engine lists limitations under `## Validation Gaps` in
+  `docs/PROGRESS.md` and the Console shows them to dependent human reviewers.
+  Leaving changes for engine auto-commit is not a blocker. Never relabel
   an unmet required check as a warning to bypass completion.
 - **Validation commands.** Structured tasks always run their manifest commands
   after the output and report gates pass. For legacy tasks, pass `--run-validation` /

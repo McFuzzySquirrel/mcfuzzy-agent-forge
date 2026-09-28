@@ -41,8 +41,10 @@ function hasSection(text: string, name: string): boolean {
 }
 
 function sectionContent(text: string, name: string): string {
+  // See quality-rubric.mjs: `\Z` is a literal "Z" in JavaScript, and bare `$`
+  // is defeated by the `m` flag; `$(?![\s\S])` is a true end-of-input anchor.
   const re = new RegExp(
-    `^#{2,}\\s+${name.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}[^\\n]*\\n([\\s\\S]*?)(?=^#{2,}\\s|\\Z)`,
+    `^#{2,}\\s+${name.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}[^\\n]*\\n([\\s\\S]*?)(?=^#{2,}\\s|$(?![\\s\\S]))`,
     "im",
   );
   const m = text.match(re);

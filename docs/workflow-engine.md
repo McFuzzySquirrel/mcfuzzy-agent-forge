@@ -530,6 +530,14 @@ in-flight task.
 | `docs/EXECUTION-AUDIT.jsonl` | Append-only audit trail for every state transition |
 | `docs/artifacts/<type>/<id>.json` | Typed JSON artifacts written by the artifact store |
 
+Completed structured tasks retain reported `validationLimitations` on their
+state records. Progress includes a **Validation Gaps** section and, when gaps
+exist, a count beside the unchanged **Status**. Manual runs list gaps only for
+the selected task scope. These are non-required checks not run; required checks
+still block completion. Older state records without the field remain valid and
+are not backfilled from past artifacts. A human approval does not clear the
+original report. See [Task Contracts](task-contracts.md).
+
 ---
 
 ## Artifact pattern

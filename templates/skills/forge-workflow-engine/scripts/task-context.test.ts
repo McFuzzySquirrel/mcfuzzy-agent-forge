@@ -77,4 +77,8 @@ test("Console-style review evidence is accepted by the canonical attestation", (
   assert.equal(evidence, "docs/reviews/upload-console-review.md");
   approveHumanTask(root, task, "Console Reviewer", [evidence]);
   assert.equal(humanTaskApproved(root, task), true);
+  for (const notes of ["Done", "x".repeat(39), `  ${"x".repeat(39)}  `]) {
+    assert.throws(() => writeHumanReviewEvidence(root, task, "Console Reviewer", notes), /at least 40 characters/);
+  }
+  assert.doesNotThrow(() => writeHumanReviewEvidence(root, task, "Console Reviewer", "x".repeat(40)));
 });

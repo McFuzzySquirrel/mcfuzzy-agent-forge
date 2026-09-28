@@ -35,10 +35,14 @@ export function taskReviewDigest(repoRoot: string, task: ManifestTask): string {
   return createHash("sha256").update(JSON.stringify(task)).update(taskReferenceContext(repoRoot, task)).digest("hex");
 }
 
+/** Review notes shorter than this ("Done", "LGTM") cannot describe what was actually exercised. */
+export const MIN_REVIEW_NOTES_LENGTH = 40;
+
 export function writeHumanReviewEvidence(repoRoot: string, task: ManifestTask, reviewer: string, notes: string): string {
   validateTaskContract(task);
   if (task.contract?.kind !== "human-review") throw new Error("Only human-review tasks accept evidence.");
   if (!reviewer.trim() || !notes.trim()) throw new Error("Reviewer identity and review notes are required.");
+  if (notes.trim().length < MIN_REVIEW_NOTES_LENGTH) throw new Error(`Review notes must describe what was exercised and found (at least ${MIN_REVIEW_NOTES_LENGTH} characters).`);
   const relativePath = `docs/reviews/${task.id}-console-review.md`;
   const file = localFile(repoRoot, relativePath);
   mkdirSync(dirname(file), { recursive: true });

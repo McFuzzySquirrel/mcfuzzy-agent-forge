@@ -37,6 +37,8 @@ export interface TaskRecord {
   artifactId?: string;
   /** IDs of artifacts consumed as input context for this task */
   inputArtifactIds?: string[];
+  /** Nonblocking checks the agent reported as not run (from forge-result.validationLimitations) */
+  validationLimitations?: string[];
 }
 
 export interface TaskAttemptSummary {

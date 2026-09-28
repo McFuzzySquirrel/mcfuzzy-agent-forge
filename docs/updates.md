@@ -4,6 +4,84 @@ Detailed release and change notes for MyForge.
 
 ---
 
+## September 2026 - v3.84
+
+### Skill section extraction no longer truncates a last-position section
+
+- The quality rubric's section reader used `\Z` to mean "end of input". JavaScript
+  has no `\Z` — it compiles to a literal `Z` — so a `##` section that was the
+  **last** section in a `SKILL.md` read as empty, and a section containing a
+  capital `Z` (`Zod`, `Zen`, …) was truncated at that letter. The correct
+  end-of-input assertion is `$(?![\s\S])`; bare `$` is not a fix, because the
+  reader's `m` flag makes it match at every line end. Fixed in both copies:
+  `forge-build-agent-team/scripts/quality-rubric.mjs` and
+  `skill-review/scripts/rubric.ts`.
+- **User-visible effect:** a skill whose `## Gotchas` is its final section scored
+  **1/3** on the blocking Gotchas-coverage axis no matter how many gotchas it
+  contained, so the project-skill stage could hard-fail it under
+  `--min-axis 2 --fail-axis-below`. The bundled `forge-auto-build` skill is one
+  such case: 8 concrete gotchas scored 1, and now score 3. Section *order* no
+  longer affects any score.
+- The same fix restores the reviewer-style proxy and long-section detection,
+  which read sections through the same helper and could never see a final
+  section.
+- Added regression tests covering a last-position `## Gotchas` section, a capital
+  `Z` inside a final section, and the reviewer-style proxy for a last-position
+  section. All three fail against the previous `\Z` reader.
+- Reverted a duplicated entry in the `skill-review` discovery list, which had
+  dropped `.agents/skills/` and listed `.opencode/skills/` twice.
+
+## September 2026 - v3.83
+
+### `reuse` skill candidates are no longer treated as authored outputs
+
+- The project-skill stage now requires a project package only for `create` and
+  `extend` candidates. A `reuse` candidate names a package that resolves outside
+  the repository (a global install or an upstream package), so the stage no
+  longer requires, authors, or validates a project-local copy of it. Previously
+  any project whose team legitimately reused an existing package could not
+  complete the skills stage, failing with `Planned project skill is missing or
+  empty: <harness-root>/skills/<name>/SKILL.md`. The validator now agrees with
+  the offline stub runner, which already skipped `omit` and `reuse`.
+- `noSkillsRequired` is derived from the handoff rather than from the output
+  count. It is true only for an empty candidate list or an all-`omit` list,
+  matching the no-model fast path. An all-`reuse` handoff now completes as a
+  normal `complete` stage instead of being reported as "no skills required" —
+  those skills *are* required, they are just not authored here.
+- The skills stage records reused candidate names in a new optional
+  `reusedSkills` field in `docs/authoring-state.json`, so an all-`reuse`
+  completion is distinguishable from an all-`omit` one.
+- Reuse targets are deliberately not verified: the launcher cannot enumerate
+  every harness's global skill roots, so a `reuse` name that resolves nowhere
+  passes silently. Documented as a known limit in `docs/forge-launcher.md` and
+  `forge-build-project-skills`; teams that need a package actually validated
+  should choose `extend`. See
+  [ADR-054](adr/054-reuse-candidates-are-not-authored-outputs.md).
+- An all-`reuse` handoff still invokes the model, because the stage's
+  reconciliation mode adopts and checks existing packages.
+
+## September 2026 - v3.82
+
+### Reachability, live integration and validation-gap visibility
+
+- The task authoring contract (`forge-build-prd/references/task-contract.md`)
+  now requires the composition root (`App.tsx`, router, `Program.cs`, DI) in the
+  outputs of the task that wires a new component, a dependent live integration
+  task for every external-service integration, and a primary-user-journey
+  criterion on human reviews of user-facing features. `forge-build-prd` adds
+  matching validation items and a gotcha against guessing external API contracts
+  (api-versions, query parameters, formats).
+- The workflow engine persists each task's `validationLimitations` and lists them
+  in a new `## Validation Gaps` section of `docs/PROGRESS.md`; `**Status**` values
+  are unchanged.
+- The Forge Console human-review dialog lists unverified checks reported by every
+  upstream task and prerequisite-phase dependency without duplicating shared
+  prerequisites. Review notes must be at least 40 characters after trimming.
+- Existing state files and reports without limitations remain compatible; the
+  display does not prove that checks ran or bypass required completion gates.
+  See [ADR-053](adr/053-reachability-and-validation-gaps.md) for the decision,
+  compatibility guidance, and branch review findings.
+
 ## September 2026 - v3.81
 
 ### Harness invocation and activity logging
