@@ -3,6 +3,7 @@ import { dirname, join, relative } from "node:path";
 
 import type { AgentDescriptor, ExecutionManifest, ForgeRepo, ManifestPhase, ManifestTask } from "./types.ts";
 import { parseTaskBlocks } from "./task-contract.ts";
+import { referenceParts } from "./requirement-sources.ts";
 import { documentIntegrity } from "./document-integrity.ts";
 
 interface HeadingBlock {
@@ -563,6 +564,84 @@ export function validateManifestSafety(manifest: ExecutionManifest, warnings: st
       }
     }
   }
+  for (const warning of reviewDependencyWarnings(manifest)) {
+    if (!warnings.includes(warning)) warnings.push(warning);
+  }
+}
+
+/**
+ * Every task a given task transitively depends on: its direct dependencies plus
+ * every task of each phase it depends on, resolved to a fixed point. Mirrors the
+ * engine's dispatch gate (engine.ts `nextReadyTasks`) so "depends on" means the
+ * same thing on both sides.
+ */
+function prerequisiteClosure(manifest: ExecutionManifest, taskId: string): Set<string> {
+  const tasks = new Map<string, ManifestTask>();
+  const phases = new Map<string, ManifestPhase>();
+  for (const phase of manifest.phases) {
+    phases.set(phase.id, phase);
+    for (const task of phase.tasks) tasks.set(task.id, task);
+  }
+
+  const closure = new Set<string>();
+  const visit = (id: string): void => {
+    if (closure.has(id)) return;
+    closure.add(id);
+    const task = tasks.get(id);
+    if (!task) return;
+    for (const dependency of task.dependencies ?? []) visit(dependency);
+    const owner = manifest.phases.find((phase) => phase.tasks.some((entry) => entry.id === id));
+    for (const phaseId of owner?.dependencies ?? []) {
+      for (const prerequisite of phases.get(phaseId)?.tasks ?? []) visit(prerequisite.id);
+    }
+  };
+  visit(taskId);
+  closure.delete(taskId);
+  return closure;
+}
+
+/**
+ * A human review must declare the tasks whose work it inspects.
+ *
+ * The engine dispatches a review on its declared dependencies alone, and the
+ * compiler never adds any. A review that references a file some other task
+ * produces, but depends on neither it nor anything downstream of it, can
+ * therefore be dispatched before that task runs - and the operator would be
+ * asked to approve work that does not exist yet.
+ *
+ * This is a warning, not an error: a review legitimately references a file no
+ * task produces, and the engine now holds an unapproved review rather than
+ * stopping the run, so a missed dependency is not fatal. It is still worth
+ * saying, because the review then runs at the wrong time rather than never.
+ */
+function reviewDependencyWarnings(manifest: ExecutionManifest): string[] {
+  const producer = new Map<string, string>();
+  for (const phase of manifest.phases) {
+    for (const task of phase.tasks) {
+      for (const output of task.expectedOutputs ?? []) {
+        if (!producer.has(output)) producer.set(output, task.id);
+      }
+    }
+  }
+
+  const warnings: string[] = [];
+  for (const phase of manifest.phases) {
+    for (const task of phase.tasks) {
+      if (task.contract?.kind !== "human-review") continue;
+      const closure = prerequisiteClosure(manifest, task.id);
+      for (const reference of task.contract.references ?? []) {
+        const { path } = referenceParts(reference);
+        const producingTask = producer.get(path);
+        if (producingTask && producingTask !== task.id && !closure.has(producingTask)) {
+          warnings.push(
+            `Human review '${task.id}' references '${path}', produced by task '${producingTask}', but does not depend on it. `
+            + `The review can be dispatched before '${producingTask}' completes; add '${producingTask}' to its dependencies.`,
+          );
+        }
+      }
+    }
+  }
+  return warnings;
 }
 
 /** Synthesize a single phase from a feature doc's Functional Requirements bullets. */

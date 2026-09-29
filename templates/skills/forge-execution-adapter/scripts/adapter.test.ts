@@ -191,6 +191,62 @@ test("manifest safety rejects duplicate global task ids and warns on orphan depe
   assert.match(clean.warnings.join("\n"), /orphan task 'missing-task'/);
 });
 
+test("manifest safety warns when a human review omits a dependency on the task it reviews", () => {
+  const root = createFixture();
+  const build = () => {
+    const manifest = compileExecutionManifest(discoverForgeRepo(root));
+    const producer = manifest.phases[0]!.tasks[0]!;
+    const review: typeof producer = {
+      ...producer,
+      id: "REVIEW-1",
+      title: "Review the result",
+      description: "Review the result",
+      ownerAgent: undefined,
+      dependencies: [],
+      expectedOutputs: [],
+      validationCommands: [],
+      contract: {
+        version: 1,
+        kind: "human-review",
+        requirements: ["Reviewer confirms the delivered work"],
+        acceptanceCriteria: ["Named reviewer inspected it"],
+        constraints: [],
+        references: [producer.expectedOutputs[0]!],
+        reviewFile: "docs/reviews/review-1.json",
+      },
+    };
+    manifest.phases[0]!.tasks = [producer, review];
+    return manifest;
+  };
+
+  // Undeclared: the engine can dispatch the review before the producer runs.
+  const missing = build();
+  validateManifestSafety(missing);
+  assert.match(
+    missing.warnings.join("\n"),
+    /Human review 'REVIEW-1' references '.*', produced by task '[^']+', but does not depend on it/,
+  );
+
+  // Declared directly, and reachable transitively, are both silent.
+  const direct = build();
+  direct.phases[0]!.tasks[1]!.dependencies = [direct.phases[0]!.tasks[0]!.id];
+  validateManifestSafety(direct);
+  assert.doesNotMatch(direct.warnings.join("\n"), /Human review 'REVIEW-1'/);
+
+  const transitive = build();
+  const bridge = { ...transitive.phases[0]!.tasks[0]!, id: "BRIDGE-1", dependencies: [transitive.phases[0]!.tasks[0]!.id] };
+  transitive.phases[0]!.tasks = [transitive.phases[0]!.tasks[0]!, bridge, { ...transitive.phases[0]!.tasks[1]!, dependencies: ["BRIDGE-1"] }];
+  validateManifestSafety(transitive);
+  assert.doesNotMatch(transitive.warnings.join("\n"), /Human review 'REVIEW-1'/,
+    "a producer reachable through another task is still a declared prerequisite");
+
+  // A review referencing something no task produces is not a dependency claim.
+  const unrelated = build();
+  unrelated.phases[0]!.tasks[1]!.contract = { ...unrelated.phases[0]!.tasks[1]!.contract!, references: ["docs/PRD.md"] };
+  validateManifestSafety(unrelated);
+  assert.doesNotMatch(unrelated.warnings.join("\n"), /Human review 'REVIEW-1'/);
+});
+
 test("compileExecutionManifest auto-declares artifact produces/inputs", () => {
   const root = createFixture();
   const repo = discoverForgeRepo(root);
