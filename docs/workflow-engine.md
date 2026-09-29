@@ -682,6 +682,15 @@ receives - the percentage is just an estimate.
   `docs/engine-control.json`, the engine polls it at the top of each task wave,
   finishes the in-flight task, saves state as `paused`, and exits. `run` resumes
   a paused run.
+- **A human review pauses the run, but only as a last resort.** A review with no
+  operator attestation is held pending and the run keeps going, so unrelated
+  tasks that happen to share its wave are never deferred. The run pauses when
+  nothing else is dispatchable and reviews are still unapproved, which means the
+  operator is always interrupted with the reviewed work already finished - even
+  if the review's dependencies were left undeclared in the feature document. The
+  held task keeps a `Human review required` note on its record, and the
+  `run.paused` audit event names the reviews rather than reporting a stop
+  request. Each wave that holds a review says so on stdout.
 - **`stop`** does the same as `pause` and additionally sends `SIGTERM` to the
   engine PID recorded in `docs/engine.pid` (the engine writes its own PID at
   startup), so a live detached run stops even mid-task - still after the current

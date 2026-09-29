@@ -82,13 +82,27 @@ The engine's main loop is a `while` that runs until either the workflow is compl
 ```
 while (!isComplete && !stopRequested) {
     ready = ownerUniqueReady(nextReadyTasks(manifest, state))
-    for each ready task in the current wave:
+    // A human review with no attestation is held, not dispatched: it stays
+    // pending so the wave's other work still runs.
+    waiting  = ready.filter(isUnapprovedHumanReview)
+    runnable = ready - waiting
+    if (runnable is empty && waiting is not empty): pause, naming the reviews
+    for each runnable task in the current wave:
         executeTask(task)
     merge task results back into authoritative state
     saveState()
     syncProgressMd()
 }
 ```
+
+That `waiting` split is the non-obvious part. The obvious implementation -
+dispatch the review, see it needs approval, pause - is a trap when the review's
+dependencies were under-declared in the feature document: the run stops before
+the work it reviews exists, and the operator is asked to approve nothing. Because
+the compiler only warns about that case, the engine has to be correct without
+trusting the manifest, which is why an unapproved review is a *wait* and the run
+pauses only once nothing else can proceed. `executeTask` therefore does not
+request a pause for an unapproved review at all; the loop owns that decision.
 
 The interesting function here is `nextReadyTasks`. It has to answer: *"given everything that's already finished, what can run right now?"* This is the **DAG resolution** step.
 
@@ -414,8 +428,9 @@ only for tasks explicitly requiring `text`.
 
 The engine prepares a read-only `TaskAttemptRequest` before each adapter call.
 Structured implementation contracts require repository tooling, passing validation,
-and an outcome report; human-review contracts pause for operator attestation and
-never reach a harness. See [task contracts](task-contracts.md).
+and an outcome report; human-review contracts never reach a harness and are held
+pending by the core loop until the operator attests. See
+[task contracts](task-contracts.md).
 It contains the agent and task descriptors, effective model, projected context,
 repository root, attempt metadata, and budget. Effective model precedence is:
 

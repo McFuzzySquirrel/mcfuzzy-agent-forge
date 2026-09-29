@@ -178,8 +178,22 @@ See [ADR-046](adr/046-task-execution-files.md).
 ## Human review
 
 A `human-review` contract is not dispatched to Copilot or another model.
-The engine pauses at the review task, leaving it pending. `--yes` and headless
-PRD approval do not bypass this gate. The Forge Console task detail now offers
+The engine holds it pending. `--yes` and headless PRD approval do not bypass this
+gate.
+
+Holding is not pausing. An unapproved review does not stop the run: every other
+task continues, including tasks that share its wave, and the run pauses only when
+nothing else is left to do. The operator is therefore interrupted once there is
+something to review, even if the review's dependencies were left undeclared. A
+review that is the only ready task still pauses the run immediately.
+
+For that reason a review must declare the tasks whose work it inspects. The
+compiler matches each review reference against other tasks' `expectedOutputs`
+and warns when the producing task is not among the review's dependencies
+(directly or transitively). The warning is advisory - the run stays correct
+without it - but the review will otherwise be dispatched at the wrong time.
+Field reviews that verify a running system rather than a file have no path to
+match and are not covered. The Forge Console task detail now offers
 **Complete human review** for these tasks. The form shows the task criteria,
 captures the reviewer's name and notes, requires an explicit attestation, writes
 repository-local Markdown evidence, records the canonical engine attestation,

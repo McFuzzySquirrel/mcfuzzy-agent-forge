@@ -182,7 +182,11 @@ sandboxMode          = effectiveConcurrency > 1
   run; blocking on it made the form refuse the run it had just approved. An
   approval recorded outside `docs/` is named as a review record in the refusal
   so "commit your work" is not the wrong instruction for it.
-- Human-review tasks are never sandboxed. They do not invoke a harness and read
+- Human-review tasks are never sandboxed, and an unapproved one does not stop the
+  run: it is held pending while other tasks continue, and the run pauses only once
+  nothing else is dispatchable. See
+  [ADR-057](057-human-review-waits-rather-than-pauses-the-run.md). They do not
+  invoke a harness and read
   operator evidence from the engine root.
 
 ### 7. Lifecycle

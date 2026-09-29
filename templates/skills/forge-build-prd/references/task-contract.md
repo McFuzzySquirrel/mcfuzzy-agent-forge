@@ -195,7 +195,15 @@ Preparation and human sign-off are separate tasks. Human tasks use
 `docs/reviews/arabic-accessibility.json`), empty `expectedOutputs` and
 `validationCommands`, and omit `ownerAgent`. They retain requirements,
 acceptanceCriteria, constraints, references, and explicit dependencies on the
-preparation/implementation tasks. Never represent a rehearsal or native-language
+preparation/implementation tasks.
+
+Those dependencies are load-bearing and the compiler cannot infer them. List
+every task whose `expectedOutputs` the review reads in its `references`: a
+review that names a produced file but declares no dependency on its producer can
+be dispatched before that task runs, and the compiler emits a warning when the
+producer is missing from the review's transitive prerequisites. Reviews that
+verify a running system rather than a file have nothing to match and must still
+declare their preparation tasks explicitly. Never represent a rehearsal or native-language
 review as autonomous code generation. Headless PRD approval does not approve
 later human work. Agents must never run `approve-task` or fabricate attestations.
 

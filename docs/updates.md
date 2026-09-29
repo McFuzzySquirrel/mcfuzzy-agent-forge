@@ -77,10 +77,31 @@ Detailed release and change notes for MyForge.
   Related: a Console-started run with a numeric `concurrency`, `taskTimeoutMs`,
   or `maxRetries` in `docs/engine-config.json` could not launch at all — those
   values were passed to `argv` as numbers and crashed the job runner.
+- **An unapproved human review no longer stops the run.** A review with no
+  operator attestation used to pause the run the moment it was dispatched. If its
+  dependencies were left undeclared in the feature document — the compiler never
+  adds them — the engine parked the run before the very work the review was meant
+  to inspect existed, and the operator was asked to approve nothing, with no way
+  out but that approval. A review is now held pending while every other task
+  continues, and the run pauses only when nothing else is dispatchable, so the
+  operator is always interrupted with the work already finished. A review also
+  stops deferring unrelated work that shared its wave. The held task keeps a
+  `Human review required` note so the Console and `PROGRESS.md` explain it, and
+  the `run.paused` audit event now names the reviews instead of reporting a stop
+  request. A review that is the only ready task still pauses immediately, and
+  `--yes` still cannot approve human work.
+- **Compiling warns when a review omits the dependency it reviews.** A
+  `human-review` task whose `references` name a file produced by another task it
+  does not depend on — directly or transitively — gets a warning naming the
+  producer. Advisory, not an error: existing feature documents keep compiling,
+  and the engine is now correct without it. The PRD authoring guide tells
+  authors to list every task whose outputs the review reads.
 - See [ADR-056](adr/056-parallel-execution-task-sandboxes.md) and the
   [implementation plan](parallel-execution-plan.md); amends
   [ADR-021](adr/021-parallel-task-dispatch.md) and
-  [ADR-040](adr/040-native-adapter-contracts.md).
+  [ADR-040](adr/040-native-adapter-contracts.md). Review-wait semantics are
+  recorded in
+  [ADR-057](adr/057-human-review-waits-rather-than-pauses-the-run.md).
 
 ## September 2026 - v3.85
 
