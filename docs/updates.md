@@ -4,6 +4,59 @@ Detailed release and change notes for MyForge.
 
 ---
 
+## September 2026 - v3.86
+
+### `--concurrency` is real throughput again: per-task git worktree sandboxes
+
+- **Concurrent tasks now genuinely overlap.** `--concurrency <n>` / `FORGE_ENGINE_CONCURRENCY`
+  used to be accepted and then ignored — the engine always ran one repository
+  task at a time, because output attribution compared repository-wide worktree
+  snapshots and could not say which task changed what. Each concurrent task now
+  runs in its own `git worktree` under `.forge-sandboxes/`, so what a task
+  changed is exactly what its sandbox contains. Wall-clock time on multi-agent
+  builds drops from the sum of task durations toward the critical path. The
+  default `--concurrency 1` is unchanged in every respect.
+- **`outputFiles`, the no-op output gate, and `validationCommands` are exact.**
+  The harness, the output-verification snapshot, and the task's manifest
+  validation commands all run against the task's own worktree, so a sibling
+  task's edits can no longer be mis-attributed, and a task is never validated
+  against a tree another task is halfway through editing.
+- **Per-task auto-commit stays clean.** When a task finishes, its files are
+  copied back into the repository and the normal per-task commit runs. Each
+  commit still contains exactly one task's work, and the history stays aligned
+  with the manifest.
+- **Concurrent writes to the same file now fail loudly.** If two tasks in a wave
+  change the same path, the second fails with `Concurrent write overlap on
+  <paths>` instead of silently overwriting the first. Declare a dependency
+  between those tasks or give them disjoint outputs, then `replay` the failed
+  task.
+- **Run state can no longer lose updates.** The engine is now the single writer:
+  a task owns one record and hands it to the engine, and state persistence,
+  sandbox integration, and git all run on one serialized queue. A task is
+  durable the moment it finishes, so a crash mid-wave never re-runs completed
+  work. This fixes CR-01 from the September 2026 codebase review.
+- **Two operator-visible requirements for parallel runs.** The working tree must
+  be clean: a worktree is built from a commit and cannot see uncommitted work, so
+  the engine refuses to start and names the exact offending paths rather than
+  quietly handing a task a stale tree. Engine-generated `docs/` output and
+  untracked files under `docs/` (the compiled manifest, engine config, review
+  evidence) are tolerated and copied into each sandbox. Consequently,
+  **`--concurrency > 1` cannot be combined with `--no-auto-commit`**, and
+  **keep-alive is downgraded to a cold start per task** when a run is parallel —
+  one warm `opencode serve` serves one project directory and cannot serve several
+  worktrees. An explicit `--attach <url>` is still honored exactly as given.
+- **Same-owner serialization is unchanged**: at most one task per agent runs per
+  wave, and a harness that does not declare `supportsConcurrency` still falls
+  back to a single task at a time (with a warning, not a failure).
+- **No trace left behind.** Sandboxes are hidden with `.git/info/exclude`, so a
+  run never edits your tracked `.gitignore`. Worktrees left by a killed engine
+  are swept before the next run, and the sandbox root is deleted when the run
+  ends. Disk cost is N concurrent checkouts of `HEAD`.
+- See [ADR-056](adr/056-parallel-execution-task-sandboxes.md) and the
+  [implementation plan](parallel-execution-plan.md); amends
+  [ADR-021](adr/021-parallel-task-dispatch.md) and
+  [ADR-040](adr/040-native-adapter-contracts.md).
+
 ## September 2026 - v3.85
 
 ### Remove projects from Forge without changing their repositories

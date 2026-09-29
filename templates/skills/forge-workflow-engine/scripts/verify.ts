@@ -35,6 +35,19 @@ const ENGINE_OWNED_PREFIXES = [
   "docs/task-executions/",
 ];
 
+/**
+ * True for a path the engine writes on the operator's behalf. Used to keep
+ * engine output out of `outputFiles` and to let the sandbox preflight tell
+ * engine metadata apart from real work in a dirty working tree.
+ */
+export function isEngineOwnedPath(relPath: string): boolean {
+  const normalized = relPath.replace(/\\/g, "/");
+  return ENGINE_OWNED_PREFIXES.some((prefix) => normalized === prefix || normalized.startsWith(prefix));
+}
+
+/** Everything the engine generates lives under docs/; sandboxes seed from there. */
+export const ENGINE_METADATA_ROOT = "docs/";
+
 export interface VerifyOptions {
   repoRoot: string;
   allowNoop: boolean;
@@ -50,17 +63,38 @@ export interface WorktreeSnapshot {
   paths: Set<string>;
 }
 
+/** One entry of `git status --porcelain -z`, with the rename source resolved. */
+export interface WorktreeEntry {
+  /** Repository-relative path, forward-slashed. */
+  path: string;
+  /** The two-character porcelain status, e.g. `??`, ` M`, `A `. */
+  code: string;
+}
+
+/**
+ * Parses NUL-delimited `git status --porcelain -z` output. Rename and copy
+ * records carry the source path in a second NUL-delimited field, which is
+ * consumed here so callers only ever see the destination path.
+ */
+export function parseWorktreeEntries(stdout: string): WorktreeEntry[] {
+  const entries: WorktreeEntry[] = [];
+  const fields = stdout.split("\0");
+  for (let i = 0; i < fields.length; i += 1) {
+    const field = fields[i];
+    if (!field) continue;
+    const code = field.slice(0, 2);
+    entries.push({ path: field.slice(3).replace(/\\/g, "/"), code });
+    if (code.includes("R") || code.includes("C")) i += 1;
+  }
+  return entries;
+}
+
 /** True when a response is too short / thin to count as real work output. */
 export function isTrivialOutput(stdout: string): boolean {
   const trimmed = stdout.trim();
   if (trimmed.length === 0) return true;
   if (trimmed.length < MIN_SUBSTANTIVE_OUTPUT_LEN) return true;
   return !trimmed.split(/\r?\n/).some((line) => line.trim().length > MIN_CONTENT_LINE_LEN);
-}
-
-function isEngineOwnedPath(relPath: string): boolean {
-  const normalized = relPath.replace(/\\/g, "/");
-  return ENGINE_OWNED_PREFIXES.some((prefix) => normalized === prefix || normalized.startsWith(prefix));
 }
 
 function resolveRepoPath(repoRoot: string, filePath: string): string {
@@ -88,19 +122,8 @@ export async function captureWorktree(repoRoot: string): Promise<WorktreeSnapsho
   if (result.status !== 0) return null;
 
   const paths = new Set<string>();
-  const entries = result.stdout.split("\0");
-  for (let i = 0; i < entries.length; i += 1) {
-    const entry = entries[i];
-    if (!entry) continue;
-
-    // porcelain -z v1 entry: "<XY> <path>\0" and rename/copy records include an
-    // additional NUL-delimited source path field immediately after this entry.
-    const status = entry.slice(0, 2);
-    const file = entry.slice(3);
-    const rel = file.replace(/\\/g, "/");
-    if (!isEngineOwnedPath(rel)) paths.add(rel);
-
-    if (status.includes("R") || status.includes("C")) i += 1;
+  for (const entry of parseWorktreeEntries(result.stdout)) {
+    if (!isEngineOwnedPath(entry.path)) paths.add(entry.path);
   }
   return { paths };
 }

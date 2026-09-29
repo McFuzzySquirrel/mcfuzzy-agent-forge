@@ -12,6 +12,8 @@ export interface KeepAliveDecision {
   startServer: boolean;
   /** Number of tasks still pending (not complete/skipped). */
   remaining: number;
+  /** Set when a keep-alive request had to be downgraded, with the reason. */
+  notice?: string;
 }
 
 /**
@@ -24,6 +26,12 @@ export interface KeepAliveDecision {
  *   3. `--keep-alive` / FORGE_ENGINE_ATTACH=1        - force keep-alive.
  *   4. Adaptive: keep-alive when more than one task remains, cold start
  *      otherwise (so short resumes do not pay the server boot cost).
+ *
+ * Sandbox mode (concurrent tasks, each in its own git worktree) always boots
+ * per task: one warm server is bound to a single project directory and cannot
+ * serve the several project directories a parallel wave uses. An operator who
+ * already runs a server can still pass `--attach <url>`, which is honoured
+ * as given.
  */
 export function shouldKeepAlive(opts: {
   attachUrl?: string;
@@ -31,16 +39,22 @@ export function shouldKeepAlive(opts: {
   noKeepAlive: boolean;
   harness: string;
   remaining: number;
+  sandboxMode?: boolean;
 }): KeepAliveDecision {
-  const { attachUrl, keepAlive, noKeepAlive, harness, remaining } = opts;
+  const { attachUrl, keepAlive, noKeepAlive, harness, remaining, sandboxMode = false } = opts;
   if (attachUrl) return { mode: "attach", startServer: false, remaining };
   if (noKeepAlive) return { mode: "cold", startServer: false, remaining };
+  const sandboxNotice = sandboxMode
+    ? "Parallel task execution runs each task in its own git worktree, so the engine cold-starts a harness process per task instead of booting one shared keep-alive server."
+    : undefined;
   if (keepAlive) {
+    if (sandboxNotice) return { mode: "cold", startServer: false, remaining, notice: sandboxNotice };
     return { mode: "keep-alive", startServer: harness === "opencode", remaining };
   }
-  if (harness === "opencode" && remaining > 1) {
+  if (harness === "opencode" && remaining > 1 && !sandboxMode) {
     return { mode: "adaptive", startServer: true, remaining };
   }
+  if (sandboxNotice) return { mode: "cold", startServer: false, remaining, notice: sandboxNotice };
   return { mode: "cold", startServer: false, remaining };
 }
 

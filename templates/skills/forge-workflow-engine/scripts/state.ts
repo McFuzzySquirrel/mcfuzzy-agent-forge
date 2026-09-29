@@ -86,23 +86,56 @@ export function reconcileState(state: WorkflowState, manifest: ExecutionManifest
   };
 }
 
+// ─── Record-level transitions ─────────────────────────────────────────────────
+//
+// The engine is the single writer of `WorkflowState`. A task never derives a
+// whole new state from the snapshot it was handed (that loses updates when
+// several tasks run concurrently); it owns one `TaskRecord` and the engine
+// splices that record into the authoritative state.
+
+export function startRecord(record: TaskRecord): TaskRecord {
+  return {
+    ...record,
+    status: "running",
+    startedAt: new Date().toISOString(),
+    attempt: record.attempt + 1,
+  };
+}
+
+export function completeRecord(
+  record: TaskRecord,
+  outputFiles: string[],
+  agentOutput: string,
+  artifactId?: string,
+  inputArtifactIds?: string[],
+  validationLimitations?: string[],
+): TaskRecord {
+  return {
+    ...record,
+    status: "complete",
+    completedAt: new Date().toISOString(),
+    outputFiles,
+    agentOutput,
+    errorMessage: undefined,
+    failureKind: undefined,
+    validationLimitations: validationLimitations?.length ? [...validationLimitations] : undefined,
+    ...(artifactId !== undefined ? { artifactId } : {}),
+    ...(inputArtifactIds !== undefined ? { inputArtifactIds } : {}),
+  };
+}
+
+export function failRecord(record: TaskRecord, errorMessage: string): TaskRecord {
+  return { ...record, status: "failed", completedAt: new Date().toISOString(), errorMessage };
+}
+
+export function withTaskRecord(state: WorkflowState, record: TaskRecord): WorkflowState {
+  return { ...state, lastUpdatedAt: new Date().toISOString(), tasks: { ...state.tasks, [record.taskId]: record } };
+}
+
 export function markTaskStarted(state: WorkflowState, taskId: string): WorkflowState {
   const task = state.tasks[taskId];
   if (!task) throw new Error(`Unknown task: ${taskId}`);
-
-  return {
-    ...state,
-    lastUpdatedAt: new Date().toISOString(),
-    tasks: {
-      ...state.tasks,
-      [taskId]: {
-        ...task,
-        status: "running",
-        startedAt: new Date().toISOString(),
-        attempt: task.attempt + 1,
-      },
-    },
-  };
+  return withTaskRecord(state, startRecord(task));
 }
 
 export function markTaskComplete(
@@ -116,26 +149,7 @@ export function markTaskComplete(
 ): WorkflowState {
   const task = state.tasks[taskId];
   if (!task) throw new Error(`Unknown task: ${taskId}`);
-
-  return {
-    ...state,
-    lastUpdatedAt: new Date().toISOString(),
-    tasks: {
-      ...state.tasks,
-      [taskId]: {
-        ...task,
-        status: "complete",
-        completedAt: new Date().toISOString(),
-        outputFiles,
-        agentOutput,
-        errorMessage: undefined,
-        failureKind: undefined,
-        validationLimitations: validationLimitations?.length ? [...validationLimitations] : undefined,
-        ...(artifactId !== undefined ? { artifactId } : {}),
-        ...(inputArtifactIds !== undefined ? { inputArtifactIds } : {}),
-      },
-    },
-  };
+  return withTaskRecord(state, completeRecord(task, outputFiles, agentOutput, artifactId, inputArtifactIds, validationLimitations));
 }
 
 export function markTaskFailed(
@@ -145,20 +159,7 @@ export function markTaskFailed(
 ): WorkflowState {
   const task = state.tasks[taskId];
   if (!task) throw new Error(`Unknown task: ${taskId}`);
-
-  return {
-    ...state,
-    lastUpdatedAt: new Date().toISOString(),
-    tasks: {
-      ...state.tasks,
-      [taskId]: {
-        ...task,
-        status: "failed",
-        completedAt: new Date().toISOString(),
-        errorMessage,
-      },
-    },
-  };
+  return withTaskRecord(state, failRecord(task, errorMessage));
 }
 
 export function markTaskSkipped(state: WorkflowState, taskId: string): WorkflowState {
@@ -220,19 +221,20 @@ export function syncProgressMd(
     }
   }
 
-  const currentEntry = Object.values(state.tasks).find((t) => t.status === "running");
+  // Every in-flight task is listed: a parallel wave runs more than one at a
+  // time, and a first-match-only summary would hide all but one of them.
+  const runningEntries = Object.values(state.tasks).filter((t) => t.status === "running");
   const currentLines: string[] = [];
-  if (currentEntry) {
-    const phaseId = findPhaseForTask(manifest, currentEntry.taskId);
-    const task = findTask(manifest, currentEntry.taskId);
+  for (const entry of runningEntries) {
+    const phaseId = findPhaseForTask(manifest, entry.taskId);
+    const task = findTask(manifest, entry.taskId);
     if (task && phaseId && inScope(task.id)) {
       currentLines.push(`- [ ] Phase ${phaseId}, Task ${task.id}: ${task.title}${task.ownerAgent ? ` (@${task.ownerAgent})` : ""}`);
       currentLines.push("  - Status: In progress");
     }
-  } else if (state.status === "complete") {
-    currentLines.push("- [x] All workflow tasks completed");
-  } else {
-    currentLines.push("- None currently running");
+  }
+  if (runningEntries.length === 0) {
+    currentLines.push(...(state.status === "complete" ? ["- [x] All workflow tasks completed"] : ["- None currently running"]));
   }
 
   const remainingPhases = manifest.phases.filter((phase) =>

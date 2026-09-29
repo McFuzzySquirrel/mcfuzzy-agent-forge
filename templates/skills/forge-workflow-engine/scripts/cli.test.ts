@@ -95,6 +95,22 @@ test("shouldKeepAlive: adaptive never applies to non-opencode harnesses", () => 
   assert.equal(d.startServer, false);
 });
 
+test("shouldKeepAlive: sandbox mode cold-starts instead of booting one shared server", () => {
+  for (const keepAlive of [false, true]) {
+    const d = shouldKeepAlive({ attachUrl: undefined, keepAlive, noKeepAlive: false, harness: "opencode", remaining: 10, sandboxMode: true });
+    assert.equal(d.mode, "cold", `keepAlive=${keepAlive}`);
+    assert.equal(d.startServer, false, "one warm server cannot serve several task worktrees");
+    assert.match(d.notice ?? "", /own git worktree/);
+  }
+});
+
+test("shouldKeepAlive: an explicit --attach is still honoured in sandbox mode", () => {
+  const d = shouldKeepAlive({ attachUrl: "http://127.0.0.1:4096", keepAlive: true, noKeepAlive: false, harness: "opencode", remaining: 10, sandboxMode: true });
+  assert.equal(d.mode, "attach");
+  assert.equal(d.startServer, false);
+  assert.equal(d.notice, undefined, "the operator owns the server, so the engine does not second-guess it");
+});
+
 test("remainingTaskCount counts fresh (no state) tasks as remaining", () => {
   const root = mkdtempSync(join(tmpdir(), "forge-remaining-"));
   mkdirSync(join(root, "docs"), { recursive: true });

@@ -590,11 +590,16 @@ session). To reuse a server you already keep running, pass `--attach <url>` (or
 `FORGE_ENGINE_ATTACH_URL`). See the workflow-engine
 [keep-alive attach mode](workflow-engine.md#keep-alive-attach-mode-opencode-harness).
 
-The launcher still accepts `FORGE_ENGINE_CONCURRENCY=<n>` (or `--concurrency <n>`
-to `forge-launcher engine-run`) and persists it to `docs/engine-config.json`, but
-the current engine executes one repo task at a time while output attribution is
-repository-wide. Treat it as stored run configuration for now rather than an
-active parallelism toggle. See [ADR-021](adr/021-parallel-task-dispatch.md).
+The launcher passes `--concurrency <n>` through to the engine and persists it to
+`docs/engine-config.json`. Above `1` the engine runs up to `n` ready tasks at
+once, each in its own `git worktree` under `.forge-sandboxes/`, so output
+attribution, validation, and per-task commits stay exact. Two operator
+consequences: **commit or stash before running in parallel** (the engine refuses
+and lists any uncommitted path otherwise, and `--no-auto-commit` cannot be
+combined with concurrency), and **keep-alive is downgraded to a cold start per
+task** when a run is parallel. See
+[ADR-056](adr/056-parallel-execution-task-sandboxes.md) and
+[ADR-021](adr/021-parallel-task-dispatch.md).
 
 **Auto-commit is on by default.** Each completed task is committed to git (one
 commit per task, including the engine-owned `docs/*` files). Disable with
@@ -969,7 +974,7 @@ reflect the running build (monitor + resume) rather than the manual
 | `FORGE_RUN_WITH` | 8 | Authoring runner: `opencode`, `copilot`, `claude`, or `stub`. Outranks the `runner` saved in `docs/authoring-config.json`; only the `--runner` flag outranks it. With none of those set, the default is `copilot` for the GitHub harness, `opencode` otherwise, including for the Claude harness, except that when the inherited runner's CLI is not installed and the harness's own CLI is, the harness's CLI is used; explicit selections are never substituted. `stub` is environment-only and runs offline fixtures - it is an offline lock that even `--runner` cannot override; combine with `FORGE_STUB_NOOP=1` to test failure diagnostics |
 | `FORGE_STUB_NOOP` | 8 | `1` makes the stub skill runner (`FORGE_RUN_WITH=stub`) write nothing, exercising the auto-draft failure diagnostics |
 | `FORGE_LAUNCHER_DEBUG` | 8 | `1` (or the `--debug` flag) prints the skill-run log tail after every headless skill run; also passes `--print-logs` to `opencode` |
- | `FORGE_ENGINE_CONCURRENCY` | 8 | Persisted engine concurrency preference (default `1`); shown in summaries and config even though current repo-task execution remains serialized |
+ | `FORGE_ENGINE_CONCURRENCY` | 8 | Max concurrent engine tasks (default `1` = sequential); above `1` the engine needs a clean working tree and runs each task in its own git worktree, and keep-alive falls back to a cold start per task |
  | `FORGE_ENGINE_TASK_TIMEOUT_MS` | 8 | Per-task timeout for the workflow engine in ms (default `600000` / 10 min; a task's manifest `timeoutMs` overrides it, see ADR-022) |
  | `FORGE_ENGINE_GRANULARITY` | 8 | Task granularity for the adapter compile: `fine` (default) or `coarse`. Setting it recompiles the manifest at that granularity |
  | `FORGE_ENGINE_MAX_RETRIES` | 8 | Max retries per engine task (default `2`) |

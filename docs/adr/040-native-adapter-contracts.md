@@ -45,8 +45,15 @@ both normal runs and replay, including preparation failure. Cleanup must be safe
 when preparation was incomplete or cleanup already occurred. External attach
 resources remain operator-owned.
 
-The engine remains serialized regardless of `supportsConcurrency`; that field
-describes transport capability and does not enable parallel repository edits.
+The engine no longer remains serialized regardless of `supportsConcurrency`.
+Since [ADR-056](056-parallel-execution-task-sandboxes.md) the flag gates
+parallel dispatch, and repository-level isolation is supplied by the engine: each
+concurrent task runs in its own `git worktree`, and `request.repoRoot` is that
+task's workspace rather than the repository root. The flag still means what it
+always meant - transport capability - and is still necessary but not sufficient.
+Because one warm attach server serves a single project directory, keep-alive is
+downgraded to a cold start per task when the run is parallel; an operator-supplied
+`--attach <url>` is still honoured.
 
 ## Consequences
 

@@ -93,6 +93,13 @@ export interface TaskAttemptRequest {
   readonly agent: DeepReadonly<AgentDescriptor>;
   readonly task: DeepReadonly<ManifestTask>;
   readonly effectiveModel?: string;
+  /**
+   * Root the task's harness, output verification, and validation commands run
+   * in. Equal to the engine's `repoRoot` for a sequential run, and to a
+   * per-task `git worktree` sandbox when tasks run concurrently, so
+   * `expectedOutputs` and `outputFiles` always resolve against the tree the
+   * agent actually edited. See ADR-056.
+   */
   readonly repoRoot: string;
   readonly contextBlock: string;
   readonly requiredCapabilities: readonly TaskCapability[];
@@ -115,7 +122,11 @@ export interface HarnessRunContext {
 
 export interface HarnessAdapter {
   readonly name: string;
-  /** Transport support only; engine attribution still requires serialization. */
+  /**
+   * Whether the transport tolerates concurrent invocations. Required, but not
+   * sufficient: the engine additionally isolates every concurrent task in its
+   * own git worktree, so repository-level isolation never rests on the adapter.
+   */
   readonly supportsConcurrency: boolean;
   readonly capabilities: readonly TaskCapability[];
   readonly defaultModel?: string;
@@ -144,8 +155,11 @@ export interface EngineOptions {
   /** Interval (ms) between heartbeat lines while a task is executing; 0 disables. */
   heartbeatMs: number;
   /**
-   * Reserved concurrency setting. Tasks remain serialized until output
-   * attribution is isolated per task, regardless of transport concurrency.
+   * Maximum number of ready tasks dispatched at once. `1` (the default) is
+   * fully sequential. Above `1` the engine only parallelizes a harness that
+   * declares `supportsConcurrency`, and each task then runs in its own
+   * `git worktree` so output attribution, validation, and auto-commit stay
+   * exact. See ADR-056.
    */
   maxConcurrency: number;
   /**

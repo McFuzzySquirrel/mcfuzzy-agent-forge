@@ -171,7 +171,7 @@ The checkpoint flow should make "resume from last checkpoint" possible even when
 
 ### Step 4: Hand Off to the Runner
 
-Once the manifest exists and progress is synchronized, hand the structured contract to the execution backend. Execution is phase-ordered by default. Parallel dispatch is supported via `--concurrency <n>` but only for harness backends that declare `supportsConcurrency` (see ADR-021); do not assume speculative parallelism for a backend that has not opted in.
+Once the manifest exists and progress is synchronized, hand the structured contract to the execution backend. Execution is phase-ordered by default. Parallel dispatch is supported via `--concurrency <n>`, but only for harness backends that declare `supportsConcurrency` (see ADR-021), and it requires a clean working tree: the engine runs each concurrent task in its own `git worktree` and refuses to start if uncommitted work would be invisible to a task (ADR-056). Declaring disjoint `expectedOutputs` for independent tasks is what lets them overlap.
 
 ---
 
