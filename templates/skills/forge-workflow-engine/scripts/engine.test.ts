@@ -4,8 +4,7 @@ import { execFileSync } from "node:child_process";
 import { existsSync, mkdtempSync, mkdirSync, rmSync, writeFileSync, readFileSync, unlinkSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-
-import { allDepsComplete, isComplete, isTaskDone, mapLimit, nextReadyTasks, ownerUniqueReady, replayTask, resolveConcurrency, runEngine, validateManifestDependencies } from "./engine.ts";
+import { allDepsComplete, isComplete, isTaskDone, mapLimit, nextReadyTasks, ownerUniqueReady, replayTask, resolveConcurrency, runEngine, unmetPrerequisites, validateManifestDependencies } from "./engine.ts";
 import { runCommand } from "./harness/run.ts";
 import { OpenAIAdapter } from "./harness/openai-adapter.ts";
 import { compileExecutionManifestDetailed } from "../../forge-execution-adapter/scripts/compiler.ts";
@@ -135,6 +134,33 @@ test("nextReadyTasks blocks a downstream phase while its dependency is pending",
 
   const ready = nextReadyTasks(manifest, state);
   assert.deepEqual(ready.map((entry) => entry.task.id), ["1.2"]);
+});
+
+test("unmetPrerequisites agrees with nextReadyTasks about what is reviewable", () => {
+  // The Console surfaces this list and both approval surfaces refuse on it, so
+  // it has to be the same gate the dispatcher applies - including for a
+  // skipped prerequisite, which must not hold a review open.
+  const manifest = makeManifest([
+    makePhase("1", [makeTask("1.1"), makeTask("1.2")]),
+    makePhase("2", [{ ...makeTask("2.1"), dependencies: ["1.2"] }], ["1"]),
+  ]);
+
+  for (const statuses of [
+    { "1.1": "complete", "1.2": "pending", "2.1": "pending" },
+    { "1.1": "complete", "1.2": "skipped", "2.1": "pending" },
+    { "1.1": "complete", "1.2": "complete", "2.1": "pending" },
+    { "1.1": "failed", "1.2": "complete", "2.1": "pending" },
+  ] as Array<Record<string, TaskStatus>>) {
+    const state = makeState(statuses);
+    const ready = new Set(nextReadyTasks(manifest, state).map((entry) => entry.task.id));
+    const unmet = unmetPrerequisites(manifest, state, "2.1");
+    assert.equal(unmet.length === 0, ready.has("2.1"),
+      `2.1 ready=${ready.has("2.1")} but unmet=${JSON.stringify(unmet)} for ${JSON.stringify(statuses)}`);
+  }
+  assert.deepEqual(unmetPrerequisites(manifest, makeState({ "1.1": "complete", "1.2": "pending", "2.1": "pending" }), "2.1"), ["1.2"]);
+  assert.deepEqual(unmetPrerequisites(manifest, makeState({ "1.1": "pending", "1.2": "pending", "2.1": "pending" }), "2.1"), ["1.2", "1.1"],
+    "a phase dependency brings in every task of the phase, not only its last one, and is reported after the direct ones");
+  assert.deepEqual(unmetPrerequisites(manifest, makeState({}), "missing"), []);
 });
 
 test("nextReadyTasks filters to the manual selection", () => {

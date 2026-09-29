@@ -434,6 +434,19 @@ export function tasks(p: RepoPaths): TaskRow[] {
       [task.id, [...(task.dependencies ?? []), ...phaseDependencies]] as const);
   }));
   const ownGaps = (taskId: string) => (state?.tasks?.[taskId]?.validationLimitations ?? []).map((gap) => `${taskId}: ${gap}`);
+  // Mirrors the engine's dispatch rule (engine.ts `nextReadyTasks`): a task is
+  // dispatchable only once its direct dependencies and every task of a phase it
+  // depends on are complete or skipped. The engine exports this as
+  // `unmetPrerequisites`; this copy exists because `tasks()` is synchronous and
+  // cannot reach engine code at runtime, so the approval API re-uses the
+  // engine's own definition as the authority and this one only decides what the
+  // row is labelled. A drift can therefore mislabel a row, never permit an
+  // approval.
+  const unmetPrerequisites = (taskId: string): string[] =>
+    (dependenciesByTask.get(taskId) ?? []).filter((id) => {
+      const status = state?.tasks?.[id]?.status;
+      return status !== "complete" && status !== "skipped";
+    });
   // A human reviewer must see every "not run" check the reviewed work depends on,
   // not only the review task's own record (which never has any).
   const upstreamGaps = (taskId: string): string[] => {
@@ -489,6 +502,7 @@ export function tasks(p: RepoPaths): TaskRow[] {
         references: task.contract?.references ?? [],
         reviewFile: task.contract?.reviewFile,
         validationGaps: task.contract?.kind === "human-review" ? upstreamGaps(task.id) : ownGaps(task.id),
+        unmetPrerequisites: unmetPrerequisites(task.id),
       });
     }
   }

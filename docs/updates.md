@@ -39,12 +39,12 @@ Detailed release and change notes for MyForge.
   requirements must be committed: a worktree is built from a commit and cannot
   see uncommitted work, so the engine refuses to start and names the exact
   offending paths rather than quietly handing a task a stale tree. Uncommitted
-  `docs/PRD.md`, `docs/IDEA.md`, `docs/features/**` and `docs/reviews/**` block
-  the run for the same reason — that is what a task is told to read. Everything
-  else under `docs/` is generated state (engine config, compiled manifest,
-  responsibility matrix, progress, audit, authoring artifacts) and is tolerated
+  `docs/PRD.md`, `docs/IDEA.md` and `docs/features/**` block the run for the same
+  reason — that is what a task is told to read. Everything else under `docs/` is
+  generated or operator input (engine config, compiled manifest, responsibility
+  matrix, progress, audit, authoring artifacts, review records) and is tolerated
   and copied into each sandbox, so changing a Console setting does not block a
-  run. Consequently, **`--concurrency > 1` cannot be combined with
+  run, and neither does recording a human-review approval. Consequently, **`--concurrency > 1` cannot be combined with
   `--no-auto-commit`**, and **keep-alive is downgraded to a cold start per task**
   when a run is parallel — one warm `opencode serve` serves one project directory
   and cannot serve several worktrees. An explicit `--attach <url>` is still
@@ -56,6 +56,27 @@ Detailed release and change notes for MyForge.
   run never edits your tracked `.gitignore`. Worktrees left by a killed engine
   are swept before the next run, and the sandbox root is deleted when the run
   ends. Disk cost is N concurrent checkouts of `HEAD`.
+- **A human review can no longer be approved before it is reviewable.** The
+  engine always gated dispatch on a review task's prerequisites, so the task
+  never paused for work that did not exist — but the Console listed every
+  manifest task and offered its approval action on status alone. A review
+  attests to delivered work, and its attestation is fingerprinted over the task
+  and its references (so a changed reference self-invalidates) but **not** over
+  the reviewed output, meaning a premature approval survived and released every
+  downstream task on a review of pre-review code. A review row now reads
+  **Human review blocked** and lists what it is waiting on until those
+  prerequisites are done, and both the Console API and `approve-task` refuse an
+  early approval and name the prerequisites. All three surfaces call the engine's
+  own `unmetPrerequisites`, so the dispatch gate, the row, and the guard cannot
+  drift apart.
+- **Console approve-and-resume no longer deadlocks under parallel execution.**
+  The form wrote the review record and attestation and then started the run; with
+  `docs/reviews/**` classified as a requirement, the run's clean-tree preflight
+  refused the very files the form had just written, so the operator had to
+  hand-commit them to approve. Review records are now tolerated generated state.
+  Related: a Console-started run with a numeric `concurrency`, `taskTimeoutMs`,
+  or `maxRetries` in `docs/engine-config.json` could not launch at all — those
+  values were passed to `argv` as numbers and crashed the job runner.
 - See [ADR-056](adr/056-parallel-execution-task-sandboxes.md) and the
   [implementation plan](parallel-execution-plan.md); amends
   [ADR-021](adr/021-parallel-task-dispatch.md) and

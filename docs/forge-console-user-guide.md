@@ -194,7 +194,11 @@ such a task; `--yes` cannot approve it.
 
 #### Approve from the Console
 
-1. Open **Tasks** and select the paused task labeled **Human review required**.
+1. Open **Tasks** and select the task. It reads **Human review required** only
+   once its prerequisites are complete; before that it reads **Human review
+   blocked** and lists the tasks it is waiting on, with no approval action. A
+   review attests to delivered work, so the form cannot be submitted early - the
+   API and the `approve-task` command both refuse it and name the prerequisites.
 2. Read its requirements, acceptance criteria, constraints, and references.
 3. Click **Complete human review**.
 4. Read **Unverified upstream checks**, which includes transitive task and
@@ -207,6 +211,10 @@ such a task; `--yes` cannot approve it.
    `docs/reviews/<task-id>-console-review.md`, writes the task's configured
    `reviewFile` attestation with the task fingerprint and evidence hash, and
    resumes the build when the task is ready.
+
+Approving from the Console is safe with parallel execution: the review record and
+attestation it writes are tolerated generated state, so the run it resumes is not
+refused by the clean-tree preflight that sandboxes require.
 
 The completed task changes to **Human review complete**. To prove the approval,
 show both the Markdown review record and the configured JSON approval record.
@@ -235,6 +243,12 @@ npm run workflow-engine -- approve-task <task-id> \
   --evidence docs/reviews/my-review.md \
   --confirm-human-review
 ```
+
+The command refuses while any prerequisite of the task is pending or failed, and
+names them, so an approval cannot be recorded against work that does not exist
+yet. The attestation is fingerprinted over the task and its references, so it
+self-invalidates when those change - but not when the reviewed output changes,
+which is what this check exists to prevent.
 
 The command writes the configured `reviewFile` attestation and prints a
 confirmation. Resume the detached build with:

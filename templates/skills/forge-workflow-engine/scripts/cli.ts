@@ -3,7 +3,7 @@ import { dirname, join, resolve } from "node:path";
 import { existsSync, readFileSync } from "node:fs";
 import * as readline from "node:readline";
 
-import { runEngine, replayTask, resolveConcurrency } from "./engine.ts";
+import { runEngine, replayTask, resolveConcurrency, unmetPrerequisites } from "./engine.ts";
 import { loadState, statePath, auditPath } from "./state.ts";
 import { startVizServer, type VizServer } from "./viz/server.ts";
 import { controlPath, pidPath, readPid, removePid, writeControl, writePid } from "./control.ts";
@@ -615,6 +615,19 @@ async function main(): Promise<void> {
       const manifest = JSON.parse(readFileSync(join(repo, "docs", "EXECUTION-MANIFEST.json"), "utf8")) as ExecutionManifest;
       const task = manifest.phases.flatMap((phase) => phase.tasks).find((entry) => entry.id === args[0]);
       if (!task) throw new Error("Unknown review task.");
+      // A review attests to work that exists. The attestation is fingerprinted
+      // over the task and its references, so it self-invalidates when those
+      // change - but not when the reviewed *output* changes, which would let a
+      // premature approval release downstream tasks on a review of code that
+      // had not been written yet. Refuse until the engine would actually
+      // dispatch this task.
+      const state = loadState(statePath(repo));
+      if (state) {
+        const unmet = unmetPrerequisites(manifest, state, task.id);
+        if (unmet.length > 0) {
+          throw new Error(`Cannot approve '${task.id}' yet: ${unmet.join(", ")} must be complete or skipped first. A human review attests to delivered work.`);
+        }
+      }
       const evidence = args.flatMap((arg, index) => arg === "--evidence" && args[index + 1] ? [args[index + 1]!] : []);
       approveHumanTask(repo, task, flag(args, "--reviewer") ?? "", evidence);
       console.log(`Recorded operator attestation for ${task.id}. Resume the engine to verify and complete the review task.`);

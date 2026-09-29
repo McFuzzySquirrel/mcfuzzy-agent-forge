@@ -454,8 +454,38 @@ function detail(t: TaskRow): HTMLElement {
   return el("div", { className: "detail" }, fields.filter(Boolean) as HTMLElement[]);
 }
 
+export type HumanReviewGate =
+  | { state: "complete" }
+  | { state: "blocked"; unmet: string[] }
+  | { state: "ready" };
+
+/**
+ * Whether a human-review row can offer its approval action.
+ *
+ * A review attests to delivered work, and the engine will not dispatch the task
+ * until its prerequisites are done - so before then the work under review does
+ * not exist. The action is withheld rather than offered and then refused, and
+ * `unmetPrerequisites` is what the server computed from the same rule.
+ */
+export function humanReviewGate(t: TaskRow): HumanReviewGate {
+  const unmet = t.unmetPrerequisites ?? [];
+  if (t.status === "complete") return { state: "complete" };
+  if (unmet.length > 0) return { state: "blocked", unmet };
+  return { state: "ready" };
+}
+
 function humanReviewAction(t: TaskRow): HTMLElement {
-  const complete = t.status === "complete";
+  const gate = humanReviewGate(t);
+  const complete = gate.state === "complete";
+  if (gate.state === "blocked") {
+    const unmet = gate.unmet;
+    return el("div", { class: "review-action" }, [
+      el("div", { class: "k" }, "Human review blocked"),
+      el("p", { class: "dim small" },
+        `Waiting on ${unmet.length} prerequisite task${unmet.length === 1 ? "" : "s"}: ${unmet.join(", ")}. `
+        + "The review action appears once they are complete."),
+    ]);
+  }
   const button = el("button", {
     className: complete ? "btn btn-review-complete" : "btn btn-primary",
     type: "button",
