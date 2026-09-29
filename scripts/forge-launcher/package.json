@@ -1,6 +1,6 @@
 {
   "name": "forge-launcher",
-  "version": "1.0.0-beta.5",
+  "version": "1.0.0-beta.6",
   "type": "module",
   "description": "One command from zero to auto-build: creates a repo, bootstraps MyForge, captures your idea, and launches the full pipeline. Cross-platform replacement for the forge-launcher/bootstrap/forge-engine-run shell scripts.",
   "bin": {
