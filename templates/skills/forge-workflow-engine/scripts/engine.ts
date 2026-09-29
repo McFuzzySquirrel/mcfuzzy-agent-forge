@@ -44,6 +44,10 @@ import { clearControl, readControl } from "./control.ts";
 import { assertTaskCapabilities, prepareTaskRequest } from "./request.ts";
 import { humanTaskApproved, taskReferenceContext } from "./task-context.ts";
 import { readTaskHandoff } from "./task-result.ts";
+// The task graph is the shared definition of readiness; re-exported so the engine
+// keeps one public surface and the Console can import it without the harness.
+export { isTaskDone, unmetPrerequisites } from "./task-graph.ts";
+import { isTaskDone, unmetPrerequisites } from "./task-graph.ts";
 import { writeTaskAttempt } from "./task-execution.ts";
 import {
   clearSandboxRoot,
@@ -143,42 +147,12 @@ function loadManifest(path: string): ExecutionManifest {
   return manifest;
 }
 
-export function isTaskDone(status: TaskStatus | undefined): boolean {
-  return status === "complete" || status === "skipped";
-}
-
 export function allDepsComplete(
   taskId: string,
   deps: string[],
   state: WorkflowState,
 ): boolean {
   return deps.every((depId) => isTaskDone(state.tasks[depId]?.status));
-}
-
-/**
- * Every prerequisite of `taskId` that is not yet complete or skipped, using the
- * same direct-dependency plus transitive-phase-dependency rule `nextReadyTasks`
- * dispatches on.
- *
- * This is the single definition of "is this task reviewable yet". The Console
- * surfaces it, and both approval surfaces refuse to record an attestation until
- * it is empty, so the engine's dispatch gate, the Console's affordance, and the
- * approval guard cannot drift into disagreeing about what is ready.
- */
-export function unmetPrerequisites(
-  manifest: ExecutionManifest,
-  state: WorkflowState,
-  taskId: string,
-): string[] {
-  const flat = flattenManifest(manifest);
-  const entry = flat.find((candidate) => candidate.task.id === taskId);
-  if (!entry) return [];
-
-  const phase = manifest.phases[entry.phaseIndex];
-  const phaseDependencies = (phase?.dependencies ?? []).flatMap((id) =>
-    (manifest.phases.find((candidate) => candidate.id === id)?.tasks ?? []).map((task) => task.id));
-  const prerequisites = [...new Set([...(entry.task.dependencies ?? []), ...phaseDependencies])];
-  return prerequisites.filter((id) => !isTaskDone(state.tasks[id]?.status));
 }
 
 function findAgentForTask(agents: AgentDescriptor[], ownerName: string | undefined): AgentDescriptor | undefined {

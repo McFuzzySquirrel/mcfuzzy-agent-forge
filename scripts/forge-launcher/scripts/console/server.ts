@@ -71,7 +71,12 @@ async function approveConsoleHumanReview(repoRoot: string, taskId: string, revie
     writeHumanReviewEvidence: (repoRoot: string, task: ManifestTask, reviewer: string, notes: string) => string;
     approveHumanTask: (repoRoot: string, task: ManifestTask, reviewer: string, evidence: string[]) => void;
   };
-  const engine = await import(pathToFileURL(path.join(engineScripts, "engine.ts")).href) as {
+  // The task graph is the engine's own dispatch gate, in a module with no
+  // runtime dependencies: the Console serves a project directory whose engine
+  // copy may not have `node_modules` installed, so importing `engine.ts` here
+  // would drag in the harness and fail. `task-graph.ts` is the shared
+  // definition, and the engine re-exports it.
+  const engine = await import(pathToFileURL(path.join(engineScripts, "task-graph.ts")).href) as {
     unmetPrerequisites: (manifest: unknown, state: unknown, taskId: string) => string[];
   };
   const manifest = repo.loadManifest(repoPaths(repoRoot));
