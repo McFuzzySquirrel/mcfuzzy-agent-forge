@@ -195,3 +195,19 @@ test("destroySandbox ignores a path that is not inside the sandbox root", async 
   assert.ok(existsSync(join(elsewhere, "keep.txt")), "cleanup can never delete outside the sandbox root");
   rmSync(elsewhere, { recursive: true, force: true });
 });
+
+test("destroySandbox still removes a sandbox whose path is spelled the way git prints it", async () => {
+  const root = makeRepo();
+  const sandbox = await createSandbox(root, "1.1");
+  // git reports worktrees with forward slashes and no trailing separator, and on
+  // Windows the path can come back in a different case or through a short name.
+  // A spelling mismatch used to make teardown skip the worktree entirely and
+  // leak its registration.
+  const asGitPrintsIt = sandbox.path.replace(/\\/g, "/").replace(/\/+$/, "");
+
+  await destroySandbox(root, asGitPrintsIt);
+
+  assert.ok(!existsSync(sandbox.path), `sandbox at ${sandbox.path} should be gone`);
+  assert.equal(git(root, ["worktree", "list", "--porcelain"]).match(/^worktree /gm)?.length, 1, "no registration is left behind");
+  await clearSandboxRoot(root);
+});

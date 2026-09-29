@@ -30,6 +30,7 @@ import {
   mkdirSync,
   readFileSync,
   readlinkSync,
+  realpathSync,
   rmSync,
   symlinkSync,
 } from "node:fs";
@@ -92,8 +93,31 @@ async function gitPaths(repoRoot: string, args: string[]): Promise<string[]> {
   return (await gitOrThrow(repoRoot, args)).split("\0").filter(Boolean);
 }
 
+/**
+ * A path in a form that can be compared for containment across platforms.
+ *
+ * Windows is case-insensitive, git prints paths with forward slashes, and a
+ * directory reachable through a short (8.3) name can come back spelled the long
+ * way. Resolving the real path first and then normalizing means a sandbox is
+ * still recognized as one when the spelling differs from how we created it -
+ * otherwise teardown silently skips it and the worktree leaks.
+ */
+function comparablePath(value: string): string {
+  const absolute = resolve(value);
+  let real = absolute;
+  try {
+    real = realpathSync.native(absolute);
+  } catch {
+    // The path may not exist yet (a sandbox being created, or one already
+    // removed); the resolved form is still a stable comparison key.
+  }
+  const normalized = real.replace(/\\/g, "/").replace(/\/+$/, "");
+  return process.platform === "win32" ? normalized.toLowerCase() : normalized;
+}
+
+/** True when `candidate` sits strictly inside `parent`. */
 function isInside(parent: string, candidate: string): boolean {
-  const rel = relative(resolve(parent), resolve(candidate));
+  const rel = relative(comparablePath(parent), comparablePath(candidate));
   return rel !== "" && !rel.startsWith("..") && !isAbsolute(rel);
 }
 
@@ -135,8 +159,8 @@ export async function sweepStaleSandboxes(repoRoot: string): Promise<number> {
     .filter((line) => line.startsWith("worktree "))
     .map((line) => line.slice("worktree ".length).trim())
     .filter((path) => isInside(root, path));
-  for (const path of stale) await git(repoRoot, ["worktree", "remove", "--force", path]);
-  if (existsSync(root)) rmSync(root, { recursive: true, force: true });
+  for (const path of stale) await removeWorktree(repoRoot, path);
+  if (existsSync(root)) rmSync(root, { recursive: true, force: true, maxRetries: 3 });
   await git(repoRoot, ["worktree", "prune"]);
   return stale.length;
 }
@@ -216,12 +240,28 @@ export function sandboxProvidedPaths(sandbox: Pick<Sandbox, "linkedInputs" | "se
   return [...sandbox.linkedInputs, ...sandbox.seededFiles];
 }
 
+/**
+ * Removes a worktree and makes sure it is actually gone.
+ *
+ * `git worktree remove` can report success and still leave the directory -
+ * notably on Windows, where a linked build input is a directory junction that
+ * git will not delete. The direct removal is therefore unconditional, and a
+ * directory that survives both is reported rather than leaked silently, since
+ * it would otherwise keep a worktree registration alive for the whole run.
+ */
+async function removeWorktree(repoRoot: string, path: string): Promise<void> {
+  await git(repoRoot, ["worktree", "remove", "--force", path]);
+  if (existsSync(path)) rmSync(path, { recursive: true, force: true, maxRetries: 3 });
+  await git(repoRoot, ["worktree", "prune"]);
+  if (existsSync(path)) {
+    console.warn(`[engine] Could not remove task sandbox ${path}. Remove it by hand; git worktree prune will clear its registration.`);
+  }
+}
+
 /** Removes the task's worktree. Safe to call twice. */
 export async function destroySandbox(repoRoot: string, path: string): Promise<void> {
   if (!path || !isInside(sandboxRoot(repoRoot), path)) return;
-  const removed = await git(repoRoot, ["worktree", "remove", "--force", path]);
-  if (removed.status !== 0) rmSync(path, { recursive: true, force: true });
-  await git(repoRoot, ["worktree", "prune"]);
+  await removeWorktree(repoRoot, path);
 }
 
 /**
@@ -231,7 +271,7 @@ export async function destroySandbox(repoRoot: string, path: string): Promise<vo
  */
 export async function clearSandboxRoot(repoRoot: string): Promise<void> {
   const root = sandboxRoot(repoRoot);
-  if (existsSync(root)) rmSync(root, { recursive: true, force: true });
+  if (existsSync(root)) rmSync(root, { recursive: true, force: true, maxRetries: 3 });
   await git(repoRoot, ["worktree", "prune"]);
 }
 
