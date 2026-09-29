@@ -464,6 +464,154 @@ test("human review pauses without dispatch and resumes only with task-bound evid
   assert.equal(stale.tasks["1.1"]!.status, "pending");
 });
 
+/** Replace a single-task fixture's manifest with the given tasks in one phase. */
+function withTasks(fixture: EngineFixture, tasks: Partial<ManifestTask>[]): void {
+  const manifest = JSON.parse(readFileSync(fixture.manifestPath, "utf8")) as ExecutionManifest;
+  const base = manifest.phases[0]!.tasks[0]!;
+  manifest.phases[0]!.tasks = tasks.map((overrides) => ({ ...base, ...overrides }) as ManifestTask);
+  writeFileSync(fixture.manifestPath, JSON.stringify(manifest), "utf8");
+}
+
+/** Records task ids and writes each task's declared output, passing the gates. */
+class WritingHarness implements HarnessAdapter {
+  readonly name = "writing";
+  readonly supportsConcurrency = true;
+  readonly capabilities = ["text", "repository-tools"] as const;
+  taskIds: string[] = [];
+
+  async invoke(params: Parameters<HarnessAdapter["invoke"]>[0]) {
+    this.taskIds.push(params.task.id);
+    const outputs = params.task.expectedOutputs;
+    if (outputs.length > 0) writeFileSync(join(params.repoRoot, outputs[0]!), "written\n", "utf8");
+    // A structured task must also report what it did (engine.test.ts:600).
+    return {
+      success: true,
+      outputFiles: [...outputs],
+      stdout: '```forge-result\n{"summary":["Delivered the work","Verified the change"],"unresolved":[]}\n```',
+      stderr: "",
+      durationMs: 1,
+    };
+  }
+}
+
+function implTask(id: string, dependencies: string[] = []): Partial<ManifestTask> {
+  return {
+    id,
+    title: `Build ${id}`,
+    description: `Build ${id}`,
+    ownerAgent: "worker",
+    dependencies,
+    expectedOutputs: [`${id}.txt`],
+    // A structured contract requires a nonempty validation command.
+    validationCommands: ['node -e "process.exit(0)"'],
+    contract: {
+      version: 1,
+      kind: "implementation" as const,
+      requirements: ["Deliver the work"],
+      acceptanceCriteria: ["The work is delivered"],
+      constraints: [],
+      references: ["docs/PRD.md"],
+    },
+  };
+}
+
+const reviewTask: Partial<ManifestTask> = {
+  id: "1.9",
+  title: "Review the thing",
+  description: "Review the thing",
+  ownerAgent: undefined,
+  dependencies: [],
+  expectedOutputs: [],
+  validationCommands: [],
+  contract: {
+    version: 1,
+    kind: "human-review",
+    requirements: ["Human checks the delivered work"],
+    acceptanceCriteria: ["Named reviewer confirms the delivered work"],
+    constraints: [],
+    // Deliberately references an output the tasks below produce, and declares
+    // no dependency on them - the authoring mistake this guards against.
+    references: ["docs/PRD.md"],
+    reviewFile: "docs/reviews/1.9.json",
+  },
+};
+
+test("an unapproved review does not strand the work it was meant to review", async () => {
+  // Regression: the review dispatched immediately because its dependencies were
+  // under-declared, paused the run on the spot, and the run then waited for an
+  // approval of work that had not been done. Holding the review instead lets
+  // everything else finish, so the operator is only interrupted once there is
+  // genuinely something to review.
+  const fixture = makeEngineFixture();
+  withTasks(fixture, [
+    implTask("1.1"),
+    implTask("1.2", ["1.1"]),
+    reviewTask,
+  ]);
+  const harness = new WritingHarness();
+  const state = await runEngine(engineOptionsFor(fixture, harness, 1000, { autoCommit: false }));
+  assert.equal(state.status, "paused");
+  assert.deepEqual(harness.taskIds.sort(), ["1.1", "1.2"],
+    "the review must not prevent its would-be predecessors from running");
+  assert.equal(state.tasks["1.1"]!.status, "complete");
+  assert.equal(state.tasks["1.2"]!.status, "complete");
+  assert.equal(state.tasks["1.9"]!.status, "pending");
+  assert.match(state.tasks["1.9"]!.errorMessage ?? "", /Human review required/);
+
+  // Approving after the fact completes it: the work it reviews now exists.
+  const manifest = JSON.parse(readFileSync(fixture.manifestPath, "utf8")) as ExecutionManifest;
+  writeFileSync(join(fixture.root, "review.md"), "Operator reviewed the delivered work and recorded evidence.");
+  approveHumanTask(fixture.root, manifest.phases[0]!.tasks[2]!, "Reviewer", ["review.md"]);
+  const resumed = await runEngine(engineOptionsFor(fixture, harness, 1000, { autoCommit: false }));
+  assert.equal(resumed.status, "complete");
+  assert.equal(resumed.tasks["1.9"]!.status, "complete");
+});
+
+test("an unapproved review does not defer unrelated work sharing its wave", async () => {
+  const fixture = makeEngineFixture();
+  withTasks(fixture, [implTask("1.1"), implTask("1.2"), reviewTask]);
+  // Concurrency above 1 needs a real commit for the task sandboxes to build from.
+  execFileSync("git", ["init", "-q"], { cwd: fixture.root });
+  execFileSync("git", ["config", "user.email", "forge-test@local"], { cwd: fixture.root });
+  execFileSync("git", ["config", "user.name", "Forge Test"], { cwd: fixture.root });
+  execFileSync("git", ["add", "-A"], { cwd: fixture.root });
+  execFileSync("git", ["commit", "-qm", "seed"], { cwd: fixture.root });
+  const harness = new WritingHarness();
+  const state = await runEngine(engineOptionsFor(fixture, harness, 1000, { autoCommit: false, maxConcurrency: 2 }));
+
+  assert.equal(state.status, "paused");
+  assert.deepEqual(harness.taskIds.sort(), ["1.1", "1.2"]);
+  assert.equal(state.tasks["1.1"]!.status, "complete");
+  assert.equal(state.tasks["1.2"]!.status, "complete");
+  assert.equal(state.tasks["1.9"]!.status, "pending");
+});
+
+test("a run paused for review records the review, not a stop request", async () => {
+  // The post-loop tail writes run.paused for whatever broke the loop. A review
+  // gate that inherited the generic "stop requested" note would send an operator
+  // hunting for a control file or signal that does not exist.
+  const fixture = makeEngineFixture(reviewTask as Partial<ManifestTask>);
+  const harness = new RecordingHarness();
+  await runEngine(engineOptionsFor(fixture, harness, 1000, { autoCommit: false }));
+
+  const paused = readFileSync(join(fixture.root, "docs", "EXECUTION-AUDIT.jsonl"), "utf8")
+    .split("\n").filter(Boolean).map((line) => JSON.parse(line) as { action: string; note?: string })
+    .filter((event) => event.action === "run.paused");
+  assert.equal(paused.length, 1);
+  assert.match(paused[0]!.note ?? "", /Human review required/);
+  assert.doesNotMatch(paused[0]!.note ?? "", /control file or signal/);
+});
+
+test("replaying an unapproved review reports a pause rather than success", async () => {
+  const fixture = makeEngineFixture(reviewTask as Partial<ManifestTask>);
+  const harness = new RecordingHarness();
+  await runEngine(engineOptionsFor(fixture, harness, 1000, { autoCommit: false }));
+
+  const state = await replayTask("1.9", engineOptionsFor(fixture, harness, 1000, { autoCommit: false }) as EngineOptions & { taskId?: string } as never as Parameters<typeof replayTask>[1] & { taskId: string });
+  assert.equal(state.status, "paused");
+  assert.equal(state.tasks["1.9"]!.status, "pending");
+});
+
 test("structured tasks require passing validation even when legacy validation is disabled", async () => {
   const fixture = makeEngineFixture({ expectedOutputs: ["result.txt"], validationCommands: ['node -e "process.exit(1)"'], contract: { version: 1, kind: "implementation", requirements: ["Build a result"], acceptanceCriteria: ["Result passes the test"], constraints: [], references: ["docs/PRD.md"] } });
   const harness: HarnessAdapter = {

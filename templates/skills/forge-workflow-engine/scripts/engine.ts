@@ -381,11 +381,15 @@ async function executeTask(
     if (env.shouldStop()) return { taskId: task.id, record: initial };
     taskReferenceContext(engineRoot, task);
     if (!humanTaskApproved(engineRoot, task)) {
+      // Deliberately not a pause request. The wave loop holds this task pending
+      // and keeps running everything else, then pauses once nothing else is
+      // left - so a review whose dependencies were under-declared in the
+      // feature document still finds its work finished by the time an operator
+      // is asked to look at it. Pausing here instead would strand that work.
       const note = `Human review required for '${task.id}'. Record operator evidence with workflow-engine approve-task, then resume. --yes does not approve human work.`;
-      console.log(`[engine] ${note}`);
-      const paused = { ...initial, errorMessage: note };
-      await env.checkpoint(paused);
-      return { taskId: task.id, record: paused, pauseRequested: true };
+      const pending = { ...initial, errorMessage: note };
+      await env.checkpoint(pending);
+      return { taskId: task.id, record: pending };
     }
     const artifact = task.produces ? store.write({ type: task.produces, category: "work", taskId: task.id, producedBy: "human-reviewer", status: "complete", summary: `Operator evidence verified for ${task.title}`, filesChanged: [task.contract.reviewFile!], inputs: [], payload: { reviewFile: task.contract.reviewFile }, nextActions: [] }) : undefined;
     writeAuditEvent(opts.auditPath, { timestamp: new Date().toISOString(), action: "task.complete", runId: env.runId, taskId: task.id, note: `Human attestation: ${task.contract.reviewFile}` });
@@ -937,6 +941,10 @@ async function runEngineSession(opts: EngineOptions): Promise<WorkflowState> {
     }
   };
 
+  // The tail below records why a run ended, so each break must supply the truth
+  // rather than inheriting a generic "stop requested" note.
+  let pauseNote = "Stop/pause requested (control file or signal)";
+
   const runEntry = async (entry: FlatTask, claimed: Set<string>): Promise<void> => {
     // A stop/pause (or an earlier failure in this wave) leaves queued tasks
     // pending so a later run resumes them instead of starting them now.
@@ -987,16 +995,49 @@ async function runEngineSession(opts: EngineOptions): Promise<WorkflowState> {
     }
 
     const ready = ownerUniqueReady(nextReadyTasks(manifest, state));
+    // A human review with no operator attestation is a *wait*, not a stop. If it
+    // paused the run the moment it was dispatched, a review whose dependencies
+    // were under-declared in the feature document would park the whole run
+    // before the very work it reviews existed - a deadlock the operator cannot
+    // approve their way out of. Holding it pending lets every other task finish;
+    // the run pauses below only once nothing else is left to do, at which point
+    // there is always something to review.
+    const waitingForApproval = ready.filter((entry) =>
+      entry.task.contract?.kind === "human-review" && !humanTaskApproved(opts.repoRoot, entry.task));
+    const dispatchable = ready.filter((entry) => !waitingForApproval.includes(entry));
 
-    if (ready.length === 0) {
+    if (dispatchable.length === 0) {
+      if (waitingForApproval.length > 0) {
+        pauseNote = `Human review required for ${waitingForApproval.map((entry) => entry.task.id).join(", ")}. Record operator evidence with workflow-engine approve-task (or the Console), then resume. --yes does not approve human work.`;
+        console.log(`[engine] ${pauseNote}`);
+        state = { ...state, status: "paused" };
+        saveState(opts.statePath, state);
+        break;
+      }
       if (hasFailed(state)) break;
       console.error("[engine] Deadlock: no tasks are ready but workflow is not complete. Check dependency graph.");
       state = { ...state, status: "failed", blockers: [...state.blockers, "Dependency deadlock detected"] };
       break;
     }
 
+    if (waitingForApproval.length > 0) {
+      const held = waitingForApproval.map((entry) => entry.task.id);
+      console.log(`[engine] Holding ${held.join(", ")} for operator review; continuing with ${dispatchable.length} other task(s).`);
+      // Record why on the tasks themselves, so the Console row and PROGRESS.md
+      // explain a pending review that is not simply waiting its turn.
+      for (const entry of waitingForApproval) {
+        state = withTaskRecord(state, {
+          ...state.tasks[entry.task.id]!,
+          errorMessage: `Human review required for '${entry.task.id}'. Record operator evidence with workflow-engine approve-task, then resume. --yes does not approve human work.`,
+        });
+      }
+      saveState(opts.statePath, state);
+    }
+
     // Phase bookkeeping for every phase entering this wave (manifest order).
-    for (const entry of ready) {
+    // Driven by what actually starts, so a phase whose only task is a held
+    // review does not announce itself as begun.
+    for (const entry of dispatchable) {
       if (entry.phaseId !== currentPhaseId) {
         currentPhaseId = entry.phaseId;
         state = setCurrentPhase(state, currentPhaseId);
@@ -1013,7 +1054,7 @@ async function runEngineSession(opts: EngineOptions): Promise<WorkflowState> {
     // Paths already integrated by a task in this wave, so two concurrent tasks
     // that touched the same file fail loudly instead of losing an edit.
     const claimed = new Set<string>();
-    await mapLimit(ready, concurrency.effective, (entry) => runEntry(entry, claimed));
+    await mapLimit(dispatchable, concurrency.effective, (entry) => runEntry(entry, claimed));
   }
 
   if (shouldStop() && !isComplete(manifest, state)) {
@@ -1024,9 +1065,9 @@ async function runEngineSession(opts: EngineOptions): Promise<WorkflowState> {
       timestamp: new Date().toISOString(),
       action: "run.paused",
       runId: state.runId,
-      note: "Stop/pause requested (control file or signal)",
+      note: pauseNote,
     });
-    console.log("[engine] Paused after current task.");
+    console.log(`[engine] ${pauseNote}`);
   } else if (hasFailed(state)) {
     state = { ...state, status: "failed" };
     writeAuditEvent(opts.auditPath, {
@@ -1123,6 +1164,13 @@ async function replayTaskSession(taskId: string, opts: EngineOptions): Promise<W
   });
   state = withTaskRecord(state, outcome.record);
   if (outcome.pauseRequested) state = { ...state, status: "paused" };
+  // A replay is one task, so there is no other work to hold back for: an
+  // unapproved review replayed directly has to report itself as the pause it
+  // is, rather than returning with the task still pending and the run's status
+  // untouched.
+  if (task.contract?.kind === "human-review" && state.tasks[taskId]?.status === "pending") {
+    state = { ...state, status: "paused" };
+  }
   if ((state.status === "paused" || opts.signal?.aborted) && !isComplete(manifest, state)) {
     state = { ...state, status: "paused" };
     writeAuditEvent(opts.auditPath, {
