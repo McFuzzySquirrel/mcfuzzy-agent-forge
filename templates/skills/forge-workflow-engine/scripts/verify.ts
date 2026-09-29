@@ -49,15 +49,20 @@ export function isEngineOwnedPath(relPath: string): boolean {
 export const ENGINE_METADATA_ROOT = "docs/";
 
 /**
- * Human-authored requirements a task is told to read, plus the operator's own
- * review evidence.
+ * Human-authored requirements a task is told to read.
  *
  * A task sandbox is a checkout of HEAD, so a dirty copy of one of these would be
  * silently stale inside it while the operator sees the edit. Everything else
  * under `docs/` is generated state - engine settings, the compiled manifest, the
- * responsibility matrix, progress and audit logs, authoring artifacts - which the
- * engine has already resolved into the task's prompt, and which is therefore
+ * responsibility matrix, progress and audit logs, authoring artifacts, review
+ * evidence - which the engine has already resolved, and which is therefore
  * copied into the sandbox rather than treated as a reason to refuse the run.
+ *
+ * `docs/reviews/` is deliberately *not* here. Review evidence is operator input
+ * for the engine, not something a task builds from, and a human-review task is
+ * never sandboxed - it reads the fresh attestation from the engine root. Listing
+ * it as a requirement made the Console's approve-and-resume action refuse to
+ * start the very run it had just approved.
  *
  * This is deliberately a short list of requirements rather than a list of
  * managed files: the forge tooling rewrites a dozen generated `docs/` paths, and
@@ -67,7 +72,6 @@ const REQUIREMENT_PREFIXES = [
   "docs/PRD.md",
   "docs/IDEA.md",
   "docs/features/",
-  "docs/reviews/",
 ];
 
 /** True for a path whose uncommitted content a task would read as truth. */

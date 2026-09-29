@@ -155,6 +155,32 @@ export function allDepsComplete(
   return deps.every((depId) => isTaskDone(state.tasks[depId]?.status));
 }
 
+/**
+ * Every prerequisite of `taskId` that is not yet complete or skipped, using the
+ * same direct-dependency plus transitive-phase-dependency rule `nextReadyTasks`
+ * dispatches on.
+ *
+ * This is the single definition of "is this task reviewable yet". The Console
+ * surfaces it, and both approval surfaces refuse to record an attestation until
+ * it is empty, so the engine's dispatch gate, the Console's affordance, and the
+ * approval guard cannot drift into disagreeing about what is ready.
+ */
+export function unmetPrerequisites(
+  manifest: ExecutionManifest,
+  state: WorkflowState,
+  taskId: string,
+): string[] {
+  const flat = flattenManifest(manifest);
+  const entry = flat.find((candidate) => candidate.task.id === taskId);
+  if (!entry) return [];
+
+  const phase = manifest.phases[entry.phaseIndex];
+  const phaseDependencies = (phase?.dependencies ?? []).flatMap((id) =>
+    (manifest.phases.find((candidate) => candidate.id === id)?.tasks ?? []).map((task) => task.id));
+  const prerequisites = [...new Set([...(entry.task.dependencies ?? []), ...phaseDependencies])];
+  return prerequisites.filter((id) => !isTaskDone(state.tasks[id]?.status));
+}
+
 function findAgentForTask(agents: AgentDescriptor[], ownerName: string | undefined): AgentDescriptor | undefined {
   if (!ownerName) return undefined;
   return agents.find((a) => a.name === ownerName);
@@ -845,7 +871,11 @@ async function runEngineSession(opts: EngineOptions): Promise<WorkflowState> {
   if (concurrency.notice) console.warn(`[engine] ${concurrency.notice}`);
 
   if (concurrency.sandboxMode) {
-    const preflight = await preflightSandboxMode(opts.repoRoot);
+    const preflight = await preflightSandboxMode(opts.repoRoot, {
+      reviewFiles: flattenManifest(manifest)
+        .map(({ task }) => task.contract?.reviewFile)
+        .filter((file): file is string => typeof file === "string"),
+    });
     if (!preflight.ok) {
       const message = preflight.reason ?? "Parallel task execution is not available in this repository.";
       console.error(`[engine] ${message}`);

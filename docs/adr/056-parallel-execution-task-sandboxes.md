@@ -92,7 +92,7 @@ refuses parallel execution and names the exact paths — but the rule is about
 **consequence, not tidiness**:
 
 - **Human-authored requirements block the run**: `docs/PRD.md`, `docs/IDEA.md`,
-  `docs/features/**`, and `docs/reviews/**`. A dirty copy of one of these is
+  `docs/features/**`. A dirty copy of one of these is
   exactly what a task is told to read, so silently handing the agent the
   committed copy would be a correctness failure.
 - **Everything else under `docs/` is tolerated**, because it is generated state
@@ -175,6 +175,13 @@ sandboxMode          = effectiveConcurrency > 1
   one warm `opencode serve` is bound to a single project directory and cannot
   serve the several worktrees a parallel wave uses. An operator-supplied
   `--attach <url>` is still honoured as given: they own that server.
+- Review records are operator input for the engine, not something a task builds
+  from, so `docs/reviews/**` is tolerated rather than treated as a requirement.
+  A human-review task reads its attestation from the engine root, and the
+  Console's approve-and-resume action writes that attestation before starting the
+  run; blocking on it made the form refuse the run it had just approved. An
+  approval recorded outside `docs/` is named as a review record in the refusal
+  so "commit your work" is not the wrong instruction for it.
 - Human-review tasks are never sandboxed. They do not invoke a harness and read
   operator evidence from the engine root.
 

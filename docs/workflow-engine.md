@@ -500,14 +500,22 @@ parallel and names the exact paths. The rule is about consequence, not tidiness:
 
 | Uncommitted path | Result |
 |---|---|
-| `docs/PRD.md`, `docs/IDEA.md`, `docs/features/**`, `docs/reviews/**` | **blocks the run** - this is what a task is told to read |
-| anything else under `docs/` (engine config, manifest, matrix, progress, audit, authoring artifacts) | tolerated, and copied into the sandbox so the task sees your current version |
+| `docs/PRD.md`, `docs/IDEA.md`, `docs/features/**` | **blocks the run** - this is what a task is told to read |
+| anything else under `docs/` (engine config, manifest, matrix, progress, audit, authoring artifacts, review records) | tolerated, and copied into the sandbox so the task sees your current version |
 | anything outside `docs/` (your code and configuration) | **blocks the run** - a sandbox at `HEAD` cannot represent it |
 
 ```bash
 # will fail with the exact uncommitted paths listed
 FORGE_ENGINE_CONCURRENCY=3 npm run workflow-engine -- run
 ```
+
+Review records are deliberately tolerated rather than listed as requirements. A
+human-review task is never sandboxed - it reads the attestation from the engine
+root - and the Console's approve-and-resume action writes that attestation and
+then immediately starts the run, so treating the approval as uncommitted work to
+commit first would make the form refuse the run it had just approved. If an
+approval lands outside `docs/`, the refusal names it as a review record rather
+than as work in progress.
 
 Changing a Console setting rewrites a generated `docs/` file, which is why
 generated state is exempt rather than blocking.

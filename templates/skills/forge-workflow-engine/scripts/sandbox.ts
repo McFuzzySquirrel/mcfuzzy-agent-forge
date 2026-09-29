@@ -50,6 +50,16 @@ export interface SandboxPreflight {
   reason?: string;
 }
 
+export interface SandboxPreflightOptions {
+  /**
+   * `reviewFile` paths declared by human-review tasks in this manifest. A dirty
+   * path among these is almost always an approval the operator has just
+   * recorded rather than abandoned work, so the refusal says so instead of
+   * only asking for a clean tree.
+   */
+  reviewFiles?: readonly string[];
+}
+
 export interface Sandbox {
   taskId: string;
   /** Absolute path of the task's worktree. */
@@ -174,13 +184,18 @@ export async function sweepStaleSandboxes(repoRoot: string): Promise<number> {
  * than work in progress, and every such path is copied into the sandbox so the
  * task reads what the operator reads. The exception is the human-authored
  * requirements a task is explicitly told to read - the PRD, the original idea,
- * the feature documents, and review evidence. A dirty copy of one of those would
- * be silently stale inside every sandbox, so it blocks the run instead.
+ * and the feature documents. A dirty copy of one of those would be silently
+ * stale inside every sandbox, so it blocks the run instead. Review evidence is
+ * not such a requirement: it is operator input for the engine, and a
+ * human-review task reads it from the engine root, never from a sandbox.
  *
  * Anything outside `docs/` is the operator's own code or configuration and always
  * blocks, because a sandbox at HEAD cannot see it.
  */
-export async function preflightSandboxMode(repoRoot: string): Promise<SandboxPreflight> {
+export async function preflightSandboxMode(
+  repoRoot: string,
+  options: SandboxPreflightOptions = {},
+): Promise<SandboxPreflight> {
   if (!existsSync(join(repoRoot, ".git"))) {
     return { ok: false, reason: "Parallel task execution needs a git repository: there is no .git in the repository root. Commit the project, or run with --concurrency 1." };
   }
@@ -199,6 +214,19 @@ export async function preflightSandboxMode(repoRoot: string): Promise<SandboxPre
   if (blocking.length > 0) {
     const shown = blocking.slice(0, 10).join(", ");
     const more = blocking.length > 10 ? ` (+${blocking.length - 10} more)` : "";
+    const approvals = blocking.filter((path) => new Set(options.reviewFiles ?? []).has(path));
+    // A just-recorded approval is the one case where "commit your dirty files"
+    // reads as a non-sequitur: the operator did not leave work behind, the
+    // review they filed is what is dirty, and the engine will commit it with the
+    // review task. Say that instead.
+    if (approvals.length > 0) {
+      return {
+        ok: false,
+        reason: `Parallel task execution needs a clean working tree, and these look like human-review records rather than unfinished work: ${approvals.join(", ")}. `
+          + "The engine commits a review task's attestation with the task, so either let the run start with them committed, "
+          + "or finish this task at --concurrency 1.",
+      };
+    }
     return {
       ok: false,
       reason: `Parallel task execution requires a clean working tree, but these paths are uncommitted: ${shown}${more}. `
