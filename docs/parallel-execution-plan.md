@@ -89,17 +89,23 @@ state itself. It owns a `TaskRecord`, calls `checkpoint(record)`, and returns
 ### 6. Preflight and lifecycle
 
 Before the first sandboxed wave, `preflightSandboxMode` checks that the repository
-has at least one commit and that `git status --porcelain -uall` is empty outside
-`docs/`. Violations fail the run with the exact paths and a remedy.
+has at least one commit and that nothing a task would read as truth is
+uncommitted. Violations fail the run with the exact paths and a remedy.
 
-Untracked engine metadata under `docs/` (`EXECUTION-MANIFEST.json`,
-`engine-config.json`, `reviews/`, `artifacts/`) is copied into each sandbox so
-agents can read it. Stale `.forge-sandboxes/*` from a crashed run are swept, then
-`git worktree prune`. Cleanup runs in `finally`.
+The rule is about consequence, not tidiness. Human-authored requirements
+(`docs/PRD.md`, `docs/IDEA.md`, `docs/features/**`, `docs/reviews/**`) and
+anything outside `docs/` block the run. Everything else under `docs/` is
+generated state and is tolerated: the working tree's `docs/` delta
+(`EXECUTION-MANIFEST.json`, `engine-config.json`, the responsibility matrix,
+authoring state, `reviews/`, `artifacts/`, progress and audit logs) is copied into
+each sandbox so agents read what the operator reads. Stale `.forge-sandboxes/*`
+from a crashed run are swept, then `git worktree prune`. Cleanup runs in `finally`.
 
-> The execution file is mirrored from the sandbox back into the engine root after
-> each attempt rather than symlinked: `executionRoot()` rejects a symlinked
-> `docs/artifacts` directory.
+> Listed as *requirements* rather than as *managed files* on purpose: the forge
+> tooling rewrites a dozen generated `docs/` paths, and a managed-file list drifts
+> as soon as authoring gains another. The Console persists a concurrency choice by
+> rewriting `docs/engine-config.json` in place, so treating a tracked-and-modified
+> `docs/` file as blocking would make it impossible to enable concurrency.
 
 ### 7. Concurrency resolution and keep-alive
 

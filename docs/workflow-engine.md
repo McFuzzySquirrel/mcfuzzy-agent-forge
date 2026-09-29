@@ -496,26 +496,33 @@ Three things make the sandbox usable and safe:
 #### Requirements for parallel runs
 A worktree is built from a commit, so it cannot see uncommitted work. Rather
 than silently handing an agent a stale tree, the engine **refuses** to run in
-parallel and names the exact paths. Tolerated: the engine's own `docs/` output
-and untracked files under `docs/`, which are copied into the sandbox. Not
-tolerated: any modified or untracked file elsewhere, including a hand-edited
-`docs/PRD.md`.
+parallel and names the exact paths. The rule is about consequence, not tidiness:
+
+| Uncommitted path | Result |
+|---|---|
+| `docs/PRD.md`, `docs/IDEA.md`, `docs/features/**`, `docs/reviews/**` | **blocks the run** - this is what a task is told to read |
+| anything else under `docs/` (engine config, manifest, matrix, progress, audit, authoring artifacts) | tolerated, and copied into the sandbox so the task sees your current version |
+| anything outside `docs/` (your code and configuration) | **blocks the run** - a sandbox at `HEAD` cannot represent it |
 
 ```bash
 # will fail with the exact uncommitted paths listed
 FORGE_ENGINE_CONCURRENCY=3 npm run workflow-engine -- run
 ```
 
+Changing a Console setting rewrites a generated `docs/` file, which is why
+generated state is exempt rather than blocking.
+
 Two consequences to plan for:
 
-- **Commit or stash before running in parallel**, and do not combine
-  `--concurrency > 1` with `--no-auto-commit`: an uncommitted tree is exactly
-  what a sandbox cannot represent.
+- **Commit or stash your code and requirements before running in parallel**, and
+  do not combine `--concurrency > 1` with `--no-auto-commit`: an uncommitted tree
+  is exactly what a sandbox cannot represent.
 - **Keep-alive is downgraded to a cold start per task** when a run is parallel,
   because one warm `opencode serve` serves a single project directory and cannot
   serve several worktrees. An explicit `--attach <url>` is still honoured as
   given, because you own that server.
-- **Disk**: N concurrent worktrees, each a full checkout of `HEAD`.
+- **Disk**: N concurrent worktrees, each a full checkout of `HEAD`. Gitignored
+  build inputs are symlinked, not copied, so the real cost is the tracked tree.
 
 Sandboxes live in `.git/info/exclude`, so a run never edits your tracked
 `.gitignore`. Worktrees left by a killed engine are swept before the next run,

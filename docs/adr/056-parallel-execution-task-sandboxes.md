@@ -79,24 +79,40 @@ Two supporting rules make a worktree usable:
   snapshot baseline is taken *after* seeding, and seeded paths are additionally
   filtered out of the change set, so nothing the engine provided can be
   attributed to the task.
-- **Untracked engine metadata under `docs/` is copied in** (the compiled
-  manifest, engine config, human-review evidence, generated artifacts) so the
-  task reads the same versions the operator does.
+- **The working tree's `docs/` delta is copied in** (the compiled manifest, engine
+  config, responsibility matrix, authoring state, progress and audit logs,
+  human-review evidence, generated artifacts) so the task reads what the operator
+  reads, not what was last committed. Only changed paths are copied, so a file
+  that already matches `HEAD` is left alone.
 
-### 2. The working tree must be clean
+### 2. The working tree must be clean where a task would read the difference
 
-A worktree is built from a commit, so it cannot see uncommitted work. Rather than
-silently handing an agent a stale tree, the engine **refuses** parallel
-execution and names the exact paths. Only two categories are tolerated:
+A worktree is built from a commit, so it cannot see uncommitted work. The engine
+refuses parallel execution and names the exact paths — but the rule is about
+**consequence, not tidiness**:
 
-- engine-owned paths the run itself writes (`docs/WORKFLOW-STATE.json`,
-  `docs/EXECUTION-AUDIT.jsonl`, `docs/PROGRESS.md`, `docs/artifacts/`, …);
-- *untracked* files under `docs/`, which are copied into the sandbox.
+- **Human-authored requirements block the run**: `docs/PRD.md`, `docs/IDEA.md`,
+  `docs/features/**`, and `docs/reviews/**`. A dirty copy of one of these is
+  exactly what a task is told to read, so silently handing the agent the
+  committed copy would be a correctness failure.
+- **Everything else under `docs/` is tolerated**, because it is generated state
+  the engine has already resolved into the task's prompt, and it is copied into
+  the sandbox so the task sees the current version.
+- **Anything outside `docs/` blocks the run**: that is the operator's own code and
+  configuration, which a sandbox at `HEAD` cannot represent.
 
-A modified tracked file anywhere - including a hand-edited `docs/PRD.md` -
-blocks the run, because a sandbox would show the task the committed copy while
-the operator sees the edit. The failure message names the paths and offers
-`--concurrency 1`. A repository with no commit is refused for the same reason.
+This is deliberately a short list of *requirements* rather than a list of managed
+files. The forge tooling rewrites a dozen generated `docs/` paths —
+`engine-config.json`, `authoring-config.json`, `authoring-state.json`,
+`EXECUTION-MANIFEST.json`, `agent-responsibility-matrix.md`,
+`AUTHORING-EVENTS.jsonl`, the `SKILL-*` authoring artifacts — and a managed-file
+list drifts out of date as soon as authoring gains another. It also matters
+operationally: the Console persists a concurrency choice by rewriting
+`docs/engine-config.json` in place, so treating a tracked-and-modified `docs/`
+file as blocking would make it impossible to enable concurrency, since you would
+have to commit the very setting that turns it on before the run would start.
+
+A repository with no commit is refused for the same reason as a dirty tree.
 
 Consequence worth stating plainly: `--concurrency > 1` and `--no-auto-commit`
 are not combinable, because an uncommitted tree is exactly what a sandbox
@@ -190,13 +206,15 @@ behind.
 
 - **Disk and setup.** N concurrent worktrees, each a full checkout of HEAD.
   Opt-in, but real for a large repository.
-- **The clean-tree requirement is strict.** An operator with uncommitted work
-  must commit or stash before running in parallel, and cannot combine parallel
-  execution with `--no-auto-commit`.
+- **The clean-tree requirement is strict for code and requirements.** An operator
+  with uncommitted work must commit or stash before running in parallel, and
+  cannot combine parallel execution with `--no-auto-commit`. Generated `docs/`
+  state is exempt and seeded, so routine tooling churn does not block a run.
 - **Cold start per task in parallel mode.** The warm-server optimisation is
   unavailable exactly when a run is longest.
-- **A sandbox sees HEAD.** Anything the operator has not committed is invisible
-  to the task; the preflight turns that from a silent divergence into a refusal.
+- **A sandbox sees HEAD for everything except `docs/`.** Uncommitted source and
+  requirement edits are invisible to the task; the preflight turns that from a
+  silent divergence into a refusal.
 - **A failing task's sandbox work is discarded.** It is not integrated, so a
   failed task must be replayed to recover its partial work. This matches the
   pre-existing behaviour of a failed task, which never auto-committed.

@@ -35,16 +35,20 @@ Detailed release and change notes for MyForge.
   sandbox integration, and git all run on one serialized queue. A task is
   durable the moment it finishes, so a crash mid-wave never re-runs completed
   work. This fixes CR-01 from the September 2026 codebase review.
-- **Two operator-visible requirements for parallel runs.** The working tree must
-  be clean: a worktree is built from a commit and cannot see uncommitted work, so
-  the engine refuses to start and names the exact offending paths rather than
-  quietly handing a task a stale tree. Engine-generated `docs/` output and
-  untracked files under `docs/` (the compiled manifest, engine config, review
-  evidence) are tolerated and copied into each sandbox. Consequently,
-  **`--concurrency > 1` cannot be combined with `--no-auto-commit`**, and
-  **keep-alive is downgraded to a cold start per task** when a run is parallel —
-  one warm `opencode serve` serves one project directory and cannot serve several
-  worktrees. An explicit `--attach <url>` is still honored exactly as given.
+- **Two operator-visible requirements for parallel runs.** Your code and your
+  requirements must be committed: a worktree is built from a commit and cannot
+  see uncommitted work, so the engine refuses to start and names the exact
+  offending paths rather than quietly handing a task a stale tree. Uncommitted
+  `docs/PRD.md`, `docs/IDEA.md`, `docs/features/**` and `docs/reviews/**` block
+  the run for the same reason — that is what a task is told to read. Everything
+  else under `docs/` is generated state (engine config, compiled manifest,
+  responsibility matrix, progress, audit, authoring artifacts) and is tolerated
+  and copied into each sandbox, so changing a Console setting does not block a
+  run. Consequently, **`--concurrency > 1` cannot be combined with
+  `--no-auto-commit`**, and **keep-alive is downgraded to a cold start per task**
+  when a run is parallel — one warm `opencode serve` serves one project directory
+  and cannot serve several worktrees. An explicit `--attach <url>` is still
+  honored exactly as given.
 - **Same-owner serialization is unchanged**: at most one task per agent runs per
   wave, and a harness that does not declare `supportsConcurrency` still falls
   back to a single task at a time (with a warning, not a failure).

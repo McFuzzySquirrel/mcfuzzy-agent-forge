@@ -36,17 +36,45 @@ const ENGINE_OWNED_PREFIXES = [
 ];
 
 /**
- * True for a path the engine writes on the operator's behalf. Used to keep
- * engine output out of `outputFiles` and to let the sandbox preflight tell
- * engine metadata apart from real work in a dirty working tree.
+ * True for a path the engine writes on the operator's behalf. Kept separate
+ * from `isRequirementPath` on purpose: this answers "may this count as a task's
+ * output?", which is about attribution and must not change for a sequential run.
  */
 export function isEngineOwnedPath(relPath: string): boolean {
   const normalized = relPath.replace(/\\/g, "/");
   return ENGINE_OWNED_PREFIXES.some((prefix) => normalized === prefix || normalized.startsWith(prefix));
 }
 
-/** Everything the engine generates lives under docs/; sandboxes seed from there. */
+/** Everything the engine and the authoring flow generate lives under docs/. */
 export const ENGINE_METADATA_ROOT = "docs/";
+
+/**
+ * Human-authored requirements a task is told to read, plus the operator's own
+ * review evidence.
+ *
+ * A task sandbox is a checkout of HEAD, so a dirty copy of one of these would be
+ * silently stale inside it while the operator sees the edit. Everything else
+ * under `docs/` is generated state - engine settings, the compiled manifest, the
+ * responsibility matrix, progress and audit logs, authoring artifacts - which the
+ * engine has already resolved into the task's prompt, and which is therefore
+ * copied into the sandbox rather than treated as a reason to refuse the run.
+ *
+ * This is deliberately a short list of requirements rather than a list of
+ * managed files: the forge tooling rewrites a dozen generated `docs/` paths, and
+ * a list of those drifts out of date the moment authoring gains a new one.
+ */
+const REQUIREMENT_PREFIXES = [
+  "docs/PRD.md",
+  "docs/IDEA.md",
+  "docs/features/",
+  "docs/reviews/",
+];
+
+/** True for a path whose uncommitted content a task would read as truth. */
+export function isRequirementPath(relPath: string): boolean {
+  const normalized = relPath.replace(/\\/g, "/");
+  return REQUIREMENT_PREFIXES.some((prefix) => normalized === prefix || normalized.startsWith(prefix));
+}
 
 export interface VerifyOptions {
   repoRoot: string;

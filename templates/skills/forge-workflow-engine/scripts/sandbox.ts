@@ -38,7 +38,7 @@ import { dirname, isAbsolute, join, relative, resolve, sep } from "node:path";
 
 import { runCommand } from "./harness/run.ts";
 import { taskFileId } from "./task-execution.ts";
-import { ENGINE_METADATA_ROOT, isEngineOwnedPath, parseWorktreeEntries } from "./verify.ts";
+import { ENGINE_METADATA_ROOT, isRequirementPath, parseWorktreeEntries } from "./verify.ts";
 
 /** Repository-relative directory that holds live and stale task sandboxes. */
 export const SANDBOX_DIRNAME = ".forge-sandboxes";
@@ -167,13 +167,18 @@ export async function sweepStaleSandboxes(repoRoot: string): Promise<number> {
 
 /**
  * Refuse parallel execution unless a sandbox can faithfully stand in for the
- * engine root: the repository needs a resolvable HEAD, and the working tree
- * must be clean apart from engine metadata under `docs/`.
+ * engine root: the repository needs a resolvable HEAD, and the working tree must
+ * be clean apart from generated `docs/` state.
  *
- * Only *untracked* `docs/` files are tolerated, and those are copied into each
- * sandbox, so the task reads the same versions the operator does. A modified
- * tracked file anywhere - including a hand-edited `docs/PRD.md` - blocks the
- * run instead of silently handing the task the committed copy.
+ * Everything under `docs/` is tolerated because it is regenerated state rather
+ * than work in progress, and every such path is copied into the sandbox so the
+ * task reads what the operator reads. The exception is the human-authored
+ * requirements a task is explicitly told to read - the PRD, the original idea,
+ * the feature documents, and review evidence. A dirty copy of one of those would
+ * be silently stale inside every sandbox, so it blocks the run instead.
+ *
+ * Anything outside `docs/` is the operator's own code or configuration and always
+ * blocks, because a sandbox at HEAD cannot see it.
  */
 export async function preflightSandboxMode(repoRoot: string): Promise<SandboxPreflight> {
   if (!existsSync(join(repoRoot, ".git"))) {
@@ -187,20 +192,18 @@ export async function preflightSandboxMode(repoRoot: string): Promise<SandboxPre
   if (status.status !== 0) {
     return { ok: false, reason: "git could not be queried in the repository root, so task sandboxes cannot be built. Run with --concurrency 1." };
   }
-  const blocking = parseWorktreeEntries(status.stdout)
-    .filter((entry) => {
-      if (entry.path === SANDBOX_DIRNAME || isEngineOwnedPath(entry.path)) return false;
-      // Untracked docs/ files are engine metadata and are copied into the sandbox.
-      return !(entry.code === "??" && entry.path.startsWith(ENGINE_METADATA_ROOT));
-    })
-    .map((entry) => entry.path)
+  const blocking = [...new Set(parseWorktreeEntries(status.stdout).map((entry) => entry.path))]
+    .filter((path) => path !== SANDBOX_DIRNAME)
+    .filter((path) => isRequirementPath(path) || !path.startsWith(ENGINE_METADATA_ROOT))
     .sort();
   if (blocking.length > 0) {
     const shown = blocking.slice(0, 10).join(", ");
     const more = blocking.length > 10 ? ` (+${blocking.length - 10} more)` : "";
     return {
       ok: false,
-      reason: `Parallel task execution requires a clean working tree, but these paths are uncommitted: ${shown}${more}. Commit or stash them, or run with --concurrency 1.`,
+      reason: `Parallel task execution requires a clean working tree, but these paths are uncommitted: ${shown}${more}. `
+        + "Task sandboxes start from the last commit, so uncommitted requirements would be invisible to the agents. "
+        + "Commit or stash them, or run with --concurrency 1.",
     };
   }
   return { ok: true };
@@ -344,24 +347,34 @@ async function linkBuildInputs(repoRoot: string, sandbox: string): Promise<strin
 }
 
 /**
- * Copies the engine's own `docs/` output into the sandbox: the compiled
- * manifest, the engine config, human-review evidence, and any generated
- * artifacts. These are never tracked, so a worktree at HEAD does not have them,
- * and a task that reads them must see the current versions.
+ * Copies the engine's `docs/` output into the sandbox so the task reads the same
+ * versions the operator does: the compiled manifest, engine config, authoring
+ * state, progress and audit logs, human-review evidence, and any generated
+ * artifacts.
+ *
+ * Driven by `git status` rather than `ls-files --others` so a file that is
+ * *tracked and modified* is seeded too. Copying only untracked files would let
+ * a task silently read HEAD's copy of a settings file the operator has just
+ * changed. Paths that no longer exist (deletions) and directory entries are
+ * skipped, and the snapshot baseline is taken after this runs, so nothing seeded
+ * here is ever attributed to the task.
  */
 async function seedEngineMetadata(repoRoot: string, sandbox: string): Promise<string[]> {
-  const ignored = await gitPaths(repoRoot, ["ls-files", "--others", "--ignored", "--exclude-standard", "--directory", "-z"]);
-  const untracked = await gitPaths(repoRoot, ["ls-files", "--others", "--exclude-standard", "-z"]);
+  const status = await git(repoRoot, ["status", "--porcelain", "-z", "--untracked-files=all"]);
+  const entries = status.status === 0 ? parseWorktreeEntries(status.stdout) : [];
   const seeded: string[] = [];
-  for (const raw of [...ignored, ...untracked]) {
-    const relPath = raw.replace(/\/$/, "");
-    if (!relPath.startsWith(ENGINE_METADATA_ROOT)) continue;
-    const source = join(repoRoot, relPath);
-    const target = join(sandbox, relPath);
-    if (!existsSync(source) || existsSync(target)) continue;
+  for (const entry of entries) {
+    if (!entry.path.startsWith(ENGINE_METADATA_ROOT)) continue;
+    const source = join(repoRoot, entry.path);
+    const target = join(sandbox, entry.path);
+    // Deltas only: a path unchanged in the working tree is not listed, so a file
+    // that already matches HEAD is left alone, and one that differs is
+    // overwritten even though the sandbox already holds a committed copy.
+    if (!existsSync(source)) continue;
     mkdirSync(dirname(target), { recursive: true });
-    cpSync(source, target, { recursive: true, force: true });
-    seeded.push(relPath);
+    if (lstatSync(source).isDirectory()) cpSync(source, target, { recursive: true, force: true });
+    else copyFileSync(source, target);
+    seeded.push(entry.path);
   }
   return seeded;
 }
