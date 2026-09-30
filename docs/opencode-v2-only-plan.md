@@ -21,10 +21,16 @@ code changed. Three of its premises turned out to be wrong.
 | v2 removed `run --attach` | Confirmed; replaced by `--server <url>` and `--standalone` |
 | `serve` gained mandatory auth | Confirmed — HTTP Basic, user `opencode`, password from `OPENCODE_SERVER_PASSWORD` or generated to the log |
 | A trailing path is swallowed into the prompt | Confirmed (`run [flags] [<message...>]`) |
-| **Project dir travels via `PWD`** | **False — v2 resolves the project from `process.cwd()` and ignores `PWD`** |
+| **Project dir travels via `PWD`** | **Inverted — v2 resolves the project from `process.env.PWD ?? process.cwd()`, so `PWD` outranks `cwd`. See [ADR-059](adr/059-pwd-aligned-spawn-environment.md), which corrects this row.** |
 | Keep-alive must be fully retired | Flags are dead, but the capability is still buildable on v2 via `serve --port` + `run --server`. Full retirement was a deliberate choice, not a forced consequence. |
 
 ### The `PWD` claim was wrong
+
+> **Corrected by [ADR-059](adr/059-pwd-aligned-spawn-environment.md).** The
+> conclusion in this section is inverted: all three measurements launched with an
+> inherited `PWD` that already matched `cwd`, so they could not distinguish the
+> two. v2 prefers `process.env.PWD`. Both are now set together. The text below is
+> preserved as the historical record of this migration.
 
 Measured three ways:
 
@@ -74,7 +80,10 @@ silent wrong-project run.
   argv carries neither `--dir` nor `--attach`; the recorded `cwd` is the repo
   root and `PWD` is *not* what selects the project; and a sandbox worktree is
   selected by `cwd` without leaking into argv. They use a shim that records argv,
-  `cwd`, and `PWD` so project selection is directly observable.
+  `cwd`, and `PWD` so project selection is directly observable. **(The second of
+  these asserted the inverted invariant and was rewritten by
+  [ADR-059](adr/059-pwd-aligned-spawn-environment.md); it now asserts that a
+  stale inherited `PWD` is corrected.)**
 
 ### Launcher — `scripts/forge-launcher/scripts/`
 

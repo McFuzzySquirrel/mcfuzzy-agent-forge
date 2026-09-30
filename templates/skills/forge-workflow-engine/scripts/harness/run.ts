@@ -20,7 +20,12 @@ export interface RunCommandOptions {
   shell?: boolean;
   timeoutMs: number;
   maxBufferBytes: number;
-  /** Extra environment variables merged over `process.env`. */
+  /**
+   * Extra environment variables merged over `process.env`.
+   *
+   * A child is never handed a `PWD` that disagrees with `cwd`; see
+   * `childEnv`. Passing `PWD` here is therefore pointless: `cwd` wins.
+   */
   env?: NodeJS.ProcessEnv;
   signal?: AbortSignal;
   /** When present, the invocation (and effective invocation) is logged before launch. */
@@ -39,6 +44,24 @@ export interface RunCommandResult {
   /** Human-readable failure reason (spawn error, timeout, or buffer overflow). */
   error?: string;
   failureKind?: TaskFailureKind;
+}
+
+/**
+ * Builds the environment a child is launched with.
+ *
+ * `cwd` alone is not enough, because a child that trusts `$PWD` resolves its
+ * project from the *inherited* `PWD` and ignores the working directory it was
+ * given. OpenCode v2 is exactly that: its `run` handler computes
+ * `process.env.PWD ?? process.cwd()`, so a stale `PWD` inherited from the shell
+ * that started the engine outranks the correct `cwd` and every task runs against
+ * the wrong project (ADR-059). The engine is normally launched from its own
+ * package directory, so that stale `PWD` names a different project entirely.
+ *
+ * So a child is only ever launched with `PWD` equal to its `cwd`: `cwd` fixes
+ * the filesystem, `PWD` is corrected to match it, and the two cannot disagree.
+ */
+function childEnv(cwd: string, extra?: NodeJS.ProcessEnv): NodeJS.ProcessEnv {
+  return { ...process.env, ...extra, PWD: resolvePath(cwd) };
 }
 
 /**
@@ -89,7 +112,7 @@ export function runCommand(
     // A dedicated POSIX process group lets cancellation include descendants
     // inheriting the output pipes. This remains attached: no unref during work.
     const child = spawn(bin, args, {
-      cwd: opts.cwd, env: opts.env, stdio: ["ignore", "pipe", "pipe"],
+      cwd: opts.cwd, env: childEnv(opts.cwd, opts.env), stdio: ["ignore", "pipe", "pipe"],
       shell: opts.shell,
       detached: process.platform !== "win32", windowsHide: true,
     });

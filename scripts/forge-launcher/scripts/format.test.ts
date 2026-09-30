@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
-import { describeSpawnError, hyperlink, link, runCommand, spawnDetached } from "./format.ts";
+import { describeSpawnError, hyperlink, link, runCommand, runLogged, runTee, spawnDetached } from "./format.ts";
 
 test("runCommand rejects with a friendly message when the command is missing", async () => {
   await assert.rejects(
@@ -50,6 +50,45 @@ test("reports an asynchronous detached startup failure to the callback once", as
   await new Promise((resolve) => setTimeout(resolve, 50));
   assert.equal(calls, 1);
 });
+
+/**
+ * A child that trusts `$PWD` resolves its project from the inherited value and
+ * ignores the `cwd` it was given, so every launcher spawn must correct PWD to
+ * match the working directory it pinned - not just the engine adapter's.
+ */
+for (const [name, spawnWithCwd] of [
+  ["runCommand", (cwd: string) => runCommand(process.execPath, ["-e", "process.stdout.write(process.cwd() + '|' + (process.env.PWD ?? ''))"], { cwd, capture: true })],
+  ["runLogged", (cwd: string) => runLogged(process.execPath, ["-e", `require("fs").writeFileSync(${JSON.stringify(path.join(cwd, "out.txt"))}, process.cwd() + "|" + (process.env.PWD ?? ""))`], { cwd, logFile: path.join(cwd, "run.log") }).then(() => ({ stdout: fs.readFileSync(path.join(cwd, "out.txt"), "utf8") }))],
+  ["runTee", (cwd: string) => runTee(process.execPath, ["-e", `require("fs").writeFileSync(${JSON.stringify(path.join(cwd, "out.txt"))}, process.cwd() + "|" + (process.env.PWD ?? ""))`], { cwd, logFile: path.join(cwd, "tee.log") }).then(() => ({ stdout: fs.readFileSync(path.join(cwd, "out.txt"), "utf8") }))],
+  ["spawnDetached", async (cwd: string) => {
+    const record = path.join(cwd, "detached.json");
+    assert.ok(spawnDetached(process.execPath, ["-e", `require("fs").writeFileSync(${JSON.stringify(record)}, JSON.stringify({ cwd: process.cwd(), pwd: process.env.PWD ?? null }))`], { cwd }).pid);
+    for (let attempt = 0; attempt < 100 && !fs.existsSync(record); attempt += 1) {
+      await new Promise((resolve) => setTimeout(resolve, 20));
+    }
+    const written = JSON.parse(fs.readFileSync(record, "utf8")) as { cwd: string; pwd: string | null };
+    return { stdout: `${written.cwd}|${written.pwd ?? ""}` };
+  }],
+] as const) {
+  test(`${name} hands the child a PWD that matches its cwd, whatever it inherited`, async (t) => {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), "forge-pwd-target-"));
+    t.after(() => fs.rmSync(dir, { recursive: true, force: true }));
+    const decoy = fs.mkdtempSync(path.join(os.tmpdir(), "forge-pwd-decoy-"));
+    t.after(() => fs.rmSync(decoy, { recursive: true, force: true }));
+
+    const saved = process.env["PWD"];
+    process.env["PWD"] = decoy;
+    try {
+      const result = await spawnWithCwd(dir);
+      // A stale PWD would name the launcher's own project, so the spawned
+      // skill or engine would run somewhere the repository does not exist.
+      assert.equal(result.stdout.trim(), `${dir}|${dir}`);
+    } finally {
+      if (saved === undefined) delete process.env["PWD"];
+      else process.env["PWD"] = saved;
+    }
+  });
+}
 
 test("detached children keep shared and separate logs after all parent descriptors close", async (t) => {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), "forge-detached-"));

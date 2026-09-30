@@ -357,7 +357,8 @@ Shells out to the `opencode` CLI per task:
 ```
 opencode run --model <agent.model> [--agent <name>] "<short execution-file instruction>"
 
-# spawned with cwd set to the task root, which is how v2 selects the project
+# spawned with cwd set to the task root and PWD set to match, which together
+# are how v2 selects the project (it reads `process.env.PWD ?? process.cwd()`)
 ```
 
 When the owning agent's file lives under the project's `.opencode/agents/`

@@ -21,7 +21,7 @@ guarantee the serialization was protecting:
 |---|---|
 | 1 | **Option A** — per-task `git worktree` sandbox for isolation and attribution |
 | 2 | Sandboxes live at `<repoRoot>/.forge-sandboxes/`, hidden via `.git/info/exclude` |
-| 3 | *Superseded by ADR-058:* the engine-managed keep-alive and `--attach` flags this step gated were retired with OpenCode v2; per-task project selection now happens through the spawn `cwd` |
+| 3 | *Superseded by ADR-058:* the engine-managed keep-alive and `--attach` flags this step gated were retired with OpenCode v2; per-task project selection now happens through the spawn `cwd`, with the child's `PWD` set to match (ADR-059) |
 | 4 | Sandbox machinery engages **only** when effective concurrency > 1 |
 | 5 | Sandbox mode requires a **clean** engine tree (engine-owned `docs/` metadata excepted); otherwise it refuses with a precise message |
 | 6 | Gitignored top-level build inputs (`node_modules/`, `.env`, `dist/`, …) are symlinked into each sandbox |

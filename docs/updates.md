@@ -4,6 +4,41 @@ Detailed release and change notes for MyForge.
 
 ---
 
+## September 2026 - v3.88
+
+### Fixed: sandboxed tasks ran against the engine instead of their worktree
+
+- **Parallel runs executed every task in the wrong project.** OpenCode v2
+  resolves the project from `process.env.PWD ?? process.cwd()`, so an inherited
+  stale `PWD` outranks the `cwd` the engine pinned — the opposite of what
+  [ADR-058](adr/058-opencode-v2-project-resolution.md) recorded. Because the
+  engine is normally launched from its own package directory, each task ran
+  there instead of in its sandbox worktree, could not find the execution file
+  the engine had written for it, produced nothing, and failed the output gate
+  with a *missing-`expectedOutputs`* error that pointed at the task rather than
+  the harness. See [ADR-059](adr/059-pwd-aligned-spawn-environment.md) and
+  issue [#121](https://github.com/McFuzzySquirrel/mcfuzzy-agent-forge/issues/121).
+- **The failure was silent at `--concurrency 1` and fatal above it.** In
+  sequential mode the execution file landed in the same directory the
+  misdirected session already occupied, so tasks found it by accident. Only the
+  mode that actually isolates tasks was broken, which is how this reached a
+  released default.
+- **No action needed.** A child is now never launched with a `PWD` that
+  disagrees with its `cwd`; both are set from the same value at the spawn choke
+  points. Nothing to migrate, and no flag, environment variable, or config
+  changes.
+- **The launcher is fixed too.** Invoking `forge-launcher` from outside the
+  repository it targets had the same effect on headless skill runs,
+  `engine-run`, and the console's detached engine.
+- **Copilot and Claude tasks get the same protection.** The hazard was never
+  opencode-specific; only opencode's project resolution was verified to depend
+  on `PWD`. The launcher's `cwd` remains the mechanism that fixes the
+  filesystem — do not drop it on the theory that `PWD` covers it.
+- **Correction to v3.87 below:** its claim that the `PWD`-based replacement "was
+  verified to be wrong" was itself wrong, and its "no action needed for project
+  selection" advice was the origin of the bug. That entry is left as written; see
+  ADR-059.
+
 ## September 2026 - v3.87
 
 ### OpenCode v2 only: `--dir` and `--attach` retired

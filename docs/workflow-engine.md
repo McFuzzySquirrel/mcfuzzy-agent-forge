@@ -376,12 +376,15 @@ To give a run a private server instead of the shared one, pass `--standalone`:
 OPENCODE_EXTRA_FLAGS=--standalone npm run workflow-engine -- run --harness opencode --yes
 ```
 
-**Project selection.** OpenCode v2 resolves the project from the child's
-`process.cwd()`. `run --dir` is gone and `run` takes no path argument (a trailing
-path is swallowed into the prompt), so the engine pins each task by spawning with
-`cwd` set to that task's root. In parallel mode that is the task's own git
-worktree under `.forge-sandboxes/`, which is how per-task project isolation works
-now. See [ADR-056](adr/056-parallel-execution-task-sandboxes.md).
+**Project selection.** `run --dir` is gone and `run` takes no path argument (a
+trailing path is swallowed into the prompt), so the engine pins each task by
+spawning with `cwd` set to that task's root. It also sets the child's `PWD` to
+that same value, because OpenCode v2 resolves the project from
+`process.env.PWD ?? process.cwd()` and an inherited stale `PWD` outranks `cwd` on
+its own. In parallel mode the pinned root is the task's own git worktree under
+`.forge-sandboxes/`, which is how per-task project isolation works now. See
+[ADR-056](adr/056-parallel-execution-task-sandboxes.md) and
+[ADR-059](adr/059-pwd-aligned-spawn-environment.md).
 
 ### Live visualization (The Forge Board)
 
@@ -512,10 +515,13 @@ Two consequences to plan for:
 - **Commit or stash your code and requirements before running in parallel**, and
   do not combine `--concurrency > 1` with `--no-auto-commit`: an uncommitted tree
   is exactly what a sandbox cannot represent.
-- **Each sandbox selects its project through the spawn `cwd`.** OpenCode v2
-  resolves the project from `process.cwd()`, and `run --dir` no longer exists
+- **Each sandbox selects its project through the spawn `cwd`, with `PWD` set to
+  match.** OpenCode v2 resolves the project from
+  `process.env.PWD ?? process.cwd()` and `run --dir` no longer exists
   (ADR-058), so a parallel wave isolates projects by spawning every task in its
-  own worktree.
+  own worktree *and* correcting the child's `PWD` to the same path — without
+  which every task would run against the engine's own package directory and fail
+  with missing outputs (ADR-059).
 - **Disk**: N concurrent worktrees, each a full checkout of `HEAD`. Gitignored
   build inputs are symlinked, not copied, so the real cost is the tracked tree.
 

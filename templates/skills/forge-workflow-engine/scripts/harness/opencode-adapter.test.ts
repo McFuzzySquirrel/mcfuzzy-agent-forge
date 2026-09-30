@@ -190,10 +190,11 @@ test("FORGE_ENGINE_NATIVE_AGENT=0 forces the inline-persona fallback for .openco
 // ─── OpenCode v2 project resolution (ADR-058) ─────────────────────────────────
 //
 // v2 removed `run --dir` and `run --attach`, and `run` takes no path argument:
-// a trailing path is swallowed into the prompt. The project is selected by the
-// child's `process.cwd()`, which the adapter sets to the task root. These tests
-// pin both halves of that contract, since a regression here silently runs a task
-// against the wrong project.
+// a trailing path is swallowed into the prompt. The project is selected from
+// `process.env.PWD ?? process.cwd()`, so the adapter pins `cwd` to the task root
+// and `runCommand` sets the child's `PWD` to match. These tests pin both halves
+// of that contract, since a regression here silently runs a task against the
+// wrong project. ADR-058 concluded the opposite about `PWD`; ADR-059 corrects it.
 
 /** Shim that records argv, cwd, and PWD, so project selection is observable. */
 function makeCwdShim(t: TestContext): { bin: string; recordFile: string } {
@@ -246,19 +247,29 @@ test("argv carries no --dir or --attach, both removed in OpenCode v2", async (t)
   assert.ok(argv.includes("--auto"), "per-task permissions stay auto-approved");
 });
 
-test("the project is pinned by the spawn cwd, not by PWD", async (t) => {
+test("a stale inherited PWD cannot redirect a task away from its spawn cwd", async (t) => {
   const root = tempDir(t, "forge-opencode-cwd-repo-");
+  // Stands in for the shell that started the engine: the engine normally runs
+  // from its own package dir, so the inherited PWD names a different project.
+  const decoy = tempDir(t, "forge-opencode-decoy-pwd-");
   const agent = makeAgent(join(root, ".opencode", "agents", "discovery-engineer.md"));
   const shim = makeCwdShim(t);
-
-  await invokeRecording(shim, agent, root);
+  const inherited = process.env.PWD;
+  process.env.PWD = resolve(decoy);
+  try {
+    await invokeRecording(shim, agent, root);
+  } finally {
+    if (inherited === undefined) delete process.env.PWD;
+    else process.env.PWD = inherited;
+  }
 
   const { cwd, pwd, argv } = recordedInvocation(shim.recordFile);
-  // v2 resolves the project from process.cwd(); this is the only mechanism.
+  // v2 resolves the project from `process.env.PWD ?? process.cwd()`, so a child
+  // that kept the stale PWD would run against `decoy` and never see the task's
+  // execution file. The adapter must correct PWD to match the pinned cwd.
   assert.equal(cwd, resolve(root));
-  // Guard against the retired mechanism creeping back: PWD is not consulted,
-  // and the path must not appear in argv (v2 would read it as prompt text).
-  assert.notEqual(pwd, resolve(root), "PWD must not be relied on to select the project");
+  assert.equal(pwd, resolve(root), "the child must receive the corrected PWD, not the inherited one");
+  // The path must not also appear in argv (v2 would read it as prompt text).
   assert.ok(!argv.includes(resolve(root)), `argv leaks the repo path: ${argv.join(" ")}`);
 });
 
@@ -273,7 +284,11 @@ test("a sandbox worktree is selected by cwd, keeping parallel tasks isolated", a
 
   await invokeRecording(shim, agent, worktree);
 
-  const { cwd, argv } = recordedInvocation(shim.recordFile);
+  const { cwd, pwd, argv } = recordedInvocation(shim.recordFile);
   assert.equal(cwd, resolve(worktree), "each task must run in its own worktree");
+  // Parallel mode is where a stale PWD is fatal: the execution file lives in the
+  // worktree, so a task pointed at the inherited PWD cannot find its own
+  // instructions and produces nothing.
+  assert.equal(pwd, resolve(worktree), "a sandboxed task must receive its worktree as PWD");
   assert.ok(!argv.includes(resolve(worktree)), `argv leaks the worktree path: ${argv.join(" ")}`);
 });

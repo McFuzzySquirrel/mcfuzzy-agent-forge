@@ -408,10 +408,12 @@ blocking child of the session) and the per-task harness is selected with
 > the forge skills' headless gate fires deterministically (they also detect the
 > embedded "headless / auto-proceed" text). Headless `opencode run` calls carry
 > no path argument — OpenCode v2 removed `--dir` and `run` takes no path — and
-> instead rely on the spawn `cwd`, which `runLoggedStep` pins to the repository
-> (v2 resolves the project from `process.cwd()`). Without that the skill would
-> run in the launcher's own directory, where `docs/IDEA.md` does not exist, and
-> its input would be reported missing. If an auto-draft stage finishes
+> instead rely on the spawn `cwd`, which `runLoggedStep` pins to the repository,
+> with the child's `PWD` set to match (v2 resolves the project from
+> `process.env.PWD ?? process.cwd()`, so `PWD` outranks `cwd` on its own — see
+> [ADR-059](adr/059-pwd-aligned-spawn-environment.md)). Without that the skill
+> would run in the launcher's own directory, where `docs/IDEA.md` does not exist,
+> and its input would be reported missing. If an auto-draft stage finishes
 > without its expected artifact (`docs/PRD.md` / the decomposed layout, or
 > generated agents), the launcher prints the run-log tail, the repo's `git
 > status`, and whether the skill file resolved, then offers (interactive) to

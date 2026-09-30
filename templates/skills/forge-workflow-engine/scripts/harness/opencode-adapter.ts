@@ -33,8 +33,12 @@ import { executionPrompt } from "../task-execution.ts";
  * The project directory is pinned by the child's spawn `cwd` (see `invoke`).
  * OpenCode v2 removed `run --dir` and added no replacement: `run` takes only
  * `message...` arguments, so a trailing path would be swallowed into the prompt
- * while the project stayed wherever the process was launched. v2 resolves the
- * project from `process.cwd()`, so `cwd` is the only mechanism - see ADR-058.
+ * while the project stayed wherever the process was launched.
+ *
+ * `cwd` is necessary but not sufficient on its own: v2 resolves the project
+ * from `process.env.PWD ?? process.cwd()`, so an inherited stale `PWD`
+ * outranks the correct `cwd`. `runCommand` pins both, so they cannot disagree -
+ * see ADR-059, which corrects the `PWD` claim in ADR-058.
  *
  * There is no engine-managed warm server. OpenCode v2 dropped `run --attach`,
  * so instead each `opencode run` connects to OpenCode's own background
@@ -73,11 +77,13 @@ export class OpenCodeAdapter implements HarnessAdapter {
     const args = ["run", ...modelFlag, ...agentFlag, ...this.extraFlags, prompt];
 
     const result = await runCommand(this.bin, args, {
-      // `opencode run` resolves its project from `process.cwd()` (verified on
-      // v2.0.20: the `PWD` environment variable is ignored). Pinning `cwd` is
-      // what keeps a task in its repository - or, in parallel mode, in its own
-      // sandbox worktree - even when the engine process lives in a
-      // subdirectory such as the engine's own package dir.
+      // `opencode run` resolves its project from `process.env.PWD ??
+      // process.cwd()` (read out of the v2.0.20 bundle), so `PWD` is what
+      // actually decides and an inherited one outranks `cwd`. `runCommand`
+      // sets `PWD` to this `cwd` for the child, so pinning `cwd` keeps a task
+      // in its repository - or, in parallel mode, in its own sandbox worktree
+      // - even when the engine process lives in a subdirectory such as the
+      // engine's own package dir. Do not drop `cwd` thinking PWD covers it.
       cwd: repoRoot,
       timeoutMs: request.budget.timeoutMs,
       signal: request.signal,

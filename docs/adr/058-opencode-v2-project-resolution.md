@@ -4,6 +4,7 @@
 **Status:** Accepted
 **Supersedes:** [ADR-027](027-workflow-engine-keep-alive-attach.md) (engine-managed keep-alive attach mode), the keep-alive half of [ADR-031](031-adaptive-keep-alive-and-budget-hints.md)
 **Amends:** [ADR-056](056-parallel-execution-task-sandboxes.md) (per-task project selection in sandbox mode)
+**Amended by:** [ADR-059](059-pwd-aligned-spawn-environment.md) — the `PWD` claim recorded below is **inverted**; see that ADR's Context. `cwd` is still necessary, but on its own it is not sufficient.
 
 ---
 
@@ -53,6 +54,13 @@ FLAGS
 The migration plan also asserted that the project directory would have to travel
 in the child's `PWD`, on the theory that v2 resolves the project from its parent
 process rather than the spawn `cwd`. **This is false.** Measured three ways:
+
+> **Superseded by [ADR-059](059-pwd-aligned-spawn-environment.md).** The
+> measurements below are preserved as written, but they could not have detected
+> the claim: each one launched with an inherited `PWD` that already agreed with
+> `cwd`. In fact v2 resolves the project from `process.env.PWD ?? process.cwd()`,
+> so `PWD` outranks `cwd`. The warning at the end of this section is inverted for
+> the same reason: `cwd` alone is insufficient, and both must be set together.
 
 1. `opencode debug config` reported a project's `opencode.json` only when `cwd`
    matched that project — setting `PWD` alone to the project changed nothing.
