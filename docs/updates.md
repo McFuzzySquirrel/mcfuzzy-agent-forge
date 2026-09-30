@@ -4,6 +4,26 @@ Detailed release and change notes for MyForge.
 
 ---
 
+## October 2026 - v3.89
+
+### Console concurrency labels now say "parallel tasks", not "parallel agents"
+
+- **The concurrency control was named for a capability it never had.** The
+  Overview **Controls** panel, the New Project wizard, and the Console Help view
+  all read "Concurrency (parallel agents)". Parallel execution here schedules
+  *independent* tasks that happen to be ready at the same time; it is not several
+  agents collaborating on one task. Multi-agent describes who owns a task;
+  parallel describes when tasks run, and the two are independent — a multi-agent
+  workflow can run sequentially, which is what MyForge did until per-task
+  worktree sandboxes made concurrency real.
+- All three labels now read **"Concurrency (parallel tasks)"**, and the Help
+  entry describes it as running that many independent tasks at once. No behavior,
+  flag, or persisted setting changes; `docs/engine-config.json` and
+  `--concurrency` are unaffected.
+- No keybindings, routes, or API fields changed, so nothing downstream needs
+  updating. See the worktree and scheduling discussion in
+  [Part 4 of the story](THE-STORY-PART-4.md).
+
 ## September 2026 - v3.88
 
 ### Fixed: sandboxed tasks ran against the engine instead of their worktree
