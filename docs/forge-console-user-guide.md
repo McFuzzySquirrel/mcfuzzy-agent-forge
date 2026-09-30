@@ -177,7 +177,7 @@ The Overview controls panel offers the same actions you would otherwise issue fr
   view. Manual mode requires at least one selected task.
 - **Auto-commit after each task**: toggles one-commit-per-task git history (on by default).
 - **Log harness activity**: streams harness CLI stdout/stderr into `docs/engine-run.log`, where the Logs view shows it live while the run is active. Off by default; the saved choice is applied to subsequently started runs and restored after a reload. Activity logs can contain sensitive repository content and increase log volume, and command invocation logging is always on regardless. Turning it off stops activity capture for later runs without disabling command logging.
-- **Concurrency preference**: stores the engine concurrency value in `docs/engine-config.json`. Enter a positive integer (e.g. `3`) and click **Set**; enter `0` to return to the engine default. The value is shown in later Run/Resume summaries, but current repo-task execution remains serialized while output attribution is repo-wide.
+- **Concurrency preference**: stores the engine concurrency value in `docs/engine-config.json`. Enter a positive integer (e.g. `3`) and click **Set**; enter `0` to return to the engine default. The value is shown in later Run/Resume summaries. Above `1` the engine runs up to that many ready tasks at once, each in its own git worktree under `.forge-sandboxes/`, so each task's reported files and commit stay its own. Two things to know before setting it above `1`: **the working tree must be clean** (the run stops and lists any uncommitted path otherwise, so commit or stash first), and **keep-alive is turned off for parallel runs** because one warm harness server serves one project directory. See [ADR-056](adr/056-parallel-execution-task-sandboxes.md).
 - **Reset changed tasks for review**: after feature reconciliation, resets completed or skipped tasks whose contracts changed back to pending. Review the changed task IDs before using this action.
 - **Launch \<harness\> CLI**: opens the project's harness CLI (opencode/copilot/claude) in a new terminal from the project folder, so you can watch the live run and take over manually. Also available on the Tasks header.
 
@@ -194,7 +194,11 @@ such a task; `--yes` cannot approve it.
 
 #### Approve from the Console
 
-1. Open **Tasks** and select the paused task labeled **Human review required**.
+1. Open **Tasks** and select the task. It reads **Human review required** only
+   once its prerequisites are complete; before that it reads **Human review
+   blocked** and lists the tasks it is waiting on, with no approval action. A
+   review attests to delivered work, so the form cannot be submitted early - the
+   API and the `approve-task` command both refuse it and name the prerequisites.
 2. Read its requirements, acceptance criteria, constraints, and references.
 3. Click **Complete human review**.
 4. Read **Unverified upstream checks**, which includes transitive task and
@@ -207,6 +211,10 @@ such a task; `--yes` cannot approve it.
    `docs/reviews/<task-id>-console-review.md`, writes the task's configured
    `reviewFile` attestation with the task fingerprint and evidence hash, and
    resumes the build when the task is ready.
+
+Approving from the Console is safe with parallel execution: the review record and
+attestation it writes are tolerated generated state, so the run it resumes is not
+refused by the clean-tree preflight that sandboxes require.
 
 The completed task changes to **Human review complete**. To prove the approval,
 show both the Markdown review record and the configured JSON approval record.
@@ -235,6 +243,12 @@ npm run workflow-engine -- approve-task <task-id> \
   --evidence docs/reviews/my-review.md \
   --confirm-human-review
 ```
+
+The command refuses while any prerequisite of the task is pending or failed, and
+names them, so an approval cannot be recorded against work that does not exist
+yet. The attestation is fingerprinted over the task and its references, so it
+self-invalidates when those change - but not when the reviewed output changes,
+which is what this check exists to prevent.
 
 The command writes the configured `reviewFile` attestation and prints a
 confirmation. Resume the detached build with:

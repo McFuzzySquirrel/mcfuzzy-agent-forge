@@ -82,13 +82,27 @@ The engine's main loop is a `while` that runs until either the workflow is compl
 ```
 while (!isComplete && !stopRequested) {
     ready = ownerUniqueReady(nextReadyTasks(manifest, state))
-    for each ready task in the current wave:
+    // A human review with no attestation is held, not dispatched: it stays
+    // pending so the wave's other work still runs.
+    waiting  = ready.filter(isUnapprovedHumanReview)
+    runnable = ready - waiting
+    if (runnable is empty && waiting is not empty): pause, naming the reviews
+    for each runnable task in the current wave:
         executeTask(task)
     merge task results back into authoritative state
     saveState()
     syncProgressMd()
 }
 ```
+
+That `waiting` split is the non-obvious part. The obvious implementation -
+dispatch the review, see it needs approval, pause - is a trap when the review's
+dependencies were under-declared in the feature document: the run stops before
+the work it reviews exists, and the operator is asked to approve nothing. Because
+the compiler only warns about that case, the engine has to be correct without
+trusting the manifest, which is why an unapproved review is a *wait* and the run
+pauses only once nothing else can proceed. `executeTask` therefore does not
+request a pause for an unapproved review at all; the loop owns that decision.
 
 The interesting function here is `nextReadyTasks`. It has to answer: *"given everything that's already finished, what can run right now?"* This is the **DAG resolution** step.
 
@@ -126,7 +140,21 @@ Three filters determine readiness:
 
 This is a simplified but correct DAG walk. Because tasks always move from `pending → running → complete/failed/skipped` and never backwards (except on explicit `replay`), `nextReadyTasks` can be called repeatedly as the loop iterates and will always produce the correct frontier.
 
-> **Why one task at a time right now?** The engine still has a wave-shaped dispatcher, a `--concurrency` setting, and a per-owner guard, but it currently executes one repo task at a time. The reason is no longer harness async support; it is **output attribution**. The engine snapshots the repository worktree before and after a task to enforce the no-op gate and to enrich `outputFiles` for in-place edits. If multiple repo-editing tasks ran together, those repository-wide snapshots could mis-attribute file changes across tasks. Correct attribution is more important than nominal parallelism, so the runtime currently forces serialized execution until task-isolated attribution exists again.
+> **How are tasks dispatched?** The engine drains its ready frontier in bounded
+> **waves**. Each wave computes the ready set, keeps at most one task per owning
+> agent (`ownerUniqueReady`), and runs the survivors through a bounded worker pool
+> up to `--concurrency`. With the default `--concurrency 1` that pool is
+> sequential and the engine behaves exactly as it always has.
+>
+> Above concurrency `1` each task runs in its own `git worktree` under
+> `.forge-sandboxes/`. The harness, the output-verification snapshot, and the
+> task's `validationCommands` all operate inside that worktree, so "which files
+> did this task change" is answered by the sandbox contents rather than by a
+> repository-wide diff that a sibling could have polluted. When the task
+> finishes, its files are copied back into the repository and the normal
+> per-task auto-commit runs. A parallel run requires a clean working tree and a
+> harness that declares `supportsConcurrency`; the engine refuses with the exact
+> offending paths otherwise. See [ADR-056](adr/056-parallel-execution-task-sandboxes.md).
 
 ---
 
@@ -309,9 +337,10 @@ interface HarnessAdapter {
 }
 ```
 
-`supportsConcurrency` describes transport capability only; the engine currently
-serializes repository tasks regardless of that flag or the configured
-concurrency value. `prepare` and `cleanup` are run-scoped hooks. Cleanup runs
+`supportsConcurrency` describes transport capability. It gates whether the engine
+will dispatch more than one task at a time, but it is not sufficient on its own:
+repository-level isolation comes from the engine's per-task worktree sandbox, not
+from the adapter. `prepare` and `cleanup` are run-scoped hooks. Cleanup runs
 in `finally` around both normal runs and replay, including preparation failure,
 and must be safe when preparation did not complete or cleanup already ran.
 
@@ -399,8 +428,9 @@ only for tasks explicitly requiring `text`.
 
 The engine prepares a read-only `TaskAttemptRequest` before each adapter call.
 Structured implementation contracts require repository tooling, passing validation,
-and an outcome report; human-review contracts pause for operator attestation and
-never reach a harness. See [task contracts](task-contracts.md).
+and an outcome report; human-review contracts never reach a harness and are held
+pending by the core loop until the operator attests. See
+[task contracts](task-contracts.md).
 It contains the agent and task descriptors, effective model, projected context,
 repository root, attempt metadata, and budget. Effective model precedence is:
 
@@ -595,8 +625,6 @@ Every state transition returns a new object. This makes the flow of state throug
 ## Next Possible Steps
 
 ### For this system specifically
-
-- **Task-isolated attribution before parallelism returns**: the engine already has wave-shaped dispatch plumbing, but safe multi-task repo execution now depends on proving which task changed which files. A future task sandbox or per-task diff isolation would let higher configured concurrency become real throughput again.
 
 - **Approval gates between phases**: The manifest already has `approvalGates.betweenPhases`. The engine could pause after each phase, surface a diff of what was produced, and wait for a human `continue` signal before proceeding to the next phase.
 

@@ -6,7 +6,7 @@ import { parseTaskHandoff } from "./task-result.ts";
 
 export const TASK_EXECUTION_DIR = "docs/artifacts";
 
-function taskFileId(taskId: string): string {
+export function taskFileId(taskId: string): string {
   if (/^[A-Z0-9][A-Z0-9_.-]{0,79}$/.test(taskId) && !taskId.endsWith(".") && !/^(CON|PRN|AUX|NUL|COM[0-9]|LPT[0-9])(?:\.|$)/.test(taskId)) return taskId;
   const readable = taskId.replace(/[^a-zA-Z0-9_-]/g, "_").slice(0, 40);
   return `%${readable}-${createHash("sha256").update(taskId).digest("hex").slice(0, 16)}`;

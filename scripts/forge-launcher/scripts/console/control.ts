@@ -64,10 +64,14 @@ function engineRunArgs(repoRoot: string): string[] {
   const harness = process.env.FORGE_ENGINE_HARNESS ?? cfg?.harness ?? inferEngineHarness(repoRoot);
   assertEngineHarnessAvailable(harness);
   const args = ["engine-run", "--repo", repoRoot, "--harness", harness];
-  if (cfg?.granularity) args.push("--granularity", cfg.granularity);
-  if (cfg?.concurrency) args.push("--concurrency", cfg.concurrency);
-  if (cfg?.taskTimeoutMs) args.push("--task-timeout-ms", cfg.taskTimeoutMs);
-  if (cfg?.maxRetries) args.push("--max-retries", cfg.maxRetries);
+  // The numeric settings are numbers in engine-config.json but strings in argv;
+  // passing one through raw makes the job runner's argv scanning throw on
+  // `startsWith`, so a Console-started run with a configured concurrency, task
+  // timeout, or retry count could not be launched at all.
+  if (cfg?.granularity) args.push("--granularity", String(cfg.granularity));
+  if (cfg?.concurrency) args.push("--concurrency", String(cfg.concurrency));
+  if (cfg?.taskTimeoutMs) args.push("--task-timeout-ms", String(cfg.taskTimeoutMs));
+  if (cfg?.maxRetries) args.push("--max-retries", String(cfg.maxRetries));
   if (cfg?.keepAlive) args.push("--keep-alive");
   if (cfg?.attach) args.push("--attach", cfg.attach);
   if (cfg?.autoCommit === false) args.push("--no-auto-commit");

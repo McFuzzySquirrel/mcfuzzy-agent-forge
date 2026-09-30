@@ -3,7 +3,7 @@ import { dirname, join, resolve } from "node:path";
 import { existsSync, readFileSync } from "node:fs";
 import * as readline from "node:readline";
 
-import { runEngine, replayTask } from "./engine.ts";
+import { runEngine, replayTask, resolveConcurrency, unmetPrerequisites } from "./engine.ts";
 import { loadState, statePath, auditPath } from "./state.ts";
 import { startVizServer, type VizServer } from "./viz/server.ts";
 import { controlPath, pidPath, readPid, removePid, writeControl, writePid } from "./control.ts";
@@ -45,7 +45,9 @@ Usage:
 Environment variables:
   FORGE_ENGINE_YES      Skip the pre-run confirmation gate (same as --yes)
   FORGE_ENGINE_HEARTBEAT_MS  Heartbeat interval in ms while a task runs (default: 60000)
-  FORGE_ENGINE_CONCURRENCY   Reserved concurrency setting (execution remains serialized for output attribution)
+  FORGE_ENGINE_CONCURRENCY   Max concurrent tasks (default: 1 = sequential). Values above 1 need a harness that declares
+                             supportsConcurrency and a clean working tree: each task runs in its own git worktree under
+                             .forge-sandboxes/, so output attribution and per-task commits stay exact.
   FORGE_ENGINE_TASK_TIMEOUT_MS   Per-task timeout in ms (default: 600000 / 10 min; per-task manifest timeoutMs overrides)
   FORGE_ENGINE_ALLOW_NOOP        "1" to allow tasks that produce no expected outputs, no file changes, and only
                                  trivial agent output to count as complete (bypasses the no-op output gate)
@@ -68,6 +70,14 @@ Pause & stop:
   the current task and saves state as paused; run resumes from the last completed task.
   stop does the same and additionally sends SIGTERM to the engine PID recorded in
   docs/engine.pid, so a live run stops even mid-task (still gracefully after the current task).
+
+Parallel execution:
+  --concurrency N > 1 runs up to N ready tasks at once, each in its own detached-HEAD
+  git worktree under .forge-sandboxes/. A task's file changes, validation commands, and
+  auto-commit are then scoped to that task alone. The engine root must be clean apart
+  from engine-generated docs/ metadata; otherwise the run stops with the exact uncommitted
+  paths. Keep-alive/attach is downgraded to a cold start per task because one warm
+  server serves one project directory. See ADR-056.
 
   OPENCODE_BIN           Path to opencode binary (default: opencode)
   OPENCODE_EXTRA_FLAGS   Extra flags passed to opencode run
@@ -255,6 +265,16 @@ async function confirmPreRun(opts: EngineOptions, args: string[], keepAlive?: Ke
             : "cold start (single task remaining)"
     : "n/a";
 
+  const concurrency = resolveConcurrency({
+    maxConcurrency: opts.maxConcurrency,
+    supportsConcurrency: opts.harness.supportsConcurrency,
+  });
+  const concurrencyLabel = concurrency.sandboxMode
+    ? `${concurrency.effective} task(s) in parallel, each in its own git worktree sandbox (requires a clean working tree)`
+    : concurrency.notice
+      ? `1 (${concurrency.notice})`
+      : "1 (sequential; --concurrency N runs N tasks in parallel, one git worktree each)";
+
   console.log("Forge Workflow Engine - Pre-run Summary");
   console.log(`  Harness : ${opts.harness.name}`);
   console.log(`  Layout  : ${manifest.sourceLayout ?? "unsupported legacy manifest; recompile from features"}`);
@@ -262,7 +282,8 @@ async function confirmPreRun(opts: EngineOptions, args: string[], keepAlive?: Ke
   console.log(`  Tasks   : ${taskCount}`);
   console.log(`  Timeout : ${opts.taskTimeoutMs}ms per task (--task-timeout-ms / per-task timeoutMs overrides)`);
   console.log(`  Retries : ${opts.maxRetries} max, ${opts.retryDelayMs}ms between attempts (--max-retries / --retry-delay-ms)`);
-  console.log(`  Concurrency: serialized for repository output attribution (--concurrency is reserved)`);
+  console.log(`  Concurrency: ${concurrencyLabel}`);
+  if (concurrency.notice) console.log(`  Concurrency warning: ${concurrency.notice}`);
   console.log(`  Keep-alive: ${keepAliveLabel}`);
   console.log(`  Output gate: ${opts.allowNoop ? "relaxed (--allow-noop: no-op tasks allowed)" : "strict (missing outputs / no-op tasks are retried then failed)"}`);
   if (opts.runValidation) console.log("  Validation: running manifest validationCommands per task (--run-validation)");
@@ -323,19 +344,32 @@ async function cmdRun(args: string[]): Promise<void> {
   const keepAlive = hasFlag(args, "--keep-alive") || process.env["FORGE_ENGINE_ATTACH"] === "1";
   const noKeepAlive = hasFlag(args, "--no-keep-alive") || process.env["FORGE_ENGINE_ATTACH"] === "0";
 
+  // One decision, shared with the engine, so the summary, the keep-alive
+  // strategy, and the dispatcher can never disagree about sandboxing.
+  const opts = buildOptions(args, repoRoot, harnessName, attachUrl);
+  const concurrency = resolveConcurrency({
+    maxConcurrency: opts.maxConcurrency,
+    supportsConcurrency: opts.harness.supportsConcurrency,
+  });
+
   const decision = shouldKeepAlive({
     attachUrl,
     keepAlive,
     noKeepAlive,
     harness: harnessName,
-    remaining: remainingTaskCount(manifestPath, statePath(repoRoot), buildOptions(args, repoRoot, harnessName, attachUrl).selectedTaskIds ?? []),
+    remaining: remainingTaskCount(manifestPath, statePath(repoRoot), opts.selectedTaskIds ?? []),
+    sandboxMode: concurrency.sandboxMode,
   });
 
+  if (decision.notice) console.warn(`[engine] ${decision.notice}`);
   if (decision.mode === "keep-alive" && harnessName !== "opencode") {
     console.warn("[engine] --keep-alive only applies to the opencode harness; ignoring.");
   }
+  if (concurrency.sandboxMode && attachUrl) {
+    console.warn(`[engine] --attach is honoured as given, but each task now runs in its own git worktree under ${attachUrl} rather than in ${repoRoot}.`);
+  }
 
-  await runWithServer(args, repoRoot, harnessName, attachUrl, decision);
+  await runWithServer(args, repoRoot, harnessName, attachUrl, decision, opts);
 }
 
 async function runWithServer(
@@ -344,8 +378,9 @@ async function runWithServer(
   harnessName: string,
   attachUrl: string | undefined,
   decision: KeepAliveDecision,
+  built: EngineOptions,
 ): Promise<void> {
-  const opts = buildOptions(args, repoRoot, harnessName, attachUrl);
+  const opts = built;
   if (harnessName === "opencode") {
     opts.harness = new OpenCodeAdapter({
       attachUrl, startServer: decision.startServer,
@@ -580,6 +615,19 @@ async function main(): Promise<void> {
       const manifest = JSON.parse(readFileSync(join(repo, "docs", "EXECUTION-MANIFEST.json"), "utf8")) as ExecutionManifest;
       const task = manifest.phases.flatMap((phase) => phase.tasks).find((entry) => entry.id === args[0]);
       if (!task) throw new Error("Unknown review task.");
+      // A review attests to work that exists. The attestation is fingerprinted
+      // over the task and its references, so it self-invalidates when those
+      // change - but not when the reviewed *output* changes, which would let a
+      // premature approval release downstream tasks on a review of code that
+      // had not been written yet. Refuse until the engine would actually
+      // dispatch this task.
+      const state = loadState(statePath(repo));
+      if (state) {
+        const unmet = unmetPrerequisites(manifest, state, task.id);
+        if (unmet.length > 0) {
+          throw new Error(`Cannot approve '${task.id}' yet: ${unmet.join(", ")} must be complete or skipped first. A human review attests to delivered work.`);
+        }
+      }
       const evidence = args.flatMap((arg, index) => arg === "--evidence" && args[index + 1] ? [args[index + 1]!] : []);
       approveHumanTask(repo, task, flag(args, "--reviewer") ?? "", evidence);
       console.log(`Recorded operator attestation for ${task.id}. Resume the engine to verify and complete the review task.`);

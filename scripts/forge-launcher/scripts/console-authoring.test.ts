@@ -2,12 +2,17 @@ import assert from "node:assert/strict";
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
+import { execFileSync } from "node:child_process";
+import { pathToFileURL } from "node:url";
 import { test, type TestContext } from "node:test";
 import { get } from "node:http";
 import { startConsoleServer } from "./console/server.ts";
 import { RunController, type SpawnOptions } from "./console/control.ts";
 import { inferEngineHarness, repoPaths } from "./console/paths.ts";
 import { actions, setModelOverride, summary, tasks } from "./console/repo.ts";
+import { humanReviewGate } from "./console/dashboard/views/tasks.ts";
+import type { TaskRow } from "./console/types.ts";
+import { resolveResources } from "./resources.ts";
 import { currentJobForRepo } from "./console/jobs.ts";
 import { authoringConfigPath, saveAuthoringConfig } from "./authoring-config.ts";
 import { fingerprintFiles, saveAuthoringStage, stageInputFingerprint } from "./authoring-state.ts";
@@ -100,6 +105,202 @@ test("human-review Console action records evidence and rejects non-review tasks"
   assert.equal(response.status, 200);
   assert.equal(fs.existsSync(path.join(root, "docs", "reviews", `${implementation.id}-console-review.md`)), true);
   assert.equal(fs.existsSync(path.join(root, "docs", "reviews", "review.json")), true);
+});
+
+test("human-review rows withhold the approval action until their prerequisites are done", (t) => {
+  const root = fixture(t);
+  const reviewManifest = () => {
+    const review = (id: string, dependencies: string[]) => ({
+      id, title: id, description: id, dependencies, expectedOutputs: [], validationCommands: [], approvalRequired: false,
+      contract: {
+        version: 1, kind: "human-review" as const, requirements: ["r"], acceptanceCriteria: ["a"], constraints: [],
+        references: ["docs/PRD.md"], reviewFile: `docs/reviews/${id}.json`,
+      },
+    });
+    const impl = (id: string, dependencies: string[]) => ({
+      id, title: id, description: id, dependencies, expectedOutputs: [], validationCommands: [], approvalRequired: false,
+      ownerAgent: "worker",
+      contract: { version: 1, kind: "implementation" as const, requirements: ["r"], acceptanceCriteria: ["a"], constraints: [], references: ["docs/PRD.md"] },
+    });
+    return {
+      version: "1", generatedAt: new Date().toISOString(), repoRoot: root, harnessRoot: ".github", prdPath: "docs/PRD.md",
+      progressPath: "docs/PROGRESS.md", auditPath: "docs/EXECUTION-AUDIT.jsonl", validationCommands: [],
+      approvalGates: { preflight: false, betweenPhases: false }, warnings: [],
+      phases: [
+        { id: "P1", title: "P1", description: "P1", ownerAgents: ["worker"], dependencies: [], approvalRequired: false, tasks: [impl("API-1", [])] },
+        { id: "P2", title: "P2", description: "P2", ownerAgents: ["worker"], dependencies: ["P1"], approvalRequired: false, tasks: [review("REVIEW-1", [])] },
+      ],
+    };
+  };
+  const writeState = (apiStatus: "pending" | "complete") => fs.writeFileSync(
+    path.join(root, "docs", "WORKFLOW-STATE.json"),
+    JSON.stringify({
+      runId: "run", startedAt: "", lastUpdatedAt: "", manifestPath: "", manifestVersion: "1", harness: "stub",
+      status: "running", blockers: [],
+      tasks: {
+        "API-1": { taskId: "API-1", status: apiStatus, attempt: apiStatus === "complete" ? 1 : 0, outputFiles: [] },
+        "REVIEW-1": { taskId: "REVIEW-1", status: "pending", attempt: 0, outputFiles: [] },
+      },
+    }),
+  );
+  fs.writeFileSync(path.join(root, "docs", "EXECUTION-MANIFEST.json"), JSON.stringify(reviewManifest()));
+
+  // A phase dependency must count, not just a direct task dependency: the engine
+  // gates dispatch on both, so the row must reflect both.
+  writeState("pending");
+  const blocked = tasks(repoPaths(root)).find((row) => row.id === "REVIEW-1")!;
+  assert.deepEqual(blocked.unmetPrerequisites, ["API-1"]);
+  assert.deepEqual(humanReviewGate(blocked), { state: "blocked", unmet: ["API-1"] });
+
+  writeState("complete");
+  const ready = tasks(repoPaths(root)).find((row) => row.id === "REVIEW-1")!;
+  assert.deepEqual(ready.unmetPrerequisites, []);
+  assert.deepEqual(humanReviewGate(ready), { state: "ready" });
+
+  const done: TaskRow = { ...ready, status: "complete" };
+  assert.deepEqual(humanReviewGate(done), { state: "complete" });
+  assert.deepEqual(
+    humanReviewGate({ ...blocked, status: "complete" }),
+    { state: "complete" },
+    "a finished review keeps its completed state even if the state file lists late prerequisites",
+  );
+});
+
+test("the approval API refuses a review whose prerequisites are unmet", async (t) => {
+  const root = fixture(t);
+  const review = {
+    id: "REVIEW-1", title: "Review", description: "Review", dependencies: ["API-1"], expectedOutputs: [], validationCommands: [], approvalRequired: false,
+    contract: {
+      version: 1, kind: "human-review" as const, requirements: ["r"], acceptanceCriteria: ["a"], constraints: [],
+      references: ["docs/PRD.md"], reviewFile: "docs/reviews/REVIEW-1.json",
+    },
+  };
+  const impl = {
+    id: "API-1", title: "API", description: "API", dependencies: [], expectedOutputs: [], validationCommands: [], approvalRequired: false,
+    ownerAgent: "worker",
+    contract: { version: 1, kind: "implementation" as const, requirements: ["r"], acceptanceCriteria: ["a"], constraints: [], references: ["docs/PRD.md"] },
+  };
+  fs.writeFileSync(path.join(root, "docs", "EXECUTION-MANIFEST.json"), JSON.stringify({
+    version: "1", generatedAt: new Date().toISOString(), repoRoot: root, harnessRoot: ".github", prdPath: "docs/PRD.md",
+    progressPath: "docs/PROGRESS.md", auditPath: "docs/EXECUTION-AUDIT.jsonl", validationCommands: [],
+    approvalGates: { preflight: false, betweenPhases: false }, warnings: [],
+    phases: [{ id: "P1", title: "P1", description: "P1", ownerAgents: ["worker"], dependencies: [], approvalRequired: false, tasks: [impl, review] }],
+  }));
+  const record = (taskId: string, status: string) => ({ taskId, status, attempt: status === "complete" ? 1 : 0, outputFiles: [] });
+  fs.writeFileSync(path.join(root, "docs", "WORKFLOW-STATE.json"), JSON.stringify({
+    runId: "run", startedAt: "", lastUpdatedAt: "", manifestPath: "", manifestVersion: "1", harness: "stub",
+    status: "running", blockers: [],
+    tasks: { "API-1": record("API-1", "pending"), "REVIEW-1": record("REVIEW-1", "pending") },
+  }));
+
+  const server = await startConsoleServer({ repoRoot: root, port: port++, open: false });
+  t.after(() => server.stop());
+  const post = (body: unknown) => fetch(`${server.url}/api/tasks/human-review`, {
+    method: "POST", headers: { "Content-Type": "application/json", "X-Forge-Token": server.token }, body: JSON.stringify(body),
+  });
+  const notes = "Exercised the fixture end to end and every acceptance criterion held.";
+
+  const premature = await post({ taskId: review.id, reviewer: "Reviewer", notes, resume: false });
+  const prematureBody = await premature.text();
+  assert.equal(premature.status, 400, prematureBody);
+  assert.match(prematureBody, /API-1 must be complete or skipped first/);
+  assert.equal(fs.existsSync(path.join(root, "docs", "reviews", "REVIEW-1.json")), false,
+    "a refused approval must not leave an attestation behind");
+
+  fs.writeFileSync(path.join(root, "docs", "WORKFLOW-STATE.json"), JSON.stringify({
+    runId: "run", startedAt: "", lastUpdatedAt: "", manifestPath: "", manifestVersion: "1", harness: "stub",
+    status: "running", blockers: [],
+    tasks: { "API-1": record("API-1", "complete"), "REVIEW-1": record("REVIEW-1", "pending") },
+  }));
+  const accepted = await post({ taskId: review.id, reviewer: "Reviewer", notes, resume: false });
+  assert.equal(accepted.status, 200, await accepted.text());
+  assert.equal(fs.existsSync(path.join(root, "docs", "reviews", "REVIEW-1.json")), true);
+});
+
+test("approving a review and resuming the engine passes sandbox preflight", async (t) => {
+  // Regression, end to end: the Console's approve-and-resume form writes the
+  // review record and attestation and then immediately starts the run. With
+  // concurrency above 1 the run's clean-tree preflight used to refuse the very
+  // files the form had just written, so the operator had to hand-commit them.
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), "forge-review-resume-"));
+  t.after(() => fs.rmSync(root, { recursive: true, force: true }));
+  const git = (...args: string[]) => execFileSync("git", args, { cwd: root, encoding: "utf8" });
+  git("init", "-q");
+  git("config", "user.email", "test@example.com");
+  git("config", "user.name", "Test");
+  fs.mkdirSync(path.join(root, ".github", "agents"), { recursive: true });
+  fs.writeFileSync(path.join(root, ".github", "agents", "worker.md"), '---\nname: worker\ndescription: "Worker"\n---\n');
+  fs.mkdirSync(path.join(root, "docs"), { recursive: true });
+  fs.mkdirSync(path.join(root, "docs", "features"), { recursive: true });
+  fs.writeFileSync(path.join(root, "docs", "PRD.md"), "# PRD\n");
+  fs.writeFileSync(path.join(root, "docs", "features", "core.md"), "# Core\n");
+  // concurrency 4 is what turns on sandbox mode and therefore the preflight
+  fs.writeFileSync(path.join(root, "docs", "engine-config.json"), `${JSON.stringify({ concurrency: 4 }, null, 2)}\n`);
+  const review = {
+    id: "REVIEW-1", title: "Review", description: "Review", dependencies: ["API-1"], expectedOutputs: [], validationCommands: [], approvalRequired: false,
+    contract: {
+      version: 1, kind: "human-review" as const, requirements: ["r"], acceptanceCriteria: ["a"], constraints: [],
+      references: ["docs/PRD.md"], reviewFile: "docs/reviews/REVIEW-1.json",
+    },
+  };
+  const impl = {
+    id: "API-1", title: "API", description: "API", dependencies: [], expectedOutputs: [], validationCommands: [], approvalRequired: false,
+    ownerAgent: "worker",
+    contract: { version: 1, kind: "implementation" as const, requirements: ["r"], acceptanceCriteria: ["a"], constraints: [], references: ["docs/PRD.md"] },
+  };
+  fs.writeFileSync(path.join(root, "docs", "EXECUTION-MANIFEST.json"), `${JSON.stringify({
+    version: "1", generatedAt: new Date().toISOString(), repoRoot: root, harnessRoot: ".github", prdPath: "docs/PRD.md",
+    progressPath: "docs/PROGRESS.md", auditPath: "docs/EXECUTION-AUDIT.jsonl", validationCommands: [],
+    approvalGates: { preflight: false, betweenPhases: false }, warnings: [],
+    phases: [{ id: "P1", title: "P1", description: "P1", ownerAgents: ["worker"], dependencies: [], approvalRequired: false, tasks: [impl, review] }],
+  }, null, 2)}\n`);
+  const record = (taskId: string, status: string) => ({ taskId, status, attempt: status === "complete" ? 1 : 0, outputFiles: [] });
+  fs.writeFileSync(path.join(root, "docs", "WORKFLOW-STATE.json"), `${JSON.stringify({
+    runId: "run", startedAt: "", lastUpdatedAt: "", manifestPath: "docs/EXECUTION-MANIFEST.json", manifestVersion: "1",
+    harness: "opencode", status: "running", blockers: [],
+    tasks: { "API-1": record("API-1", "complete"), "REVIEW-1": record("REVIEW-1", "pending") },
+  }, null, 2)}\n`);
+  git("add", "-A");
+  git("commit", "-qm", "seed project");
+
+  const engineScripts = path.join(resolveResources().templatesDir, "skills", "forge-workflow-engine", "scripts");
+  // The preflight itself needs the engine's own node_modules, which this package
+  // does not install and a bootstrapped project may not have either, so the
+  // rule is not re-implemented here. This asserts the strictly stronger
+  // statement that makes the deadlock impossible: approving leaves nothing
+  // dirty except the two review records, all of which the parallel preflight
+  // tolerates. The rule's own coverage lives in the engine's sandbox suite.
+  assert.deepEqual(
+    execFileSync("git", ["status", "--porcelain", "--untracked-files=all"], { cwd: root, encoding: "utf8" })
+      .split("\n").filter(Boolean).map((line) => line.slice(3)),
+    [],
+    "the repository must start clean enough to run in parallel",
+  );
+
+  const server = await startConsoleServer({
+    repoRoot: root, port: port++, open: false,
+    deps: { spawner: () => ({ pid: 1 }) },
+  });
+  t.after(() => server.stop());
+  const response = await fetch(`${server.url}/api/tasks/human-review`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", "X-Forge-Token": server.token },
+    body: JSON.stringify({ taskId: review.id, reviewer: "Reviewer", notes: "Exercised the fixture end to end and every acceptance criterion held." }),
+  });
+  const body = await response.text();
+  assert.equal(response.status, 200, body);
+  assert.equal(JSON.parse(body).resumed, true, "the approval must have started the resume run");
+  assert.equal(fs.existsSync(path.join(root, "docs", "reviews", "REVIEW-1.json")), true);
+
+  // The whole point: the resume it just triggered must not be refused, because
+  // the approval left only state the preflight tolerates.
+  assert.deepEqual(
+    execFileSync("git", ["status", "--porcelain", "--untracked-files=all"], { cwd: root, encoding: "utf8" })
+      .split("\n").filter(Boolean).map((line) => line.slice(3)).sort(),
+    ["docs/reviews/REVIEW-1-console-review.md", "docs/reviews/REVIEW-1.json"],
+    "approving must not dirty anything the parallel preflight refuses",
+  );
+  assert.ok(fs.existsSync(path.join(engineScripts, "task-context.ts")), "the approval must have used the installed engine's review writer");
 });
 
 test("human-review task rows surface transitive upstream validation gaps", (t) => {

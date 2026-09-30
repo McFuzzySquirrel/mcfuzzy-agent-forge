@@ -4,6 +4,105 @@ Detailed release and change notes for MyForge.
 
 ---
 
+## September 2026 - v3.86
+
+### `--concurrency` is real throughput again: per-task git worktree sandboxes
+
+- **Concurrent tasks now genuinely overlap.** `--concurrency <n>` / `FORGE_ENGINE_CONCURRENCY`
+  used to be accepted and then ignored — the engine always ran one repository
+  task at a time, because output attribution compared repository-wide worktree
+  snapshots and could not say which task changed what. Each concurrent task now
+  runs in its own `git worktree` under `.forge-sandboxes/`, so what a task
+  changed is exactly what its sandbox contains. Wall-clock time on multi-agent
+  builds drops from the sum of task durations toward the critical path. The
+  default `--concurrency 1` is unchanged in every respect.
+- **`outputFiles`, the no-op output gate, and `validationCommands` are exact.**
+  The harness, the output-verification snapshot, and the task's manifest
+  validation commands all run against the task's own worktree, so a sibling
+  task's edits can no longer be mis-attributed, and a task is never validated
+  against a tree another task is halfway through editing.
+- **Per-task auto-commit stays clean.** When a task finishes, its files are
+  copied back into the repository and the normal per-task commit runs. Each
+  commit still contains exactly one task's work, and the history stays aligned
+  with the manifest.
+- **Concurrent writes to the same file now fail loudly.** If two tasks in a wave
+  change the same path, the second fails with `Concurrent write overlap on
+  <paths>` instead of silently overwriting the first. Declare a dependency
+  between those tasks or give them disjoint outputs, then `replay` the failed
+  task.
+- **Run state can no longer lose updates.** The engine is now the single writer:
+  a task owns one record and hands it to the engine, and state persistence,
+  sandbox integration, and git all run on one serialized queue. A task is
+  durable the moment it finishes, so a crash mid-wave never re-runs completed
+  work. This fixes CR-01 from the September 2026 codebase review.
+- **Two operator-visible requirements for parallel runs.** Your code and your
+  requirements must be committed: a worktree is built from a commit and cannot
+  see uncommitted work, so the engine refuses to start and names the exact
+  offending paths rather than quietly handing a task a stale tree. Uncommitted
+  `docs/PRD.md`, `docs/IDEA.md` and `docs/features/**` block the run for the same
+  reason — that is what a task is told to read. Everything else under `docs/` is
+  generated or operator input (engine config, compiled manifest, responsibility
+  matrix, progress, audit, authoring artifacts, review records) and is tolerated
+  and copied into each sandbox, so changing a Console setting does not block a
+  run, and neither does recording a human-review approval. Consequently, **`--concurrency > 1` cannot be combined with
+  `--no-auto-commit`**, and **keep-alive is downgraded to a cold start per task**
+  when a run is parallel — one warm `opencode serve` serves one project directory
+  and cannot serve several worktrees. An explicit `--attach <url>` is still
+  honored exactly as given.
+- **Same-owner serialization is unchanged**: at most one task per agent runs per
+  wave, and a harness that does not declare `supportsConcurrency` still falls
+  back to a single task at a time (with a warning, not a failure).
+- **No trace left behind.** Sandboxes are hidden with `.git/info/exclude`, so a
+  run never edits your tracked `.gitignore`. Worktrees left by a killed engine
+  are swept before the next run, and the sandbox root is deleted when the run
+  ends. Disk cost is N concurrent checkouts of `HEAD`.
+- **A human review can no longer be approved before it is reviewable.** The
+  engine always gated dispatch on a review task's prerequisites, so the task
+  never paused for work that did not exist — but the Console listed every
+  manifest task and offered its approval action on status alone. A review
+  attests to delivered work, and its attestation is fingerprinted over the task
+  and its references (so a changed reference self-invalidates) but **not** over
+  the reviewed output, meaning a premature approval survived and released every
+  downstream task on a review of pre-review code. A review row now reads
+  **Human review blocked** and lists what it is waiting on until those
+  prerequisites are done, and both the Console API and `approve-task` refuse an
+  early approval and name the prerequisites. All three surfaces call the engine's
+  own `unmetPrerequisites`, so the dispatch gate, the row, and the guard cannot
+  drift apart.
+- **Console approve-and-resume no longer deadlocks under parallel execution.**
+  The form wrote the review record and attestation and then started the run; with
+  `docs/reviews/**` classified as a requirement, the run's clean-tree preflight
+  refused the very files the form had just written, so the operator had to
+  hand-commit them to approve. Review records are now tolerated generated state.
+  Related: a Console-started run with a numeric `concurrency`, `taskTimeoutMs`,
+  or `maxRetries` in `docs/engine-config.json` could not launch at all — those
+  values were passed to `argv` as numbers and crashed the job runner.
+- **An unapproved human review no longer stops the run.** A review with no
+  operator attestation used to pause the run the moment it was dispatched. If its
+  dependencies were left undeclared in the feature document — the compiler never
+  adds them — the engine parked the run before the very work the review was meant
+  to inspect existed, and the operator was asked to approve nothing, with no way
+  out but that approval. A review is now held pending while every other task
+  continues, and the run pauses only when nothing else is dispatchable, so the
+  operator is always interrupted with the work already finished. A review also
+  stops deferring unrelated work that shared its wave. The held task keeps a
+  `Human review required` note so the Console and `PROGRESS.md` explain it, and
+  the `run.paused` audit event now names the reviews instead of reporting a stop
+  request. A review that is the only ready task still pauses immediately, and
+  `--yes` still cannot approve human work.
+- **Compiling warns when a review omits the dependency it reviews.** A
+  `human-review` task whose `references` name a file produced by another task it
+  does not depend on — directly or transitively — gets a warning naming the
+  producer. Advisory, not an error: existing feature documents keep compiling,
+  and the engine is now correct without it. The PRD authoring guide tells
+  authors to list every task whose outputs the review reads.
+- See [ADR-056](adr/056-parallel-execution-task-sandboxes.md) and the
+  [implementation plan](parallel-execution-plan.md); amends
+  [ADR-021](adr/021-parallel-task-dispatch.md) and
+  [ADR-040](adr/040-native-adapter-contracts.md). Review-wait semantics are
+  recorded in
+  [ADR-057](adr/057-human-review-waits-rather-than-pauses-the-run.md).
+
 ## September 2026 - v3.85
 
 ### Remove projects from Forge without changing their repositories

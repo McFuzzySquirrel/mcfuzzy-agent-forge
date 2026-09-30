@@ -130,7 +130,8 @@ For repository tasks, that persona is in the execution file rather than argv.
 ## Auto-commit
 
 After each task completes, the engine commits the working tree — one commit per
-task, sequenced after the wave merge so it is safe at any `--concurrency`. This
+task, sequenced on the engine's single writer queue after the task's work is
+integrated, so it is safe at any `--concurrency`. This
 produces a git history aligned with the manifest's task decomposition: review,
 bisect, or roll back any single task's work.
 
@@ -254,10 +255,10 @@ npm run workflow-engine -- viz     [--repo <path>] [--port <n>] [--no-open]
 | `--max-retries <n>` | `2` | Attempts per task before it is marked `failed` |
 | `--retry-delay-ms <ms>` | `5000` | Delay between retries |
 | `--heartbeat-ms <ms>` | `60000` | Heartbeat interval while a task runs; `0` disables |
-| `--concurrency <n>` | `1` | Persisted concurrency preference for future multi-task dispatch; the current engine still executes one repo task at a time while output attribution is repo-wide (see *Execution waves and concurrency* below) |
+| `--concurrency <n>` | `1` | Max ready tasks dispatched at once. Above `1` the harness must declare `supportsConcurrency` and the working tree must be clean; each task then runs in its own git worktree under `.forge-sandboxes/` (see *Execution waves and concurrency*) |
 | `--task-timeout-ms <ms>` | `600000` (10 min) | Per-task timeout before the harness call is killed; a task's own `timeoutMs` in the manifest overrides this |
 | `--yes` | *(off)* | Skip the interactive pre-run gate |
-| `--keep-alive` | adaptive | OpenCode harness only: boot one `opencode serve` for the run and attach every task to it, avoiding per-task cold boots (see *Keep-alive attach mode* below). **Default is adaptive** - on when more than one task remains, off for a single-task run |
+| `--keep-alive` | adaptive | OpenCode harness only: boot one `opencode serve` for the run and attach every task to it, avoiding per-task cold boots (see *Keep-alive attach mode* below). **Default is adaptive** - on when more than one task remains, off for a single-task run. Always off when `--concurrency > 1`, because one server serves one project directory |
 | `--keep-alive-port <n>` | free port | Port for the engine-managed `opencode serve` instance |
 | `--no-keep-alive` | *(off)* | OpenCode harness only: force a cold-start `opencode run` per task (bypasses the adaptive default) |
 | `--attach <url>` | *(off)* | Attach tasks to an already-running `opencode serve` instance (e.g. `http://127.0.0.1:4096`) with no lifecycle management |
@@ -387,6 +388,14 @@ client auto-sends credentials). While attaching, the adapter prints a per-task
 startup split (`[opencode] task <id>: boot=… total=…`) so the cold-boot removal
 is measurable against `docs/EXECUTION-AUDIT.jsonl`.
 
+**Parallel runs always cold-start.** One warm server is bound to a single
+project directory, and a parallel wave gives each task its own git worktree. So
+with `--concurrency > 1` the engine skips the engine-managed server and runs a
+fresh `opencode run` per task, logging the reason. `--attach <url>` is still
+honoured exactly as given, because you own that server; the engine warns that
+each task will point `--dir` at its own worktree. See
+[ADR-056](adr/056-parallel-execution-task-sandboxes.md).
+
 ### Live visualization (The Forge Board)
 
 Pass `--viz` to run (or `forge-launcher engine-run --viz`) to launch a live
@@ -451,29 +460,84 @@ rather than retried as an ordinary task failure. See
 
 ### Execution waves and concurrency
 By default the engine runs tasks **sequentially** (concurrency `1`). With
-`--concurrency <n>` it still records the operator's intended concurrency in
-config, summaries, and launcher/console flows, but the current runtime executes
-**one repo task at a time**.
+`--concurrency <n>` (or `FORGE_ENGINE_CONCURRENCY`) it runs up to `n` ready
+tasks at once. Disjoint-owner tasks genuinely overlap, so wall-clock time
+approaches the critical path instead of the sum of task durations.
 
-Why the conservative behavior? Output verification and artifact synthesis now use
-repository-wide worktree snapshots to prove what changed during a task. Running
-multiple repo-editing tasks at once would let one task mis-attribute another
-task's file-diff evidence, corrupting `outputFiles`, `filesChanged`, and the
-no-op gate. Until attribution becomes task-isolated, the engine forces
-serialized execution even when a higher concurrency value is configured.
+Concurrency is opt-in, harness-gated, and isolated:
 
-What still matters today:
+- only adapters that declare `supportsConcurrency` are parallelized; a higher
+  value on any other adapter warns and falls back to `1`;
+- **same-owner tasks never overlap** - `ownerUniqueReady` keeps at most one task
+  per agent in a wave;
+- each concurrent task runs in its own `git worktree` (see below), so
+  `outputFiles`, the no-op gate, and `validationCommands` stay exact.
 
-- the configured concurrency value is persisted in `docs/engine-config.json`,
-  shown in the pre-run summary, and carried through launcher/console flows;
-- ready-task selection still passes through `ownerUniqueReady`, so the dispatch
-  boundary already preserves one-task-per-owner behavior; and
-- the wave-shaped design remains the re-entry point for future safe parallelism.
+#### Task sandboxes
+Above concurrency `1` the engine creates a detached-HEAD worktree per task under
+`.forge-sandboxes/` and runs the harness, output verification, and the task's
+`validationCommands` inside it. What a task changed is therefore exactly what its
+sandbox contains, not a repository-wide diff that a sibling task could have
+polluted.
 
-So treat `--concurrency` as a stored operator preference today, not an active
-throughput dial. See [ADR-021](adr/021-parallel-task-dispatch.md) for the
-original parallel-dispatch design and why the current docs call out the stricter
-runtime behavior explicitly.
+When a task completes, its files are copied back into the repository and the
+normal per-task auto-commit runs. Because integration is serialized, each commit
+still contains exactly one task's work.
+
+Three things make the sandbox usable and safe:
+
+- **Gitignored build inputs are symlinked in** (`node_modules/`, `.env`,
+  `dist/`, …), so validation commands still find installed dependencies.
+- **Engine metadata under `docs/` is copied in** (the compiled manifest, engine
+  config, review evidence, generated artifacts) so the task reads what you read.
+- **Nothing the engine placed in a sandbox is ever attributed to the task** or
+  copied back into your repository.
+
+#### Requirements for parallel runs
+A worktree is built from a commit, so it cannot see uncommitted work. Rather
+than silently handing an agent a stale tree, the engine **refuses** to run in
+parallel and names the exact paths. The rule is about consequence, not tidiness:
+
+| Uncommitted path | Result |
+|---|---|
+| `docs/PRD.md`, `docs/IDEA.md`, `docs/features/**` | **blocks the run** - this is what a task is told to read |
+| anything else under `docs/` (engine config, manifest, matrix, progress, audit, authoring artifacts, review records) | tolerated, and copied into the sandbox so the task sees your current version |
+| anything outside `docs/` (your code and configuration) | **blocks the run** - a sandbox at `HEAD` cannot represent it |
+
+```bash
+# will fail with the exact uncommitted paths listed
+FORGE_ENGINE_CONCURRENCY=3 npm run workflow-engine -- run
+```
+
+Review records are deliberately tolerated rather than listed as requirements. A
+human-review task is never sandboxed - it reads the attestation from the engine
+root - and the Console's approve-and-resume action writes that attestation and
+then immediately starts the run, so treating the approval as uncommitted work to
+commit first would make the form refuse the run it had just approved. If an
+approval lands outside `docs/`, the refusal names it as a review record rather
+than as work in progress.
+
+Changing a Console setting rewrites a generated `docs/` file, which is why
+generated state is exempt rather than blocking.
+
+Two consequences to plan for:
+
+- **Commit or stash your code and requirements before running in parallel**, and
+  do not combine `--concurrency > 1` with `--no-auto-commit`: an uncommitted tree
+  is exactly what a sandbox cannot represent.
+- **Keep-alive is downgraded to a cold start per task** when a run is parallel,
+  because one warm `opencode serve` serves a single project directory and cannot
+  serve several worktrees. An explicit `--attach <url>` is still honoured as
+  given, because you own that server.
+- **Disk**: N concurrent worktrees, each a full checkout of `HEAD`. Gitignored
+  build inputs are symlinked, not copied, so the real cost is the tracked tree.
+
+Sandboxes live in `.git/info/exclude`, so a run never edits your tracked
+`.gitignore`. Worktrees left by a killed engine are swept before the next run,
+and the sandbox root is deleted when the run ends.
+
+See [ADR-056](adr/056-parallel-execution-task-sandboxes.md) and
+[ADR-021](adr/021-parallel-task-dispatch.md).
 
 ---
 
@@ -484,9 +548,11 @@ runtime behavior explicitly.
 2. Project input artifacts into a compact context block (see *Artifact pattern* below).
 3. Mark the task `running` and persist state, then invoke the harness - retrying up to `--max-retries` on failure.
 4. On success, record the task `complete` (and synthesize a work artifact if `produces` is declared).
-5. Persist the authoritative state, sync `PROGRESS.md`, and finish task commit bookkeeping before starting the next task.
+5. Merge the task's record into the authoritative state, sync `PROGRESS.md`, copy any sandboxed work back, and finish task commit bookkeeping.
 
-Tasks are currently executed one at a time even though the engine still reasons in ready-frontier waves. A failed task blocks downstream tasks in that phase, and the run stops with `status: "failed"`. Intentional skips remain explicit state transitions and are not used to hide owner or discovery failures.
+The engine is the single writer of run state: state persistence, sandbox integration, and git auto-commit are serialized on one queue, so concurrent tasks can never interleave them and no task's updates are lost. A task is durable the moment it finishes, so a crash mid-wave never re-runs completed work.
+
+A failed task blocks downstream tasks in that phase, and the run stops with `status: "failed"`. In a parallel wave, in-flight siblings are allowed to finish (drain) before the run stops, and a failed task is re-run with `replay`, not by a bare `run`. Intentional skips remain explicit state transitions and are not used to hide owner or discovery failures.
 
 > **Owner assignment.** `forge-execution-adapter compile` should produce owners,
 > but the engine validates the selected `manifest.harnessRoot` and discovered
@@ -616,6 +682,15 @@ receives - the percentage is just an estimate.
   `docs/engine-control.json`, the engine polls it at the top of each task wave,
   finishes the in-flight task, saves state as `paused`, and exits. `run` resumes
   a paused run.
+- **A human review pauses the run, but only as a last resort.** A review with no
+  operator attestation is held pending and the run keeps going, so unrelated
+  tasks that happen to share its wave are never deferred. The run pauses when
+  nothing else is dispatchable and reviews are still unapproved, which means the
+  operator is always interrupted with the reviewed work already finished - even
+  if the review's dependencies were left undeclared in the feature document. The
+  held task keeps a `Human review required` note on its record, and the
+  `run.paused` audit event names the reviews rather than reporting a stop
+  request. Each wave that holds a review says so on stdout.
 - **`stop`** does the same as `pause` and additionally sends `SIGTERM` to the
   engine PID recorded in `docs/engine.pid` (the engine writes its own PID at
   startup), so a live detached run stops even mid-task - still after the current
@@ -640,7 +715,7 @@ To start fresh (e.g. after recompiling the manifest), delete `docs/WORKFLOW-STAT
 |---|---|---|
 | `FORGE_ENGINE_YES` | *(unset)* | `1` skips the pre-run gate (same as `--yes`) |
 | `FORGE_ENGINE_HEARTBEAT_MS` | `60000` | Heartbeat interval in ms |
-| `FORGE_ENGINE_CONCURRENCY` | `1` | Persisted concurrency preference mirrored from `--concurrency`; retained in config and summaries even though repo-task execution is currently serialized |
+| `FORGE_ENGINE_CONCURRENCY` | `1` | Max concurrent tasks (same as `--concurrency`); above `1` each task runs in its own git worktree and the working tree must be clean |
 | `FORGE_ENGINE_TASK_TIMEOUT_MS` | `600000` | Per-task timeout in ms (same as `--task-timeout-ms`; per-task manifest `timeoutMs` overrides) |
 | `FORGE_ENGINE_HARNESS` | `opencode` | Default harness for the standalone runner |
 | `FORGE_ENGINE_VIZ` | *(unset)* | `1` enables `--viz` on the standalone runner |

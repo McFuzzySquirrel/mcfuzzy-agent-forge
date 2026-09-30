@@ -2,6 +2,16 @@
 
 **Date:** 2026-08-25
 **Status:** Accepted
+**Amended:** 2026-09-29 by [ADR-056](056-parallel-execution-task-sandboxes.md)
+
+> **Amendment (v3.86).** Sections 2, 3, and 5 below describe the original design
+> and are retained as history. Parallel dispatch was disabled in the interim
+> because output attribution had become repository-wide; ADR-056 restores it by
+> running each concurrent task in its own `git worktree`. Two details in this
+> record are now superseded: repository-level file isolation is **not** delegated
+> to the dependency graph (it is enforced by the sandbox plus an integration-time
+> overlap check), and state is **not** saved once per wave (the engine is a single
+> writer that persists per task). `--concurrency 1` behaviour is unchanged.
 
 ---
 
@@ -90,8 +100,9 @@ Failure handling uses **drain** semantics: in-flight tasks in the current wave r
 
 ### Negative
 
-- Parallel repo-editing harnesses can race if a manifest author declares insufficient dependencies. The mitigation is unchanged from sequential mode (the DAG, plus the same-owner guard), but the blast radius of a missing dependency is now a lost edit rather than a serialized-but-wrong edit. Cross-owner tasks on shared paths (one task scaffolding a directory while another builds inside it) are still the operator's responsibility - a future file-overlap gate would close that.
+- **Parallel repo-editing harnesses can race if a manifest author declares insufficient dependencies.** The mitigation is unchanged from sequential mode (the DAG, plus the same-owner guard), but the blast radius of a missing dependency is now a lost edit rather than a serialized-but-wrong edit. **Amended by ADR-056:** concurrent tasks no longer share a working tree, and two tasks that do change the same file are detected at integration time - the second fails with `Concurrent write overlap` instead of silently overwriting the first. A task that edits undeclared shared files (package.json, lockfiles) no longer races, but it also sees only its own committed baseline.
 - The on-disk `WORKFLOW-STATE.json` no longer reflects a task's `running` status *during* a wave (it is persisted at wave boundaries). A process kill mid-wave re-runs the wave's tasks on resume, which is safe but not free.
+  - **Amended by ADR-056:** state is now persisted per task transition through a single-writer queue, so a task is durable the moment it finishes and a mid-wave crash never re-runs completed work.
 - "Current phase" is informational when multiple phases are in flight; `phase.started` events are emitted for each phase that enters a wave, but there is no single linear "current task" notion during a parallel wave.
 
 ### Neutral

@@ -10,6 +10,7 @@ import type {
   SelectionScope,
   TaskAttemptSummary,
   TaskGateResult,
+  TaskRecord,
   TaskResult,
   TaskStatus,
   TaskSelection,
@@ -19,19 +20,20 @@ import type {
 import {
   appendAuditEvent,
   auditPath as defaultAuditPath,
+  completeRecord,
+  failRecord,
   findPhaseForTask,
   findTask,
   initState,
   loadState,
-  markTaskComplete,
-  markTaskFailed,
-  markTaskStarted,
   reconcileState,
   saveState,
   setCurrentPhase,
   setSelection,
+  startRecord,
   statePath as defaultStatePath,
   syncProgressMd,
+  withTaskRecord,
   writeAuditEvent,
 } from "./state.ts";
 
@@ -42,7 +44,21 @@ import { clearControl, readControl } from "./control.ts";
 import { assertTaskCapabilities, prepareTaskRequest } from "./request.ts";
 import { humanTaskApproved, taskReferenceContext } from "./task-context.ts";
 import { readTaskHandoff } from "./task-result.ts";
+// The task graph is the shared definition of readiness; re-exported so the engine
+// keeps one public surface and the Console can import it without the harness.
+export { isTaskDone, unmetPrerequisites } from "./task-graph.ts";
+import { isTaskDone, unmetPrerequisites } from "./task-graph.ts";
 import { writeTaskAttempt } from "./task-execution.ts";
+import {
+  clearSandboxRoot,
+  createSandbox,
+  destroySandbox,
+  integrateSandbox,
+  preflightSandboxMode,
+  sandboxProvidedPaths,
+  sandboxRoot,
+  sweepStaleSandboxes,
+} from "./sandbox.ts";
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -78,14 +94,57 @@ export async function mapLimit<T, R>(
   return results;
 }
 
+/**
+ * Serializes work behind a promise chain. The engine uses one queue so that
+ * state persistence, sandbox integration, and git auto-commit never interleave:
+ * a task may run concurrently with its siblings, but the engine itself is a
+ * single writer.
+ */
+export function createSerialQueue(): { run<T>(work: () => Promise<T> | T): Promise<T> } {
+  let tail: Promise<unknown> = Promise.resolve();
+  return {
+    run(work) {
+      const result = tail.then(work, work);
+      tail = result.then(() => undefined, () => undefined);
+      return result;
+    },
+  };
+}
+
+export interface ConcurrencyDecision {
+  /** The value the operator asked for, after parsing. */
+  requested: number;
+  /** The value the engine will actually dispatch with. */
+  effective: number;
+  /** True when concurrent tasks each run in their own git worktree sandbox. */
+  sandboxMode: boolean;
+  /** Set when the request had to be reduced, with the reason. */
+  notice?: string;
+}
+
+/**
+ * The single source of truth for how many tasks run at once. The CLI uses it for
+ * the pre-run summary and the keep-alive decision, the engine for dispatch, so
+ * the three can never disagree about whether sandboxes are in play.
+ */
+export function resolveConcurrency(options: { maxConcurrency: number; supportsConcurrency: boolean }): ConcurrencyDecision {
+  const requested = Number.isFinite(options.maxConcurrency) ? Math.floor(options.maxConcurrency) : 1;
+  const wanted = Math.max(1, requested);
+  if (wanted > 1 && !options.supportsConcurrency) {
+    return {
+      requested,
+      effective: 1,
+      sandboxMode: false,
+      notice: `Harness does not support concurrent task execution; --concurrency ${wanted} falls back to 1.`,
+    };
+  }
+  return { requested, effective: wanted, sandboxMode: wanted > 1 };
+}
+
 function loadManifest(path: string): ExecutionManifest {
   const manifest = JSON.parse(readFileSync(path, "utf8")) as ExecutionManifest;
   if (manifest.sourceLayout !== "features") throw new Error("Feature-based manifest required. Convert legacy requirements into docs/PRD.md + docs/features/*.md and recompile before execution.");
   return manifest;
-}
-
-export function isTaskDone(status: TaskStatus | undefined): boolean {
-  return status === "complete" || status === "skipped";
 }
 
 export function allDepsComplete(
@@ -264,35 +323,88 @@ function hasFailed(state: WorkflowState): boolean {
 }
 
 // ─── Single-task executor ─────────────────────────────────────────────────────
+// ─── Single-task executor ─────────────────────────────────────────────────────
+
+/**
+ * What a finished task reports back to the engine.
+ *
+ * The engine is the only writer of `WorkflowState`: a task owns one
+ * `TaskRecord`, hands it to `env.checkpoint` for durability while it runs, and
+ * returns it here. It never derives a whole state from a snapshot, which is
+ * what previously lost updates when more than one task ran at a time.
+ */
+export interface TaskOutcome {
+  taskId: string;
+  record: TaskRecord;
+  /** The task asked the run to pause (human review, control file, signal). */
+  pauseRequested?: boolean;
+  /** Sandbox the task ran in; the engine integrates from it before destroying it. */
+  sandboxPath?: string;
+  /** Repository-relative paths the task changed inside its sandbox. */
+  changedPaths?: string[];
+  /**
+   * Artifact the task synthesised before the engine integrated its work. If
+   * integration then fails, the artifact is downgraded so downstream tasks
+   * never consume output that was never merged.
+   */
+  artifactId?: string;
+}
+
+interface TaskEnvironment {
+  agents: AgentDescriptor[];
+  opts: EngineOptions;
+  store: ArtifactStore;
+  shouldStop: () => boolean;
+  runId: string;
+  /** Root that owns engine state, artifacts, and evidence files. */
+  engineRoot: string;
+  /**
+   * Root the harness, output verification, and validation commands run in.
+   * Equal to `engineRoot` unless the task has its own sandbox.
+   */
+  workspaceRoot: string;
+  /** Single-writer durability hook owned by the engine. */
+  checkpoint: (record: TaskRecord) => Promise<void>;
+}
 
 async function executeTask(
   entry: FlatTask,
-  agents: AgentDescriptor[],
-  state: WorkflowState,
-  opts: EngineOptions,
-  store: ArtifactStore,
-  shouldStop: () => boolean,
-): Promise<WorkflowState> {
+  initial: TaskRecord,
+  env: TaskEnvironment,
+): Promise<TaskOutcome> {
   const { task } = entry;
+  const { opts, store, workspaceRoot: workspace, engineRoot } = env;
+
   if (task.contract?.kind === "human-review") {
-    if (shouldStop()) return state;
-    taskReferenceContext(opts.repoRoot, task);
-    if (!humanTaskApproved(opts.repoRoot, task)) {
+    // Human review never touches the worktree: it reads operator evidence from
+    // the engine root, so it is never sandboxed.
+    if (env.shouldStop()) return { taskId: task.id, record: initial };
+    taskReferenceContext(engineRoot, task);
+    if (!humanTaskApproved(engineRoot, task)) {
+      // Deliberately not a pause request. The wave loop holds this task pending
+      // and keeps running everything else, then pauses once nothing else is
+      // left - so a review whose dependencies were under-declared in the
+      // feature document still finds its work finished by the time an operator
+      // is asked to look at it. Pausing here instead would strand that work.
       const note = `Human review required for '${task.id}'. Record operator evidence with workflow-engine approve-task, then resume. --yes does not approve human work.`;
-      console.log(`[engine] ${note}`);
-      return { ...state, status: "paused", tasks: { ...state.tasks, [task.id]: { ...state.tasks[task.id]!, errorMessage: note } } };
+      const pending = { ...initial, errorMessage: note };
+      await env.checkpoint(pending);
+      return { taskId: task.id, record: pending };
     }
     const artifact = task.produces ? store.write({ type: task.produces, category: "work", taskId: task.id, producedBy: "human-reviewer", status: "complete", summary: `Operator evidence verified for ${task.title}`, filesChanged: [task.contract.reviewFile!], inputs: [], payload: { reviewFile: task.contract.reviewFile }, nextActions: [] }) : undefined;
-    writeAuditEvent(opts.auditPath, { timestamp: new Date().toISOString(), action: "task.complete", runId: state.runId, taskId: task.id, note: `Human attestation: ${task.contract.reviewFile}` });
-    return markTaskComplete(markTaskStarted(state, task.id), task.id, [task.contract.reviewFile!], "Human review approved with evidence.", artifact?.artifactId);
+    writeAuditEvent(opts.auditPath, { timestamp: new Date().toISOString(), action: "task.complete", runId: env.runId, taskId: task.id, note: `Human attestation: ${task.contract.reviewFile}` });
+    const completed = completeRecord(startRecord(initial), [task.contract.reviewFile!], "Human review approved with evidence.", artifact?.artifactId);
+    await env.checkpoint(completed);
+    return { taskId: task.id, record: completed, artifactId: artifact?.artifactId };
   }
-  const agent = findAgentForTask(agents, task.ownerAgent);
+
+  const agent = findAgentForTask(env.agents, task.ownerAgent);
 
   // A stop/pause was requested while this task was queued in the current wave.
-  // Leave it pending so `run` resumes it later instead of starting it.
-  if (shouldStop()) {
+  // Leave it pending so the run resumes it later instead of starting it.
+  if (env.shouldStop()) {
     console.log(`[engine] Stop requested before task ${task.id} started; leaving it pending.`);
-    return state;
+    return { taskId: task.id, record: initial };
   }
 
   if (!agent) {
@@ -322,7 +434,7 @@ async function executeTask(
       writeAuditEvent(opts.auditPath, {
         timestamp: new Date().toISOString(),
         action: "context.projected",
-        runId: state.runId,
+        runId: env.runId,
         taskId: task.id,
         sourceTokenEstimate: projection.sourceTokenEstimate,
         projectedTokenEstimate: projection.projectedTokenEstimate,
@@ -337,73 +449,75 @@ async function executeTask(
     }
   }
 
-  let currentState = markTaskStarted(state, task.id);
-  writeAuditEvent(opts.auditPath, {
-    timestamp: new Date().toISOString(),
-    action: "task.started",
-    runId: currentState.runId,
-    taskId: task.id,
-    phaseId: entry.phaseId,
-    attempt: currentState.tasks[task.id]?.attempt,
-  });
-
+  let current = startRecord(initial);
   // Persist the "running" status so snapshots/dashboards (and reconnects) see
   // in-flight work instead of a stale "pending". Safe on restart: runEngine
   // normalizes any leftover "running" tasks back to "pending" on load.
-  saveState(opts.statePath, currentState);
+  await env.checkpoint(current);
+  writeAuditEvent(opts.auditPath, {
+    timestamp: new Date().toISOString(),
+    action: "task.started",
+    runId: env.runId,
+    taskId: task.id,
+    phaseId: entry.phaseId,
+    attempt: current.attempt,
+  });
 
   // Output-verification baseline: a snapshot of the working tree taken before
   // the harness runs. It supports both the no-op heuristic and Git-based
   // output-file enrichment for in-place edits, even when --allow-noop disables
-  // only the no-op rejection check.
-  const baseline = await captureWorktree(opts.repoRoot);
+  // only the no-op rejection check. Taken after sandbox seeding, so seeded
+  // engine metadata never counts as task work.
+  const baseline = await captureWorktree(workspace);
 
   console.log(`[engine] Starting task ${task.id}: ${task.title} (@${agent.name})`);
 
-  const cancelAttempt = (): WorkflowState => {
-    currentState = {
-      ...currentState,
-      tasks: { ...currentState.tasks, [task.id]: {
-        ...currentState.tasks[task.id]!, status: "pending", startedAt: undefined, completedAt: undefined,
-        errorMessage: "Task cancelled", failureKind: "cancelled",
-      } },
+  const cancelAttempt = async (): Promise<TaskOutcome> => {
+    current = {
+      ...current,
+      status: "pending", startedAt: undefined, completedAt: undefined,
+      errorMessage: "Task cancelled", failureKind: "cancelled",
     };
     writeAuditEvent(opts.auditPath, {
-      timestamp: new Date().toISOString(), action: "task.cancelled", runId: currentState.runId, taskId: task.id,
+      timestamp: new Date().toISOString(), action: "task.cancelled", runId: env.runId, taskId: task.id,
       note: "Attempt cancelled; task remains pending for resume",
     });
-    return currentState;
+    await env.checkpoint(current);
+    return { taskId: task.id, record: current, pauseRequested: true };
   };
 
-  const previousAttempt = currentState.tasks[task.id]?.attemptHistory?.at(-1);
-  let previousFailure = currentState.tasks[task.id]?.errorMessage ?? previousAttempt?.reason;
+  const leavePending = async (note: string): Promise<TaskOutcome> => {
+    current = { ...current, status: "pending", startedAt: undefined, errorMessage: note };
+    await env.checkpoint(current);
+    return { taskId: task.id, record: current, pauseRequested: true };
+  };
+
+  let previousAttempt = current.attemptHistory?.at(-1);
+  let previousFailure = current.errorMessage ?? previousAttempt?.reason;
   let previousResultPath = previousAttempt?.resultPath;
 
   for (let attempt = 0; attempt <= opts.maxRetries; attempt += 1) {
     if (attempt > 0) {
       // A stop/pause arrived during the failed attempt. Do not start another
-      // retry; reset the task back to pending so `run` resumes it later.
-      if (shouldStop()) {
+      // retry; reset the task back to pending so the run resumes it later.
+      if (env.shouldStop()) {
         console.log(`[engine] Stop requested between attempts for task ${task.id}; leaving it pending.`);
-        const pendingTask = { ...currentState.tasks[task.id]!, status: "pending" as const, startedAt: undefined };
-        return { ...currentState, tasks: { ...currentState.tasks, [task.id]: pendingTask } };
+        return leavePending("Stop requested between attempts");
       }
       console.log(`[engine] Retrying task ${task.id} (attempt ${attempt + 1}/${opts.maxRetries + 1})`);
       writeAuditEvent(opts.auditPath, {
         timestamp: new Date().toISOString(),
         action: "task.retrying",
-        runId: currentState.runId,
+        runId: env.runId,
         taskId: task.id,
-        attempt: currentState.tasks[task.id]!.attempt + 1,
+        attempt: current.attempt + 1,
         note: previousFailure,
         resultPath: previousResultPath,
       });
       await sleep(opts.retryDelayMs);
-      if (shouldStop()) {
-        return { ...currentState, tasks: { ...currentState.tasks, [task.id]: { ...currentState.tasks[task.id]!, status: "pending", startedAt: undefined } } };
-      }
-      currentState = markTaskStarted(currentState, task.id);
-      saveState(opts.statePath, currentState);
+      if (env.shouldStop()) return leavePending("Stop requested before retry");
+      current = startRecord(current);
+      await env.checkpoint(current);
     }
 
     const invokeStart = Date.now();
@@ -419,11 +533,11 @@ async function executeTask(
     let result: TaskResult;
     try {
       result = await opts.harness.invoke(prepareTaskRequest({
-        agent, task, repoRoot: opts.repoRoot, contextBlock,
+        agent, task, repoRoot: workspace, contextBlock,
         defaultModel: opts.harness.defaultModel, timeoutMs: opts.taskTimeoutMs,
-        maxRetries: opts.maxRetries, attempt: currentState.tasks[task.id]!.attempt,
+        maxRetries: opts.maxRetries, attempt: current.attempt,
         previousFailure, previousResultPath,
-        runId: currentState.runId, signal: opts.signal,
+        runId: env.runId, signal: opts.signal,
         logHarnessActivity: opts.logHarnessActivity,
       }));
     } catch (error) {
@@ -439,47 +553,47 @@ async function executeTask(
     const setGate = (gate: TaskGateResult["gate"], status: TaskGateResult["status"], reason?: string, evidence?: string[]) => {
       Object.assign(gates.find((entry) => entry.gate === gate)!, { status, reason, evidence });
     };
-    const recordAttempt = (outcome: TaskAttemptSummary["outcome"], reason?: string) => {
-      const record = currentState.tasks[task.id]!;
-      const resultPath = writeTaskAttempt(opts.repoRoot, {
-        runId: currentState.runId, taskId: task.id, attempt: record.attempt, outcome, reason, result, gates,
+    const recordAttempt = async (outcome: TaskAttemptSummary["outcome"], reason?: string) => {
+      const resultPath = writeTaskAttempt(engineRoot, {
+        runId: env.runId, taskId: task.id, attempt: current.attempt, outcome, reason, result, gates,
       });
-      currentState.tasks[task.id] = { ...record,
-        attemptHistory: [...(record.attemptHistory ?? []), { attempt: record.attempt, outcome, reason, resultPath }],
+      current = {
+        ...current,
+        attemptHistory: [...(current.attemptHistory ?? []), { attempt: current.attempt, outcome, reason, resultPath }],
         errorMessage: reason,
       };
-      saveState(opts.statePath, currentState);
+      await env.checkpoint(current);
       writeAuditEvent(opts.auditPath, {
-        timestamp: new Date().toISOString(), action: "task.attempt.finished", runId: currentState.runId,
-        taskId: task.id, phaseId: entry.phaseId, attempt: record.attempt, durationMs: result.durationMs,
+        timestamp: new Date().toISOString(), action: "task.attempt.finished", runId: env.runId,
+        taskId: task.id, phaseId: entry.phaseId, attempt: current.attempt, durationMs: result.durationMs,
         note: reason ?? "All applicable completion gates passed", resultPath,
       });
       previousFailure = reason;
       previousResultPath = resultPath;
-      console.log(`[engine] Task ${task.id} attempt ${record.attempt} ${outcome}: ${reason ?? "completion gates passed"} (result ${resultPath})`);
+      console.log(`[engine] Task ${task.id} attempt ${current.attempt} ${outcome}: ${reason ?? "completion gates passed"} (result ${resultPath})`);
     };
 
     // Record a failed attempt (either the harness failed or the output gate
     // rejected a hollow "success"). Exhausting retries marks the task failed.
-    const failTask = (msg: string): WorkflowState => {
+    const failTask = async (msg: string): Promise<TaskOutcome> => {
       console.error(`[engine] Task ${task.id} FAILED after ${attempt + 1} attempt(s): ${msg}`);
-      currentState = markTaskFailed(currentState, task.id, msg);
-      currentState.tasks[task.id] = { ...currentState.tasks[task.id]!, failureKind: result.failureKind ?? "retryable" };
+      current = { ...failRecord(current, msg), failureKind: result.failureKind ?? "retryable" };
+      await env.checkpoint(current);
       writeAuditEvent(opts.auditPath, {
         timestamp: new Date().toISOString(),
         action: "task.failed",
-        runId: currentState.runId,
+        runId: env.runId,
         taskId: task.id,
         phaseId: entry.phaseId,
         durationMs: result.durationMs,
         note: msg,
       });
-      return currentState;
+      return { taskId: task.id, record: current };
     };
 
     if (opts.signal?.aborted) {
       setGate("harness", "failed", "Task cancelled");
-      recordAttempt("cancelled", "Task cancelled");
+      await recordAttempt("cancelled", "Task cancelled");
       return cancelAttempt();
     }
 
@@ -488,7 +602,7 @@ async function executeTask(
     if (result.success) {
       // ── Output verification: never report a task complete with no evidence ─
       const verified = await verifyTaskResult(task, result, baseline, {
-        repoRoot: opts.repoRoot,
+        repoRoot: workspace,
         allowNoop: opts.allowNoop,
         runValidation: Boolean(task.contract) || opts.runValidation,
       });
@@ -512,7 +626,7 @@ async function executeTask(
       }
 
       if (!failReason && (task.contract || opts.runValidation)) {
-        const validation = await runTaskValidation(task, opts.repoRoot, task.timeoutMs ?? opts.taskTimeoutMs);
+        const validation = await runTaskValidation(task, workspace, task.timeoutMs ?? opts.taskTimeoutMs);
         if (!validation.ok) failReason = validation.reason;
         else validationEvidence = task.validationCommands.map((command) => `${command}: exit 0 (engine-verified)`);
         setGate("validation", task.validationCommands.length ? (validation.ok ? "passed" : "failed") : "skipped",
@@ -522,7 +636,7 @@ async function executeTask(
       }
 
       if (failReason) {
-        recordAttempt("failed", failReason);
+        await recordAttempt("failed", failReason);
         if (attempt === opts.maxRetries) return failTask(failReason);
         continue; // hollow success → retry
       }
@@ -531,17 +645,20 @@ async function executeTask(
       // Adapters only check `expectedOutputs` for output files, which misses
       // files the agent modified in place.  Diff the worktree against the
       // pre-task baseline to capture every file that changed during this task
-      // and merge with any files the adapter already reported.
+      // and merge with any files the adapter already reported.  In sandbox mode
+      // the workspace holds this task alone, so the diff is exact.
+      let changedPaths: string[] | undefined;
       if (baseline) {
-        const after = await captureWorktree(opts.repoRoot);
+        const after = await captureWorktree(workspace);
         const gitChanged = diffWorktree(baseline, after);
         if (gitChanged.length > 0) {
           const merged = new Set([...result.outputFiles, ...gitChanged]);
           result = { ...result, outputFiles: [...merged] };
+          changedPaths = gitChanged;
         }
       }
 
-      recordAttempt("passed");
+      await recordAttempt("passed");
 
       // ── Artifact creation ─────────────────────────────────────────────────
       let artifactId: string | undefined;
@@ -563,7 +680,7 @@ async function executeTask(
         writeAuditEvent(opts.auditPath, {
           timestamp: new Date().toISOString(),
           action: "artifact.created",
-          runId: currentState.runId,
+          runId: env.runId,
           taskId: task.id,
           artifactId: artifact.artifactId,
           artifactType: artifact.type,
@@ -573,36 +690,36 @@ async function executeTask(
         console.log(`[engine] Artifact created: ${artifact.artifactId} (${artifact.type})`);
       }
 
-      currentState = markTaskComplete(
-        currentState,
-        task.id,
+      current = completeRecord(
+        current,
         result.outputFiles,
         result.stdout,
         artifactId,
         inputArtifactIds.length > 0 ? inputArtifactIds : undefined,
         validationLimitations,
       );
+      await env.checkpoint(current);
       writeAuditEvent(opts.auditPath, {
         timestamp: new Date().toISOString(),
         action: "task.complete",
-        runId: currentState.runId,
+        runId: env.runId,
         taskId: task.id,
         phaseId: entry.phaseId,
         outputFiles: result.outputFiles,
         durationMs: result.durationMs,
       });
       console.log(`[engine] Task ${task.id} complete (${result.durationMs}ms)`);
-      return currentState;
+      return { taskId: task.id, record: current, changedPaths, artifactId };
     }
 
-    recordAttempt(result.failureKind === "cancelled" ? "cancelled" : "failed", result.errorMessage ?? result.stderr);
+    await recordAttempt(result.failureKind === "cancelled" ? "cancelled" : "failed", result.errorMessage ?? result.stderr);
     if (attempt === opts.maxRetries || result.failureKind === "configuration" ||
         result.failureKind === "exception" || result.failureKind === "cancelled") {
       return failTask(result.errorMessage ?? result.stderr);
     }
   }
 
-  return currentState;
+  return { taskId: task.id, record: current };
 }
 
 async function preflightOwners(
@@ -725,16 +842,150 @@ async function runEngineSession(opts: EngineOptions): Promise<WorkflowState> {
   await opts.harness.prepare?.({ repoRoot: opts.repoRoot, runId: state.runId, signal: opts.signal });
 
   const store = new ArtifactStore({ artifactsPath: opts.artifactsPath });
-  // Output attribution compares repository-wide worktree snapshots; running
-  // tasks concurrently can attribute another task's file changes to the current
-  // task. Keep execution serialized until task-isolated attribution is used.
+  const concurrency = resolveConcurrency({
+    maxConcurrency: opts.maxConcurrency,
+    supportsConcurrency: opts.harness.supportsConcurrency,
+  });
+  if (concurrency.notice) console.warn(`[engine] ${concurrency.notice}`);
+
+  if (concurrency.sandboxMode) {
+    const preflight = await preflightSandboxMode(opts.repoRoot, {
+      reviewFiles: flattenManifest(manifest)
+        .map(({ task }) => task.contract?.reviewFile)
+        .filter((file): file is string => typeof file === "string"),
+    });
+    if (!preflight.ok) {
+      const message = preflight.reason ?? "Parallel task execution is not available in this repository.";
+      console.error(`[engine] ${message}`);
+      state = { ...state, status: "failed", blockers: [...state.blockers, message] };
+      saveState(opts.statePath, state);
+      syncProgressMd(opts.progressPath, state, manifest);
+      writeAuditEvent(opts.auditPath, { timestamp: new Date().toISOString(), action: "run.failed", runId: state.runId, note: message });
+      clearControl(opts.controlPath);
+      return state;
+    }
+    await sweepStaleSandboxes(opts.repoRoot);
+    console.log(`[engine] Parallel execution: up to ${concurrency.effective} tasks at once, each in its own git worktree under ${sandboxRoot(opts.repoRoot)}/.`);
+  }
+
   let currentPhaseId: string | undefined;
+  // One writer for the whole run: state, sandbox integration, and auto-commit
+  // are serialized so concurrent tasks can never interleave git or state writes.
+  const queue = createSerialQueue();
 
   // Stop signal: the in-process flag (SIGINT/SIGTERM) OR a pause/stop request
   // written to the control file by `workflow-engine pause|stop`. Checked at the
   // top of each wave so a running task finishes before the run pauses.
   const shouldStop = (): boolean =>
     Boolean(state.status === "paused" || opts.pauseRequested || opts.stopRequested?.() || opts.signal?.aborted || readControl(opts.controlPath) !== null);
+
+  /**
+   * Terminal bookkeeping for one task, run on the engine's single writer queue:
+   * copy the task's work back from its sandbox, merge its record, persist, and
+   * commit exactly that task's work.
+   */
+  const finishTask = async (entry: FlatTask, outcome: TaskOutcome, claimed: Set<string>): Promise<void> => {
+    let final = outcome;
+    if (concurrency.sandboxMode && outcome.sandboxPath && outcome.changedPaths?.length && outcome.record.status === "complete") {
+      const integration = await integrateSandbox({
+        repoRoot: opts.repoRoot,
+        sandbox: outcome.sandboxPath,
+        paths: outcome.changedPaths,
+        claimed,
+      });
+      if (integration.conflicts.length > 0) {
+        const reason = `Concurrent write overlap on ${integration.conflicts.join(", ")}: another task in this wave already changed these paths. Declare a dependency between the tasks or give them disjoint outputs, then replay this task.`;
+        console.error(`[engine] Task ${outcome.taskId} FAILED: ${reason}`);
+        writeAuditEvent(opts.auditPath, {
+          timestamp: new Date().toISOString(), action: "task.failed", runId: state.runId,
+          taskId: outcome.taskId, phaseId: entry.phaseId, note: reason,
+        });
+        final = { ...outcome, record: { ...failRecord(outcome.record, reason), failureKind: "configuration" } };
+        // The task synthesised its artifact before the engine could integrate
+        // its work, so the artifact now describes output that was never merged.
+        // Downgrade it rather than letting a later task consume it.
+        const artifact = outcome.artifactId ? store.read(outcome.artifactId) : null;
+        if (artifact) {
+          store.write({
+            ...artifact,
+            status: "failed",
+            summary: `Task ${outcome.taskId} was not integrated: ${reason}`,
+            filesChanged: [],
+          });
+        }
+      }
+    }
+
+    state = withTaskRecord(state, final.record);
+    if (final.pauseRequested) state = { ...state, status: "paused" };
+    saveState(opts.statePath, state);
+    syncProgressMd(opts.progressPath, state, manifest);
+
+    if (opts.autoCommit !== false && final.record.status === "complete") {
+      const sha = await commitTaskWork(
+        outcome.taskId,
+        entry.task.title,
+        opts.repoRoot,
+        opts.commitMessageTemplate,
+      );
+      if (sha) {
+        writeAuditEvent(opts.auditPath, {
+          timestamp: new Date().toISOString(),
+          action: "task.committed",
+          runId: state.runId,
+          taskId: outcome.taskId,
+          commitSha: sha,
+        });
+        console.log(`[engine] Task ${outcome.taskId} committed (${sha.slice(0, 7)})`);
+      }
+    }
+  };
+
+  // The tail below records why a run ended, so each break must supply the truth
+  // rather than inheriting a generic "stop requested" note.
+  let pauseNote = "Stop/pause requested (control file or signal)";
+
+  const runEntry = async (entry: FlatTask, claimed: Set<string>): Promise<void> => {
+    // A stop/pause (or an earlier failure in this wave) leaves queued tasks
+    // pending so a later run resumes them instead of starting them now.
+    if (shouldStop() || hasFailed(state)) return;
+    const record = state.tasks[entry.task.id]!;
+    const checkpoint = (next: TaskRecord) => queue.run(async () => {
+      state = withTaskRecord(state, next);
+      saveState(opts.statePath, state);
+    });
+
+    const humanReview = entry.task.contract?.kind === "human-review";
+    const useSandbox = concurrency.sandboxMode && !humanReview;
+    let sandboxPath: string | undefined;
+    let provided: string[] = [];
+    try {
+      if (useSandbox) {
+        const sandbox = await createSandbox(opts.repoRoot, entry.task.id, { signal: opts.signal });
+        sandboxPath = sandbox.path;
+        provided = sandboxProvidedPaths(sandbox);
+      }
+      const outcome = await executeTask(entry, record, {
+        agents,
+        opts,
+        store,
+        shouldStop,
+        runId: state.runId,
+        engineRoot: opts.repoRoot,
+        workspaceRoot: sandboxPath ?? opts.repoRoot,
+        checkpoint,
+      });
+      await queue.run(() => finishTask(entry, {
+        ...outcome,
+        sandboxPath,
+        // Nothing the engine put in the sandbox is the task's work, so it can
+        // never be attributed to the task or merged back into the repository.
+        changedPaths: outcome.changedPaths?.filter((path) => !provided.some((p) => path === p || path.startsWith(`${p}/`))),
+      }, claimed));
+    } finally {
+      if (sandboxPath) await destroySandbox(opts.repoRoot, sandboxPath);
+    }
+  };
 
   while (!isComplete(manifest, state) && !shouldStop()) {
     if (hasFailed(state)) {
@@ -744,16 +995,49 @@ async function runEngineSession(opts: EngineOptions): Promise<WorkflowState> {
     }
 
     const ready = ownerUniqueReady(nextReadyTasks(manifest, state));
+    // A human review with no operator attestation is a *wait*, not a stop. If it
+    // paused the run the moment it was dispatched, a review whose dependencies
+    // were under-declared in the feature document would park the whole run
+    // before the very work it reviews existed - a deadlock the operator cannot
+    // approve their way out of. Holding it pending lets every other task finish;
+    // the run pauses below only once nothing else is left to do, at which point
+    // there is always something to review.
+    const waitingForApproval = ready.filter((entry) =>
+      entry.task.contract?.kind === "human-review" && !humanTaskApproved(opts.repoRoot, entry.task));
+    const dispatchable = ready.filter((entry) => !waitingForApproval.includes(entry));
 
-    if (ready.length === 0) {
+    if (dispatchable.length === 0) {
+      if (waitingForApproval.length > 0) {
+        pauseNote = `Human review required for ${waitingForApproval.map((entry) => entry.task.id).join(", ")}. Record operator evidence with workflow-engine approve-task (or the Console), then resume. --yes does not approve human work.`;
+        console.log(`[engine] ${pauseNote}`);
+        state = { ...state, status: "paused" };
+        saveState(opts.statePath, state);
+        break;
+      }
       if (hasFailed(state)) break;
       console.error("[engine] Deadlock: no tasks are ready but workflow is not complete. Check dependency graph.");
       state = { ...state, status: "failed", blockers: [...state.blockers, "Dependency deadlock detected"] };
       break;
     }
 
+    if (waitingForApproval.length > 0) {
+      const held = waitingForApproval.map((entry) => entry.task.id);
+      console.log(`[engine] Holding ${held.join(", ")} for operator review; continuing with ${dispatchable.length} other task(s).`);
+      // Record why on the tasks themselves, so the Console row and PROGRESS.md
+      // explain a pending review that is not simply waiting its turn.
+      for (const entry of waitingForApproval) {
+        state = withTaskRecord(state, {
+          ...state.tasks[entry.task.id]!,
+          errorMessage: `Human review required for '${entry.task.id}'. Record operator evidence with workflow-engine approve-task, then resume. --yes does not approve human work.`,
+        });
+      }
+      saveState(opts.statePath, state);
+    }
+
     // Phase bookkeeping for every phase entering this wave (manifest order).
-    for (const entry of ready) {
+    // Driven by what actually starts, so a phase whose only task is a held
+    // review does not announce itself as begun.
+    for (const entry of dispatchable) {
       if (entry.phaseId !== currentPhaseId) {
         currentPhaseId = entry.phaseId;
         state = setCurrentPhase(state, currentPhaseId);
@@ -767,34 +1051,10 @@ async function runEngineSession(opts: EngineOptions): Promise<WorkflowState> {
       }
     }
 
-    // Every task starts from the authoritative state; durability and commit
-    // attribution must finish before another task can touch the worktree.
-    for (const entry of ready) {
-      if (shouldStop() || hasFailed(state)) break;
-      state = setCurrentPhase(state, entry.phaseId);
-      state = await executeTask(entry, agents, state, opts, store, shouldStop);
-      saveState(opts.statePath, state);
-      syncProgressMd(opts.progressPath, state, manifest);
-      if (opts.autoCommit !== false) {
-        const record = state.tasks[entry.task.id];
-        if (record?.status !== "complete") continue;
-        const sha = await commitTaskWork(
-          entry.task.id,
-          entry.task.title,
-          opts.repoRoot,
-          opts.commitMessageTemplate,
-        );
-        if (!sha) continue;
-        writeAuditEvent(opts.auditPath, {
-          timestamp: new Date().toISOString(),
-          action: "task.committed",
-          runId: state.runId,
-          taskId: entry.task.id,
-          commitSha: sha,
-        });
-        console.log(`[engine] Task ${entry.task.id} committed (${sha.slice(0, 7)})`);
-      }
-    }
+    // Paths already integrated by a task in this wave, so two concurrent tasks
+    // that touched the same file fail loudly instead of losing an edit.
+    const claimed = new Set<string>();
+    await mapLimit(dispatchable, concurrency.effective, (entry) => runEntry(entry, claimed));
   }
 
   if (shouldStop() && !isComplete(manifest, state)) {
@@ -805,9 +1065,9 @@ async function runEngineSession(opts: EngineOptions): Promise<WorkflowState> {
       timestamp: new Date().toISOString(),
       action: "run.paused",
       runId: state.runId,
-      note: "Stop/pause requested (control file or signal)",
+      note: pauseNote,
     });
-    console.log("[engine] Paused after current task.");
+    console.log(`[engine] ${pauseNote}`);
   } else if (hasFailed(state)) {
     state = { ...state, status: "failed" };
     writeAuditEvent(opts.auditPath, {
@@ -831,6 +1091,10 @@ async function runEngineSession(opts: EngineOptions): Promise<WorkflowState> {
   // or complete) and the next `run` must start clean.
   clearControl(opts.controlPath);
 
+  // No task is in flight once the dispatcher returns, so the sandbox root can
+  // go: a finished run must leave nothing behind in the repository.
+  if (concurrency.sandboxMode) await clearSandboxRoot(opts.repoRoot);
+
   saveState(opts.statePath, state);
   syncProgressMd(opts.progressPath, state, manifest);
   return state;
@@ -840,8 +1104,9 @@ async function runEngineSession(opts: EngineOptions): Promise<WorkflowState> {
 
 async function replayTaskSession(taskId: string, opts: EngineOptions): Promise<WorkflowState> {
   const manifest = loadManifest(opts.manifestPath);
-  let state = loadState(opts.statePath);
-  if (!state) throw new Error("No workflow state found. Run the engine first.");
+  const loaded = loadState(opts.statePath);
+  if (!loaded) throw new Error("No workflow state found. Run the engine first.");
+  let state: WorkflowState = loaded;
 
   const record = state.tasks[taskId];
   if (!record) throw new Error(`Task '${taskId}' not found in workflow state.`);
@@ -881,7 +1146,31 @@ async function replayTaskSession(taskId: string, opts: EngineOptions): Promise<W
   }
 
   const entry = { phaseId, phaseIndex: manifest.phases.findIndex((p) => p.id === phaseId), task };
-  state = await executeTask(entry, agents, state, opts, store, () => Boolean(opts.signal?.aborted));
+  // A replay is a single task, so it always runs in the engine root: there is
+  // nothing to overlap and the operator expects to see the work in place.
+  const checkpoint = (next: TaskRecord) => {
+    state = withTaskRecord(state, next);
+    saveState(opts.statePath, state);
+  };
+  const outcome = await executeTask(entry, state.tasks[taskId]!, {
+    agents,
+    opts,
+    store,
+    shouldStop: () => Boolean(opts.signal?.aborted),
+    runId: state.runId,
+    engineRoot: opts.repoRoot,
+    workspaceRoot: opts.repoRoot,
+    checkpoint: async (next) => { checkpoint(next); },
+  });
+  state = withTaskRecord(state, outcome.record);
+  if (outcome.pauseRequested) state = { ...state, status: "paused" };
+  // A replay is one task, so there is no other work to hold back for: an
+  // unapproved review replayed directly has to report itself as the pause it
+  // is, rather than returning with the task still pending and the run's status
+  // untouched.
+  if (task.contract?.kind === "human-review" && state.tasks[taskId]?.status === "pending") {
+    state = { ...state, status: "paused" };
+  }
   if ((state.status === "paused" || opts.signal?.aborted) && !isComplete(manifest, state)) {
     state = { ...state, status: "paused" };
     writeAuditEvent(opts.auditPath, {
@@ -936,7 +1225,7 @@ async function withHarnessLifecycle(opts: EngineOptions, run: () => Promise<Work
       let failed: WorkflowState = { ...state, status: cancelled ? "paused" : "failed", blockers: [...state.blockers, message] };
       for (const record of Object.values(failed.tasks)) {
         if (record.status === "running") {
-          failed = markTaskFailed(failed, record.taskId, message);
+          failed = withTaskRecord(failed, failRecord(record, message));
           failed.tasks[record.taskId] = { ...failed.tasks[record.taskId]!, failureKind: cancelled ? "cancelled" : "exception",
             ...(cancelled ? { status: "pending", startedAt: undefined, completedAt: undefined } : {}) };
         }

@@ -66,16 +66,35 @@ function boardDir(): string {
 
 async function approveConsoleHumanReview(repoRoot: string, taskId: string, reviewer: string, notes: string): Promise<string> {
   const { templatesDir } = resolveResources();
-  const contextPath = path.join(templatesDir, "skills", "forge-workflow-engine", "scripts", "task-context.ts");
-  const context = await import(pathToFileURL(contextPath).href) as {
+  const engineScripts = path.join(templatesDir, "skills", "forge-workflow-engine", "scripts");
+  const context = await import(pathToFileURL(path.join(engineScripts, "task-context.ts")).href) as {
     writeHumanReviewEvidence: (repoRoot: string, task: ManifestTask, reviewer: string, notes: string) => string;
     approveHumanTask: (repoRoot: string, task: ManifestTask, reviewer: string, evidence: string[]) => void;
+  };
+  // The task graph is the engine's own dispatch gate, in a module with no
+  // runtime dependencies: the Console serves a project directory whose engine
+  // copy may not have `node_modules` installed, so importing `engine.ts` here
+  // would drag in the harness and fail. `task-graph.ts` is the shared
+  // definition, and the engine re-exports it.
+  const engine = await import(pathToFileURL(path.join(engineScripts, "task-graph.ts")).href) as {
+    unmetPrerequisites: (manifest: unknown, state: unknown, taskId: string) => string[];
   };
   const manifest = repo.loadManifest(repoPaths(repoRoot));
   const task = manifest?.phases.flatMap((phase) => phase.tasks).find((entry) => entry.id === taskId);
   if (!task) throw new Error(`Unknown task '${taskId}'.`);
   if (task.contract?.kind !== "human-review") throw new Error(`Task '${taskId}' is not a human-review task.`);
-  const evidence = `docs/reviews/${task.id}-console-review.md`;
+  // A review attests to delivered work, and the engine only dispatches a
+  // human-review task once its prerequisites are done. Ask the engine rather
+  // than re-deriving the rule here, so this guard and the dispatch gate cannot
+  // drift apart - the same class of bug as the preflight and the Console
+  // surface disagreeing about what a run is allowed to start on.
+  const state = repo.loadState(repoPaths(repoRoot));
+  if (state) {
+    const unmet = engine.unmetPrerequisites(manifest, state, taskId);
+    if (unmet.length > 0) {
+      throw new Error(`Cannot approve '${taskId}' yet: ${unmet.join(", ")} must be complete or skipped first. A human review attests to delivered work.`);
+    }
+  }
   const generatedEvidence = context.writeHumanReviewEvidence(repoRoot, task, reviewer, notes);
   context.approveHumanTask(repoRoot, task, reviewer, [generatedEvidence]);
   return task.contract.reviewFile!;
