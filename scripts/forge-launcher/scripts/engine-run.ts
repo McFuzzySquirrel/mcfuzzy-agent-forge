@@ -21,10 +21,6 @@ export interface EngineRunOptions {
   viz?: boolean;
   vizPort?: string;
   noOpen?: boolean;
-  keepAlive?: boolean;
-  keepAlivePort?: string;
-  noKeepAlive?: boolean;
-  attach?: string;
   allowNoop?: boolean;
   runValidation?: boolean;
   logHarnessActivity?: boolean;
@@ -59,10 +55,6 @@ export async function engineRun(opts: EngineRunOptions = {}): Promise<number> {
   const viz = opts.viz ?? process.env.FORGE_ENGINE_VIZ === "1";
   const vizPort = opts.vizPort ?? process.env.FORGE_ENGINE_VIZ_PORT ?? "";
   const noOpen = opts.noOpen ?? false;
-  const keepAlive = opts.keepAlive ?? process.env.FORGE_ENGINE_ATTACH === "1";
-  const keepAlivePort = opts.keepAlivePort ?? "";
-  const noKeepAlive = opts.noKeepAlive ?? process.env.FORGE_ENGINE_ATTACH === "0";
-  const attach = opts.attach ?? process.env.FORGE_ENGINE_ATTACH_URL ?? "";
   const allowNoop = opts.allowNoop ?? process.env.FORGE_ENGINE_ALLOW_NOOP === "1";
   const runValidation = opts.runValidation ?? process.env.FORGE_ENGINE_RUN_VALIDATION === "1";
   const envLogHarnessActivity = process.env.FORGE_ENGINE_LOG_HARNESS_ACTIVITY === "1"
@@ -144,7 +136,7 @@ export async function engineRun(opts: EngineRunOptions = {}): Promise<number> {
 
   const manifest = path.join(repo, "docs", "EXECUTION-MANIFEST.json");
 
-  out(`forge-engine-run: repo=${repo} harness=${harness}${granularity ? ` granularity=${granularity}` : ""}${concurrency ? ` concurrency=${concurrency}` : ""}${taskTimeoutMs ? ` task-timeout=${taskTimeoutMs}` : ""}${maxRetries ? ` max-retries=${maxRetries}` : ""}${viz ? ` viz=${vizPort || "default"}` : ""}${keepAlive ? ` keep-alive${keepAlivePort ? `=${keepAlivePort}` : ""}` : ""}${noKeepAlive ? ` no-keep-alive` : ""}${attach ? ` attach=${attach}` : ""}${autoCommit === false ? " no-auto-commit" : ""}${commitMessageTemplate ? " commit-message-template=<custom>" : ""}${logHarnessActivity ? " log-harness-activity" : " no-log-harness-activity"}`);
+  out(`forge-engine-run: repo=${repo} harness=${harness}${granularity ? ` granularity=${granularity}` : ""}${concurrency ? ` concurrency=${concurrency}` : ""}${taskTimeoutMs ? ` task-timeout=${taskTimeoutMs}` : ""}${maxRetries ? ` max-retries=${maxRetries}` : ""}${viz ? ` viz=${vizPort || "default"}` : ""}${autoCommit === false ? " no-auto-commit" : ""}${commitMessageTemplate ? " commit-message-template=<custom>" : ""}${logHarnessActivity ? " log-harness-activity" : " no-log-harness-activity"}`);
   out(`  engine : ${engineDir}`);
   out(`  adapter: ${adapterDir || "<not bootstrapped; manifest must already exist>"}`);
 
@@ -197,10 +189,6 @@ export async function engineRun(opts: EngineRunOptions = {}): Promise<number> {
   if (yes) engineFlags.push("--yes");
   if (viz) engineFlags.push(vizPort ? `--viz=${vizPort}` : "--viz");
   if (noOpen) engineFlags.push("--no-open");
-  if (keepAlive) engineFlags.push("--keep-alive");
-  if (keepAlivePort) engineFlags.push("--keep-alive-port", keepAlivePort);
-  if (noKeepAlive) engineFlags.push("--no-keep-alive");
-  if (attach) engineFlags.push("--attach", attach);
   if (allowNoop) engineFlags.push("--allow-noop");
   if (runValidation) engineFlags.push("--run-validation");
   engineFlags.push(logHarnessActivity ? "--log-harness-activity" : "--no-log-harness-activity");
@@ -241,10 +229,6 @@ export function engineRunCli(args: string[]): Promise<number> {
       case "--viz": opts.viz = true; break;
       case "--viz-port": opts.vizPort = args[++i]; break;
       case "--no-open": opts.noOpen = true; break;
-      case "--keep-alive": opts.keepAlive = true; break;
-      case "--keep-alive-port": opts.keepAlivePort = args[++i]; break;
-      case "--no-keep-alive": opts.noKeepAlive = true; break;
-      case "--attach": opts.attach = args[++i]; break;
       case "--allow-noop": opts.allowNoop = true; break;
       case "--run-validation": opts.runValidation = true; break;
       case "--log-harness-activity": opts.logHarnessActivity = true; opts.noLogHarnessActivity = false; break;

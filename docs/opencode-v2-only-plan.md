@@ -1,187 +1,137 @@
 # OpenCode v2-only harness plan
 
-**Status:** Paused — waiting for OpenCode v2 to be installed before any code is changed.
-**Decision:** Going forward the Forge OpenCode harness supports **OpenCode v2 only**.
+**Status:** Implemented on `feat/opencode-v2-harness`. Superseded in part by
+[ADR-058](adr/058-opencode-v2-project-resolution.md).
+**Decision:** The Forge OpenCode harness supports **OpenCode v2 only**.
 OpenCode v1.x (`run --dir`, `run --attach`, engine-managed `opencode serve`) is
 **retired**, not kept as a compatibility path.
-**Branch:** `feat/parallel-agents` (last commit `bade4cc`).
-**Related:** ADR-027 (keep-alive attach), ADR-031 (adaptive keep-alive),
-ADR-056 (parallel task sandboxes), planned ADR-058 (this decision).
+**Related:** ADR-027 (keep-alive attach, superseded), ADR-031 (adaptive
+keep-alive, keep-alive half superseded), ADR-056 (parallel task sandboxes),
+ADR-058 (this migration).
 
-## Why this is paused
+## Verification results (opencode v2.0.20)
 
-The work started from the premise that **OpenCode v2 removed `run --dir` and
-`run --attach`, and `serve` gained mandatory auth**. That premise is currently
-**unverified against the CLI on this machine**:
+The plan below originally paused pending verification, because it was written
+from the v1 help output. It was checked against the installed v2 CLI before any
+code changed. Three of its premises turned out to be wrong.
 
-```
-$ opencode --version
-1.18.33
-$ opencode run --help
-      --attach     attach to a running opencode server (e.g., http://localhost:4096)
-      --dir        directory to run in, path on remote server if attaching
-```
+| Assumption | Result |
+|---|---|
+| v2 removed `run --dir` | Confirmed |
+| v2 removed `run --attach` | Confirmed; replaced by `--server <url>` and `--standalone` |
+| `serve` gained mandatory auth | Confirmed — HTTP Basic, user `opencode`, password from `OPENCODE_SERVER_PASSWORD` or generated to the log |
+| A trailing path is swallowed into the prompt | Confirmed (`run [flags] [<message...>]`) |
+| **Project dir travels via `PWD`** | **False — v2 resolves the project from `process.cwd()` and ignores `PWD`** |
+| Keep-alive must be fully retired | Flags are dead, but the capability is still buildable on v2 via `serve --port` + `run --server`. Full retirement was a deliberate choice, not a forced consequence. |
 
-The only `opencode` on the box is `/home/mcfuzzysquirrel/.opencode/bin/opencode`,
-**v1.18.33**, and it still exposes both flags. **Do not implement the plan
-below until v2 is installed and its `run --help` has been checked.** The plan may
-need adjusting if v2's actual surface differs.
+### The `PWD` claim was wrong
 
-## Verification gate (run this first once v2 is installed)
+Measured three ways:
 
-```bash
-opencode --version
-opencode run --help          # confirm --dir and --attach are gone
-opencode serve --help        # confirm auth requirements
-```
+1. `opencode debug config` reported a project's `opencode.json` only when `cwd`
+   matched that project. Setting `PWD` alone changed nothing.
+2. A real `opencode run` launched from a neutral directory stored its session
+   under the neutral directory's project, not the target repo's — including when
+   the repo path was passed as a trailing argument (it became prompt text).
+3. The same held with `--server`: the session landed in the client's `cwd`
+   project.
 
-Confirm all three, then update the assumptions section below before editing:
+**Both call sites already set `cwd` correctly** — the engine adapter spawns with
+`cwd: repoRoot`, and the launcher's `runLoggedStep` spawns with
+`cwd: state.repoDir`. `--dir` was redundant on v1 too, so no replacement
+mechanism was needed. An in-flight code comment claiming "PWD wins over cwd in
+both v1 and v2" was removed, since acting on it would mean deleting the `cwd`
+that does the actual work.
 
-- [ ] v2 removed `run --dir`.
-- [ ] v2 removed `run --attach` (and `serve` requires auth).
-- [ ] A child process with `PWD=<repo>` (and any `cwd`) makes `opencode run`
-      operate on `<repo>`. Test on both Linux and, if it is a target, Windows.
-- [ ] Confirm whether v2 accepts any positional project argument at all — the
-      in-flight comment claims a trailing path is swallowed into the prompt.
+### Both removed flags hard-fail
 
-## Repository state at pause (from the crashed session)
+`opencode run --dir <p>` and `--attach <url>` print the usage block and exit 1
+rather than being ignored, so the v1→v2 upgrade breakage is loud rather than a
+silent wrong-project run.
 
-Working tree is dirty and **does not typecheck**. Do not commit as-is.
+## What changed
 
-Staged deletions:
-- `templates/skills/forge-workflow-engine/scripts/harness/opencode-server.ts`
-- `templates/skills/forge-workflow-engine/scripts/harness/opencode-server.test.ts`
-- `templates/skills/forge-workflow-engine/scripts/keepalive.ts`
+### Engine — `templates/skills/forge-workflow-engine/scripts/`
 
-Unstaged edits:
-- `templates/skills/forge-workflow-engine/scripts/harness/opencode-adapter.ts`
-  — removed `OpenCodeAdapterOptions`/attach/`prepare`/`cleanup`; argv is now
-  `run [--model …] [--agent …] --auto … <prompt>`; spawns with
-  `env: { ...process.env, PWD: resolve(repoRoot) }`; constructor takes no args.
-- `templates/skills/forge-workflow-engine/scripts/harness/run.ts`
-  — removed `bootMs` from `RunCommandResult`.
+- `harness/opencode-adapter.ts` — argv is now
+  `run [--model …] [--agent …] --auto <prompt>`; no `--dir`, no `--attach`, no
+  `PWD` env. The constructor takes no arguments; `OpenCodeAdapterOptions`,
+  `prepare`, and `cleanup` are gone. Comments record that v2 selects the project
+  from `process.cwd()` and that runs connect to OpenCode's background service.
+- `harness/run.ts` — dropped the `bootMs` field and the now-dead `firstOutputAt`
+  tracking.
+- `harness/opencode-server.ts`, `harness/opencode-server.test.ts`,
+  `keepalive.ts` — deleted.
+- `cli.ts` — dropped the keep-alive import, the `attachUrl` parameter from
+  `resolveHarness` / `buildOptions` / `cmdReplay`, the `Keep-alive:` summary
+  line, the retired flag parsing, and the sandbox `--attach` warning.
+  `runWithServer` now only constructs `new OpenCodeAdapter()`.
+- `cli.test.ts` — removed the nine `shouldKeepAlive` and four `remainingTaskCount`
+  tests. `remainingTaskCount` needed no relocation: with the keep-alive decision
+  gone, it had no remaining callers.
+- `engine.ts` — concurrency doc comment no longer mentions a keep-alive decision.
+- `harness/opencode-adapter.test.ts` — three tests added to the existing eight:
+  argv carries neither `--dir` nor `--attach`; the recorded `cwd` is the repo
+  root and `PWD` is *not* what selects the project; and a sandbox worktree is
+  selected by `cwd` without leaking into argv. They use a shim that records argv,
+  `cwd`, and `PWD` so project selection is directly observable.
 
-`npm run typecheck` in `templates/skills/forge-workflow-engine` currently fails:
+### Launcher — `scripts/forge-launcher/scripts/`
 
-```
-cli.test.ts(9): Cannot find module './keepalive.ts'
-cli.ts(164):   Cannot find module './keepalive.ts'
-cli.ts(184):   Expected 0 arguments, but got 1   (new OpenCodeAdapter({ attachUrl }))
-cli.ts(385):   Expected 0 arguments, but got 1   (new OpenCodeAdapter({ attachUrl, startServer, port }))
-run.ts(128):   'bootMs' does not exist in type 'RunCommandResult'
-```
+- `engine-run.ts` — removed `keepAlive` / `keepAlivePort` / `noKeepAlive` /
+  `attach` from the options type, resolution, summary line, `engineFlags`, and
+  argument parsing.
+- `authoring-inventory.ts` — dropped `--dir <repo>` from the opencode argv. The
+  `repo` parameter is retained (now `_repo`) so the call signature and the Copilot
+  and Claude branches are untouched; the doc comment records that callers must
+  spawn with `cwd` set to the repository.
+- `engine-config.ts` — dropped `keepAlive` / `attach` from `PersistedEngineConfig`.
+- `launcher.ts` — removed the flag pushes and env reads; `console/control.ts`
+  and `console/repo.ts` likewise.
+- `cli.ts` — removed the four flags from the usage text.
 
-Either finish the change, or revert the staged deletions and unstaged edits to
-return to a green tree before doing anything else.
+### Tests
 
-## Project-directory resolution (the actual v2 fix)
+Keep-alive and attach assertions were replaced with retirement tests: retired
+flags are rejected, retired env vars and stale config keys change nothing, and
+the headless command carries no path argument. All 261 launcher tests and 246
+engine tests pass (239 passing, 7 pre-existing skips).
 
-`opencode run` resolves its project from its **parent process** rather than the
-child's spawn `cwd`. In v1 the engine pinned this with `--dir <repo>`. With
-`--dir` gone in v2, the one portable mechanism is the child's `PWD`:
+### Docs
 
-- Engine: `harness/opencode-adapter.ts` passes `env: { ...process.env, PWD: resolve(repoRoot) }`.
-- Launcher headless: the authoring runner must set `PWD` when spawning
-  `opencode run`, and the displayed command should show the pinned directory
-  (e.g. `PWD=<repo> opencode run …`) since it is no longer visible in argv.
+New [ADR-058](adr/058-opencode-v2-project-resolution.md). ADR-027 marked
+Superseded, ADR-031 marked partially superseded (keep-alive half only), ADR-056's
+keep-alive note corrected. Updated `docs/workflow-engine.md`,
+`templates/skills/forge-workflow-engine/SKILL.md`,
+`docs/workflow-engine-deep-dive.md`, `docs/forge-launcher.md`,
+`docs/forge-console-user-guide.md`, `docs/parallel-execution-plan.md`,
+`docs/prompt-playbook.md`, and `docs/research/claude-authoring-runner.md`.
+Changelog section for v3.87; README `**Latest:**` bumped.
 
-In parallel mode the sandbox worktree path is the `PWD`, which keeps each task
-pinned to its own worktree.
+`docs/research/claude-code-harness-adapter*.md`, `docs/adr/028`, `032`, `040`,
+`042`, and `docs/codebase-review-2026-09-05.md` mention the retired flags but are
+historical records of a different harness investigation; they are left intact per
+the repository's convention of preserving historical ADRs and research notes.
 
-## Implementation plan (execute only after the verification gate)
-
-### 1. Engine — `templates/skills/forge-workflow-engine/scripts/`
-
-- `harness/run.ts:127-128` — delete the `bootMs` computation (interface already
-  dropped the field).
-- `cli.ts`
-  - Remove the `keepalive.ts` import (line 164) and all
-    `shouldKeepAlive` / `remainingTaskCount` / `KeepAliveDecision` usage.
-  - Drop the `attachUrl` parameter from `resolveHarness` (182) and
-    `buildOptions` (201, 220).
-  - Delete the `keepAlive` parameter and the `Keep-alive:` line from
-    `confirmPreRun` (248, 256–266, 287).
-  - Delete `--attach` / `--keep-alive` / `--no-keep-alive` parsing and the
-    sandbox `--attach` warning in `cmdRun` (343–372).
-  - Collapse `runWithServer` (375–389) to `opts.harness = new OpenCodeAdapter()`.
-  - Remove `attachUrl` from `cmdReplay` (504–505).
-  - Relocate `remainingTaskCount` (still used at `cli.ts:360`) into `cli.ts` or a
-    small module, since `keepalive.ts` is deleted.
-- `cli.test.ts:9,49-112` — drop the `keepalive` import and the nine
-  `shouldKeepAlive` tests.
-
-### 2. Launcher — `scripts/forge-launcher/scripts/`
-
-- `engine-run.ts` — remove `keepAlive` / `keepAlivePort` / `noKeepAlive` /
-  `attach` from `EngineRunOptions` (24–27), resolution (62–65), the summary line
-  (147), `engineFlags` (200–203), and `engineRunCli` cases (244–247).
-- `cli.ts:26` — remove `--keep-alive` / `--keep-alive-port` / `--no-keep-alive` /
-  `--attach` from the usage text.
-- `engine-config.ts:8,20-21` — drop `keepAlive` / `attach` from
-  `PersistedEngineConfig`.
-- `console/control.ts:75-76` and `console/repo.ts:272-273` — remove those fields.
-- `launcher.ts:971-972, 1788-1789, 2126-2127` — remove the flag pushes/env reads.
-
-### 3. Launcher headless `--dir` (same v2 breakage)
-
-- `authoring-inventory.ts:286` — drop `--dir repo` from the opencode argv.
-- `launcher.ts` `runSkillHeadless` (627–665) — pass `PWD: state.repoDir` in the
-  child env; `headlessCmdFor` (525) and `cmdStr` (629) must display the pinned
-  directory another way.
-- Tests: `authoring.test.ts:405,408`, `launcher.test.ts:409-427`,
-  `resume.test.ts:76,98`.
-
-### 4. Tests to remove/update
-
-- `templates/skills/forge-workflow-engine/scripts/cli.test.ts` — keep-alive tests.
-- `scripts/forge-launcher/scripts/engine-run.test.ts:33-71`,
-  `launcher.test.ts:298-318`, `resume.test.ts:130-195`.
-- Add: `harness/opencode-adapter.test.ts` asserting **no `--dir` in argv** and
-  that the child env `PWD` equals the repo root (currently untested).
-
-### 5. Docs and ADR (full retirement)
-
-- New `docs/adr/058-opencode-v2-pwd-project-resolution.md`: v2 dropped `--dir`
-  and `--attach`; `serve` requires auth; project dir travels via `PWD`;
-  keep-alive/attach retired; **v2-only support**; migration note.
-- Mark ADR-027 and ADR-031 **Superseded by ADR-058**; correct the keep-alive note
-  in ADR-056:174-177.
-- Update `docs/workflow-engine.md` (242, 264, 371–394, 530, 724),
-  `templates/skills/forge-workflow-engine/SKILL.md` (145–157, 374, 570–572),
-  `docs/workflow-engine-deep-dive.md` (240), `docs/forge-launcher.md` (107, 589),
-  `docs/forge-console-user-guide.md`, `docs/parallel-execution-plan.md`
-  (24, 122–141), the two `docs/research/claude-code-harness-adapter*.md` docs.
-- Add a new `## September 2026 - v3.87` section at the top of `docs/updates.md`
-  and bump the README `**Latest:**` line to v3.87.
-
-## Verification (after implementation)
+## Verification
 
 ```bash
-npm install && npm run typecheck && npm test   # in templates/skills/forge-workflow-engine
-npm install && npm run typecheck && npm test   # in scripts/forge-launcher
+npm run typecheck && npm test   # in templates/skills/forge-workflow-engine
+npm run typecheck && npm test   # in scripts/forge-launcher
 ```
 
-Grep to zero across the repo: `--dir`, `--attach`, `keep-alive`, `keepAlive`,
-`keepAlivePort`, `noKeepAlive`, `bootMs`, `opencode-server`, `keepalive`.
+A literal grep for `--dir` / `keep-alive` does not reach zero across the repo and
+is not a useful gate: `console/server.ts` sets the HTTP `Connection: keep-alive`
+header, and `sandbox.ts` passes `git ls-files --directory`. Both are unrelated.
 
-## Risks and open questions
+## Open items
 
-- **Unverified v2 surface.** Everything depends on the v2 `run`/`serve` help
-  output; confirm it before coding.
-- **`PWD` cross-platform.** On POSIX `PWD` is normally set by the shell; on
-  Windows it may be absent, so setting it explicitly is the safer direction, but
-  v2's actual lookup order (`PWD` vs `process.cwd()`) must be confirmed.
-- **Breaking CLI change.** Removing `--keep-alive` / `--attach` breaks scripts and
-  persisted `docs/engine-config.json` files that set them; the ADR and changelog
-  must say so plainly.
-- **Windows path handling** for `PWD` and any remaining `--dir` assumptions.
-
-## References
-
-- `templates/skills/forge-workflow-engine/scripts/harness/opencode-adapter.ts`
-- `templates/skills/forge-workflow-engine/scripts/cli.ts`
-- `scripts/forge-launcher/scripts/engine-run.ts`
-- `scripts/forge-launcher/scripts/authoring-inventory.ts`
-- `docs/adr/027-workflow-engine-keep-alive-attach.md`
-- `docs/adr/031-adaptive-keep-alive-and-budget-hints.md`
-- `docs/adr/056-parallel-execution-task-sandboxes.md`
+- **Windows `cwd` behaviour** was not exercised on this machine. The engine
+  already used `cwd` before this change, so the risk is unchanged from v1, but the
+  shim-based adapter test does exercise a `.cmd` wrapper on Windows in CI.
+- **Background service lifecycle** is now OpenCode's responsibility, not the
+  engine's. If the service is down, `opencode run` starts it; the engine cannot
+  pre-warm or health-check it.
+- **A future engine-managed warm server** remains available on v2
+  (`serve --port` + `run --server` with a generated `OPENCODE_SERVER_PASSWORD`).
+  Verified working, deliberately not adopted.

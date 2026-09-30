@@ -92,8 +92,6 @@ interface LauncherState {
     maxRetries: string;
     viz: boolean;
     vizPort: string;
-    keepAlive: boolean;
-    attach: string;
     autoCommit: boolean;
     logHarnessActivity: boolean;
     executionMode: "auto" | "manual";
@@ -128,8 +126,6 @@ function createLauncherState(options: LauncherOptions = {}): LauncherState {
       maxRetries: env.FORGE_ENGINE_MAX_RETRIES ?? "",
       viz: env.FORGE_ENGINE_VIZ === "1",
       vizPort: env.FORGE_ENGINE_VIZ_PORT ?? "",
-      keepAlive: env.FORGE_ENGINE_ATTACH === "1",
-      attach: env.FORGE_ENGINE_ATTACH_URL ?? "",
       autoCommit: env.FORGE_ENGINE_AUTO_COMMIT !== "0",
       logHarnessActivity: env.FORGE_ENGINE_LOG_HARNESS_ACTIVITY === "1",
       executionMode: "auto",
@@ -967,8 +963,6 @@ function engineRunArgs(): string[] {
     args.push("--viz");
     if (cfg.vizPort) args.push("--viz-port", cfg.vizPort);
   }
-  if (cfg.keepAlive) args.push("--keep-alive");
-  if (cfg.attach) args.push("--attach", cfg.attach);
   if (cfg.autoCommit === false) args.push("--no-auto-commit");
   args.push(cfg.logHarnessActivity ? "--log-harness-activity" : "--no-log-harness-activity");
   if (cfg.executionMode === "manual") {
@@ -1784,8 +1778,6 @@ function setupStateForRepo(repoDir: string): void {
   state.engineConfig.maxRetries = state.env.FORGE_ENGINE_MAX_RETRIES ?? persisted?.maxRetries ?? "";
   state.engineConfig.viz = envFlagOrUndefined("FORGE_ENGINE_VIZ") ?? persisted?.viz ?? false;
   state.engineConfig.vizPort = state.env.FORGE_ENGINE_VIZ_PORT ?? persisted?.vizPort ?? "";
-  state.engineConfig.keepAlive = envFlagOrUndefined("FORGE_ENGINE_ATTACH") ?? persisted?.keepAlive ?? false;
-  state.engineConfig.attach = state.env.FORGE_ENGINE_ATTACH_URL ?? persisted?.attach ?? "";
   state.engineConfig.autoCommit = envFlagOrUndefined("FORGE_ENGINE_AUTO_COMMIT") ?? persisted?.autoCommit ?? true;
   state.engineConfig.logHarnessActivity = envFlagOrUndefined("FORGE_ENGINE_LOG_HARNESS_ACTIVITY") ?? persisted?.logHarnessActivity ?? false;
   state.engineConfig.executionMode = persisted?.executionMode === "manual" ? "manual" : "auto";
@@ -2122,8 +2114,6 @@ async function engineRunCliForIncrement(repoDir: string, featureNames: string[])
     if (cfg.taskTimeoutMs) args.push("--task-timeout-ms", cfg.taskTimeoutMs);
     if (cfg.maxRetries) args.push("--max-retries", cfg.maxRetries);
     if (cfg.viz) args.push("--viz", ...(cfg.vizPort ? ["--viz-port", cfg.vizPort] : []));
-    if (cfg.keepAlive) args.push("--keep-alive");
-    if (cfg.attach) args.push("--attach", cfg.attach);
     if (cfg.autoCommit === false) args.push("--no-auto-commit");
     args.push(cfg.logHarnessActivity ? "--log-harness-activity" : "--no-log-harness-activity");
     return engineRunCli(args);

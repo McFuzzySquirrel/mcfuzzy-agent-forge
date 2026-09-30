@@ -23,7 +23,6 @@ Usage:
                             [--concurrency <n>] [--task-timeout-ms <ms>] [--max-retries <n>]
                             [--retry-delay-ms <ms>] [--heartbeat-ms <ms>] [--yes] [--dry-run]
                             [--viz [--viz-port <n>]] [--no-open]
-                            [--keep-alive [--keep-alive-port <n>]] [--no-keep-alive] [--attach <url>]
                             [--allow-noop] [--run-validation]
                             [--log-harness-activity|--no-log-harness-activity]
                             [--auto-commit|--no-auto-commit] [--commit-message-template <tmpl>]

@@ -50,7 +50,6 @@ block removal. Existing folders can be added again without bootstrapping.
 forge-launcher engine-run --harness opencode --yes                 # per-task: opencode run
 forge-launcher engine-run --harness copilot --yes                  # per-task: copilot -p --yolo
 forge-launcher engine-run --harness opencode --concurrency 3 --yes # parallel dispatch
-forge-launcher engine-run --harness opencode --keep-alive --yes    # one warm server, no per-task cold boot
 forge-launcher engine-run --harness opencode --task-timeout-ms 900000 --yes  # 15-min task budget
 forge-launcher engine-run --harness opencode --viz --yes           # live Forge Board dashboard
 forge-launcher engine-run --harness opencode --log-harness-activity # stream harness output to the engine log
@@ -59,7 +58,14 @@ forge-launcher engine-run --pause   # pause a detached run after the current tas
 ```
 
 Run `forge-launcher engine-run --help` for every option (granularity,
-concurrency, timeout, retries, heartbeat, keep-alive/attach, viz).
+concurrency, timeout, retries, heartbeat, viz).
+
+OpenCode v2 is required. The former `--keep-alive`, `--keep-alive-port`,
+`--no-keep-alive`, and `--attach` flags are retired (see
+[ADR-058](../../docs/adr/058-opencode-v2-project-resolution.md)); each
+`opencode run` connects to OpenCode's own warm background service, so there is no
+server to manage. Set `OPENCODE_EXTRA_FLAGS=--standalone` for a private
+per-run server.
 
 ## Harnesses
 

@@ -3,10 +3,9 @@ import { resolve } from "node:path";
 
 import { runCommand, extractModelFlags, canSelectAgentNatively } from "./run.ts";
 import { harnessInvocationContext } from "./invocation-log.ts";
-import type { AgentDescriptor, HarnessAdapter, HarnessRunContext, TaskAttemptRequest, TaskResult } from "../types.ts";
+import type { AgentDescriptor, HarnessAdapter, TaskAttemptRequest, TaskResult } from "../types.ts";
 import { inlinePersona } from "../request.ts";
 import { executionPrompt } from "../task-execution.ts";
-import { startAttachServer, type AttachServer } from "./opencode-server.ts";
 
 /**
  * OpenCode CLI harness adapter.
@@ -31,18 +30,19 @@ import { startAttachServer, type AttachServer } from "./opencode-server.ts";
  * `--auto` is passed by default so per-task tool permissions are auto-approved;
  * this adapter runs non-interactively (no user is present to approve prompts).
  *
- * Pass `attachUrl` (e.g. "http://127.0.0.1:4096") to attach every task to a
- * warm `opencode serve` instance. This skips the per-task cold start (config,
- * AGENTS.md, skills, MCP server boot) - the server holds that state, and each
- * `run --attach` still creates a fresh, isolated session per task.
+ * The project directory is pinned by the child's spawn `cwd` (see `invoke`).
+ * OpenCode v2 removed `run --dir` and added no replacement: `run` takes only
+ * `message...` arguments, so a trailing path would be swallowed into the prompt
+ * while the project stayed wherever the process was launched. v2 resolves the
+ * project from `process.cwd()`, so `cwd` is the only mechanism - see ADR-058.
+ *
+ * There is no engine-managed warm server. OpenCode v2 dropped `run --attach`,
+ * so instead each `opencode run` connects to OpenCode's own background
+ * service, which is warm by default (config, AGENTS.md, skills, and MCP
+ * servers are already booted) while every run still gets a fresh, isolated
+ * session in the project its `cwd` names. Pass `--standalone` via
+ * OPENCODE_EXTRA_FLAGS to give a run its own private server instead.
  */
-export interface OpenCodeAdapterOptions {
-  /** URL of a running `opencode serve` instance to attach to. */
-  attachUrl?: string;
-  startServer?: boolean;
-  port?: number;
-}
-
 export class OpenCodeAdapter implements HarnessAdapter {
   readonly name = "opencode";
   readonly supportsConcurrency = true;
@@ -51,34 +51,13 @@ export class OpenCodeAdapter implements HarnessAdapter {
 
   private readonly bin: string;
   private readonly extraFlags: string[];
-  private attachUrl?: string;
-  private server?: AttachServer;
 
-  constructor(private readonly options: OpenCodeAdapterOptions = {}) {
+  constructor() {
     this.bin = process.env["OPENCODE_BIN"] ?? "opencode";
     const extra = (process.env["OPENCODE_EXTRA_FLAGS"] ?? "").split(/\s+/).filter(Boolean);
     const parsed = extractModelFlags(extra);
     this.extraFlags = ["--auto", ...parsed.flags];
     this.defaultModel = parsed.model;
-    this.attachUrl = options.attachUrl;
-  }
-
-  async prepare(context: HarnessRunContext): Promise<void> {
-    context.signal?.throwIfAborted();
-    if (!this.options.startServer || this.attachUrl) return;
-    this.server = await startAttachServer({ bin: this.bin, repoRoot: context.repoRoot, port: this.options.port, signal: context.signal });
-    this.attachUrl = this.server.url;
-    console.log(`[engine] opencode attach server ready at ${this.server.url}`);
-  }
-
-  async cleanup(): Promise<void> {
-    if (!this.server) return;
-    try {
-      await this.server.stop();
-    } finally {
-      this.server = undefined;
-      this.attachUrl = this.options.attachUrl;
-    }
   }
 
   async invoke(request: TaskAttemptRequest): Promise<TaskResult> {
@@ -91,15 +70,14 @@ export class OpenCodeAdapter implements HarnessAdapter {
     const agentFlag = this.canSelectAgent(request) ? ["--agent", agent.name] : [];
 
     const prompt = executionPrompt(request, agentFlag.length === 0 ? inlinePersona(request) : "");
-    // `--dir` pins the project directory explicitly: `opencode run` resolves its
-    // working directory from its parent process, not the child's spawn `cwd`, so
-    // relying on `cwd: repoRoot` alone runs tasks in the wrong project when the
-    // engine process lives in a subdirectory (e.g. the engine's own package dir).
-    // With `--attach`, `--dir` names the project root on the remote server.
-    const attachFlags = this.attachUrl ? ["--attach", this.attachUrl] : [];
-    const args = ["run", ...modelFlag, ...agentFlag, "--dir", repoRoot, ...attachFlags, ...this.extraFlags, prompt];
+    const args = ["run", ...modelFlag, ...agentFlag, ...this.extraFlags, prompt];
 
     const result = await runCommand(this.bin, args, {
+      // `opencode run` resolves its project from `process.cwd()` (verified on
+      // v2.0.20: the `PWD` environment variable is ignored). Pinning `cwd` is
+      // what keeps a task in its repository - or, in parallel mode, in its own
+      // sandbox worktree - even when the engine process lives in a
+      // subdirectory such as the engine's own package dir.
       cwd: repoRoot,
       timeoutMs: request.budget.timeoutMs,
       signal: request.signal,
@@ -108,14 +86,6 @@ export class OpenCodeAdapter implements HarnessAdapter {
       activity: request.logHarnessActivity === true,
     });
     const durationMs = Date.now() - start;
-
-    if (this.attachUrl) {
-      // When attaching, `bootMs` is the client's startup, not a full harness
-      // cold start - comparing it against a non-attach run quantifies the win.
-      console.log(
-        `[opencode] task ${task.id}: boot=${result.bootMs ?? durationMs}ms total=${durationMs}ms`,
-      );
-    }
 
     const stdout = result.stdout;
     const stderr = result.stderr;

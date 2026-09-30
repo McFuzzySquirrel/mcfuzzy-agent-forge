@@ -4,6 +4,37 @@ Detailed release and change notes for MyForge.
 
 ---
 
+## September 2026 - v3.87
+
+### OpenCode v2 only: `--dir` and `--attach` retired
+
+- **The Forge OpenCode harness now requires OpenCode v2.** v2 removed
+  `opencode run --dir` and `opencode run --attach`, so the engine's project
+  pinning and warm-server modes were rebuilt. v1.x is no longer supported; there
+  is no compatibility path. See [ADR-058](adr/058-opencode-v2-project-resolution.md).
+- **Breaking: four flags are gone** — `--keep-alive`, `--keep-alive-port`,
+  `--no-keep-alive`, and `--attach <url>` — from both `workflow-engine run` and
+  `forge-launcher engine-run`. Passing one is now an explicit `Unknown option`
+  error rather than a silent no-op. `FORGE_ENGINE_ATTACH` and
+  `FORGE_ENGINE_ATTACH_URL` are accepted but ignored, and `keepAlive` / `attach`
+  in a persisted `docs/engine-config.json` are likewise ignored. Remove them from
+  your scripts, CI invocations, and config files.
+- **The engine no longer boots or owns `opencode serve`.** Each `opencode run`
+  now connects to OpenCode's own background service, which is already warm
+  (config, AGENTS.md, skills, MCP servers), and every task still gets a fresh,
+  isolated session. Set `OPENCODE_EXTRA_FLAGS=--standalone` to give a run a
+  private server instead.
+- **No action needed for project selection.** OpenCode v2 resolves the project
+  from the child's `process.cwd()`, and both the engine and the launcher's
+  headless runner already spawned with `cwd` set to the repository, so the
+  retired `--dir <repo>` was redundant. In parallel runs each task's worktree is
+  the `cwd`, which preserves per-task isolation. The `PWD`-based replacement
+  proposed in earlier planning was verified to be wrong and was not adopted.
+- **Migration note:** upgrading straight from a v1-era install fails loudly.
+  OpenCode v2 hard-fails an unknown flag with a usage dump and exit 1, so a stale
+  `--dir` or `--attach` surfaces immediately instead of running in the wrong
+  project. Fix the invocation rather than expecting a fallback.
+
 ## September 2026 - v3.86
 
 ### `--concurrency` is real throughput again: per-task git worktree sandboxes

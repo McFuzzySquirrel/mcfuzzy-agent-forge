@@ -104,8 +104,7 @@ npx forge-launcher@beta bootstrap [TARGET_DIR] ... [--init-git]
                               [--runner <copilot|opencode|claude|inherit>]
 npx forge-launcher@beta engine-run [--repo <path>] [--harness <h>] [--concurrency <n>]
                               [--task-timeout-ms <ms>] [--yes] [--dry-run]
-                              [--keep-alive [--keep-alive-port <n>]] [--no-keep-alive] [--attach <url>]
-                              [--allow-noop] [--run-validation]
+                               [--allow-noop] [--run-validation]
                               [--log-harness-activity|--no-log-harness-activity]
                               [--auto-commit|--no-auto-commit] [--commit-message-template <tmpl>]
 npx forge-launcher@beta resume [--repo <path>] [--non-interactive] [--dry-run]
@@ -368,8 +367,8 @@ What gets queued:
 
 | Repo state | Queued command |
 |---|---|
-| PRD captured in Step 6 (or a decomposed PRD exists) | `opencode run --auto --dir "<repo>" "/forge-auto-build Use docs/PRD.md as the project PRD. GO [--workflow-engine]"` |
-| No PRD captured | `opencode run --auto --dir "<repo>" "/forge-auto-build-prd Use docs/IDEA.md as the project idea. Headless mode: auto-proceed with default assumptions and approve the PRD. After drafting, run a PRD gap check: every major component must have clear acceptance criteria, a defined tech stack, non-functional requirements (performance, security, privacy), and implementation phases; fill any gaps before approving."` |
+| PRD captured in Step 6 (or a decomposed PRD exists) | `opencode run --auto (cwd=<repo>) "/forge-auto-build Use docs/PRD.md as the project PRD. GO [--workflow-engine]"` |
+| No PRD captured | `opencode run --auto (cwd=<repo>) "/forge-auto-build-prd Use docs/IDEA.md as the project idea. Headless mode: auto-proceed with default assumptions and approve the PRD. After drafting, run a PRD gap check: every major component must have clear acceptance criteria, a defined tech stack, non-functional requirements (performance, security, privacy), and implementation phases; fill any gaps before approving."` |
 
 The embedded `GO` satisfies `forge-auto-build`'s pre-flight gate, and the
 headless `forge-auto-build-prd` invocation skips its interactive confirmation
@@ -407,11 +406,12 @@ blocking child of the session) and the per-task harness is selected with
 
 > **Headless skill runs set `FORGE_HEADLESS=1`** for the spawned harness CLI, so
 > the forge skills' headless gate fires deterministically (they also detect the
-> embedded "headless / auto-proceed" text). Headless `opencode run` calls also
-> pass `--dir "<repo>"`: `opencode run` resolves its project directory from its
-> **parent process**, not the child's spawn `cwd`, so without `--dir` the skill
-> would run in the launcher's own directory (where `docs/IDEA.md` does not
-> exist) and its input would be reported missing. If an auto-draft stage finishes
+> embedded "headless / auto-proceed" text). Headless `opencode run` calls carry
+> no path argument — OpenCode v2 removed `--dir` and `run` takes no path — and
+> instead rely on the spawn `cwd`, which `runLoggedStep` pins to the repository
+> (v2 resolves the project from `process.cwd()`). Without that the skill would
+> run in the launcher's own directory, where `docs/IDEA.md` does not exist, and
+> its input would be reported missing. If an auto-draft stage finishes
 > without its expected artifact (`docs/PRD.md` / the decomposed layout, or
 > generated agents), the launcher prints the run-log tail, the repo's `git
 > status`, and whether the skill file resolved, then offers (interactive) to
@@ -566,7 +566,7 @@ set `FORGE_AUTO_DRAFT=1` in non-interactive runs. The workflow-engine run later:
 ```bash
 forge-launcher engine-run --repo "<repo-dir>" --harness opencode --yes
 forge-launcher engine-run --repo "<repo-dir>" --harness opencode --yes --viz  # live dashboard
-forge-launcher engine-run --repo "<repo-dir>" --harness opencode --yes --keep-alive  # one warm server
+forge-launcher engine-run --repo "<repo-dir>" --harness opencode --yes   # default (OpenCode's warm background service)
 ```
 
 Pass `--viz` (or `--viz-port <n>`) to `forge-launcher engine-run` to launch the
@@ -578,17 +578,18 @@ already-running or detached engine run instead, use
 `npm run workflow-engine -- viz --repo "<repo-dir>"`
 inside the repo's engine package.
 
-**Cut per-task cold boots with keep-alive.** By default every `opencode run`
-task cold-starts its own project instance (config, AGENTS.md, skills, and every
-MCP server). The engine now defaults to **adaptive keep-alive**: it boots one
-headless `opencode serve` for the run and attaches every task to it when more
-than one task remains, and cold-starts a single remaining task (short resumes
-don't pay the server boot). Force the behavior with `--keep-alive` /
-`FORGE_ENGINE_ATTACH=1`, or `--no-keep-alive` / `FORGE_ENGINE_ATTACH=0`
-(`--keep-alive-port <n>` pins the port; each task still gets a fresh, isolated
-session). To reuse a server you already keep running, pass `--attach <url>` (or
-`FORGE_ENGINE_ATTACH_URL`). See the workflow-engine
-[keep-alive attach mode](workflow-engine.md#keep-alive-attach-mode-opencode-harness).
+**Per-task cold boots are handled by OpenCode, not the engine.** Each
+`opencode run` would otherwise cold-start its own project instance (config,
+AGENTS.md, skills, and every MCP server). The engine used to manage a warm
+`opencode serve` itself via `--keep-alive` / `--attach`; OpenCode v2 removed
+`run --attach` and added mandatory auth to `serve`, so those flags and their
+`FORGE_ENGINE_ATTACH` / `FORGE_ENGINE_ATTACH_URL` env variables are **retired**
+in v3.87. Each task now connects to OpenCode's background service, which is warm
+by default, and still gets a fresh, isolated session. Set
+`OPENCODE_EXTRA_FLAGS=--standalone` to give a run a private server. See the
+workflow-engine
+[harness warm-up](workflow-engine.md#harness-warm-up-opencode-harness) section
+and [ADR-058](adr/058-opencode-v2-project-resolution.md).
 
 The launcher passes `--concurrency <n>` through to the engine and persists it to
 `docs/engine-config.json`. Above `1` the engine runs up to `n` ready tasks at
@@ -804,14 +805,14 @@ then compiled and the launcher asks how to run the workflow engine - now
 ```
 Generate the PRD from docs/IDEA.md automatically now (headless, auto-proceed with best answers)? [y/N]: y
   Auto-drafting the PRD from docs/IDEA.md (headless) …
-    opencode run --auto --dir "/home/user/projects/my-cool-app" "/forge-auto-build-prd Use docs/IDEA.md as the project idea. Headless mode: auto-proceed with default assumptions and approve the PRD. After drafting, run a PRD gap check: every major component must have clear acceptance criteria, a defined tech stack, non-functional requirements (performance, security, privacy), and implementation phases; fill any gaps before approving."
+    opencode run --auto "/forge-auto-build-prd Use docs/IDEA.md as the project idea. Headless mode: auto-proceed with default assumptions and approve the PRD. After drafting, run a PRD gap check: every major component must have clear acceptance criteria, a defined tech stack, non-functional requirements (performance, security, privacy), and implementation phases; fill any gaps before approving."
   ✔  Committed: 'docs: add auto-drafted PRD'
   ✔  PRD generated.
   Review it before continuing:
     - /home/user/projects/my-cool-app/docs/PRD.md
 Generate the agent team from the PRD automatically now (headless)? [y/N]: y
   Auto-drafting the agent team from the PRD (headless) …
-    opencode run --auto --dir "/home/user/projects/my-cool-app" "/forge-build-agent-team Use docs/PRD.md to build the agent team. Auto-proceed with default assumptions and no questions."
+    opencode run --auto "/forge-build-agent-team Use docs/PRD.md to build the agent team. Auto-proceed with default assumptions and no questions."
   ✔  Committed: 'feat: generate auto-drafted agent team'
   ✔  Agent team generated.
   Review the generated team before building:

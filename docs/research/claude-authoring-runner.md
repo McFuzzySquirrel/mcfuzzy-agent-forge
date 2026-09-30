@@ -59,7 +59,7 @@ Read from `authoring-inventory.ts` and `launcher.ts`; every item is a concrete b
 
 | Concern | Copilot | OpenCode | Claude Code (proposed) |
 |---|---|---|---|
-| Headless argv (`authoringArgv`, `:173-177`) | `-p <msg> --yolo [--model m]` | `run --auto --dir <repo> [--model m] <msg>` | `-p <msg> --permission-mode bypassPermissions [--model m]` |
+| Headless argv (`authoringArgv`, `:173-177`) | `-p <msg> --yolo [--model m]` | `run --auto [--model m] <msg>` (cwd=repo) | `-p <msg> --permission-mode bypassPermissions [--model m]` |
 | Inventory probe (`refreshAuthoringInventory`, `:110-114`) | `copilot --help`, text-mined | `opencode models` | `claude -p "/model" --bare --output-format json`, see below |
 | Inventory parser (`:117`) | `parseCopilotMetadataOutput` | `parseModelInventoryOutput` | new `parseClaudeModelOutput` |
 | Provider key (`inventoryForRunner`, `:63`) | `copilot_cli`, `copilot_subscription` | `opencode_cli` | `claude_cli` |

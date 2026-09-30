@@ -124,8 +124,8 @@ export interface ConcurrencyDecision {
 
 /**
  * The single source of truth for how many tasks run at once. The CLI uses it for
- * the pre-run summary and the keep-alive decision, the engine for dispatch, so
- * the three can never disagree about whether sandboxes are in play.
+ * the pre-run summary, the engine for dispatch, so the two can never disagree
+ * about whether sandboxes are in play.
  */
 export function resolveConcurrency(options: { maxConcurrency: number; supportsConcurrency: boolean }): ConcurrencyDecision {
   const requested = Number.isFinite(options.maxConcurrency) ? Math.floor(options.maxConcurrency) : 1;

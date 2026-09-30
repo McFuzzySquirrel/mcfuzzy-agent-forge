@@ -72,8 +72,6 @@ function engineRunArgs(repoRoot: string): string[] {
   if (cfg?.concurrency) args.push("--concurrency", String(cfg.concurrency));
   if (cfg?.taskTimeoutMs) args.push("--task-timeout-ms", String(cfg.taskTimeoutMs));
   if (cfg?.maxRetries) args.push("--max-retries", String(cfg.maxRetries));
-  if (cfg?.keepAlive) args.push("--keep-alive");
-  if (cfg?.attach) args.push("--attach", cfg.attach);
   if (cfg?.autoCommit === false) args.push("--no-auto-commit");
   args.push(cfg?.logHarnessActivity ? "--log-harness-activity" : "--no-log-harness-activity");
   const selectedTaskIds = normaliseSelectedTaskIds(cfg?.selectedTaskIds);

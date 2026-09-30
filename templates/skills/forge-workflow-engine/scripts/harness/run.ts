@@ -39,11 +39,6 @@ export interface RunCommandResult {
   /** Human-readable failure reason (spawn error, timeout, or buffer overflow). */
   error?: string;
   failureKind?: TaskFailureKind;
-  /**
-   * Milliseconds from spawn until the first stdout/stderr byte arrived. A proxy
-   * for process startup cost (the harness cold-boot the attach mode removes).
-   */
-  bootMs?: number;
 }
 
 /**
@@ -103,7 +98,6 @@ export function runCommand(
     let stdout = "";
     let stderr = "";
     let settled = false;
-    let firstOutputAt: number | undefined;
     let failure: { error: string; failureKind: TaskFailureKind } | undefined;
     let cleanupTimer: ReturnType<typeof setTimeout> | undefined;
     let treeKiller: ChildProcess | undefined;
@@ -129,8 +123,7 @@ export function runCommand(
           durationMs: Date.now() - startedAt,
         }));
       }
-      const bootMs = firstOutputAt === undefined ? Date.now() - startedAt : firstOutputAt - startedAt;
-      resolve({ stdout, stderr, status: resolvedStatus, error: failure?.error ?? error, failureKind: failure?.failureKind, bootMs });
+      resolve({ stdout, stderr, status: resolvedStatus, error: failure?.error ?? error, failureKind: failure?.failureKind });
     };
 
     const terminate = (error: string, failureKind: TaskFailureKind) => {
@@ -185,7 +178,6 @@ export function runCommand(
     if (opts.signal?.aborted) cancel();
 
     const append = (target: "stdout" | "stderr", chunk: Buffer) => {
-      if (firstOutputAt === undefined) firstOutputAt = Date.now();
       activity?.[target].write(chunk);
       const text = chunk.toString("utf8");
       if (target === "stdout") {

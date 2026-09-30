@@ -269,8 +269,6 @@ function nextEngineConfig(
     maxRetries: existing?.maxRetries ?? "",
     viz: existing?.viz ?? false,
     vizPort: existing?.vizPort ?? "",
-    keepAlive: existing?.keepAlive ?? false,
-    attach: existing?.attach ?? "",
     autoCommit: existing?.autoCommit,
     logHarnessActivity: existing?.logHarnessActivity,
     executionMode: normaliseExecutionMode(existing?.executionMode),

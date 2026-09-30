@@ -473,12 +473,12 @@ Only modify skills I've approved in the audit report.
 | Step | Command / Prompt |
 |------|-----------------|
 | **Build reviewed PRD from idea** | `@workspace /forge-auto-build-prd I want to build [idea]` |
-| **Headless PRD from idea** | `opencode run --auto --dir "<repo>" "/forge-auto-build-prd Use docs/IDEA.md as the project idea. Headless mode: auto-proceed with default assumptions and approve the PRD. After drafting, run a PRD gap check: every major component must have clear acceptance criteria, a defined tech stack, non-functional requirements (performance, security, privacy), and implementation phases; fill any gaps before approving."` |
+| **Headless PRD from idea** | `opencode run --auto (cwd=<repo>) "/forge-auto-build-prd Use docs/IDEA.md as the project idea. Headless mode: auto-proceed with default assumptions and approve the PRD. After drafting, run a PRD gap check: every major component must have clear acceptance criteria, a defined tech stack, non-functional requirements (performance, security, privacy), and implementation phases; fill any gaps before approving."` |
 | **Interactive build in the harness** | `@workspace @project-orchestrator Execute the full build` |
 | **Autonomous engine build** | `forge-launcher engine-run --harness opencode --yes` or `@workspace @workflow-orchestrator Run the workflow` |
 | **Pick up where you left off** | `forge-launcher resume` (or `--repo <path>`) |
 | **Full auto build (terminal/headless, requires PRD)** | `forge-launcher --headless` (drives `opencode run --auto "/forge-auto-build Use docs/PRD.md as the project PRD. GO"` / `copilot -p "..." --yolo`) |
-| **Full auto build (workflow-engine path)** | `opencode run --auto --dir "<repo>" "/forge-auto-build Use docs/PRD.md as the project PRD. GO --workflow-engine"` |
+| **Full auto build (workflow-engine path)** | `opencode run --auto (cwd=<repo>) "/forge-auto-build Use docs/PRD.md as the project PRD. GO --workflow-engine"` |
 | **Launcher headless (whole pipeline)** | `forge-launcher --headless` (add `--dry-run` to print the command) |
 | **Launcher auto-draft (idea → PRD → team)** | `forge-launcher --draft` (non-interactive: set `FORGE_AUTO_DRAFT=1`) |
 | Bootstrap (default) | `forge-launcher bootstrap ~/Projects/my-project` |
