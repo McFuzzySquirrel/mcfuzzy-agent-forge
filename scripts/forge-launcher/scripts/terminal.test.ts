@@ -68,13 +68,19 @@ test("the Console can still open a terminal without a TTY", async () => {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), "fl-allow-nontty-"));
   try {
     const marker = path.join(dir, "spawned");
-    const file = path.join(dir, "gnome-terminal");
-    // PATH is replaced, so the marker command must be absolute.
-    fs.writeFileSync(file, `#!/bin/sh\n/bin/touch "${marker}"\n`);
+    const isWindows = process.platform === "win32";
+    const file = path.join(dir, isWindows ? "powershell.cmd" : "gnome-terminal");
+    const script = isWindows
+      ? `@echo off\r\necho marker>"%FORGE_TERMINAL_TEST_MARKER%"\r\n`
+      : `#!/bin/sh\n/bin/touch "$FORGE_TERMINAL_TEST_MARKER"\n`;
+    // PATH is replaced, so the marker command must use a self-contained script.
+    fs.writeFileSync(file, script);
     fs.chmodSync(file, 0o755);
     const original = process.env.PATH;
+    const originalMarker = process.env.FORGE_TERMINAL_TEST_MARKER;
     const originalTty = process.stdin.isTTY;
     process.env.PATH = dir;
+    process.env.FORGE_TERMINAL_TEST_MARKER = marker;
     Object.defineProperty(process.stdin, "isTTY", { value: false, configurable: true });
     try {
       await launchCliInTerminal("opencode", "/tmp/some-repo", [], { allowWithoutTty: true });
@@ -85,6 +91,8 @@ test("the Console can still open a terminal without a TTY", async () => {
       assert.equal(fs.existsSync(marker), true, "the opt-out must reach the spawn path");
     } finally {
       process.env.PATH = original;
+      if (originalMarker === undefined) delete process.env.FORGE_TERMINAL_TEST_MARKER;
+      else process.env.FORGE_TERMINAL_TEST_MARKER = originalMarker;
       Object.defineProperty(process.stdin, "isTTY", { value: originalTty, configurable: true });
     }
   } finally {
