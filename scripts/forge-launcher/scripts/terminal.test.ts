@@ -69,13 +69,17 @@ test("the Console can still open a terminal without a TTY", async () => {
   try {
     const marker = path.join(dir, "spawned");
     const isWindows = process.platform === "win32";
-    const file = path.join(dir, isWindows ? "powershell.cmd" : "gnome-terminal");
+    const candidates = isWindows ? ["wt.cmd", "powershell.cmd"] : ["gnome-terminal"];
     const script = isWindows
       ? `@echo off\r\necho marker>"%FORGE_TERMINAL_TEST_MARKER%"\r\n`
       : `#!/bin/sh\n/bin/touch "$FORGE_TERMINAL_TEST_MARKER"\n`;
-    // PATH is replaced, so the marker command must use a self-contained script.
-    fs.writeFileSync(file, script);
-    fs.chmodSync(file, 0o755);
+    // Shadow every terminal candidate so host-installed Windows Terminal
+    // cannot bypass the deterministic marker command.
+    for (const candidate of candidates) {
+      const file = path.join(dir, candidate);
+      fs.writeFileSync(file, script);
+      fs.chmodSync(file, 0o755);
+    }
     const original = process.env.PATH;
     const originalMarker = process.env.FORGE_TERMINAL_TEST_MARKER;
     const originalTty = process.stdin.isTTY;
@@ -83,7 +87,8 @@ test("the Console can still open a terminal without a TTY", async () => {
     process.env.FORGE_TERMINAL_TEST_MARKER = marker;
     Object.defineProperty(process.stdin, "isTTY", { value: false, configurable: true });
     try {
-      await launchCliInTerminal("opencode", "/tmp/some-repo", [], { allowWithoutTty: true });
+      const launched = await launchCliInTerminal("opencode", "/tmp/some-repo", [], { allowWithoutTty: true });
+      assert.equal(launched, true, "the opt-out must reach a terminal candidate");
       // The candidate is spawned detached, so its side effect is not synchronous.
       for (let attempt = 0; attempt < 50 && !fs.existsSync(marker); attempt += 1) {
         await new Promise((resolve) => setTimeout(resolve, 20));
