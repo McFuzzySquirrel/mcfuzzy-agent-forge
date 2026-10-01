@@ -4,6 +4,92 @@ Detailed release and change notes for MyForge.
 
 ---
 
+## October 2026 - v3.89
+
+### Console concurrency labels now say "parallel tasks", not "parallel agents"
+
+- **The concurrency control was named for a capability it never had.** The
+  Overview **Controls** panel, the New Project wizard, and the Console Help view
+  all read "Concurrency (parallel agents)". Parallel execution here schedules
+  *independent* tasks that happen to be ready at the same time; it is not several
+  agents collaborating on one task. Multi-agent describes who owns a task;
+  parallel describes when tasks run, and the two are independent — a multi-agent
+  workflow can run sequentially, which is what MyForge did until per-task
+  worktree sandboxes made concurrency real.
+- All three labels now read **"Concurrency (parallel tasks)"**, and the Help
+  entry describes it as running that many independent tasks at once. No behavior,
+  flag, or persisted setting changes; `docs/engine-config.json` and
+  `--concurrency` are unaffected.
+- No keybindings, routes, or API fields changed, so nothing downstream needs
+  updating. See the worktree and scheduling discussion in
+  [Part 4 of the story](THE-STORY-PART-4.md).
+
+## September 2026 - v3.88
+
+### Fixed: sandboxed tasks ran against the engine instead of their worktree
+
+- **Parallel runs executed every task in the wrong project.** OpenCode v2
+  resolves the project from `process.env.PWD ?? process.cwd()`, so an inherited
+  stale `PWD` outranks the `cwd` the engine pinned — the opposite of what
+  [ADR-058](adr/058-opencode-v2-project-resolution.md) recorded. Because the
+  engine is normally launched from its own package directory, each task ran
+  there instead of in its sandbox worktree, could not find the execution file
+  the engine had written for it, produced nothing, and failed the output gate
+  with a *missing-`expectedOutputs`* error that pointed at the task rather than
+  the harness. See [ADR-059](adr/059-pwd-aligned-spawn-environment.md) and
+  issue [#121](https://github.com/McFuzzySquirrel/mcfuzzy-agent-forge/issues/121).
+- **The failure was silent at `--concurrency 1` and fatal above it.** In
+  sequential mode the execution file landed in the same directory the
+  misdirected session already occupied, so tasks found it by accident. Only the
+  mode that actually isolates tasks was broken, which is how this reached a
+  released default.
+- **No action needed.** A child is now never launched with a `PWD` that
+  disagrees with its `cwd`; both are set from the same value at the spawn choke
+  points. Nothing to migrate, and no flag, environment variable, or config
+  changes.
+- **The launcher is fixed too.** Invoking `forge-launcher` from outside the
+  repository it targets had the same effect on headless skill runs,
+  `engine-run`, and the console's detached engine.
+- **Copilot and Claude tasks get the same protection.** The hazard was never
+  opencode-specific; only opencode's project resolution was verified to depend
+  on `PWD`. The launcher's `cwd` remains the mechanism that fixes the
+  filesystem — do not drop it on the theory that `PWD` covers it.
+- **Correction to v3.87 below:** its claim that the `PWD`-based replacement "was
+  verified to be wrong" was itself wrong, and its "no action needed for project
+  selection" advice was the origin of the bug. That entry is left as written; see
+  ADR-059.
+
+## September 2026 - v3.87
+
+### OpenCode v2 only: `--dir` and `--attach` retired
+
+- **The Forge OpenCode harness now requires OpenCode v2.** v2 removed
+  `opencode run --dir` and `opencode run --attach`, so the engine's project
+  pinning and warm-server modes were rebuilt. v1.x is no longer supported; there
+  is no compatibility path. See [ADR-058](adr/058-opencode-v2-project-resolution.md).
+- **Breaking: four flags are gone** — `--keep-alive`, `--keep-alive-port`,
+  `--no-keep-alive`, and `--attach <url>` — from both `workflow-engine run` and
+  `forge-launcher engine-run`. Passing one is now an explicit `Unknown option`
+  error rather than a silent no-op. `FORGE_ENGINE_ATTACH` and
+  `FORGE_ENGINE_ATTACH_URL` are accepted but ignored, and `keepAlive` / `attach`
+  in a persisted `docs/engine-config.json` are likewise ignored. Remove them from
+  your scripts, CI invocations, and config files.
+- **The engine no longer boots or owns `opencode serve`.** Each `opencode run`
+  now connects to OpenCode's own background service, which is already warm
+  (config, AGENTS.md, skills, MCP servers), and every task still gets a fresh,
+  isolated session. Set `OPENCODE_EXTRA_FLAGS=--standalone` to give a run a
+  private server instead.
+- **No action needed for project selection.** OpenCode v2 resolves the project
+  from the child's `process.cwd()`, and both the engine and the launcher's
+  headless runner already spawned with `cwd` set to the repository, so the
+  retired `--dir <repo>` was redundant. In parallel runs each task's worktree is
+  the `cwd`, which preserves per-task isolation. The `PWD`-based replacement
+  proposed in earlier planning was verified to be wrong and was not adopted.
+- **Migration note:** upgrading straight from a v1-era install fails loudly.
+  OpenCode v2 hard-fails an unknown flag with a usage dump and exit 1, so a stale
+  `--dir` or `--attach` surfaces immediately instead of running in the wrong
+  project. Fix the invocation rather than expecting a fallback.
+
 ## September 2026 - v3.86
 
 ### `--concurrency` is real throughput again: per-task git worktree sandboxes

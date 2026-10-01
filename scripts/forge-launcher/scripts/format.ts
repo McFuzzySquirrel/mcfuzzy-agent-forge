@@ -111,6 +111,26 @@ export function describeSpawnError(cmd: string, err: Error): Error {
   return new Error(`Failed to run '${cmd}': ${err.message}${hint}`);
 }
 
+/**
+ * Builds the environment a child is launched with.
+ *
+ * `cwd` alone is not enough, because a child that trusts `$PWD` resolves its
+ * project from the *inherited* `PWD` and ignores the working directory it was
+ * given. OpenCode v2 is exactly that: its `run` handler computes
+ * `process.env.PWD ?? process.cwd()`, so when the launcher is invoked from
+ * outside the repository it targets - a stale `PWD` inherited from the
+ * invoking shell - a correctly pinned `cwd` is still overridden and the run
+ * happens against the wrong project (ADR-059).
+ *
+ * So a child is only ever launched with `PWD` equal to its `cwd`: `cwd` fixes
+ * the filesystem, `PWD` is corrected to match it, and the two cannot disagree.
+ * With no `cwd` the environment is passed through unchanged.
+ */
+function childEnv(cwd: string | undefined, extra?: NodeJS.ProcessEnv): NodeJS.ProcessEnv | undefined {
+  if (cwd === undefined) return extra === undefined ? undefined : { ...process.env, ...extra };
+  return { ...process.env, ...extra, PWD: path.resolve(cwd) };
+}
+
 /** Runs a command, capturing output. Resolves with the exit code. */
 export function runCommand(
   cmd: string,
@@ -120,7 +140,7 @@ export function runCommand(
   return new Promise((resolve, reject) => {
     const child = spawn(cmd, args, {
       cwd: opts.cwd,
-      env: { ...process.env, ...opts.env },
+      env: childEnv(opts.cwd, opts.env),
       stdio: opts.capture ? ["inherit", "pipe", "pipe"] : "inherit",
     });
     let stdout = "";
@@ -146,7 +166,7 @@ export function runLogged(
     if (!opts.logFile) {
       const child = spawn(cmd, args, {
         cwd: opts.cwd,
-        env: { ...process.env, ...opts.env },
+        env: childEnv(opts.cwd, opts.env),
         stdio: "inherit",
       });
       child.on("error", (err) => reject(describeSpawnError(cmd, err)));
@@ -156,7 +176,7 @@ export function runLogged(
     fs.mkdirSync(path.dirname(opts.logFile), { recursive: true });
     const child = spawn(cmd, args, {
       cwd: opts.cwd,
-      env: { ...process.env, ...opts.env },
+      env: childEnv(opts.cwd, opts.env),
       stdio: ["inherit", "pipe", "pipe"],
     });
     const stream = fs.createWriteStream(opts.logFile, { flags: "a" });
@@ -182,7 +202,7 @@ export function runTee(
   return new Promise((resolve, reject) => {
     const child = spawn(cmd, args, {
       cwd: opts.cwd,
-      env: { ...process.env, ...opts.env },
+      env: childEnv(opts.cwd, opts.env),
       stdio: ["inherit", "pipe", "pipe"],
     });
     let stream: fs.WriteStream | undefined;
@@ -262,7 +282,7 @@ export function spawnDetached(
     spawning = true;
     const child = spawn(cmd, args, {
       cwd: opts.cwd,
-      env: opts.env ?? process.env,
+      env: childEnv(opts.cwd, opts.env),
       detached: true,
       stdio,
     });

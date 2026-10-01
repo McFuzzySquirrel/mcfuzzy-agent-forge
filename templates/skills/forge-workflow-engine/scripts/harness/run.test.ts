@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { readFileSync } from "node:fs";
+import { mkdtempSync, readFileSync, rmSync } from "node:fs";
+import { tmpdir } from "node:os";
 import { join } from "node:path";
 import childProcess, { type ChildProcess } from "node:child_process";
 import { EventEmitter } from "node:events";
@@ -227,6 +228,49 @@ const invocation = {
   attempt: 1,
   cwd: process.cwd(),
 };
+
+/**
+ * A child that trusts `$PWD` resolves its project from the inherited value and
+ * ignores the `cwd` it was given, so `runCommand` must correct `PWD` to match.
+ */
+test("runCommand hands the child a PWD that matches its cwd, whatever it inherited", async (t) => {
+  const dir = mkdtempSync(join(tmpdir(), "forge-run-pwd-"));
+  t.after(() => rmSync(dir, { recursive: true, force: true }));
+  const decoy = mkdtempSync(join(tmpdir(), "forge-run-pwd-decoy-"));
+  t.after(() => rmSync(decoy, { recursive: true, force: true }));
+
+  const saved = process.env["PWD"];
+  process.env["PWD"] = decoy;
+  try {
+    // An explicitly conflicting PWD must lose too; cwd is the single source.
+    const result = await runCommand(process.execPath, ["-e", "console.log(process.cwd() + '|' + process.env.PWD)"], {
+      cwd: dir, timeoutMs: 5000, maxBufferBytes: 4096, env: { PWD: "/somewhere/else" },
+    });
+    assert.equal(result.status, 0);
+    assert.equal(result.stdout.trim(), `${dir}|${dir}`);
+  } finally {
+    if (saved === undefined) delete process.env["PWD"];
+    else process.env["PWD"] = saved;
+  }
+});
+
+test("runCommand keeps the rest of the environment alongside the corrected PWD", async (t) => {
+  const dir = mkdtempSync(join(tmpdir(), "forge-run-env-"));
+  t.after(() => rmSync(dir, { recursive: true, force: true }));
+
+  const inherited = process.env["FORGE_PWD_INHERITED_PROBE"];
+  process.env["FORGE_PWD_INHERITED_PROBE"] = "inherited";
+  try {
+    const result = await runCommand(process.execPath, ["-e", "console.log(`${process.env.FORGE_PWD_PROBE ?? 'missing'}|${process.env.FORGE_PWD_INHERITED_PROBE ?? 'missing'}`)"], {
+      cwd: dir, timeoutMs: 5000, maxBufferBytes: 4096, env: { FORGE_PWD_PROBE: "explicit" },
+    });
+    assert.equal(result.status, 0);
+    assert.equal(result.stdout.trim(), "explicit|inherited");
+  } finally {
+    if (inherited === undefined) delete process.env["FORGE_PWD_INHERITED_PROBE"];
+    else process.env["FORGE_PWD_INHERITED_PROBE"] = inherited;
+  }
+});
 
 function captureLog(): { log: (line: string) => void; lines: string[] } {
   const lines: string[] = [];

@@ -271,7 +271,14 @@ export async function resolveAuthoringModel(
   return { runner, ...selection, effectiveModel, inventoryVerifiedAt: model.last_verified };
 }
 
-export function authoringArgv(invocation: AuthoringInvocation, repo: string, message: string, extra: string[] = []): string[] {
+/**
+ * Builds the runner argv for one authoring invocation.
+ *
+ * `repo` is not placed in argv: OpenCode v2 removed `run --dir` and has no
+ * path argument, and the other runners resolve the project from the spawn
+ * `cwd` as well. Callers must spawn with `cwd` set to the repository.
+ */
+export function authoringArgv(invocation: AuthoringInvocation, _repo: string, message: string, extra: string[] = []): string[] {
   if (extra.some((arg) => arg === "--model" || arg.startsWith("--model=") || /^-m/.test(arg))) {
     throw new Error("Conflicting extra model argument: use --prd-model, --team-model, or --skills-model.");
   }
@@ -283,6 +290,10 @@ export function authoringArgv(invocation: AuthoringInvocation, repo: string, mes
       return ["-p", message, "--permission-mode", "bypassPermissions", ...model, ...extra];
     default:
       // opencode, and stub which never reaches a real spawn.
-      return ["run", "--auto", "--dir", repo, ...model, ...extra, message];
+      //
+      // No `--dir`: OpenCode v2 removed it and `run` accepts no path argument
+      // (a trailing path is swallowed into the prompt). The runner instead
+      // spawns with `cwd: state.repoDir`, which is how v2 selects the project.
+      return ["run", "--auto", ...model, ...extra, message];
   }
 }

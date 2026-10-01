@@ -737,7 +737,7 @@ function renderConcurrencyControl(container: HTMLElement, current: number): HTML
   const hint = el("span", { className: "dim small" }, current > 0 ? `current: ${current}` : "current: engine default");
   return el("div", { style: "margin-top:10px" }, [
     el("div", { className: "row gap" }, [
-      el("span", { className: "dim small" }, "Concurrency (parallel agents)"),
+      el("span", { className: "dim small" }, "Concurrency (parallel tasks)"),
       input,
       btn,
       hint,

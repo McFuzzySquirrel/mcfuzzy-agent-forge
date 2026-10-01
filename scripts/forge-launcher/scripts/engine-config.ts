@@ -5,7 +5,7 @@ import path from "node:path";
  * Persisted engine-run configuration (docs/engine-config.json). The interactive
  * launcher writes the engine options chosen in `configureEngineOptions` here so
  * `forge-launcher resume` / monitor commands rebuild the engine invocation with
- * the same concurrency / keep-alive / retries / viz settings instead of the
+ * the same concurrency / retries / viz settings instead of the
  * minimal `--harness`-only command.
  */
 
@@ -17,8 +17,6 @@ export interface PersistedEngineConfig {
   maxRetries: string;
   viz: boolean;
   vizPort: string;
-  keepAlive: boolean;
-  attach: string;
   /** Auto-commit after each completed task; absent means the engine default (on). */
   autoCommit?: boolean;
   /** Stream harness CLI activity into docs/engine-run.log; absent means the engine default (off). */

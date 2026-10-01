@@ -20,7 +20,12 @@ export interface RunCommandOptions {
   shell?: boolean;
   timeoutMs: number;
   maxBufferBytes: number;
-  /** Extra environment variables merged over `process.env`. */
+  /**
+   * Extra environment variables merged over `process.env`.
+   *
+   * A child is never handed a `PWD` that disagrees with `cwd`; see
+   * `childEnv`. Passing `PWD` here is therefore pointless: `cwd` wins.
+   */
   env?: NodeJS.ProcessEnv;
   signal?: AbortSignal;
   /** When present, the invocation (and effective invocation) is logged before launch. */
@@ -39,11 +44,24 @@ export interface RunCommandResult {
   /** Human-readable failure reason (spawn error, timeout, or buffer overflow). */
   error?: string;
   failureKind?: TaskFailureKind;
-  /**
-   * Milliseconds from spawn until the first stdout/stderr byte arrived. A proxy
-   * for process startup cost (the harness cold-boot the attach mode removes).
-   */
-  bootMs?: number;
+}
+
+/**
+ * Builds the environment a child is launched with.
+ *
+ * `cwd` alone is not enough, because a child that trusts `$PWD` resolves its
+ * project from the *inherited* `PWD` and ignores the working directory it was
+ * given. OpenCode v2 is exactly that: its `run` handler computes
+ * `process.env.PWD ?? process.cwd()`, so a stale `PWD` inherited from the shell
+ * that started the engine outranks the correct `cwd` and every task runs against
+ * the wrong project (ADR-059). The engine is normally launched from its own
+ * package directory, so that stale `PWD` names a different project entirely.
+ *
+ * So a child is only ever launched with `PWD` equal to its `cwd`: `cwd` fixes
+ * the filesystem, `PWD` is corrected to match it, and the two cannot disagree.
+ */
+function childEnv(cwd: string, extra?: NodeJS.ProcessEnv): NodeJS.ProcessEnv {
+  return { ...process.env, ...extra, PWD: resolvePath(cwd) };
 }
 
 /**
@@ -94,7 +112,7 @@ export function runCommand(
     // A dedicated POSIX process group lets cancellation include descendants
     // inheriting the output pipes. This remains attached: no unref during work.
     const child = spawn(bin, args, {
-      cwd: opts.cwd, env: opts.env, stdio: ["ignore", "pipe", "pipe"],
+      cwd: opts.cwd, env: childEnv(opts.cwd, opts.env), stdio: ["ignore", "pipe", "pipe"],
       shell: opts.shell,
       detached: process.platform !== "win32", windowsHide: true,
     });
@@ -103,7 +121,6 @@ export function runCommand(
     let stdout = "";
     let stderr = "";
     let settled = false;
-    let firstOutputAt: number | undefined;
     let failure: { error: string; failureKind: TaskFailureKind } | undefined;
     let cleanupTimer: ReturnType<typeof setTimeout> | undefined;
     let treeKiller: ChildProcess | undefined;
@@ -129,8 +146,7 @@ export function runCommand(
           durationMs: Date.now() - startedAt,
         }));
       }
-      const bootMs = firstOutputAt === undefined ? Date.now() - startedAt : firstOutputAt - startedAt;
-      resolve({ stdout, stderr, status: resolvedStatus, error: failure?.error ?? error, failureKind: failure?.failureKind, bootMs });
+      resolve({ stdout, stderr, status: resolvedStatus, error: failure?.error ?? error, failureKind: failure?.failureKind });
     };
 
     const terminate = (error: string, failureKind: TaskFailureKind) => {
@@ -185,7 +201,6 @@ export function runCommand(
     if (opts.signal?.aborted) cancel();
 
     const append = (target: "stdout" | "stderr", chunk: Buffer) => {
-      if (firstOutputAt === undefined) firstOutputAt = Date.now();
       activity?.[target].write(chunk);
       const text = chunk.toString("utf8");
       if (target === "stdout") {

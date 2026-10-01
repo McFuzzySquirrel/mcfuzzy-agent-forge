@@ -171,10 +171,14 @@ sandboxMode          = effectiveConcurrency > 1
   engages only above 1, which contains the regression risk to opt-in runs.
 - A harness without `supportsConcurrency` falls back to 1 with a warning rather
   than failing a persisted config.
-- **Keep-alive is downgraded to a cold start per task in sandbox mode**, because
-  one warm `opencode serve` is bound to a single project directory and cannot
-  serve the several worktrees a parallel wave uses. An operator-supplied
-  `--attach <url>` is still honoured as given: they own that server.
+- **Per-task project selection in sandbox mode.** Each task runs with `cwd` set to
+  its own worktree. OpenCode v2 selects the project from
+  `process.env.PWD ?? process.cwd()`, so Forge aligns the child `PWD` with its
+  worktree `cwd` (ADR-059; project resolution is described in ADR-058). The
+  keep-alive interaction originally recorded here — one warm `opencode serve`
+  serves a single project directory, so keep-alive was downgraded to a cold start
+  per task — is moot: v2 retired the engine-managed warm server along with
+  `--attach`. See [ADR-058](058-opencode-v2-project-resolution.md).
 - Review records are operator input for the engine, not something a task builds
   from, so `docs/reviews/**` is tolerated rather than treated as a requirement.
   A human-review task reads its attestation from the engine root, and the

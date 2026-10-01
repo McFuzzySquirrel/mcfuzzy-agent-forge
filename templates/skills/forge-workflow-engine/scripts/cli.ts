@@ -34,7 +34,6 @@ Usage:
                                      [--auto-commit|--no-auto-commit] [--commit-message-template <tmpl>]
                                      [--execution-mode <auto|manual>] [--selection-scope <single|range|list>] [--selected-tasks <id,id,...>]
                                      [--viz [port]] [--no-open]
-                                     [--keep-alive] [--keep-alive-port <port>] [--attach <url>] [--no-keep-alive]
   npm run workflow-engine -- status  [--repo <path>]
   npm run workflow-engine -- approve-task <task-id> --repo <path> --reviewer <name> --evidence <repo-relative-file> --confirm-human-review
   npm run workflow-engine -- replay  <task-id> [--repo <path>] [--harness opencode|copilot|claude|openai|stub]
@@ -60,10 +59,6 @@ Environment variables:
   FORGE_ENGINE_AUTO_COMMIT        "0" to disable auto-commit after each completed task (default: 1)
   FORGE_ENGINE_COMMIT_MESSAGE_TEMPLATE  Commit message template with {taskId}/{taskTitle} placeholders
                                  (default: feat(forge-engine): complete task {taskId} - {taskTitle})
-  FORGE_ENGINE_ATTACH   "1" to force the opencode keep-alive server for the run (same as --keep-alive);
-                        "0" to force cold start per task (same as --no-keep-alive); unset = adaptive
-                        (keep-alive when more than one task remains, cold start otherwise)
-  FORGE_ENGINE_ATTACH_URL   Attach tasks to an existing opencode serve instance instead of cold-starting per task
 
 Pause & stop:
   pause writes a pause request (docs/engine-control.json) - a live engine stops after
@@ -161,8 +156,6 @@ function detectRepoRoot(start = process.cwd()): string {
   return resolve(start);
 }
 
-import { shouldKeepAlive, remainingTaskCount, type KeepAliveDecision } from "./keepalive.ts";
-
 function harnessNameFor(args: string[], repoRoot: string): string {
   const explicit = flag(args, "--harness") ?? process.env["FORGE_ENGINE_HARNESS"];
   if (explicit !== undefined) return explicit;
@@ -179,9 +172,9 @@ function harnessNameFor(args: string[], repoRoot: string): string {
   return config.harness;
 }
 
-function resolveHarness(name: string | undefined, attachUrl?: string): HarnessAdapter {
+function resolveHarness(name: string | undefined): HarnessAdapter {
   switch (name ?? "opencode") {
-    case "opencode": return new OpenCodeAdapter({ attachUrl });
+    case "opencode": return new OpenCodeAdapter();
     case "copilot": return new CopilotAdapter();
     case "claude": return new ClaudeAdapter();
     case "openai": return new OpenAIAdapter();
@@ -194,11 +187,21 @@ function resolveHarness(name: string | undefined, attachUrl?: string): HarnessAd
   }
 }
 
+function rejectRetiredRunFlags(args: string[]): void {
+  const retiredFlags = ["--keep-alive", "--keep-alive-port", "--no-keep-alive", "--attach"];
+  const retiredFlag = args.find((arg) =>
+    retiredFlags.some((flag) => arg === flag || arg.startsWith(`${flag}=`)),
+  );
+  if (retiredFlag) {
+    const flagName = retiredFlag.split("=")[0];
+    throw new Error(`The retired ${flagName} option is no longer supported.`);
+  }
+}
+
 function buildOptions(
   args: string[],
   repoRoot: string,
   harnessName?: string,
-  attachUrl?: string,
 ): EngineOptions {
   const manifestPath = join(repoRoot, "docs", "EXECUTION-MANIFEST.json");
 
@@ -217,7 +220,7 @@ function buildOptions(
     artifactsPath: join(repoRoot, "docs", "artifacts"),
     controlPath: controlPath(repoRoot),
     pidPath: pidPath(repoRoot),
-    harness: resolveHarness(harnessName ?? flag(args, "--harness"), attachUrl),
+    harness: resolveHarness(harnessName ?? flag(args, "--harness")),
     maxRetries: Number(flag(args, "--max-retries") ?? "2"),
     retryDelayMs: Number(flag(args, "--retry-delay-ms") ?? "5000"),
     heartbeatMs: Number(flag(args, "--heartbeat-ms") ?? process.env["FORGE_ENGINE_HEARTBEAT_MS"] ?? String(DEFAULT_HEARTBEAT_MS)),
@@ -245,25 +248,13 @@ function buildOptions(
 
 // Presents the pre-run gate. Skipped when `--yes` or FORGE_ENGINE_YES=1 is set,
 // or when stdin is not a TTY (CI / headless) - the gate is interactive-only.
-async function confirmPreRun(opts: EngineOptions, args: string[], keepAlive?: KeepAliveDecision): Promise<void> {
+async function confirmPreRun(opts: EngineOptions, args: string[]): Promise<void> {
   const manifest = JSON.parse(readFileSync(opts.manifestPath, "utf8")) as ExecutionManifest;
   const selectedTaskIds = opts.executionMode === "manual" ? (opts.selectedTaskIds ?? []) : [];
   const taskCount = selectedTaskIds.length > 0
     ? selectedTaskIds.length
     : manifest.phases.reduce((n, p) => n + (p.tasks?.length ?? 0), 0);
   const skip = hasFlag(args, "--yes") || process.env["FORGE_ENGINE_YES"] === "1";
-
-  const keepAliveLabel = keepAlive
-    ? keepAlive.mode === "attach"
-      ? "attach to existing server"
-      : keepAlive.mode === "keep-alive"
-        ? "keep-alive (forced)"
-        : keepAlive.mode === "adaptive"
-          ? `adaptive (keep-alive, ${keepAlive.remaining} tasks remaining)`
-          : keepAlive.remaining > 1
-            ? `cold start per task (${keepAlive.remaining} tasks remaining)`
-            : "cold start (single task remaining)"
-    : "n/a";
 
   const concurrency = resolveConcurrency({
     maxConcurrency: opts.maxConcurrency,
@@ -284,7 +275,6 @@ async function confirmPreRun(opts: EngineOptions, args: string[], keepAlive?: Ke
   console.log(`  Retries : ${opts.maxRetries} max, ${opts.retryDelayMs}ms between attempts (--max-retries / --retry-delay-ms)`);
   console.log(`  Concurrency: ${concurrencyLabel}`);
   if (concurrency.notice) console.log(`  Concurrency warning: ${concurrency.notice}`);
-  console.log(`  Keep-alive: ${keepAliveLabel}`);
   console.log(`  Output gate: ${opts.allowNoop ? "relaxed (--allow-noop: no-op tasks allowed)" : "strict (missing outputs / no-op tasks are retried then failed)"}`);
   if (opts.runValidation) console.log("  Validation: running manifest validationCommands per task (--run-validation)");
   const autoCommitLabel = opts.autoCommit === false
@@ -324,6 +314,7 @@ async function confirmPreRun(opts: EngineOptions, args: string[], keepAlive?: Ke
 }
 
 async function cmdRun(args: string[]): Promise<void> {
+  rejectRetiredRunFlags(args);
   const repoArg = flag(args, "--repo");
   const repoRoot = repoArg ? resolve(repoArg) : detectRepoRoot();
   const harnessName = harnessNameFor(args, repoRoot);
@@ -335,57 +326,22 @@ async function cmdRun(args: string[]): Promise<void> {
     process.exit(1);
   }
 
-  // Attach mode: `--attach <url>` reuses an existing opencode serve instance;
-  // `--keep-alive` has the engine boot one for the run and tear it down after.
-  // Otherwise the engine defaults adaptively: keep-alive when more than one
-  // task remains, cold start per task otherwise. `--no-keep-alive` (or
-  // FORGE_ENGINE_ATTACH=0) forces the cold-start fallback.
-  const attachUrl = flag(args, "--attach") ?? process.env["FORGE_ENGINE_ATTACH_URL"];
-  const keepAlive = hasFlag(args, "--keep-alive") || process.env["FORGE_ENGINE_ATTACH"] === "1";
-  const noKeepAlive = hasFlag(args, "--no-keep-alive") || process.env["FORGE_ENGINE_ATTACH"] === "0";
+  // One decision, shared with the engine, so the summary and the dispatcher
+  // can never disagree about sandboxing.
+  const opts = buildOptions(args, repoRoot, harnessName);
 
-  // One decision, shared with the engine, so the summary, the keep-alive
-  // strategy, and the dispatcher can never disagree about sandboxing.
-  const opts = buildOptions(args, repoRoot, harnessName, attachUrl);
-  const concurrency = resolveConcurrency({
-    maxConcurrency: opts.maxConcurrency,
-    supportsConcurrency: opts.harness.supportsConcurrency,
-  });
-
-  const decision = shouldKeepAlive({
-    attachUrl,
-    keepAlive,
-    noKeepAlive,
-    harness: harnessName,
-    remaining: remainingTaskCount(manifestPath, statePath(repoRoot), opts.selectedTaskIds ?? []),
-    sandboxMode: concurrency.sandboxMode,
-  });
-
-  if (decision.notice) console.warn(`[engine] ${decision.notice}`);
-  if (decision.mode === "keep-alive" && harnessName !== "opencode") {
-    console.warn("[engine] --keep-alive only applies to the opencode harness; ignoring.");
-  }
-  if (concurrency.sandboxMode && attachUrl) {
-    console.warn(`[engine] --attach is honoured as given, but each task now runs in its own git worktree under ${attachUrl} rather than in ${repoRoot}.`);
-  }
-
-  await runWithServer(args, repoRoot, harnessName, attachUrl, decision, opts);
+  await runWithServer(args, repoRoot, harnessName, opts);
 }
 
 async function runWithServer(
   args: string[],
   repoRoot: string,
   harnessName: string,
-  attachUrl: string | undefined,
-  decision: KeepAliveDecision,
   built: EngineOptions,
 ): Promise<void> {
   const opts = built;
   if (harnessName === "opencode") {
-    opts.harness = new OpenCodeAdapter({
-      attachUrl, startServer: decision.startServer,
-      port: Number(flag(args, "--keep-alive-port") ?? "0") || undefined,
-    });
+    opts.harness = new OpenCodeAdapter();
   }
 
   // Stop signal: Ctrl+C / SIGTERM set an in-process flag the engine checks at
@@ -421,7 +377,7 @@ async function runWithServer(
       });
     }
 
-    await confirmPreRun(opts, args, decision);
+    await confirmPreRun(opts, args);
 
     const state = await runEngine({ ...opts, stopRequested: () => signalStopped });
 
@@ -501,8 +457,7 @@ async function cmdReplay(args: string[]): Promise<void> {
   const repoArg = flag(rest, "--repo");
   const repoRoot = repoArg ? resolve(repoArg) : detectRepoRoot();
   const harnessName = harnessNameFor(rest, repoRoot);
-  const attachUrl = flag(rest, "--attach") ?? process.env["FORGE_ENGINE_ATTACH_URL"];
-  const opts = buildOptions(rest, repoRoot, harnessName, attachUrl);
+  const opts = buildOptions(rest, repoRoot, harnessName);
   const state = await replayTask(taskId, opts);
   if (state.status === "failed") process.exitCode = 1;
   const record = state.tasks[taskId];

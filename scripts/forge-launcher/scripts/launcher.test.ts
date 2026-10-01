@@ -295,7 +295,7 @@ test("auto-draft engine command enables the live dashboard from env", async () =
   assert.ok(out.includes("--yes"), out);
 });
 
-test("auto-draft engine command carries keep-alive/attach from env", async () => {
+test("auto-draft engine command ignores the retired keep-alive/attach env", async () => {
   const parent = tmpDir();
   const { code, out } = await runCli(["--non-interactive"], {
     FORGE_HARNESS_CHOICE: "4",
@@ -305,6 +305,7 @@ test("auto-draft engine command carries keep-alive/attach from env", async () =>
     FORGE_YN_DEFAULT: "n",
     FORGE_AUTO_DRAFT: "1",
     FORGE_RUN_WITH: "stub",
+    // Retired with OpenCode v2 (ADR-058): setting these must change nothing.
     FORGE_ENGINE_ATTACH: "1",
     FORGE_ENGINE_ATTACH_URL: "http://127.0.0.1:4096",
   });
@@ -312,8 +313,8 @@ test("auto-draft engine command carries keep-alive/attach from env", async () =>
   assert.equal(code, 0, out);
   const repo = path.join(parent, "engine-keepalive-app");
   assert.ok(out.includes(`engine-run --repo ${repo}`), out);
-  assert.ok(out.includes("--keep-alive"), out);
-  assert.ok(out.includes("--attach http://127.0.0.1:4096"), out);
+  assert.ok(!out.includes("--keep-alive"), out);
+  assert.ok(!out.includes("--attach"), out);
   assert.ok(out.includes("--yes"), out);
 });
 
@@ -406,7 +407,7 @@ test("feature increment selection excludes unrelated manifest tasks", () => {
   assert.deepEqual(selected, ["NEW-FEATURE-1.1", "NEW-FEATURE-1.2"]);
 });
 
-test("headless skill command pins the repo dir with --dir", async () => {
+test("headless skill command omits --dir (removed in OpenCode v2)", async () => {
   const parent = tmpDir();
   const { code, out } = await runCli(["--non-interactive", "--dry-run"], {
     FORGE_HARNESS_CHOICE: "4",
@@ -420,10 +421,16 @@ test("headless skill command pins the repo dir with --dir", async () => {
 
   assert.equal(code, 0, out);
   const repo = path.join(parent, "dir-app");
-  // opencode resolves its project dir from its parent process, not the child's
-  // spawn cwd, so the launcher must pass --dir explicitly or the skill runs in
-  // the wrong repository and its input (docs/IDEA.md) is reported missing.
-  assert.match(out, new RegExp(`opencode run --auto --dir "[^"]*[\\\\/]${path.basename(repo)}"`), out);
+  // OpenCode v2 removed `run --dir` and has no path argument: a trailing path
+  // would be swallowed into the prompt. v2 resolves the project from the
+  // child's spawn cwd, which runLoggedStep already pins to the repo, so the
+  // command must carry no path at all.
+  assert.match(out, /opencode run --auto/, out);
+  assert.ok(!out.includes("--dir"), `headless command still passes --dir: ${out}`);
+  assert.ok(
+    !new RegExp(`opencode run[^\\n]*"[^"]*[\\\\/]${path.basename(repo)}"`).test(out),
+    `headless command leaks a path argument that v2 would read as prompt text: ${out}`,
+  );
 });
 
 test("imported requirements remain source material and queue feature authoring", async () => {

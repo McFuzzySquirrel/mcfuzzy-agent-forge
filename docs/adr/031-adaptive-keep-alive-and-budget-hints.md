@@ -1,8 +1,13 @@
 # ADR-031: Adaptive Keep-Alive Default + Timeout/Retry Surfacing
 
 **Date:** 2026-08-28
-**Status:** Accepted
+**Status:** Superseded by [ADR-058](058-opencode-v2-project-resolution.md) (keep-alive half only; the timeout/retry surfacing half stands)
 **Relates to:** ADR-027 (keep-alive attach mode), ADR-022 (task granularity and configurable timeout), ADR-029 (output verification gate)
+
+> **Partially superseded (v3.87).** The adaptive keep-alive default is retired:
+> OpenCode v2 removed `run --attach`, so the engine no longer manages a warm
+> server. The timeout/retry surfacing decisions below are unaffected. See
+> [ADR-058](058-opencode-v2-project-resolution.md).
 
 ---
 

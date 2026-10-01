@@ -109,7 +109,7 @@ function quickHelp(): HTMLElement {
         ["Pause / Stop", "pause after the current task or terminate the running engine."],
         ["Replay failed", "retry a selected failed task."],
         ["Timeouts", "change one task or all task budgets in minutes, then replay or run again."],
-        ["Concurrency", "set parallel agents for the next run; use 0 to restore the engine default."],
+        ["Concurrency", "run that many independent tasks at once for the next run; use 0 to restore the engine default."],
         ["Auto-commit", "commit each completed task by default; disable it when working with a dirty tree."],
       ]),
     ]),

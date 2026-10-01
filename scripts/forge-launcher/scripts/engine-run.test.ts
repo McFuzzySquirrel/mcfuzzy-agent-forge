@@ -30,45 +30,36 @@ function runCli(args: string[], env: Record<string, string> = {}): Promise<{ cod
   });
 }
 
-test("engine-run forwards --keep-alive / --keep-alive-port / --attach to the engine command", async () => {
-  const repo = tmpRepo();
-  const { code, out } = await runCli([
-    "engine-run", "--repo", repo, "--harness", "opencode",
-    "--keep-alive", "--keep-alive-port", "4096",
-    "--attach", "http://127.0.0.1:4096", "--yes", "--dry-run",
-  ]);
-  assert.equal(code, 0, out);
-  assert.ok(out.includes("--keep-alive"), out);
-  assert.ok(out.includes("--keep-alive-port 4096"), out);
-  assert.ok(out.includes("--attach http://127.0.0.1:4096"), out);
+// OpenCode v2 removed `run --dir` and `run --attach` (ADR-058), so the engine's
+// keep-alive and attach flags are retired. The engine no longer manages a warm
+// `opencode serve`; each `opencode run` connects to OpenCode's own background
+// service. These tests pin the retirement: the flags are rejected rather than
+// silently forwarded, since OpenCode v2 hard-fails on an unknown flag.
+test("engine-run rejects the retired --keep-alive / --attach flags", async () => {
+  for (const flag of ["--keep-alive", "--keep-alive-port", "--no-keep-alive", "--attach"]) {
+    const repo = tmpRepo();
+    const args = flag === "--keep-alive-port" || flag === "--attach"
+      ? ["engine-run", "--repo", repo, "--harness", "opencode", flag, "4096", "--yes", "--dry-run"]
+      : ["engine-run", "--repo", repo, "--harness", "opencode", flag, "--yes", "--dry-run"];
+    const { code, out } = await runCli(args);
+    assert.notEqual(code, 0, `${flag} was accepted but is retired: ${out}`);
+    // The rejection is explicit, so the message may name the flag; what must
+    // not happen is a dry-run command that still carries it.
+    assert.ok(!/engine-run[^\n]*--keep-alive/.test(out), `${flag} was forwarded: ${out}`);
+    assert.ok(!/engine-run[^\n]*--attach/.test(out), `${flag} was forwarded: ${out}`);
+  }
 });
 
-test("engine-run reads keep-alive/attach from FORGE_ENGINE_ATTACH[_URL]", async () => {
+test("engine-run ignores the retired FORGE_ENGINE_ATTACH[_URL] variables", async () => {
   const repo = tmpRepo();
   const { code, out } = await runCli(
     ["engine-run", "--repo", repo, "--harness", "opencode", "--yes", "--dry-run"],
     { FORGE_ENGINE_ATTACH: "1", FORGE_ENGINE_ATTACH_URL: "http://127.0.0.1:4096" },
   );
   assert.equal(code, 0, out);
-  assert.ok(out.includes("--keep-alive"), out);
-  assert.ok(out.includes("--attach http://127.0.0.1:4096"), out);
-});
-
-test("engine-run forwards --no-keep-alive and reads it from FORGE_ENGINE_ATTACH=0", async () => {
-  const repo = tmpRepo();
-
-  const viaFlag = await runCli([
-    "engine-run", "--repo", repo, "--harness", "opencode", "--no-keep-alive", "--yes", "--dry-run",
-  ]);
-  assert.equal(viaFlag.code, 0, viaFlag.out);
-  assert.ok(viaFlag.out.includes("--no-keep-alive"), viaFlag.out);
-
-  const viaEnv = await runCli(
-    ["engine-run", "--repo", repo, "--harness", "opencode", "--yes", "--dry-run"],
-    { FORGE_ENGINE_ATTACH: "0" },
-  );
-  assert.equal(viaEnv.code, 0, viaEnv.out);
-  assert.ok(viaEnv.out.includes("--no-keep-alive"), viaEnv.out);
+  assert.ok(!out.includes("--keep-alive"), out);
+  assert.ok(!out.includes("--attach"), out);
+  assert.ok(!out.includes("attach="), out);
 });
 
 test("engine-run --stop delegates to the engine stop command (no manifest needed)", async () => {

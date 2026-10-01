@@ -66,7 +66,7 @@ function buildForm(): HTMLElement {
     el("div", { className: "form-row" }, [field("Name", name), field("Harness", harness), field("Visibility", visibility)]),
     field("Description", description),
     field("Parent directory", parentDir),
-    field("Concurrency (parallel agents)", concurrency),
+    field("Concurrency (parallel tasks)", concurrency),
     field("Idea", idea),
     el("div", { className: "doc-section" }, [
       el("h4", null, "Project documents (optional, recommended)"),

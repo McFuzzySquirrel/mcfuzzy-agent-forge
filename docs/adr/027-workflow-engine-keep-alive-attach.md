@@ -1,8 +1,15 @@
 # ADR-027: Keep-Alive Attach Mode for the Workflow Engine
 
 **Date:** 2026-08-27
-**Status:** Accepted
+**Status:** Superseded by [ADR-058](058-opencode-v2-project-resolution.md)
 **Relates to:** ADR-014 (workflow engine), ADR-021 (parallel dispatch), ADR-022 (task granularity and configurable timeout)
+
+> **Superseded (v3.87).** OpenCode v2 removed `run --attach` and added mandatory
+> auth to `serve`, so the engine-managed warm server described below no longer
+> exists. `--keep-alive`, `--keep-alive-port`, `--no-keep-alive`, and `--attach`
+> are retired; each `opencode run` now connects to OpenCode's own background
+> service. The analysis below is preserved as the historical record. See
+> [ADR-058](058-opencode-v2-project-resolution.md).
 
 ---
 

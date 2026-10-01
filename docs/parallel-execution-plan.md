@@ -21,7 +21,7 @@ guarantee the serialization was protecting:
 |---|---|
 | 1 | **Option A** — per-task `git worktree` sandbox for isolation and attribution |
 | 2 | Sandboxes live at `<repoRoot>/.forge-sandboxes/`, hidden via `.git/info/exclude` |
-| 3 | Engine-managed opencode keep-alive is disabled in sandbox mode; an explicit `--attach <url>` is still honored |
+| 3 | *Superseded by ADR-058:* the engine-managed keep-alive and `--attach` flags this step gated were retired with OpenCode v2; per-task project selection now happens through the spawn `cwd`, with the child's `PWD` set to match (ADR-059) |
 | 4 | Sandbox machinery engages **only** when effective concurrency > 1 |
 | 5 | Sandbox mode requires a **clean** engine tree (engine-owned `docs/` metadata excepted); otherwise it refuses with a precise message |
 | 6 | Gitignored top-level build inputs (`node_modules/`, `.env`, `dist/`, …) are symlinked into each sandbox |
@@ -107,11 +107,10 @@ from a crashed run are swept, then `git worktree prune`. Cleanup runs in `finall
 > rewriting `docs/engine-config.json` in place, so treating a tracked-and-modified
 > `docs/` file as blocking would make it impossible to enable concurrency.
 
-### 7. Concurrency resolution and keep-alive
+### 7. Concurrency resolution
 
 One exported helper, `resolveConcurrency(opts)`, is used by the CLI (pre-run
-summary, keep-alive decision) and the engine (dispatch), so the three can never
-disagree.
+summary) and the engine (dispatch), so the two can never disagree.
 
 ```
 effectiveConcurrency = harness.supportsConcurrency ? clamp(maxConcurrency, 1..) : 1
@@ -119,9 +118,10 @@ sandboxMode          = effectiveConcurrency > 1
 ```
 
 `--concurrency > 1` on a harness without `supportsConcurrency` warns and clamps to
-1. In sandbox mode the CLI builds `OpenCodeAdapter` with `startServer: false` and
-logs why; an explicit `--attach <url>` is honored with a warning that each task
-gets its own `--dir`.
+1. OpenCode selects the project from `PWD ?? cwd`, so Forge aligns `PWD` with the
+task's worktree `cwd` when spawning; see [ADR-059](adr/059-pwd-aligned-spawn-environment.md).
+The keep-alive interaction described here was written against the retired
+`--attach` / `--keep-alive` flags and no longer applies.
 
 ### 8. Human-review tasks are never sandboxed
 
@@ -137,8 +137,8 @@ They stay in the engine root, and the run still pauses on them exactly as today.
 | `.../scripts/engine.ts` | `executeTask` → record-based, single-writer state; `mapLimit` wave; sandbox wrapper; `resolveConcurrency` |
 | `.../scripts/types.ts` | concurrency docs; `TaskAttemptRequest`; `HarnessAdapter.supportsConcurrency` comment |
 | `.../scripts/request.ts` | thread the workspace root; mirror the execution file to the engine root |
-| `.../scripts/cli.ts` | pre-run summary, keep-alive suppression, `--attach` warning |
-| `.../scripts/keepalive.ts` | accept sandbox mode in the decision |
+| `.../scripts/cli.ts` | pre-run summary |
+| `.../scripts/keepalive.ts` | *removed in v3.87 (ADR-058)* |
 | `.../scripts/state.ts` | `syncProgressMd` lists all running tasks, not the first |
 | `.../scripts/verify.ts` | `captureWorktree` / `verifyTaskResult` take an explicit workspace root |
 | `.../scripts/engine.test.ts` | rewrite the two serialization tests; add overlap, crash-recovery, sandbox-integration tests |
@@ -153,7 +153,7 @@ No adapter changes: `request.repoRoot` becomes the workspace root, so `--dir`,
   only that task's files.
 - **Kept** the same-owner serialization test at concurrency 2.
 - **New** — attribution isolation, commit isolation, overlap detection, crash
-  recovery, preflight refusals, lifecycle cleanup, keep-alive suppression.
+  recovery, preflight refusals, lifecycle cleanup.
 - **Regression gate** — the whole existing suite stays green with `maxConcurrency: 1`
   untouched.
 

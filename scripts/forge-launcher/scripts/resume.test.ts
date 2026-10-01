@@ -73,7 +73,9 @@ test("resume with an idea queues PRD drafting", async () => {
   assert.equal(code, 0, out);
   assert.ok(out.includes("No PRD yet"), out);
   assert.ok(out.includes("forge-auto-build-prd"), out);
-  assert.match(out, new RegExp(`opencode run --auto --dir "[^"]*[\\\\/]${path.basename(repo)}"`), out);
+  // OpenCode v2 removed `run --dir`; the project comes from the spawn cwd.
+  assert.match(out, /opencode run --auto/);
+  assert.ok(!out.includes("--dir"), out);
 });
 
 test("resume with only an imported source queues canonical feature authoring", async (context) => {
@@ -95,7 +97,8 @@ test("resume with a PRD but no team queues team generation", async () => {
   assert.equal(code, 0, out);
   assert.ok(out.includes("No agent team yet"), out);
   assert.ok(out.includes("forge-build-agent-team"), out);
-  assert.match(out, new RegExp(`opencode run --auto --dir "[^"]*[\\\\/]${path.basename(repo)}"`), out);
+  assert.match(out, /opencode run --auto/);
+  assert.ok(!out.includes("--dir"), out);
 });
 
 test("resume with a team but no manifest queues an engine-run", async () => {
@@ -127,7 +130,7 @@ test("resume with a paused engine run queues a resume", async () => {
   assert.ok(out.includes(`engine-run --repo ${repo}`), out);
 });
 
-test("resume carries persisted engine config (concurrency/keep-alive/retries/viz)", async () => {
+test("resume carries persisted engine config (concurrency/retries/viz)", async () => {
   const repo = makeRepo();
   write(repo, "docs/PRD.md", "# PRD\n\nBuild a thing.\n");
   write(repo, ".agents/agents/api-engineer.md", "---\nname: api-engineer\ndescription: API specialist.\n---\n");
@@ -147,15 +150,18 @@ test("resume carries persisted engine config (concurrency/keep-alive/retries/viz
     maxRetries: "3",
     viz: true,
     vizPort: "4300",
+    // Retired in OpenCode v2 (ADR-058): a stale config naming them must be
+    // ignored rather than forwarded as flags the engine no longer accepts.
     keepAlive: true,
-    attach: "",
+    attach: "http://127.0.0.1:4096",
     logHarnessActivity: true,
   }));
   const { code, out } = await runCli(["resume", "--repo", repo, "--non-interactive"]);
   assert.equal(code, 0, out);
   assert.ok(out.includes(`engine-run --repo ${repo}`), out);
   assert.ok(out.includes("--concurrency 4"), out);
-  assert.ok(out.includes("--keep-alive"), out);
+  assert.ok(!out.includes("--keep-alive"), out);
+  assert.ok(!out.includes("--attach"), out);
   assert.ok(out.includes("--max-retries 3"), out);
   assert.ok(out.includes("--task-timeout-ms 300000"), out);
   assert.ok(out.includes("--viz"), out);
@@ -182,11 +188,10 @@ test("explicit env overrides persisted engine config on resume", async () => {
     maxRetries: "",
     viz: false,
     vizPort: "",
-    keepAlive: true,
-    attach: "",
   }));
   const { code, out } = await runCli(["resume", "--repo", repo, "--non-interactive"], {
     FORGE_ENGINE_CONCURRENCY: "2",
+    // Retired in OpenCode v2: setting it must not resurrect the flag.
     FORGE_ENGINE_ATTACH: "0",
     FORGE_ENGINE_LOG_HARNESS_ACTIVITY: "1",
   });

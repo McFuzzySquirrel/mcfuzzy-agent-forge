@@ -236,9 +236,13 @@ sends SIGTERM and escalates to SIGKILL after one second.
 
 Cleanup waits for both termination work and process/stdio closure, with a
 five-second deadline. Failure rejects explicitly and releases inherited stderr
-handles; it does not claim the server was successfully removed. A startup error
-and a cleanup error are preserved together. External `--attach` servers are not
-owned and are never terminated by engine cleanup.
+handles; it does not claim the process was successfully removed. A startup error
+and a cleanup error are preserved together.
+
+*This section described the engine-managed `opencode serve` keep-alive, which
+OpenCode v2 retired along with `run --attach`; the engine no longer spawns or
+owns a server. See
+[ADR-058](adr/058-opencode-v2-project-resolution.md).*
 
 ### Heartbeat
 
@@ -351,7 +355,10 @@ Each adapter translates a `(agent, task)` pair into a real execution call:
 Shells out to the `opencode` CLI per task:
 
 ```
-opencode run --model <agent.model> [--agent <name>] --dir <repo> "<short execution-file instruction>"
+opencode run --model <agent.model> [--agent <name>] "<short execution-file instruction>"
+
+# spawned with cwd set to the task root and PWD set to match, which together
+# are how v2 selects the project (it reads `process.env.PWD ?? process.cwd()`)
 ```
 
 When the owning agent's file lives under the project's `.opencode/agents/`

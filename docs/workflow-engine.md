@@ -196,7 +196,7 @@ The engine is harness-agnostic. Select the backend with `--harness`:
 
 | Adapter | Flag | How it invokes agents |
 |---|---|---|
-| **OpenCode CLI** (default) | `--harness opencode` | `opencode run --auto [--agent <name>] --dir <repo> "<short execution-file instruction>"` |
+| **OpenCode CLI** (default) | `--harness opencode` | `opencode run --auto [--agent <name>] "<short execution-file instruction>"`, spawned with `cwd` set to the task root |
 | **GitHub Copilot CLI** | `--harness copilot` | `copilot -p "<short execution-file instruction>" [--agent <name>] --yolo` |
 | **Claude Code CLI** | `--harness claude` | `claude -p "<short execution-file instruction>" --output-format json [--agent <name>] --permission-mode bypassPermissions` |
 | **OpenAI API** | `--harness openai` | `POST /v1/chat/completions` with the agent `rawBody` as the system prompt |
@@ -239,7 +239,6 @@ npm run workflow-engine -- run     [--repo <path>] [--harness <name>] [--max-ret
                                    [--auto-commit|--no-auto-commit] [--commit-message-template <tmpl>]
                                    [--execution-mode <auto|manual>] [--selection-scope <single|range|list>]
                                    [--selected-tasks <id,id,...>]
-                                   [--keep-alive] [--keep-alive-port <n>] [--no-keep-alive] [--attach <url>]
                                    [--viz [port]] [--no-open]
 npm run workflow-engine -- status  [--repo <path>]
 npm run workflow-engine -- replay  <task-id> [--repo <path>] [--harness <name>]
@@ -258,10 +257,7 @@ npm run workflow-engine -- viz     [--repo <path>] [--port <n>] [--no-open]
 | `--concurrency <n>` | `1` | Max ready tasks dispatched at once. Above `1` the harness must declare `supportsConcurrency` and the working tree must be clean; each task then runs in its own git worktree under `.forge-sandboxes/` (see *Execution waves and concurrency*) |
 | `--task-timeout-ms <ms>` | `600000` (10 min) | Per-task timeout before the harness call is killed; a task's own `timeoutMs` in the manifest overrides this |
 | `--yes` | *(off)* | Skip the interactive pre-run gate |
-| `--keep-alive` | adaptive | OpenCode harness only: boot one `opencode serve` for the run and attach every task to it, avoiding per-task cold boots (see *Keep-alive attach mode* below). **Default is adaptive** - on when more than one task remains, off for a single-task run. Always off when `--concurrency > 1`, because one server serves one project directory |
-| `--keep-alive-port <n>` | free port | Port for the engine-managed `opencode serve` instance |
-| `--no-keep-alive` | *(off)* | OpenCode harness only: force a cold-start `opencode run` per task (bypasses the adaptive default) |
-| `--attach <url>` | *(off)* | Attach tasks to an already-running `opencode serve` instance (e.g. `http://127.0.0.1:4096`) with no lifecycle management |
+| `--keep-alive`, `--keep-alive-port`, `--no-keep-alive`, `--attach` | *(retired)* | Removed in v3.87 with OpenCode v2 (ADR-058); passing them is an error |
 | `--viz [port]` | *(off)* | Launch the live Forge Board dashboard (default port `4299`, next free port if busy) |
 | `--no-open` | *(off)* | Do not auto-open the browser (the URL is still printed) |
 | `--allow-noop` | *(off)* | Relax the output-verification no-op gate (missing/trivial output still fails) |
@@ -278,7 +274,7 @@ npm run workflow-engine -- viz     [--repo <path>] [--port <n>] [--no-open]
 ### Pre-run gate
 
 Before dispatching, the engine prints a pre-run summary (harness, phases, tasks,
-per-task timeout, max retries, retry delay, configured concurrency, keep-alive mode) and,
+per-task timeout, max retries, retry delay, configured concurrency) and,
 when run interactively, pauses for confirmation. The gate is interactive-only:
 `--yes` (or `FORGE_ENGINE_YES=1`) skips it explicitly, and it auto-skips when
 stdin is not a TTY (CI / headless).
@@ -350,51 +346,45 @@ therefore limited to whatever the CLI writes before that. Copilot and OpenCode
 stream progressively. Keeping the JSON envelope unchanged preserves structured
 result parsing.
 
-### Keep-alive attach mode (opencode harness)
+### Harness warm-up (opencode harness)
 
 Cold-starting a fresh `opencode run` for **every task** re-boots the project
 instance each time - config, AGENTS.md, skills, agent files, and every MCP
 server - and on multi-task runs that per-task overhead can rival the actual model
-work. The engine avoids it by attaching tasks to a single warm `opencode serve`
-instance. **This is the adaptive default**: keep-alive kicks in automatically
-when more than one task remains, and a single-task run (e.g. a short resume)
-cold-starts instead so it does not pay the server boot cost.
+work.
+
+The engine **no longer manages a warm server itself.** It used to boot one
+headless `opencode serve`, health-check it, run every task via
+`opencode run --attach`, and tear it down afterwards. OpenCode v2 removed
+`run --attach` and added mandatory auth to `serve`, so `--keep-alive`,
+`--keep-alive-port`, `--no-keep-alive`, `--attach <url>`, and their
+`FORGE_ENGINE_ATTACH` / `FORGE_ENGINE_ATTACH_URL` equivalents are **retired**.
+See [ADR-058](adr/058-opencode-v2-project-resolution.md).
+
+Each `opencode run` now connects to OpenCode's own background service, which is
+warm by default: config, AGENTS.md, skills, and MCP servers are already booted,
+and every run still gets a **fresh, isolated session**, so a task's context never
+leaks into the next. Nothing is started, stopped, or polled by the engine.
 
 ```
-npm run workflow-engine -- run --harness opencode --yes                 # adaptive (default)
-npm run workflow-engine -- run --harness opencode --keep-alive --yes    # force keep-alive
-npm run workflow-engine -- run --harness opencode --no-keep-alive --yes # force cold start
-npm run workflow-engine -- run --harness opencode --keep-alive --keep-alive-port 4096 --yes
+npm run workflow-engine -- run --harness opencode --yes   # connects to OpenCode's background service
 ```
 
-The engine boots one headless `opencode serve` bound to the repo, waits for
-`GET /global/health`, runs every task via `opencode run --attach`, and tears the
-server down when the run finishes (even on error). Each attach invocation still
-creates a **fresh, isolated session** - the server only keeps the shared project
-instance warm, so a task's context never leaks into the next. To reuse a server
-you already keep running (e.g. the TUI or a long-lived `opencode serve`), pass
-`--attach <url>` and skip the lifecycle management:
+To give a run a private server instead of the shared one, pass `--standalone`:
 
 ```
-npm run workflow-engine -- run --harness opencode --attach http://127.0.0.1:4096 --yes
+OPENCODE_EXTRA_FLAGS=--standalone npm run workflow-engine -- run --harness opencode --yes
 ```
 
-Env equivalents: `FORGE_ENGINE_ATTACH=1` (force keep-alive), `FORGE_ENGINE_ATTACH=0`
-(force cold start), and `FORGE_ENGINE_ATTACH_URL=<url>` (reuse an existing
-server). The engine-spawned server is loopback-only and strips ambient
-`OPENCODE_SERVER_*` auth so the engine's own health probe and attach calls
-aren't 401'd; attaching to a user-managed authenticated server still works (the
-client auto-sends credentials). While attaching, the adapter prints a per-task
-startup split (`[opencode] task <id>: boot=… total=…`) so the cold-boot removal
-is measurable against `docs/EXECUTION-AUDIT.jsonl`.
-
-**Parallel runs always cold-start.** One warm server is bound to a single
-project directory, and a parallel wave gives each task its own git worktree. So
-with `--concurrency > 1` the engine skips the engine-managed server and runs a
-fresh `opencode run` per task, logging the reason. `--attach <url>` is still
-honoured exactly as given, because you own that server; the engine warns that
-each task will point `--dir` at its own worktree. See
-[ADR-056](adr/056-parallel-execution-task-sandboxes.md).
+**Project selection.** `run --dir` is gone and `run` takes no path argument (a
+trailing path is swallowed into the prompt), so the engine pins each task by
+spawning with `cwd` set to that task's root. It also sets the child's `PWD` to
+that same value, because OpenCode v2 resolves the project from
+`process.env.PWD ?? process.cwd()` and an inherited stale `PWD` outranks `cwd` on
+its own. In parallel mode the pinned root is the task's own git worktree under
+`.forge-sandboxes/`, which is how per-task project isolation works now. See
+[ADR-056](adr/056-parallel-execution-task-sandboxes.md) and
+[ADR-059](adr/059-pwd-aligned-spawn-environment.md).
 
 ### Live visualization (The Forge Board)
 
@@ -525,10 +515,13 @@ Two consequences to plan for:
 - **Commit or stash your code and requirements before running in parallel**, and
   do not combine `--concurrency > 1` with `--no-auto-commit`: an uncommitted tree
   is exactly what a sandbox cannot represent.
-- **Keep-alive is downgraded to a cold start per task** when a run is parallel,
-  because one warm `opencode serve` serves a single project directory and cannot
-  serve several worktrees. An explicit `--attach <url>` is still honoured as
-  given, because you own that server.
+- **Each sandbox selects its project through the spawn `cwd`, with `PWD` set to
+  match.** OpenCode v2 resolves the project from
+  `process.env.PWD ?? process.cwd()` and `run --dir` no longer exists
+  (ADR-058), so a parallel wave isolates projects by spawning every task in its
+  own worktree *and* correcting the child's `PWD` to the same path — without
+  which every task would run against the engine's own package directory and fail
+  with missing outputs (ADR-059).
 - **Disk**: N concurrent worktrees, each a full checkout of `HEAD`. Gitignored
   build inputs are symlinked, not copied, so the real cost is the tracked tree.
 
@@ -720,8 +713,8 @@ To start fresh (e.g. after recompiling the manifest), delete `docs/WORKFLOW-STAT
 | `FORGE_ENGINE_HARNESS` | `opencode` | Default harness for the standalone runner |
 | `FORGE_ENGINE_VIZ` | *(unset)* | `1` enables `--viz` on the standalone runner |
 | `FORGE_ENGINE_VIZ_PORT` | `4299` | Dashboard port when `--viz` is enabled |
-| `FORGE_ENGINE_ATTACH` | *(unset)* | `1` forces the `opencode serve` keep-alive (same as `--keep-alive`); `0` forces cold start per task (same as `--no-keep-alive`); unset = adaptive |
-| `FORGE_ENGINE_ATTACH_URL` | *(unset)* | Attach tasks to an existing `opencode serve` URL (same as `--attach`) |
+| `FORGE_ENGINE_ATTACH` | *(retired)* | Removed in v3.87 (ADR-058); ignored |
+| `FORGE_ENGINE_ATTACH_URL` | *(retired)* | Removed in v3.87 (ADR-058); ignored |
 | `FORGE_ENGINE_ALLOW_NOOP` | *(unset)* | `1` relaxes the no-op output gate (same as `--allow-noop`) |
 | `FORGE_ENGINE_RUN_VALIDATION` | *(unset)* | `1` enables legacy validation; structured implementation validation is always required |
 | `FORGE_ENGINE_LOG_HARNESS_ACTIVITY` | *(unset)* | `1` streams harness CLI stdout/stderr into the engine log as it arrives; `0` forces it off. Explicit `--log-harness-activity` / `--no-log-harness-activity` overrides this. Command invocation logging is always on |
