@@ -364,7 +364,8 @@ interface PipelineStep {
   hint: string;
   /** When set, the primary button opens an interactive session instead of running `action`. */
   session?: AuthoringSessionTarget;
-  /** Label for the optional headless alternative that runs `action`. */
+  /** Label for a headless alternative that runs `action`. Only for stages that
+   * are mechanical derivations (ADR-060); never for requirements authoring. */
   autoLabel?: string;
   /** Also offer grilling the idea before authoring the PRD. */
   ideaSession?: boolean;
@@ -373,15 +374,16 @@ interface PipelineStep {
 /** Determines the next pipeline step, or null when there's nothing to advance. */
 function nextStep(summary: Summary, actions: Actions): PipelineStep | null {
   if (!summary.hasPrd) {
+    // ADR-060: requirements authoring is always interactive, so there is no
+    // headless alternative to offer on this card.
     return {
       label: "Author PRD (interactive)",
       action: summary.hasIdea ? "draft-prd" : "draft-existing-prd",
       session: "prd",
-      autoLabel: summary.hasIdea ? "Auto-draft PRD (headless)" : "Author project PRD (headless)",
       ideaSession: summary.hasIdea,
       hint: summary.hasIdea
-        ? "Opens your harness in a terminal with the PRD skill queued so it interviews you first. Use the headless path to draft without questions."
-        : "Opens your harness to interview you against the existing repository. The headless path inspects the repo and authors docs/PRD.md without questions.",
+        ? "Opens your harness in a terminal with the PRD skill queued so it interviews you first. Everything downstream is derived from what you approve, so this stage is never run headlessly."
+        : "Opens your harness to interview you against the existing repository, covering what the code cannot tell you. Requirements are never authored headlessly.",
     };
   }
   if (!summary.hasTeam) {
@@ -448,11 +450,19 @@ async function continuePipeline(container: HTMLElement, step: PipelineStep): Pro
 async function startSession(container: HTMLElement, target: AuthoringSessionTarget, prompt?: string): Promise<void> {
   try {
     const res = await api.startAuthoringSession(target, prompt);
-    toast(res.message || (res.ok ? "interactive session requested" : "launch failed"));
+    startSessionFeedback(container, res.message || (res.ok ? "interactive session requested" : "launch failed"));
   } catch (err) {
     toast(err instanceof Error ? err.message : "interactive session failed");
   }
   // The session runs in an external terminal, so poll for its committed output.
+  for (const delay of [5000, 15000, 30000]) {
+    window.setTimeout(() => void renderOverview(container), delay);
+  }
+}
+
+/** Toast plus the same refresh polling, for callers outside the pipeline card. */
+function startSessionFeedback(container: HTMLElement, message: string): void {
+  toast(message);
   for (const delay of [5000, 15000, 30000]) {
     window.setTimeout(() => void renderOverview(container), delay);
   }

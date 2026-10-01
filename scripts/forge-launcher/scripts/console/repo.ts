@@ -984,7 +984,7 @@ function resolveJobOutcome(job: BackgroundJob): { status: BackgroundJob["status"
     const p = repoPaths(job.repoPath);
     return fs.existsSync(p.featuresDir) && listMarkdown(p.featuresDir).length > 0
       ? { status: "complete", message: "Feature PRD authoring completed." }
-      : { status: "failed", message: "Feature PRD exited without producing docs/features/*.md." };
+      : { status: "failed", message: "Feature authoring is interactive (ADR-060); this job cannot write a feature document. Open the interactive session instead." };
   }
 
   if (job.type === "feature-increment") {
@@ -1012,14 +1012,16 @@ function resolveJobOutcome(job: BackgroundJob): { status: BackgroundJob["status"
 
   const p = repoPaths(job.repoPath);
   switch (job.type) {
+    // ADR-060: these no longer author. A job record from an older launch, or a
+    // stub-runner offline run, is reported by what it actually left behind.
     case "draft-prd":
       return hasProjectPrd(p)
-        ? { status: "complete", message: "PRD draft completed." }
-        : { status: "failed", message: "PRD draft exited without producing a PRD." };
+        ? { status: "complete", message: "PRD authoring completed." }
+        : { status: "failed", message: "Requirements authoring is interactive (ADR-060); this job cannot author a PRD. Open the interactive session instead." };
     case "draft-existing-prd":
       return hasProjectPrd(p)
         ? { status: "complete", message: "Existing-project PRD authoring completed." }
-        : { status: "failed", message: "Existing-project PRD authoring exited without producing a PRD." };
+        : { status: "failed", message: "Requirements authoring is interactive (ADR-060); this job cannot author a PRD. Open the interactive session instead." };
     case "draft-team":
       return hasProjectTeam(job.repoPath)
         ? { status: "complete", message: "Agent team generation completed." }

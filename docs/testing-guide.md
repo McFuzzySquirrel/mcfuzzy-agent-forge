@@ -99,7 +99,7 @@ cd /tmp/myforge-smoke
 forge-launcher --non-interactive
 ```
 
-Use environment variables if you want to drive the flow without interactive input:
+Use environment variables if you want to drive the setup without interactive input:
 
 ```bash
 export FORGE_HARNESS_CHOICE="2"
@@ -109,6 +109,12 @@ export FORGE_IDEA="A simple todo app"
 export FORGE_YN_DEFAULT="y"
 forge-launcher --non-interactive
 ```
+
+This bootstraps the repository and then stops with the command to author the PRD.
+Requirements are always interactive (ADR-060), so a non-interactive run never
+drafts one. Continue the flow by authoring the PRD in a harness session, then
+running `forge-launcher resume` — the team, project-skill, manifest, and build
+stages then run unattended.
 
 ### Step 3: Verify the bootstrapped repository
 

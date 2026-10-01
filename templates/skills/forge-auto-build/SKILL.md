@@ -8,15 +8,15 @@ description: "Terminal/headless build pipeline from validated docs/PRD.md and do
 You are running the **build pipeline** on behalf of the user in one continuous, autonomous flow. Your job is to chain the downstream skills and agents in order, validate outputs at each stage, commit after each phase, and produce a finished project -all from a single invocation.
 
 > **Where this skill fits.** `forge-auto-build` is the **terminal/headless fast-path**:
-> it is invoked by `forge-launcher` (auto-draft / headless runs) or directly via
+> it is invoked by `forge-launcher` (headless runs) or directly via
 > `opencode run --auto` / `copilot -p --yolo`. It is **not** the in-harness
 > interactive entry point. If you are already inside a chat harness, drive the
 > build with `@project-orchestrator` (`forge-orchestrate-build`, interactive,
 > per-phase approval) or `@workflow-orchestrator` (`forge-workflow-engine`,
 > autonomous) instead. Both orchestrators expect the agent team to already exist
-> (generate it via `forge-launcher resume`, the launcher's auto-draft, or
-> `/forge-build-agent-team`). This skill exists so a terminal/CI flow can chain
-> team generation → build without a chat session.
+> (generate it via `forge-launcher resume` or `/forge-build-agent-team`).
+> This skill exists so a terminal/CI flow can chain team generation → build
+> without a chat session.
 
 The underlying skills (`forge-build-agent-team`, `forge-assign-models`, `forge-orchestrate-build`) each own their own work. You are the conductor: you invoke them in sequence, verify each handoff, commit progress, and keep the user informed without interrupting them.
 
@@ -28,8 +28,8 @@ The underlying skills (`forge-build-agent-team`, `forge-assign-models`, `forge-o
 
 | Skill | Scope | Pauses |
 |---|---|---|
-| `forge-auto-build-prd` | idea to reviewed canonical vision and features | Review gate inside authoring flow |
-| `forge-build-prd` | idea/seed docs to vision and features directly | Review gate before save |
+| `forge-auto-build-prd` | idea to reviewed canonical vision and features (always interactive) | Review gate inside authoring flow |
+| `forge-build-prd` | idea/seed docs to vision and features directly (always interactive) | Review gate before save |
 | `@project-orchestrator` | In-harness interactive build execution only (no PRD, no team) | Optional pause between each phase |
 | `@workflow-orchestrator` | In-harness build execution via the workflow engine only | One pre-run gate |
 | **`forge-auto-build`** | **Terminal/headless** fast-path: existing PRD → agent team → (optional models) → choose manual or engine build path → committed result | **One** pre-flight gate, then fully autonomous |

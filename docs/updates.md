@@ -4,6 +4,74 @@ Detailed release and change notes for MyForge.
 
 ---
 
+## October 2026 - v3.90
+
+### The PRD is no longer auto-drafted — requirements authoring is always interactive
+
+- **Auto-building a PRD produced a confidently wrong spec that everything
+  downstream implemented faithfully.** The team, the execution manifest, and the
+  workflow engine are all mechanical derivations of `docs/PRD.md` plus
+  `docs/features/*.md`, so a headless requirements stage that inferred scope,
+  stack, and acceptance criteria from defaults yielded a green, passing,
+  entirely wrong build. That is the one failure mode nothing downstream can
+  detect, and it costs the whole project rather than one stage.
+
+- **Every operation that writes requirements is now interactive.** That covers
+  idea → PRD, existing-repository → PRD, feature documents, `forge-grill-idea`,
+  and `forge-decompose-prd` conversion. The rule is one sentence: **authoring
+  requirements is interactive; deriving from a reviewed PRD is headless.** The
+  team and project-skill stages stay headless, so CI and offline rebuilds still
+  work once a reviewed PRD exists.
+
+- **The four skills no longer contain a headless allowance.** `forge-build-prd`,
+  `forge-auto-build-prd`, `forge-build-feature-prd`, `forge-decompose-prd`, and
+  `forge-grill-idea` each had an opt-out that skipped the interview and recorded
+  default assumptions. Each fired on `FORGE_HEADLESS=1`, embedded
+  "auto-proceed" text, *or* a noninteractive invocation — so removing only the
+  visible toggle would have left three doors open. A noninteractive invocation now
+  reports the decisions it needs as blocking questions instead of assuming them.
+
+- **`--draft` and `FORGE_AUTO_DRAFT` are retargeted** to the team and
+  project-skill stages. A launcher run with no PRD opens a session or prints the
+  exact command and stops; it no longer drafts one. The `draft-prd`,
+  `draft-existing-prd`, and `feature-prd` subcommands report that handoff
+  instead of authoring.
+
+- **The Console no longer offers a headless alternative for the PRD stage.** The
+  Overview pipeline card already made interactive authoring primary; the
+  secondary "Auto-draft PRD (headless)" button is gone, and the documents-view
+  retry button for the PRD stage now opens the same interactive session. The
+  `draft-prd` / `draft-existing-prd` / `feature-prd` control actions return a
+  message pointing at it rather than a 400, so older clients degrade clearly.
+
+- **A latent terminal-spawning leak is fixed.** `launchCliInTerminal` had no TTY
+  guard, so any piped or `--dry-run` launcher run could spawn a real detached
+  `gnome-terminal → bash → <cli>` chain. Because the posix launch script ends in
+  `; exec bash`, each one held a shell and its file descriptors open that
+  nothing could reach to close — enough of them produced `EMFILE: too many open
+  files`. It now refuses without a TTY and prints the command instead; the
+  Console passes an explicit `allowWithoutTty` opt-out, since opening terminals
+  on the user's behalf is its purpose. `openCliFor` also honors `--dry-run`,
+  which it previously did not.
+
+- **Offline coverage is preserved through the existing stub convention** rather
+  than a new escape hatch: `stub` is already documented as the test-only
+  offline runner, so `FORGE_HEADLESS` continues to be honored for a requirements
+  stage only under `FORGE_RUN_WITH=stub` (or the test-only
+  `FORGE_TEST_ALLOW_NONINTERACTIVE=1`). Real runners never author requirements
+  unattended.
+
+- **Deliberate capability loss:** a run can no longer go from `FORGE_IDEA` to a
+  finished build unattended. This is accepted, not overlooked — the removed flow
+  produced false confidence rather than throughput. Unattended operation now
+  begins at the team stage, gated on a reviewed PRD already existing.
+
+- See [ADR-060](adr/060-interactive-requirements-authoring.md). It amends
+  ADR-051 (which kept headless authoring "as an explicit alternative"), ADR-020,
+  ADR-018, and ADR-037 (which sanctioned inferring a project PRD from source
+  code without questions), and is consistent with ADR-009's existing "the PRD is
+  a quality gate, not an input to be manufactured" principle.
+
 ## October 2026 - v3.89
 
 ### Console concurrency labels now say "parallel tasks", not "parallel agents"

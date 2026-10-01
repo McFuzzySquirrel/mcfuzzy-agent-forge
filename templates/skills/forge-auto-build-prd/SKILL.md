@@ -11,15 +11,21 @@ Every solution uses `docs/PRD.md` plus at least one
 `docs/features/*.md`, including a one-task solution. Do not first write a
 monolithic document or generate a second task catalogue.
 
+**This stage is always interactive.** It requires a conversational session with
+the user; the interview and review gate are mandatory. There is no headless or
+auto-proceed mode. If invoked non-interactively (`FORGE_HEADLESS=1`, an explicit
+headless/auto-proceed instruction, or a noninteractive invocation), stop and
+report the decisions that need answers rather than assuming them - the team,
+manifest and engine stages are all derived from this document, so an unreviewed
+one propagates silently.
+
 ## Step 1: Confirm Input and Inspect State
 
 Read the supplied idea, `docs/IDEA.md`, `docs/requirements-source.md`, research
-and relevant existing project documents. Echo the intended scope briefly.
-Interactive mode requires confirmation and the owning skill's review gate.
-Headless mode (`FORGE_HEADLESS=1`, explicit headless/auto-proceed instructions,
-or noninteractive invocation) records assumptions instead of blocking for answers.
-If there is insufficient source material to infer a coherent product, report
-the missing input rather than inventing requirements.
+and relevant existing project documents. Echo the intended scope briefly, then
+run the owning skill's interview and review gate - both are mandatory. If there
+is insufficient source material to infer a coherent product, report the missing
+input rather than inventing requirements.
 
 If canonical files already exist, run `validate-prd` before offering handoff.
 Completion markers and nonempty files do not prove readiness. For an authorized

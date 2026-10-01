@@ -81,8 +81,9 @@ Projects you create or open are remembered in a registry at
 
 - **Create a new project** - the New Project wizard collects a name, harness,
   visibility, parent directory, and idea, then spawns
-  `forge-launcher --non-interactive` in the background (optionally
-  auto-drafting the PRD). It also lets you **add an existing PRD and
+  `forge-launcher --non-interactive` in the background. That run bootstraps and
+  stops with the interactive PRD handoff; it never authors requirements
+  (ADR-060). It also lets you **add an existing PRD and
   research/seed documents** (see *Adding a PRD and research/seed documents*
   below), mirroring the CLI's Step 6.
 - **Open an existing project** - a table of your projects plus an
@@ -156,28 +157,33 @@ so you can review each result and come back later:
 
 | Stage | Continue does | Produces |
 |---|---|---|
-| Idea (no PRD) | **Author PRD (interactive)** opens `forge-auto-build-prd` in a terminal; **Auto-draft PRD (headless)** drafts without questions | `docs/PRD.md` + `docs/features/*.md` |
+| Idea (no PRD) | **Author PRD (interactive)** opens `forge-auto-build-prd` in a terminal; there is no headless alternative (ADR-060). **Grill the idea first** runs `forge-grill-idea` the same way | `docs/PRD.md` + `docs/features/*.md` |
 | PRD (no team) | **Generate team** (headless `forge-build-agent-team`) | agent files and ownership metadata |
 | Team (skills incomplete) | **Generate project skills** | project skill candidates and review result |
 | Skills ready (no manifest) | **Compile manifest** (`forge-execution-adapter`) | `docs/EXECUTION-MANIFEST.json` |
 | Manifest ready | **Start build** (`forge-launcher engine-run`) | durable workflow-engine run |
 | Paused/incomplete run | **Resume build** | engine resumes from `WORKFLOW-STATE.json` |
 
-Each step runs detached in the background (output is appended to
-`docs/engine-run.log`, visible in the **Logs** view). This includes bootstrap, PRD, team, skills, manifest-authoring jobs, and engine
-output. The console now tracks
+The derivation steps run detached in the background (output is appended to
+`docs/engine-run.log`, visible in the **Logs** view). This includes bootstrap,
+team, skills, manifest-authoring jobs, and engine output. The console now tracks
 those detached jobs directly, so the Overview can show whether work is actively
-creating the project, drafting the PRD, generating the team, running the build,
-paused, complete, or failed. Nothing runs until you click it, and the generated
-PRD/team are **view-only** in the console - review them in **Plan & Team** and
-edit them in your editor.
+creating the project, generating the team, running the build, paused, complete,
+or failed. Nothing runs until you click it, and the generated team and skills are
+**view-only** in the console - review them in **Plan & Team** and edit them in
+your editor.
+
+Requirements stages are different: the PRD and feature documents are authored in
+an interactive terminal session, not a background job. The Console therefore
+cannot pause, cancel, or report on them, and completion is observed from the
+repository after the skill commits.
 
 Completed projects remain extensible. Use **Add a feature** on Overview to run
 `forge-build-feature-prd`. The skill inspects the existing codebase, PRD, and
 agent team and writes an additive document under `docs/features/`; it does not
-replace the original PRD or start the engine. **Author Feature PRD
-(interactive)** interviews you first; **Auto-build feature (headless)** writes
-the document directly.
+replace the original PRD or start the engine. It interviews you, because a
+feature document is requirements and requirements are never authored headlessly
+(ADR-060).
 
 ### Interactive authoring
 
@@ -187,7 +193,9 @@ PRD and Feature PRD actions open your configured authoring runner in a new
 terminal with the skill already queued, so the skill asks its clarifying
 questions before drafting. Backed by `POST /api/authoring/session`, which
 resolves the authoring runner and the PRD-stage model and falls back to printing
-the manual command when no desktop terminal is available.
+the manual command when no desktop terminal is available. This is the only way to
+author requirements: the `draft-prd`, `draft-existing-prd`, and `feature-prd`
+control actions report this handoff instead of starting a job.
 
 - **Grill the idea first (interactive)** runs the `forge-grill-idea` skill,
   which interviews you in rounds to sharpen `docs/IDEA.md` before PRD authoring,
@@ -203,12 +211,16 @@ jobs: the skill validates and commits its own output, and the Console picks the
 result up from the repository. Use **Refresh** on the pipeline card, or reopen
 the view, to see newly authored documents.
 
-The terminal counterparts are the new `draft-prd` / `draft-team` subcommands:
+The terminal counterparts of the headless derivation stages are the
+`draft-team` / `draft-skills` / `compile-manifest` subcommands:
 
 ```bash
-forge-launcher draft-prd  --repo <path>   # idea → PRD (headless)
 forge-launcher draft-team --repo <path>   # PRD → agent team (headless)
+forge-launcher draft-skills --repo <path> # skill candidates → project skills (headless)
 ```
+
+`draft-prd` and `draft-existing-prd` still exist but no longer author; they print
+the interactive handoff (ADR-060).
 
 They honor the `--runner` flag (`opencode`/`copilot`/`claude`/`inherit`) first,
 then `FORGE_RUN_WITH` (the same values plus `stub`), then the `runner` saved in

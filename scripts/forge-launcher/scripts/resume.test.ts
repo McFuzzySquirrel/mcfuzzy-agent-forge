@@ -78,7 +78,7 @@ test("resume with an idea queues PRD drafting", async () => {
   assert.ok(!out.includes("--dir"), out);
 });
 
-test("resume with only an imported source queues canonical feature authoring", async (context) => {
+test("resume with only an imported source hands off to interactive feature authoring", async (context) => {
   const repo = makeRepo();
   context.after(() => fs.rmSync(repo, { recursive: true, force: true }));
   write(repo, "docs/requirements-source.md", "# Supplied requirements\nBuild a thing.\n");
@@ -87,6 +87,9 @@ test("resume with only an imported source queues canonical feature authoring", a
   assert.match(out, /forge-auto-build-prd/);
   assert.match(out, /docs\/requirements-source\.md/);
   assert.doesNotMatch(out, /No idea or PRD captured yet/);
+  // ADR-060: a non-interactive resume hands the requirements stage off rather
+  // than drafting an unreviewed PRD.
+  assert.match(out, /interactive/);
   assert.equal(fs.existsSync(path.join(repo, "docs/PRD.md")), false);
 });
 

@@ -88,12 +88,13 @@ or skills, compile a manifest, or start a build.
 
 ---
 
-## Headless Mode
+## Non-Interactive Invocations
 
-When invoked non-interactively (`FORGE_HEADLESS=1` or explicit
-headless/auto-proceed instructions), do not invent a conversation. Record every
-unanswered question under **Open Questions** with a reasonable default
-assumption, sharpen the idea from the available material, commit, and stop.
+Grilling is a conversation; it has no non-interactive form. If invoked
+non-interactively (`FORGE_HEADLESS=1` or an explicit headless/auto-proceed
+instruction), do not invent a dialogue and do not substitute default assumptions
+for the user's decisions. Stop and report the decisions that need answers, then
+wait for an interactive session.
 
 ---
 

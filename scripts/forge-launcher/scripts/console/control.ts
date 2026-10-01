@@ -200,20 +200,23 @@ export class RunController {
     return job;
   }
 
-  /** Spawns a headless launcher pipeline step (draft-prd / draft-team). */
-  private draft(action: "draft-prd" | "draft-existing-prd" | "draft-team" | "draft-skills", label: string): ControlResult {
+  /** Spawns a headless launcher pipeline step (draft-team / draft-skills). */
+  private draft(action: "draft-team" | "draft-skills", label: string): ControlResult {
     const { cmd, args } = engineDetachedCommand([action, "--repo", this.repoRoot]);
     const job = this.launchJob(action, `${label} started in the background.`, cmd, args, this.p.logPath);
     const { pid } = job;
     return { ok: job.status !== "failed", message: job.message, pid, job };
   }
 
+  /** ADR-060: requirements authoring is always interactive. Retained so an
+   * older Console client gets guidance instead of a 400. */
   draftPrd(): ControlResult {
-    return this.draft("draft-prd", "PRD draft");
+    return interactiveRequirements();
   }
 
+  /** ADR-060: see `draftPrd`. */
   draftExistingPrd(): ControlResult {
-    return this.draft("draft-existing-prd", "Existing-project PRD authoring");
+    return interactiveRequirements();
   }
 
   draftTeam(): ControlResult {
@@ -224,23 +227,17 @@ export class RunController {
     return this.draft("draft-skills", "Project-skill generation");
   }
 
-  featurePrd(prompt: string): ControlResult {
-    const logFile = this.p.logPath;
-    const { cmd, args } = engineDetachedCommand(["feature-prd", "--repo", this.repoRoot, "--prompt", prompt]);
-    const job = this.launchJob("feature-prd", "Feature PRD authoring started in the background.", cmd, args, logFile);
-    const { pid } = job;
-    return { ok: job.status !== "failed", message: job.message, pid, job };
+  /** ADR-060: a feature document is requirements, so it needs a session too. */
+  featurePrd(): ControlResult {
+    return interactiveRequirements();
   }
 
-  featureIncrement(prompt: string, run = false): ControlResult {
-    const logFile = this.p.logPath;
-    const args = ["feature-increment", "--repo", this.repoRoot, "--prompt", prompt];
-    if (run) args.push("--run");
-    const { cmd, args: fullArgs } = engineDetachedCommand(args);
-    const message = run ? "Feature increment started in the background and will run the workflow." : "Feature increment preparation started in the background.";
-    const job = this.launchJob("feature-increment", message, cmd, fullArgs, logFile, { run });
-    const { pid } = job;
-    return { ok: job.status !== "failed", message: job.message, pid, job };
+  /** ADR-060: a feature document is requirements, so the feature stage needs a
+   * session. The stages after it (team, skills, manifest, build) are headless
+   * derivations and do run unattended once the feature document is committed;
+   * the CLI `feature-increment` subcommand advances them. */
+  featureIncrement(): ControlResult {
+    return interactiveRequirements();
   }
 
   bootstrap(req: { path: string; harness?: string; force?: boolean; initGit?: boolean; runner?: string }): ControlResult {
@@ -402,16 +399,27 @@ export class RunController {
         const result = resetChangedCompletedTasks(this.p);
         return { ok: result.ok, message: result.message };
       }
-      case "draft-prd": return this.draftPrd();
-      case "draft-existing-prd": return this.draftExistingPrd();
+      case "draft-prd":
+      case "draft-existing-prd": return interactiveRequirements();
       case "draft-team": return this.draftTeam();
       case "draft-skills": return this.draftSkills();
-      case "feature-prd": return this.featurePrd("");
-      case "feature-increment": return { ok: false, message: "feature-increment requires a prompt." };
+      case "feature-prd": return interactiveRequirements();
+      case "feature-increment": return this.featureIncrement();
       case "compile-manifest": return this.compileManifest();
       default: return { ok: false, message: `Unknown action: ${action}` };
     }
   }
+}
+
+/** ADR-060: a requirements stage cannot be a background job. Point the caller at
+ * the interactive session the Overview pipeline card offers as its primary action. */
+function interactiveRequirements(): ControlResult {
+  return {
+    ok: false,
+    message: "Requirements authoring is always interactive, so it is not run as a background job. "
+      + "Use the primary action on the Overview pipeline card to open the authoring session in a terminal, "
+      + "then come back - the team, project-skill and build stages still run headless.",
+  };
 }
 
 function harnessChoice(harness?: string): string {

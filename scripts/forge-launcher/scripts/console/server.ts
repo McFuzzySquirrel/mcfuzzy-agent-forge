@@ -282,7 +282,10 @@ export async function startConsoleServer(options: ConsoleServerOptions = {}): Pr
   const clientDir = options.clientDir ?? CLIENT_DIR;
   const boardAssets = options.boardDir ?? boardDir();
   const onLog = options.onLog ?? ((m: string) => console.log(m));
-  const launchCli = options.launchCli ?? launchCliInTerminal;
+  // The Console exists to open terminals on the user's behalf, so it opts out of
+  // the no-TTY guard the launcher applies to its own handoffs.
+  const launchCli = options.launchCli
+    ?? ((cli: string, dir: string, args: string[]) => launchCliInTerminal(cli, dir, args, { allowWithoutTty: true }));
   const token = randomBytes(16).toString("hex");
 
   const controller = new RunController(options.repoRoot ?? "", options.deps);
@@ -497,15 +500,18 @@ export async function startConsoleServer(options: ConsoleServerOptions = {}): Pr
           const action = body.action as ControlAction;
           const taskId = typeof body.taskId === "string" ? body.taskId : undefined;
           if (!currentRepo) return sendJson(res, 400, { ok: false, message: "no repo selected" });
+          // ADR-060: feature authoring is interactive, so the prompt is only
+          // needed to pre-seed the session; the response names the session
+          // rather than starting a background job.
           if (action === "feature-prd") {
             const prompt = typeof body.prompt === "string" ? body.prompt.trim() : "";
             if (!prompt) return sendJson(res, 400, { ok: false, message: "prompt is required" });
-            return sendJson(res, 200, controller.featurePrd(prompt));
+            return sendJson(res, 200, controller.featurePrd());
           }
           if (action === "feature-increment") {
             const prompt = typeof body.prompt === "string" ? body.prompt.trim() : "";
             if (!prompt) return sendJson(res, 400, { ok: false, message: "prompt is required" });
-            return sendJson(res, 200, controller.featureIncrement(prompt, body.run === true));
+            return sendJson(res, 200, controller.featureIncrement());
           }
           return sendJson(res, 200, controller.dispatch(action, taskId));
         }

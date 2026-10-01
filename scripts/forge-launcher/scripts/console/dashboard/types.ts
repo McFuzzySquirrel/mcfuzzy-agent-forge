@@ -352,6 +352,9 @@ export interface FileContent {
   content: string;
 }
 
+/** ADR-060: `draft-prd` and `draft-existing-prd` are retained as accepted values
+ * so older Console clients get a clear message instead of a 400, but they no
+ * longer author requirements. Feature authoring is interactive too. */
 export type ControlAction = "run" | "resume" | "pause" | "stop" | "replay" | "reset-changed" | "draft-prd" | "draft-existing-prd" | "draft-team" | "draft-skills" | "compile-manifest" | "feature-prd" | "feature-increment";
 
 /** Interactive authoring entry points that open a pre-seeded harness terminal. */

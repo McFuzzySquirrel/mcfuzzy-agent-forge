@@ -222,16 +222,20 @@ test("GitHub projects default to the copilot engine harness", () => {
   assert.equal(defaultEngineHarness("agents"), "opencode");
 });
 
-test("headless PRD message includes the gap check the manual flow runs", () => {
+test("the PRD authoring message requires an interview and still runs the gap check", () => {
   const msg = headlessSkillMsg();
   assert.ok(msg.startsWith("/forge-auto-build-prd "), msg);
+  assert.ok(msg.includes("Interview me to fill the gaps"), msg);
   assert.ok(msg.includes("acceptance criteria"), msg);
   assert.ok(msg.includes("security, privacy, accessibility"), msg);
-  assert.ok(msg.includes("every solution, including a one-feature project"), msg);
-  assert.ok(msg.includes("Run validate-prd"), msg);
+  assert.ok(msg.includes("including for a one-feature project"), msg);
+  assert.ok(msg.includes("run validate-prd"), msg);
   assert.ok(msg.includes("docs/PRD.md"), msg);
   assert.ok(msg.includes("docs/features/*.md"), msg);
   assert.ok(!msg.includes("otherwise keep"), msg);
+  // ADR-060: the queued message must never authorize a non-interactive draft.
+  assert.ok(!msg.includes("auto-proceed"), msg);
+  assert.ok(!/headless mode/i.test(msg), msg);
 });
 
 test("team-generation prompt targets the selected harness directories", () => {
@@ -559,8 +563,11 @@ test("auto-draft compiles the native manifest after team and skills without auth
   assert.ok(out.includes("engine-run --repo"), out);
 });
 
-test("auto-draft PRD failure is diagnosed with log tail and no commit", async () => {
+test("a stubbed PRD stage that produces nothing fails validation with no commit", async () => {
   const parent = tmpDir();
+  // The stub runner is the one sanctioned non-interactive requirements path
+  // (ADR-060), so this covers the offline validation gate rather than the
+  // interactive handoff a real runner would take.
   const { code, out } = await runCli(["--non-interactive"], {
     FORGE_HARNESS_CHOICE: "4",
     FORGE_REPO_NAME: "draft-fail-app",
@@ -577,7 +584,6 @@ test("auto-draft PRD failure is diagnosed with log tail and no commit", async ()
   assert.ok(!fs.existsSync(path.join(repo, "docs", "PRD.md")), "no PRD should exist");
   assert.ok(out.includes("PRD authoring validation failed"), out);
   assert.ok(out.includes("Missing docs/PRD.md"), out);
-  assert.ok(out.includes("forge-launcher draft-prd"));
   assert.ok(out.includes("[stub] invoking forge-auto-build-prd"));
   // nothing was committed beyond the bootstrap commit
   const log = execFileSync("git", ["-C", repo, "log", "--oneline"], { encoding: "utf8" });

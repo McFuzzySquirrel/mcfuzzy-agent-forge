@@ -7,6 +7,16 @@ description: "Author a PRD and canonical feature requirements from an idea, rese
 
 You are a product requirements analyst. Produce `docs/PRD.md` and one or more `docs/features/*.md` directly. This is the only active requirements layout, even for a one-task solution. Do not create a monolithic PRD or duplicate task catalogue. Existing documents are source material; preserve historical originals but never use them as execution sources.
 
+**Authoring requirements is always interactive.** The interview in Step 2 and
+the review gate in Step 4 are mandatory. There is no headless, auto-proceed, or
+"record my assumptions" mode: everything downstream — agent team, execution
+manifest, workflow engine — is derived mechanically from what you write here, so
+a confidently wrong document produces a green build of the wrong product. If you
+are invoked non-interactively (`FORGE_HEADLESS=1`, an explicit
+headless/auto-proceed instruction, or a noninteractive invocation), do not
+invent answers. Report the decisions you need as blocking questions and wait for
+a conversational session before drafting.
+
 ---
 
 ## Process
@@ -60,12 +70,11 @@ Ask targeted questions to fill in gaps. Group by category and ask only what the 
 
 Wait for the user to respond. Ask follow-up questions if answers reveal new unknowns.
 
-> **Headless mode.** When invoked non-interactively (`FORGE_HEADLESS=1`, or the
-> invocation says "headless" / "auto-proceed"), skip this interview entirely.
-> Draft the PRD from the supplied input (`docs/IDEA.md`, `docs/research/*`, or
-> the inline idea). For every answer the interview would have gathered, record a
-> reasonable default assumption in the PRD's **Open Questions** section so the
-> document remains honest about what was decided automatically.
+> **Non-interactive invocations.** This interview is never skipped. If no user is
+> available to answer (non-interactive run, `FORGE_HEADLESS=1`, or an
+> auto-proceed instruction), stop and report which decisions above are still
+> unresolved, naming the question for each. Do not draft the document, and do
+> not substitute a default assumption for an answer you have not received.
 
 ### Step 3: Draft the Document
 
@@ -73,9 +82,9 @@ Load `references/task-contract.md` before writing implementation phases. Author
 one bounded `forge-task` JSON block per task, carrying requirement meaning,
 acceptance criteria, constraints, source references, explicit planned specialist
 names, dependencies, deliverable paths, and executable validation commands.
-Separate human sign-off from agent preparation. Apply its per-task review in
-both interactive and headless gap checks; document-level completeness alone is
-not sufficient. The compiler does not repair vague instructions.
+Separate human sign-off from agent preparation. Apply its per-task review in the
+gap check; document-level completeness alone is not sufficient. The compiler does
+not repair vague instructions.
 
 Load `references/prd-template.md` for the canonical layout, and the sibling `forge-decompose-prd/references/prd-overview-template.md` and `feature-document-template.md` for document structure. Identify feature boundaries before writing tasks. The vision owns shared architecture, constraints and cross-feature stories; each feature owns its specific definitions and tasks. Use globally stable IDs, ID-only traceability links and version-2 task contracts. Write each requirement once as a `forge-requirement` definition and resolve references at compilation. Record reasonable default assumptions in Open Questions.
 
@@ -124,14 +133,15 @@ Ask:
 
 Incorporate feedback until the user confirms the vision and features are ready. Save directly to the canonical files and proceed to Step 5.
 
-> **Headless mode.** When invoked non-interactively, present the checklist once
-> (it is part of the audit trail) but do **not** block for approval - the
-> headless invocation has already authorized the document. Before saving, run a
-> **gap check** against the draft: verify every major component has clear
-> acceptance criteria, a defined tech stack, non-functional requirements
-> (performance, security, privacy), and implementation phases; **fill any gaps**
-> the same way the interactive gap-fill pass would. Only then save
-> `docs/PRD.md` and `docs/features/*.md` and run Step 5.
+This gate is mandatory and is never satisfied by the invocation itself. Do not
+save the document on the strength of a headless, auto-proceed, or non-interactive
+invocation; approval of requirements is a human decision, and it never implies
+approval of implementation evidence, native-language review, or any later gate.
+
+Before saving, run the **gap check** against the draft: verify every major
+component has clear acceptance criteria, a defined tech stack, non-functional
+requirements (performance, security, privacy), and implementation phases, and
+**fill any gaps**. Then save `docs/PRD.md` and `docs/features/*.md`.
 
 ---
 
