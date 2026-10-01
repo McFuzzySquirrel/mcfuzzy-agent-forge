@@ -128,7 +128,7 @@ export function describeSpawnError(cmd: string, err: Error): Error {
  */
 function childEnv(cwd: string | undefined, extra?: NodeJS.ProcessEnv): NodeJS.ProcessEnv | undefined {
   if (cwd === undefined) return extra === undefined ? undefined : { ...process.env, ...extra };
-  return { ...process.env, ...extra, PWD: cwd };
+  return { ...process.env, ...extra, PWD: path.resolve(cwd) };
 }
 
 /** Runs a command, capturing output. Resolves with the exit code. */

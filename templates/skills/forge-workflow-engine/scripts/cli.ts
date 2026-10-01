@@ -187,6 +187,17 @@ function resolveHarness(name: string | undefined): HarnessAdapter {
   }
 }
 
+function rejectRetiredRunFlags(args: string[]): void {
+  const retiredFlags = ["--keep-alive", "--keep-alive-port", "--no-keep-alive", "--attach"];
+  const retiredFlag = args.find((arg) =>
+    retiredFlags.some((flag) => arg === flag || arg.startsWith(`${flag}=`)),
+  );
+  if (retiredFlag) {
+    const flagName = retiredFlag.split("=")[0];
+    throw new Error(`The retired ${flagName} option is no longer supported.`);
+  }
+}
+
 function buildOptions(
   args: string[],
   repoRoot: string,
@@ -303,6 +314,7 @@ async function confirmPreRun(opts: EngineOptions, args: string[]): Promise<void>
 }
 
 async function cmdRun(args: string[]): Promise<void> {
+  rejectRetiredRunFlags(args);
   const repoArg = flag(args, "--repo");
   const repoRoot = repoArg ? resolve(repoArg) : detectRepoRoot();
   const harnessName = harnessNameFor(args, repoRoot);

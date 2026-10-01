@@ -384,9 +384,9 @@ And the boundaries are wider than the table suggests, which is the part worth
 keeping visible:
 
 - A passing test is not a live verification. Every shim-based harness test in
-  this repository is a shim, and the one bug in Chapter 32 would have been
+  this repository is a shim, and the one bug in Chapter 33 would have been
   invisible to all of them.
-- A documented conclusion is not a verified one. Chapter 32 is the proof.
+- A documented conclusion is not a verified one. Chapter 33 is the proof.
 - A local tarball install is not registry publication.
 - A deterministic fixture is not proof that every external harness behaves the
   same way.

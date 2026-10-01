@@ -58,10 +58,16 @@ test("reports an asynchronous detached startup failure to the callback once", as
  */
 for (const [name, spawnWithCwd] of [
   ["runCommand", (cwd: string) => runCommand(process.execPath, ["-e", "process.stdout.write(process.cwd() + '|' + (process.env.PWD ?? ''))"], { cwd, capture: true })],
-  ["runLogged", (cwd: string) => runLogged(process.execPath, ["-e", `require("fs").writeFileSync(${JSON.stringify(path.join(cwd, "out.txt"))}, process.cwd() + "|" + (process.env.PWD ?? ""))`], { cwd, logFile: path.join(cwd, "run.log") }).then(() => ({ stdout: fs.readFileSync(path.join(cwd, "out.txt"), "utf8") }))],
-  ["runTee", (cwd: string) => runTee(process.execPath, ["-e", `require("fs").writeFileSync(${JSON.stringify(path.join(cwd, "out.txt"))}, process.cwd() + "|" + (process.env.PWD ?? ""))`], { cwd, logFile: path.join(cwd, "tee.log") }).then(() => ({ stdout: fs.readFileSync(path.join(cwd, "out.txt"), "utf8") }))],
+  ["runLogged", (cwd: string) => {
+    const absolute = path.resolve(cwd);
+    return runLogged(process.execPath, ["-e", `require("fs").writeFileSync(${JSON.stringify(path.join(absolute, "out.txt"))}, process.cwd() + "|" + (process.env.PWD ?? ""))`], { cwd, logFile: path.join(absolute, "run.log") }).then(() => ({ stdout: fs.readFileSync(path.join(absolute, "out.txt"), "utf8") }));
+  }],
+  ["runTee", (cwd: string) => {
+    const absolute = path.resolve(cwd);
+    return runTee(process.execPath, ["-e", `require("fs").writeFileSync(${JSON.stringify(path.join(absolute, "out.txt"))}, process.cwd() + "|" + (process.env.PWD ?? ""))`], { cwd, logFile: path.join(absolute, "tee.log") }).then(() => ({ stdout: fs.readFileSync(path.join(absolute, "out.txt"), "utf8") }));
+  }],
   ["spawnDetached", async (cwd: string) => {
-    const record = path.join(cwd, "detached.json");
+    const record = path.join(path.resolve(cwd), "detached.json");
     assert.ok(spawnDetached(process.execPath, ["-e", `require("fs").writeFileSync(${JSON.stringify(record)}, JSON.stringify({ cwd: process.cwd(), pwd: process.env.PWD ?? null }))`], { cwd }).pid);
     for (let attempt = 0; attempt < 100 && !fs.existsSync(record); attempt += 1) {
       await new Promise((resolve) => setTimeout(resolve, 20));
@@ -70,7 +76,7 @@ for (const [name, spawnWithCwd] of [
     return { stdout: `${written.cwd}|${written.pwd ?? ""}` };
   }],
 ] as const) {
-  test(`${name} hands the child a PWD that matches its cwd, whatever it inherited`, async (t) => {
+  test(`${name} hands the child a PWD that matches its relative cwd, whatever it inherited`, async (t) => {
     const dir = fs.mkdtempSync(path.join(os.tmpdir(), "forge-pwd-target-"));
     t.after(() => fs.rmSync(dir, { recursive: true, force: true }));
     const decoy = fs.mkdtempSync(path.join(os.tmpdir(), "forge-pwd-decoy-"));
@@ -79,7 +85,7 @@ for (const [name, spawnWithCwd] of [
     const saved = process.env["PWD"];
     process.env["PWD"] = decoy;
     try {
-      const result = await spawnWithCwd(dir);
+      const result = await spawnWithCwd(path.relative(process.cwd(), dir));
       // A stale PWD would name the launcher's own project, so the spawned
       // skill or engine would run somewhere the repository does not exist.
       assert.equal(result.stdout.trim(), `${dir}|${dir}`);

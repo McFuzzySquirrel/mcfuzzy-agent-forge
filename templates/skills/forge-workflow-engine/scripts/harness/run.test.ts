@@ -258,13 +258,18 @@ test("runCommand keeps the rest of the environment alongside the corrected PWD",
   const dir = mkdtempSync(join(tmpdir(), "forge-run-env-"));
   t.after(() => rmSync(dir, { recursive: true, force: true }));
 
-  const result = await runCommand(process.execPath, ["-e", "console.log(process.env.FORGE_PWD_PROBE ?? 'missing')"], {
-    cwd: dir, timeoutMs: 5000, maxBufferBytes: 4096, env: { FORGE_PWD_PROBE: "set" },
-  });
-  assert.equal(result.status, 0);
-  // The extra variable reaches the child, and so does the inherited
-  // environment - `env` merges over `process.env` rather than replacing it.
-  assert.equal(result.stdout.trim(), "set");
+  const inherited = process.env["FORGE_PWD_INHERITED_PROBE"];
+  process.env["FORGE_PWD_INHERITED_PROBE"] = "inherited";
+  try {
+    const result = await runCommand(process.execPath, ["-e", "console.log(`${process.env.FORGE_PWD_PROBE ?? 'missing'}|${process.env.FORGE_PWD_INHERITED_PROBE ?? 'missing'}`)"], {
+      cwd: dir, timeoutMs: 5000, maxBufferBytes: 4096, env: { FORGE_PWD_PROBE: "explicit" },
+    });
+    assert.equal(result.status, 0);
+    assert.equal(result.stdout.trim(), "explicit|inherited");
+  } finally {
+    if (inherited === undefined) delete process.env["FORGE_PWD_INHERITED_PROBE"];
+    else process.env["FORGE_PWD_INHERITED_PROBE"] = inherited;
+  }
 });
 
 function captureLog(): { log: (line: string) => void; lines: string[] } {

@@ -21,7 +21,7 @@ code changed. Three of its premises turned out to be wrong.
 | v2 removed `run --attach` | Confirmed; replaced by `--server <url>` and `--standalone` |
 | `serve` gained mandatory auth | Confirmed — HTTP Basic, user `opencode`, password from `OPENCODE_SERVER_PASSWORD` or generated to the log |
 | A trailing path is swallowed into the prompt | Confirmed (`run [flags] [<message...>]`) |
-| **Project dir travels via `PWD`** | **Inverted — v2 resolves the project from `process.env.PWD ?? process.cwd()`, so `PWD` outranks `cwd`. See [ADR-059](adr/059-pwd-aligned-spawn-environment.md), which corrects this row.** |
+| **Project dir travels via `PWD`** | **Confirmed — v2 resolves the project from `process.env.PWD ?? process.cwd()`, so `PWD` outranks `cwd`. ADR-059 corrects the contrary conclusion in the preserved section below.** |
 | Keep-alive must be fully retired | Flags are dead, but the capability is still buildable on v2 via `serve --port` + `run --server`. Full retirement was a deliberate choice, not a forced consequence. |
 
 ### The `PWD` claim was wrong

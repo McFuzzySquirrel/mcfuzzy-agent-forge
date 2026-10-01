@@ -172,7 +172,9 @@ sandboxMode          = effectiveConcurrency > 1
 - A harness without `supportsConcurrency` falls back to 1 with a warning rather
   than failing a persisted config.
 - **Per-task project selection in sandbox mode.** Each task runs with `cwd` set to
-  its own worktree, which is how OpenCode v2 selects the project (ADR-058). The
+  its own worktree. OpenCode v2 selects the project from
+  `process.env.PWD ?? process.cwd()`, so Forge aligns the child `PWD` with its
+  worktree `cwd` (ADR-059; project resolution is described in ADR-058). The
   keep-alive interaction originally recorded here — one warm `opencode serve`
   serves a single project directory, so keep-alive was downgraded to a cold start
   per task — is moot: v2 retired the engine-managed warm server along with

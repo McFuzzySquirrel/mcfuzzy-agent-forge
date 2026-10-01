@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { mkdtempSync, mkdirSync, writeFileSync, existsSync } from "node:fs";
+import { mkdtempSync, mkdirSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -42,5 +42,24 @@ test("retired explicit, environment, and persisted harness selections fail with 
     assert.match(result.stderr + result.stdout, /flowforge-kernel harness is retired/);
     assert.match(result.stderr + result.stdout, /engine-config\.json/);
     assert.match(result.stderr + result.stdout, /artifacts are preserved/);
+  }
+});
+
+test("run rejects retired keep-alive and attach flags, including equals forms", (t) => {
+  const root = mkdtempSync(join(tmpdir(), "forge-retired-run-flag-"));
+  t.after(() => rmSync(root, { recursive: true, force: true }));
+  mkdirSync(join(root, "docs"), { recursive: true });
+  writeFileSync(join(root, "docs", "EXECUTION-MANIFEST.json"), JSON.stringify({ phases: [] }));
+  const retiredFlags = ["--keep-alive", "--keep-alive-port", "--no-keep-alive", "--attach"];
+
+  for (const flag of retiredFlags) {
+    for (const spelling of [flag, `${flag}=value`]) {
+      const result = spawnSync(process.execPath, [
+        "--import", "tsx", fileURLToPath(new URL("./cli.ts", import.meta.url)),
+        "run", "--repo", root, "--yes", spelling,
+      ], { encoding: "utf8" });
+      assert.notEqual(result.status, 0, spelling);
+      assert.match(result.stderr + result.stdout, new RegExp(`retired ${flag}`));
+    }
   }
 });

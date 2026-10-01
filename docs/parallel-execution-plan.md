@@ -118,8 +118,8 @@ sandboxMode          = effectiveConcurrency > 1
 ```
 
 `--concurrency > 1` on a harness without `supportsConcurrency` warns and clamps to
-1. Each task's project is selected by spawning `opencode run` with `cwd` set to
-that task's worktree — see [ADR-058](adr/058-opencode-v2-project-resolution.md).
+1. OpenCode selects the project from `PWD ?? cwd`, so Forge aligns `PWD` with the
+task's worktree `cwd` when spawning; see [ADR-059](adr/059-pwd-aligned-spawn-environment.md).
 The keep-alive interaction described here was written against the retired
 `--attach` / `--keep-alive` flags and no longer applies.
 
