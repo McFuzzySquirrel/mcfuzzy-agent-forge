@@ -543,7 +543,7 @@ test("Console execution-model edits do not invalidate completed authoring", (t) 
   assert.equal(summary(repoPaths(root)).authoringReady, true);
 });
 
-test("new project request passes three distinct model flags and marks auto-setup", (t) => {
+test("new project request passes three distinct model flags without PRD auto-draft setup", (t) => {
   const root = fixture(t);
   let captured: { args: string[]; options: SpawnOptions } | undefined;
   const controller = new RunController(root, { spawner: (_cmd, args, options) => {
@@ -551,7 +551,7 @@ test("new project request passes three distinct model flags and marks auto-setup
     return { pid: 987655 };
   } });
   const result = controller.createProject({
-    name: "new-project", parentDir: root, idea: "Build something", autoDraft: true, harness: "github",
+    name: "new-project", parentDir: root, idea: "Build something", harness: "github",
     authoringConfig: { version: 1, models: { prd: "gpt-6-astra", team: "gpt-5.6-luna", skills: "gpt-6-astra" } },
   });
   assert.equal(result.ok, true);
@@ -560,7 +560,7 @@ test("new project request passes three distinct model flags and marks auto-setup
   assert.equal(args[args.indexOf("--prd-model") + 1], "gpt-6-astra");
   assert.equal(args[args.indexOf("--team-model") + 1], "gpt-5.6-luna");
   assert.equal(args[args.indexOf("--skills-model") + 1], "gpt-6-astra");
-  assert.equal(result.job?.autoDraft, true);
+  assert.equal(result.job?.autoDraft, undefined);
 });
 
 test("new project request forwards an explicit authoring runner to the launcher", (t) => {
@@ -571,7 +571,7 @@ test("new project request forwards an explicit authoring runner to the launcher"
     return { pid: 987656 };
   } });
   const result = controller.createProject({
-    name: "runner-project", parentDir: root, idea: "Build something", autoDraft: false, harness: "claude",
+    name: "runner-project", parentDir: root, idea: "Build something", harness: "claude",
     authoringConfig: { version: 1, models: {}, runner: "claude" },
   });
   assert.equal(result.ok, true);

@@ -494,7 +494,9 @@ function renderGuidance(container: HTMLElement, summary: Summary, actions: Actio
   let text: string;
   let hint: string;
   if (!summary.hasPrd) {
-    text = summary.hasIdea ? "Author the PRD interactively, or auto-draft it headless." : "Author a project PRD interactively from this existing repository.";
+    text = summary.hasIdea
+      ? "Author the PRD interactively from your idea."
+      : "Author a project PRD interactively from this existing repository.";
   } else if (!summary.hasTeam) {
     text = "Generate the agent team.";
   } else if (!summary.hasManifest && summary.executionMode === "manual") {

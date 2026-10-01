@@ -119,8 +119,9 @@ Chronological audit events, with failures highlighted.
 ## 13. New project
 
 The **New Project** wizard (`#/new`) collects project details, supported text
-documents, three optional authoring model choices, and the auto-draft setting.
-Auto-draft runs PRD, team, and project-skill generation as separate stages.
+documents, and three optional authoring model choices. The wizard does not
+auto-draft requirements; after creation, PRD authoring starts from Overview in
+an interactive terminal session.
 Selecting an existing PRD skips drafting it. Failed uploads or saves keep
 the draft available rather than silently starting with missing inputs.
 

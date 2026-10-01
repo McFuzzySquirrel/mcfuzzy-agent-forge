@@ -1,6 +1,6 @@
 # Forge Console
 
-> A local web UI that fronts `forge-launcher` (authoring) and `forge-launcher engine-run` → `workflow-engine` (build). Create a project, draft the PRD, generate the agent team, generate project skills, compile the manifest, and monitor/control the build - all from your browser.
+> A local web UI that fronts `forge-launcher` (authoring) and `forge-launcher engine-run` → `workflow-engine` (build). Create a project, author a reviewed PRD interactively, generate the agent team, generate project skills, compile the manifest, and monitor/control the build - all from your browser.
 
 > [!WARNING]
 > The Visual Tour uses current-browser captures from a deterministic local
@@ -47,8 +47,8 @@ From there:
 
 1. **Create a project** (New Project wizard) or **open an existing one**.
 2. On the **Overview**, click **Continue** to advance the pipeline one stage at a
-   time - draft the PRD, generate the agent team, generate project skills,
-   compile the manifest, then start the build.
+   time - open interactive PRD authoring, generate the agent team, generate
+   project skills, compile the manifest, then start the build.
 3. Watch it live on the **Board** / **Tasks** / **Logs** views, and use
    **Pause / Stop / Resume / Replay** to control a running build.
 

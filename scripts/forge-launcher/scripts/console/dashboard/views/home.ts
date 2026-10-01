@@ -22,7 +22,7 @@ export function renderHome(container: HTMLElement): void {
     el("div", { className: "action-cards" }, [
       actionCard(
         "Create a new project",
-        "Start from an idea — sets up a repo, bootstraps the agent harness, and drafts the PRD and team.",
+        "Start from an idea — sets up a repo, bootstraps the agent harness, and opens the interactive PRD authoring handoff.",
         "#/new",
         "Create new",
       ),

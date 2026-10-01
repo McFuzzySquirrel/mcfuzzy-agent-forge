@@ -21,7 +21,7 @@ export function unmountNew(): void {
 export function renderNew(container: HTMLElement): void {
   container.textContent = "";
   container.appendChild(el("h1", null, "New project"));
-  container.appendChild(el("p", { className: "dim" }, "Creates the repo and bootstraps MyForge, then drafts the PRD, agent team, and project skills."));
+  container.appendChild(el("p", { className: "dim" }, "Creates the repo and bootstraps MyForge, then hands you off to interactive PRD authoring."));
   container.appendChild(buildForm());
   if (createRepoDir) {
     const host = el("div");
@@ -46,7 +46,6 @@ function buildForm(): HTMLElement {
   const parentDir = el("input", { type: "text", placeholder: "/path/to/parent (optional)" });
   const concurrency = el("input", { type: "number", placeholder: "1 (optional)", min: "1" });
   const idea = el("textarea", { rows: "5", placeholder: "Describe the project idea…" });
-  const autoDraft = el("input", { type: "checkbox" });
 
   // ── Project documents (PRD + research/seed) ──────────────────────────────
   // Mirrors the CLI's Step 6 (addPrdAndResearch): both a file-picker browse and
@@ -77,8 +76,7 @@ function buildForm(): HTMLElement {
       el("p", { className: "dim small" }, "Research and seed docs (design specs, market research, technical notes) are copied to docs/research/ and give the PRD build extra context. An existing PRD is used as-is instead of drafting from the idea."),
     ]),
     authoring.root,
-    el("label", { className: "checkbox-row" }, [autoDraft, el("span", null, "Auto-draft PRD + team after creation (headless, skips the interview)")]),
-    el("p", { className: "dim small" }, "Recommended: leave this off, then select the project and author the PRD interactively from Overview so the skill can interview you first."),
+    el("p", { className: "dim small" }, "After creation, open the project Overview to author the PRD interactively. Team, project-skill, and manifest stages can run headlessly after the requirements are reviewed."),
     el("div", { className: "actions" }, [submit, cancel]),
   ]);
   const project = store.projectKey();
@@ -101,7 +99,6 @@ function buildForm(): HTMLElement {
       parentDir: (parentDir as HTMLInputElement).value.trim() || undefined,
       concurrency: Number((concurrency as HTMLInputElement).value) || undefined,
       idea: (idea as HTMLTextAreaElement).value,
-      autoDraft: (autoDraft as HTMLInputElement).checked,
       prdFile: prdPicker.input.files,
       prdPath: (prdPath as HTMLInputElement).value.trim() || undefined,
       researchFiles: researchPicker.input.files,
@@ -283,7 +280,6 @@ async function submitNewProject(req: {
   parentDir?: string;
   concurrency?: number;
   idea: string;
-  autoDraft?: boolean;
   prdFile: FileList | null;
   prdPath?: string;
   researchFiles: FileList | null;
@@ -314,7 +310,6 @@ async function submitNewProject(req: {
     visibility: req.visibility,
     parentDir: req.parentDir,
     idea: req.idea,
-    autoDraft: req.autoDraft,
     concurrency: req.concurrency && req.concurrency > 0 ? req.concurrency : undefined,
   };
   if (prdPath) payload.prdPath = prdPath;
