@@ -36,9 +36,11 @@ jobs:
         run: npm run typecheck --prefix ${{ matrix.package }}
       - name: Test
         run: npm test --prefix ${{ matrix.package }}
-      - name: Validate team quality gates
+      - name: Validate agent team gates
         if: matrix.package == 'templates/skills/skill-review'
-        run: node --test templates/skills/forge-build-agent-team/scripts/validate-team.test.mjs
+        run: |
+          node --test templates/skills/forge-build-agent-team/scripts/validate-team.test.mjs
+          node --test templates/skills/forge-build-agent-team/scripts/validate-frontmatter.test.mjs
       - name: Build launcher and check release version
         if: matrix.package == 'scripts/forge-launcher'
         run: |
