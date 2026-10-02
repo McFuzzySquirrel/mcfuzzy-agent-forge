@@ -114,6 +114,7 @@ npx forge-launcher@beta draft-existing-prd --repo <path> [model flags]
 npx forge-launcher@beta draft-team --repo <path> [model flags]
 npx forge-launcher@beta feature-prd --repo <path> --prompt "Describe the feature"
 npx forge-launcher@beta feature-increment --repo <path> --prompt "Describe the increment"
+npx forge-launcher@beta feature-increment-continue --repo <path>
 npx forge-launcher@beta compile-manifest --repo <path>
 npx forge-launcher@beta draft-skills [--repo <path>] [--prd-model <id|inherit>]
                               [--team-model <id|inherit>] [--skills-model <id|inherit>]
@@ -1157,16 +1158,18 @@ See the [authoring contract](../templates/skills/forge-build-prd/references/task
 
 `forge-launcher draft-prd --repo <path>` can author a PRD directly from an
 existing repository; `docs/IDEA.md` is optional. It inspects the repository
-context through the selected harness. For additive work use:
+context through the selected harness. For additive work, author the Feature PRD in an interactive harness session, then
+continue its mechanical derivation:
 
 ```bash
-forge-launcher feature-increment --repo <path> --prompt "Add ..."
-forge-launcher feature-increment --repo <path> --prompt "Add ..." --run
+forge-launcher feature-increment-continue --repo <path>
 ```
 
-This authors `docs/features/*.md`, updates affected agents in Feature Increment
-Mode, refreshes `docs/EXECUTION-MANIFEST.json` and
+This expects a reviewed feature document in `docs/features/`; it updates affected
+agents in Feature Increment Mode, refreshes `docs/EXECUTION-MANIFEST.json` and
 `docs/agent-responsibility-matrix.md`, and reports
 preserved/new/removed/changed task IDs. Existing task definitions must stay
 additive-only; the launcher rejects manifest rewrites that alter or remove
-pre-existing tasks. The optional `--run` starts the engine after review.
+pre-existing tasks. Use the Overview task controls to select and run the new
+tasks after review. The `feature-increment --prompt ...` command remains available
+for the offline stub runner, which can author requirements without a human session.

@@ -23,7 +23,7 @@ Detailed release and change notes for MyForge.
   team and project-skill stages stay headless, so CI and offline rebuilds still
   work once a reviewed PRD exists.
 
-- **The four skills no longer contain a headless allowance.** `forge-build-prd`,
+- **The five skills no longer contain a headless allowance.** `forge-build-prd`,
   `forge-auto-build-prd`, `forge-build-feature-prd`, `forge-decompose-prd`, and
   `forge-grill-idea` each had an opt-out that skipped the interview and recorded
   default assumptions. Each fired on `FORGE_HEADLESS=1`, embedded
@@ -43,6 +43,8 @@ Detailed release and change notes for MyForge.
   retry button for the PRD stage now opens the same interactive session. The
   `draft-prd` / `draft-existing-prd` / `feature-prd` control actions return a
   message pointing at it rather than a 400, so older clients degrade clearly.
+  Feature authoring is interactive too; **Continue after authoring** runs the
+  affected-team and manifest derivation without attempting to author requirements.
 
 - **A latent terminal-spawning leak is fixed.** `launchCliInTerminal` had no TTY
   guard, so any piped or `--dry-run` launcher run could spawn a real detached
@@ -54,12 +56,9 @@ Detailed release and change notes for MyForge.
   on the user's behalf is its purpose. `openCliFor` also honors `--dry-run`,
   which it previously did not.
 
-- **Offline coverage is preserved through the existing stub convention** rather
-  than a new escape hatch: `stub` is already documented as the test-only
-  offline runner, so `FORGE_HEADLESS` continues to be honored for a requirements
-  stage only under `FORGE_RUN_WITH=stub` (or the test-only
-  `FORGE_TEST_ALLOW_NONINTERACTIVE=1`). Real runners never author requirements
-  unattended.
+- **Offline coverage is preserved through the existing stub convention.**
+  Requirements authoring is allowed non-interactively only under
+  `FORGE_RUN_WITH=stub`; real runners never author requirements unattended.
 
 - **Deliberate capability loss:** a run can no longer go from `FORGE_IDEA` to a
   finished build unattended. This is accepted, not overlooked — the removed flow

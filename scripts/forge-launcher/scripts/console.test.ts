@@ -534,6 +534,17 @@ test("feature-increment requires a prompt and then reports the interactive hando
   });
 });
 
+test("feature-increment continuation starts only the post-authoring derivation", async () => {
+  await withServer(async (server, _repo, spawned) => {
+    const result = await postJson(`${server.url}/api/control`, {
+      action: "feature-increment-continue",
+    }, { "X-Forge-Token": server.token });
+    assert.equal(result.status, 200);
+    assert.equal((result.body as { ok: boolean }).ok, true);
+    assert.ok(spawned.calls.at(-1)?.args.join(" ").includes("feature-increment-continue"));
+  });
+});
+
 test("project list, add, and select round-trip through the registry", async () => {
   await withServer(async (server, repo) => {
     const token = server.token;

@@ -12,6 +12,7 @@ import {
   engineDetachedCommand,
   featureTaskIds,
   headlessSkillMsg,
+  runResume,
   snapshotFeatureIncrementFiles,
 } from "./launcher.ts";
 import { spawnDetached } from "./format.ts";
@@ -411,30 +412,61 @@ test("feature increment selection excludes unrelated manifest tasks", () => {
   assert.deepEqual(selected, ["NEW-FEATURE-1.1", "NEW-FEATURE-1.2"]);
 });
 
-test("headless skill command omits --dir (removed in OpenCode v2)", async () => {
-  const parent = tmpDir();
-  const { code, out } = await runCli(["--non-interactive", "--dry-run"], {
-    FORGE_HARNESS_CHOICE: "4",
-    FORGE_REPO_NAME: "dir-app",
-    FORGE_REPO_PARENT_DIR: parent,
-    FORGE_IDEA: "A thing",
-    FORGE_YN_DEFAULT: "n",
-    FORGE_AUTO_DRAFT: "1",
+test("non-interactive resume prints an interactive OpenCode requirements command", async (t) => {
+  const repo = tmpDir();
+  execFileSync("git", ["init", "-q", repo]);
+  fs.mkdirSync(path.join(repo, "docs"), { recursive: true });
+  fs.mkdirSync(path.join(repo, ".opencode"), { recursive: true });
+  fs.writeFileSync(path.join(repo, "docs", "IDEA.md"), "# Idea\n\nA thing.\n");
+  const bin = fs.mkdtempSync(path.join(os.tmpdir(), "fl-opencode-bin-"));
+  t.after(() => fs.rmSync(bin, { recursive: true, force: true }));
+  fs.writeFileSync(path.join(bin, "opencode"), "#!/bin/sh\nexit 0\n");
+  fs.chmodSync(path.join(bin, "opencode"), 0o755);
+  const { code, out } = await runCli(["resume", "--repo", repo, "--non-interactive"], {
     FORGE_RUN_WITH: "opencode",
+    PATH: `${bin}${path.delimiter}${process.env.PATH ?? ""}`,
   });
 
   assert.equal(code, 0, out);
-  const repo = path.join(parent, "dir-app");
-  // OpenCode v2 removed `run --dir` and has no path argument: a trailing path
-  // would be swallowed into the prompt. v2 resolves the project from the
-  // child's spawn cwd, which runLoggedStep already pins to the repo, so the
-  // command must carry no path at all.
-  assert.match(out, /opencode run --auto/, out);
-  assert.ok(!out.includes("--dir"), `headless command still passes --dir: ${out}`);
-  assert.ok(
-    !new RegExp(`opencode run[^\\n]*"[^"]*[\\\\/]${path.basename(repo)}"`).test(out),
-    `headless command leaks a path argument that v2 would read as prompt text: ${out}`,
-  );
+  assert.match(out, /opencode "--prompt"/);
+  assert.match(out, /\/forge-auto-build-prd/);
+  assert.doesNotMatch(out, /opencode run --auto/);
+  assert.doesNotMatch(out, /--dir/);
+});
+
+test("resume dry-run prints an interactive authoring command", async (t) => {
+  const repo = tmpDir();
+  execFileSync("git", ["init", "-q", repo]);
+  fs.mkdirSync(path.join(repo, "docs"), { recursive: true });
+  fs.mkdirSync(path.join(repo, ".opencode"), { recursive: true });
+  fs.writeFileSync(path.join(repo, "docs", "IDEA.md"), "# Idea\n\nA thing.\n");
+  const bin = fs.mkdtempSync(path.join(os.tmpdir(), "fl-opencode-bin-"));
+  t.after(() => fs.rmSync(bin, { recursive: true, force: true }));
+  fs.writeFileSync(path.join(bin, "opencode"), "#!/bin/sh\nexit 0\n");
+  fs.chmodSync(path.join(bin, "opencode"), 0o755);
+  const output: string[] = [];
+  const write = process.stdout.write;
+  process.stdout.write = ((chunk: string | Uint8Array) => {
+    output.push(typeof chunk === "string" ? chunk : Buffer.from(chunk).toString());
+    return true;
+  }) as typeof process.stdout.write;
+  let code: number;
+  try {
+    code = await runResume({
+      repo,
+      dryRun: true,
+      env: { ...process.env, FORGE_RUN_WITH: "opencode", PATH: `${bin}${path.delimiter}${process.env.PATH ?? ""}` },
+      dependencies: { promptSelect: async () => "cli" },
+    });
+  } finally {
+    process.stdout.write = write;
+  }
+  const out = output.join("");
+  assert.equal(code!, 0, out);
+  assert.match(out, /Dry-run: not opening an interactive session/);
+  assert.match(out, /opencode "--prompt"/);
+  assert.match(out, /\/forge-auto-build-prd/);
+  assert.doesNotMatch(out, /opencode run --auto/);
 });
 
 test("imported requirements remain source material and queue feature authoring", async () => {

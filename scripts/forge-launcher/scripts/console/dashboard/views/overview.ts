@@ -155,27 +155,22 @@ function renderFeatureIncrement(container: HTMLElement): HTMLElement {
   const project = store.projectKey();
   const input = el("textarea", { rows: "3", placeholder: "Describe the feature to add…", "aria-label": "Feature description" });
   input.textContent = store.getDraft(project, "featurePrompt", "");
-  const run = el("input", { type: "checkbox", "aria-label": "Run the workflow after preparing", checked: store.getDraft<string>(project, "featureRun", "false") === "true" }) as HTMLInputElement;
   input.addEventListener("input", () => store.setDraft(project, "featurePrompt", (input as HTMLTextAreaElement).value));
-  run.addEventListener("change", () => store.setDraft(project, "featureRun", String(run.checked)));
-  const button = el("button", { className: "btn btn-primary" }, "Run Feature Increment");
-  const interactive = el("button", { className: "btn" }, "Author feature PRD (interactive)");
-  button.addEventListener("click", () => {
-    const prompt = (input as HTMLTextAreaElement).value.trim();
-    if (!prompt) { toast("Describe the feature first."); return; }
-    button.setAttribute("disabled", "true");
-    button.setAttribute("disabled", "");
-    void api.featureIncrement(prompt, run.checked)
-      .then((r) => toast(r.message))
-      .catch((e) => toast(e instanceof Error ? e.message : "feature increment failed"))
-      .finally(() => button.removeAttribute("disabled"));
-  });
+  const interactive = el("button", { className: "btn btn-primary" }, "Author feature PRD (interactive)");
+  const continueButton = el("button", { className: "btn" }, "Continue after authoring");
   interactive.addEventListener("click", () => {
     const prompt = (input as HTMLTextAreaElement).value.trim();
     if (!prompt) { toast("Describe the feature first."); return; }
     void startSession(container, "feature-prd", prompt);
   });
-  return el("div", { className: "panel" }, [el("h4", null, "Increment the project"), el("p", { className: "dim small" }, "Authors the feature, updates affected agents, recompiles the manifest, and optionally runs it. Use the interactive option to interview and author just the feature PRD first."), input, el("label", { className: "checkbox-row" }, [run, el("span", null, "Run the workflow after preparing")]), el("div", { className: "actions" }, [button, interactive])]);
+  continueButton.addEventListener("click", () => {
+    continueButton.setAttribute("disabled", "");
+    void api.continueFeatureIncrement()
+      .then((r) => toast(r.message))
+      .catch((e) => toast(e instanceof Error ? e.message : "feature increment continuation failed"))
+      .finally(() => continueButton.removeAttribute("disabled"));
+  });
+  return el("div", { className: "panel" }, [el("h4", null, "Increment the project"), el("p", { className: "dim small" }, "Author the feature PRD interactively, then continue to update affected agents and recompile the manifest. Review the new tasks before running them."), input, el("div", { className: "actions" }, [interactive, continueButton])]);
 }
 
 function renderAuthoringStatus(summary: Summary): HTMLElement {
@@ -224,22 +219,12 @@ function renderFeaturePrd(container: HTMLElement): HTMLElement {
   input.textContent = store.getDraft(project, "featurePrompt", "");
   input.addEventListener("input", () => store.setDraft(project, "featurePrompt", (input as HTMLTextAreaElement).value));
   const interactive = el("button", { className: "btn btn-primary" }, "Author Feature PRD (interactive)");
-  const headless = el("button", { className: "btn" }, "Auto-build feature (headless)");
   interactive.addEventListener("click", () => {
     const prompt = (input as HTMLTextAreaElement).value.trim();
     if (!prompt) { toast("Describe the feature first."); return; }
     void startSession(container, "feature-prd", prompt);
   });
-  headless.addEventListener("click", () => {
-    const prompt = (input as HTMLTextAreaElement).value.trim();
-    if (!prompt) { toast("Describe the feature first."); return; }
-    headless.setAttribute("disabled", "");
-    void api.featurePrd(prompt)
-      .then((r) => toast(r.message))
-      .catch((e) => toast(e instanceof Error ? e.message : "feature PRD failed"))
-      .finally(() => headless.removeAttribute("disabled"));
-  });
-  return el("div", { className: "panel" }, [el("h4", null, "Add a feature"), el("p", { className: "dim small" }, "The interactive path interviews you in a terminal before authoring; the headless path writes the feature document directly. Neither starts the workflow engine."), input, el("div", { className: "actions" }, [interactive, headless])]);
+  return el("div", { className: "panel" }, [el("h4", null, "Add a feature"), el("p", { className: "dim small" }, "Open an interactive session to interview and author the feature requirements. After authoring, continue the increment to update the team and manifest."), input, el("div", { className: "actions" }, [interactive])]);
 }
 
 function renderHeader(summary: Summary): HTMLElement {

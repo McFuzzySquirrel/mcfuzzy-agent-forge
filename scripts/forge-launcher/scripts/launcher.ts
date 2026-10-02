@@ -53,6 +53,7 @@ export interface LauncherOptions extends AuthoringOptions {
     runLogged?: typeof runLogged;
     spawnDetached?: typeof spawnDetached;
     inventoryProbe?: InventoryProbe;
+    allowNonInteractiveRequirements?: (runner: AuthoringRunner) => boolean;
     prompt?: typeof defaultPrompt;
     promptSelect?: typeof defaultPromptSelect;
     promptYesNo?: typeof defaultPromptYesNo;
@@ -537,6 +538,21 @@ async function headlessCmdFor(msg: string): Promise<string> {
   return `${runner} ${authoringArgv(invocation, state.repoDir, msg).map((arg) => /^[a-zA-Z0-9_-]+$/.test(arg) ? arg : JSON.stringify(arg)).join(" ")}`;
 }
 
+async function authoringHandoffCmdFor(msg: string): Promise<string> {
+  const runner = headlessRunner();
+  if (runner === "stub" || authoringStageForSkill(skillNameFromMsg(msg)) !== "prd") {
+    return headlessCmdFor(msg);
+  }
+  const invocation = await resolveAuthoringModel(state.repoDir, "prd", runner, state.options.models, state.env, state.options.dependencies?.inventoryProbe);
+  const modelArgs = invocation.effectiveModel ? ["--model", invocation.effectiveModel] : [];
+  const args = runner === "copilot"
+    ? ["-i", msg, "--yolo", ...modelArgs]
+    : runner === "claude"
+      ? [...modelArgs, msg]
+      : ["--prompt", msg, ...modelArgs];
+  return `${runner} ${args.map((arg) => JSON.stringify(arg)).join(" ")}`;
+}
+
 /** Extracts the skill name from a skill invocation message ("/name rest…"). */
 function skillNameFromMsg(msg: string): string {
   const first = msg.trim().split(/\s+/)[0] ?? "";
@@ -601,12 +617,15 @@ async function validateAuthoringOutputs(stage: AuthoringStage, skill: string, be
 /** ADR-060: requirements stages are never run non-interactively in production.
  * The offline stub runner, or an explicit test-only override, is the sole
  * exception so the automated suite can still exercise the pipeline. */
-export function requirementsAuthoringAllowed(runner: AuthoringRunner, env: NodeJS.ProcessEnv): boolean {
-  return runner === "stub" || envFlag("FORGE_TEST_ALLOW_NONINTERACTIVE", env);
+export function requirementsAuthoringAllowed(
+  runner: AuthoringRunner,
+  allowNonInteractiveRequirements?: (runner: AuthoringRunner) => boolean,
+): boolean {
+  return runner === "stub" || allowNonInteractiveRequirements?.(runner) === true;
 }
 
-function headlessEnvFor(stage: AuthoringStage | undefined, runner: AuthoringRunner, env: NodeJS.ProcessEnv): NodeJS.ProcessEnv {
-  if (stage === "prd" && !requirementsAuthoringAllowed(runner, env)) return {};
+function headlessEnvFor(stage: AuthoringStage | undefined, runner: AuthoringRunner, allowNonInteractiveRequirements?: (runner: AuthoringRunner) => boolean): NodeJS.ProcessEnv {
+  if (stage === "prd" && !requirementsAuthoringAllowed(runner, allowNonInteractiveRequirements)) return {};
   return { FORGE_HEADLESS: "1" };
 }
 
@@ -686,7 +705,7 @@ async function runSkillHeadless(msg: string, opts: LauncherOptions): Promise<boo
     else {
       const code = await runLoggedStep("Running the skill (may take a while)", runner, args, {
         cwd: state.repoDir, dryRun: opts.dryRun,
-        env: { ...headlessEnvFor(stage, runner, state.env), FORGE_HARNESS: state.harness },
+        env: { ...headlessEnvFor(stage, runner, state.options.dependencies?.allowNonInteractiveRequirements), FORGE_HARNESS: state.harness },
       });
       if (code !== 0) throw new Error(`Skill runner exited with code ${code}`);
     }
@@ -945,11 +964,11 @@ async function offerManualRun(skillName: string, opts: LauncherOptions): Promise
  * non-interactive implementation is the offline stub runner. */
 async function interactivePrdStep(opts: LauncherOptions): Promise<void> {
   if (hasPrd()) return;
-  if (opts.nonInteractive ? (!envFlag("FORGE_AUTO_DRAFT") && !opts.draft) : await !confirmPrdStep(opts)) return;
+  if (opts.nonInteractive ? (!envFlag("FORGE_AUTO_DRAFT") && !opts.draft) : !(await confirmPrdStep(opts))) return;
   const invocation = prdAuthoringInvocation();
   // The offline stub runner is the single sanctioned non-interactive
   // requirements path, so the automated suite can still exercise this stage.
-  if (requirementsAuthoringAllowed(headlessRunner(), state.env)) {
+  if (requirementsAuthoringAllowed(headlessRunner(), state.options.dependencies?.allowNonInteractiveRequirements)) {
     out("");
     info("Auto-drafting the PRD (offline stub runner) …");
     if (await runSkillHeadless(invocation, opts)) await draftCommit("docs: add auto-drafted PRD");
@@ -1723,7 +1742,7 @@ async function launchAutobuild(opts: LauncherOptions): Promise<void> {
     const answer = await promptYesNo(`Launch ${cli} in the new repository now?`, "n");
     if (answer === "n") {
       info("To launch manually:");
-      if (authoringStageForSkill(skillNameFromMsg(autobuildCommand()))) command(await headlessCmdFor(autobuildCommand()));
+      if (authoringStageForSkill(skillNameFromMsg(autobuildCommand()))) command(await authoringHandoffCmdFor(autobuildCommand()));
       else {
         out(`    cd "${state.repoDir}" && ${cli} ${extra.join(" ")}`);
         out(`    Then: ${autobuildCommand()}`);
@@ -1770,7 +1789,7 @@ async function launchAutobuild(opts: LauncherOptions): Promise<void> {
     case "agents":
       info("Open the repository in your agent harness and run:");
       out("");
-      if (authoringStageForSkill(skillNameFromMsg(autobuildCommand()))) command(await headlessCmdFor(autobuildCommand()));
+      if (authoringStageForSkill(skillNameFromMsg(autobuildCommand()))) command(await authoringHandoffCmdFor(autobuildCommand()));
       else out(`    ${autobuildCommand()}`);
       out("");
       info("Agent templates are in:");
@@ -1968,7 +1987,7 @@ async function resumePrdStep(opts: ResumeOptions): Promise<boolean> {
     warn("This run stops with a handoff instead of drafting requirements for you.");
     out("");
     out("  Author it in a harness session with the queued skill:");
-    command(await headlessCmdFor(invocation));
+    command(await authoringHandoffCmdFor(invocation));
     out("");
     out("  Then re-run: forge-launcher resume");
     return false;
@@ -2061,7 +2080,7 @@ async function runDraftPrdInternal(repoDir: string): Promise<number> {
     out("PRD already exists.");
     return 0;
   }
-  if (!requirementsAuthoringAllowed(headlessRunner(), state.env)) return interactivePrdHandoff(repoDir, "forge-auto-build-prd");
+  if (!requirementsAuthoringAllowed(headlessRunner(), state.options.dependencies?.allowNonInteractiveRequirements)) return interactivePrdHandoff(repoDir, "forge-auto-build-prd");
   out("Auto-drafting the PRD (offline stub runner) …");
   if (!await runSkillHeadless(prdAuthoringInvocation(), { nonInteractive: true })) return 1;
   if (state.options.dryRun) return 0;
@@ -2095,7 +2114,7 @@ async function runDraftExistingPrdInternal(repoDir: string): Promise<number> {
   setupStateForRepo(repoDir);
   const prior = readAuthoringState(repoDir).stages.prd;
   if (hasPrd() && (!prior || prior.status === "complete") && await existingPrdIsValid()) { out("PRD already exists."); return 0; }
-  if (!requirementsAuthoringAllowed(headlessRunner(), state.env)) return interactivePrdHandoff(repoDir, "forge-build-prd");
+  if (!requirementsAuthoringAllowed(headlessRunner(), state.options.dependencies?.allowNonInteractiveRequirements)) return interactivePrdHandoff(repoDir, "forge-build-prd");
   out("Authoring a project PRD from the existing repository (offline stub runner) …");
   if (!await runSkillHeadless(EXISTING_PROJECT_PRD_INVOCATION, { nonInteractive: true })) return 1;
   if (state.options.dryRun) return 0;
@@ -2131,7 +2150,7 @@ async function runFeaturePrdInternal(repoDir: string, featurePrompt?: string): P
   if (!featurePrompt.trim()) return 1;
   // ADR-060: a feature document is requirements, so it is authored in a session.
   // The stub runner is the sole non-interactive path (offline tests only).
-  if (!requirementsAuthoringAllowed(headlessRunner(), state.env)) {
+  if (!requirementsAuthoringAllowed(headlessRunner(), state.options.dependencies?.allowNonInteractiveRequirements)) {
     authoringEvent("authoring.failed", { operation: "feature-prd", stage: "interactive-required" });
     out("");
     fail("Feature authoring is interactive (ADR-060); it is not run headlessly.");
@@ -2176,6 +2195,21 @@ async function runFeatureIncrementInternal(repoDir: string, featurePrompt: strin
   if (featureCode !== 0) { authoringEvent("authoring.failed", { operation: "feature-increment", stage: "feature-prd", code: featureCode }); return featureCode; }
   const featureOutputs = readAuthoringState(repoDir).stages.prd?.outputs ?? [];
   authoringEvent("authoring.stage.completed", { operation: "feature-increment", stage: "feature-prd" });
+  return continueFeatureIncrementStages(repoDir, featureOutputs, run);
+}
+
+async function prepareFeatureIncrementInternal(repoDir: string): Promise<number> {
+  setupStateForRepo(repoDir);
+  authoringEvent("authoring.started", { operation: "feature-increment", continuation: true });
+  if (!hasPrd() || !hasGeneratedTeam()) {
+    fail("Feature increment continuation requires an existing PRD and generated agent team.");
+    return 1;
+  }
+  if (!await existingPrdIsValid()) return 1;
+  return continueFeatureIncrementStages(repoDir, [], false);
+}
+
+async function continueFeatureIncrementStages(repoDir: string, featureOutputs: string[], run: boolean): Promise<number> {
   const teamCode = await runDraftTeamInternal(repoDir, true);
   if (teamCode !== 0) { authoringEvent("authoring.failed", { operation: "feature-increment", stage: "team", code: teamCode }); return teamCode; }
   authoringEvent("authoring.stage.completed", { operation: "feature-increment", stage: "team" });
@@ -2389,7 +2423,7 @@ async function openCliFor(cmd: string): Promise<void> {
   // and those detached `bash → cli` chains hold their stdio open indefinitely.
   if (state.options.dryRun) {
     warn("Dry-run: not opening an interactive session.");
-    command(await headlessCmdFor(cmd));
+    command(await authoringHandoffCmdFor(cmd));
     return;
   }
   const stage = authoringStageForSkill(skillNameFromMsg(cmd));
@@ -2400,7 +2434,7 @@ async function openCliFor(cmd: string): Promise<void> {
     const args = invocation.effectiveModel ? ["--model", invocation.effectiveModel] : [];
     if (runner === "opencode") args.unshift(state.repoDir);
     const launched = await launchCliInTerminal(runner, state.repoDir, args);
-    if (!launched) warn(`Could not open the authoring terminal. Run: ${await headlessCmdFor(cmd)}`);
+    if (!launched) warn(`Could not open the authoring terminal. Run: ${await authoringHandoffCmdFor(cmd)}`);
     authoringEvent("authoring.handoff", { stage, ...invocation, argv: args });
     out(`    Then run only this stage: ${cmd}`);
     out("    Continue with forge-launcher resume to select the next stage's model independently.");
@@ -2671,6 +2705,9 @@ export function runFeaturePrd(repoDir: string, featurePrompt?: string, options: 
 }
 export function runFeatureIncrement(repoDir: string, featurePrompt: string | undefined, run = false, options: LauncherOptions = {}): Promise<number> {
   return withLauncherSession({ ...options, nonInteractive: true }, () => runFeatureIncrementInternal(repoDir, featurePrompt, run));
+}
+export function continueFeatureIncrement(repoDir: string, options: LauncherOptions = {}): Promise<number> {
+  return withLauncherSession({ ...options, nonInteractive: true }, () => prepareFeatureIncrementInternal(repoDir));
 }
 export function runDraftTeam(repoDir: string, featureIncrement = false, options: LauncherOptions = {}): Promise<number> {
   return withLauncherSession({ ...options, nonInteractive: true }, () => runDraftTeamInternal(repoDir, featureIncrement));

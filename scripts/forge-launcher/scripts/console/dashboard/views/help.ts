@@ -115,7 +115,7 @@ function quickHelp(): HTMLElement {
     ]),
     helpSection("Incremental work", [
       "Add a feature authors an additive document under docs/features/ without replacing the original PRD.",
-      "Run Feature Increment updates affected agents and recompiles the manifest, optionally running only the new feature tasks.",
+      "Author a Feature PRD interactively, then continue the increment to update affected agents and recompile the manifest.",
       "Review preserved, new, changed, and removed task IDs in Manifest. Reset changed tasks for review only when changed completed tasks should run again.",
     ]),
     helpSection("Views", [dl([

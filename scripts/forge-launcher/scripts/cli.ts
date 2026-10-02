@@ -4,7 +4,7 @@ import { bootstrapCli } from "./bootstrap.ts";
 import { consoleCli } from "./console/cli.ts";
 import { engineRunCli } from "./engine-run.ts";
 import { fail } from "./format.ts";
-import { runCompileManifest, runDraftExistingPrd, runDraftPrd, runDraftTeam, runDraftSkills, runFeaturePrd, runLauncher, runResume } from "./launcher.ts";
+import { continueFeatureIncrement, runCompileManifest, runDraftExistingPrd, runDraftPrd, runDraftTeam, runDraftSkills, runFeaturePrd, runLauncher, runResume } from "./launcher.ts";
 import { AUTHORING_STAGES, isRunnerChoice, loadAuthoringConfig, saveAuthoringConfig, type AuthoringModels, type AuthoringOptions, type AuthoringRunnerChoice } from "./authoring-config.ts";
 import { readAuthoringInventory, refreshAuthoringInventory } from "./authoring-inventory.ts";
 import { detectRepoRoot } from "./paths.ts";
@@ -39,6 +39,7 @@ Usage:
   forge-launcher authoring-models [--repo <path>] [--runner copilot|opencode|claude] [--refresh]
   forge-launcher feature-prd [--repo <path>] [--prompt <text>] # author in docs/features/
   forge-launcher feature-increment [--repo <path>] [--prompt <text>] [--run] # author, update team, compile, optionally run
+  forge-launcher feature-increment-continue [--repo <path>] # update team and compile after interactive feature authoring
   forge-launcher compile-manifest [--repo <path>]  # headless: team → execution manifest
 
 Launcher options:
@@ -162,7 +163,7 @@ async function main(): Promise<number> {
   }
   if (args[0] === "console") return consoleCli(args.slice(1));
   if (args[0] === "engine-run") return engineRunCli(args.slice(1));
-  if (args[0] === "draft-prd" || args[0] === "draft-existing-prd" || args[0] === "draft-team" || args[0] === "draft-skills" || args[0] === "compile-manifest" || args[0] === "feature-prd" || args[0] === "feature-increment") {
+  if (args[0] === "draft-prd" || args[0] === "draft-existing-prd" || args[0] === "draft-team" || args[0] === "draft-skills" || args[0] === "compile-manifest" || args[0] === "feature-prd" || args[0] === "feature-increment" || args[0] === "feature-increment-continue") {
     let repo: string | undefined;
     let featurePrompt: string | undefined;
     let runIncrement = false;
@@ -196,6 +197,7 @@ async function main(): Promise<number> {
     if (args[0] === "draft-skills") return runDraftSkills(repoDir, options);
     if (args[0] === "feature-prd") return runFeaturePrd(repoDir, featurePrompt, options);
     if (args[0] === "feature-increment") return (await import("./launcher.ts")).runFeatureIncrement(repoDir, featurePrompt, runIncrement, options);
+    if (args[0] === "feature-increment-continue") return continueFeatureIncrement(repoDir, options);
     return runCompileManifest(repoDir, options);
   }
   if (args[0] === "resume") {

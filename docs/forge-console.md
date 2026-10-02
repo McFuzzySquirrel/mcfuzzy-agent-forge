@@ -183,7 +183,8 @@ Completed projects remain extensible. Use **Add a feature** on Overview to run
 agent team and writes an additive document under `docs/features/`; it does not
 replace the original PRD or start the engine. It interviews you, because a
 feature document is requirements and requirements are never authored headlessly
-(ADR-060).
+(ADR-060). After authoring, choose **Continue after authoring** to update affected
+agents and recompile the manifest; review the resulting tasks before running them.
 
 ### Interactive authoring
 

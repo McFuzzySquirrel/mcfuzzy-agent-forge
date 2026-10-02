@@ -73,8 +73,8 @@ test("resume with an idea queues PRD drafting", async () => {
   assert.equal(code, 0, out);
   assert.ok(out.includes("No PRD yet"), out);
   assert.ok(out.includes("forge-auto-build-prd"), out);
-  // OpenCode v2 removed `run --dir`; the project comes from the spawn cwd.
-  assert.match(out, /opencode run --auto/);
+  assert.match(out, /opencode "--prompt"/);
+  assert.doesNotMatch(out, /opencode run --auto/);
   assert.ok(!out.includes("--dir"), out);
 });
 

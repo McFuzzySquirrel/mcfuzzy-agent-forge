@@ -240,6 +240,12 @@ export class RunController {
     return interactiveRequirements();
   }
 
+  continueFeatureIncrement(): ControlResult {
+    const { cmd, args } = engineDetachedCommand(["feature-increment-continue", "--repo", this.repoRoot]);
+    const job = this.launchJob("feature-increment", "Feature increment preparation started.", cmd, args, this.p.logPath);
+    return { ok: job.status !== "failed", message: job.message, pid: job.pid, job };
+  }
+
   bootstrap(req: { path: string; harness?: string; force?: boolean; initGit?: boolean; runner?: string }): ControlResult {
     const target = path.resolve(req.path);
     const logFile = repositoryLogFile(target);
@@ -405,6 +411,7 @@ export class RunController {
       case "draft-skills": return this.draftSkills();
       case "feature-prd": return interactiveRequirements();
       case "feature-increment": return this.featureIncrement();
+      case "feature-increment-continue": return this.continueFeatureIncrement();
       case "compile-manifest": return this.compileManifest();
       default: return { ok: false, message: `Unknown action: ${action}` };
     }

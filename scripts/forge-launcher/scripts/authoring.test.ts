@@ -66,9 +66,8 @@ const candidates = {
   candidates: [{ name: "project-fixture", description: "Use when validating project fixture work.", consumers: ["project-agent"], action: "create", reason: "Project fixture behavior needs a dedicated reusable procedure." }],
 };
 const stub: LauncherOptions = { env: { FORGE_RUN_WITH: "stub" } };
-/** ADR-060: exercises a real runner for the PRD stage offline. The production
- * guard rejects this env var, so it exists only for the automated suite. */
-const offline = { FORGE_TEST_ALLOW_NONINTERACTIVE: "1" } as const;
+/** Injects a test-only authorization for real-runner argv and output coverage. */
+const offline = { allowNonInteractiveRequirements: () => true } as const;
 
 function validPrd(id = "BUILD-1"): string {
   return '# PRD\n## Phase 1: Build\n```forge-task\n' + JSON.stringify({ id, title: "Build behavior", description: `Implement ${id} behavior`, ownerAgent: "project-agent", dependencies: [], expectedOutputs: ["src/behavior.ts"], validationCommands: ["npm test"], contract: { version: 1, kind: "implementation", requirements: ["FR-1: Behavior"], acceptanceCriteria: ["Behavior verified"], constraints: [], references: ["docs/PRD.md"] } }) + '\n```\n';
@@ -77,7 +76,7 @@ function validPrd(id = "BUILD-1"): string {
 test("existing project authoring enforces decomposition and records feature fingerprints", async (t) => {
   const repo = fixture(t);
   let repaired = false;
-  const options: LauncherOptions = { env: { FORGE_RUN_WITH: "copilot", ...offline }, dependencies: { runLogged: async (_cmd, args) => {
+  const options: LauncherOptions = { env: { FORGE_RUN_WITH: "copilot" }, dependencies: { ...offline, runLogged: async (_cmd, args) => {
     assert.match(args[1]!, /Feature-based authoring is mandatory for every solution/);
     fs.writeFileSync(path.join(repo, "docs/PRD.md"), "# Incomplete vision\n");
     if (repaired) {
@@ -102,7 +101,7 @@ test("existing complete markers cannot bypass missing decomposition through team
   writeAuthoringJson(path.join(repo, "docs/authoring-state.json"), { version: 1, stages: { prd: { status: "complete", inputFingerprint: "old", outputs: ["docs/PRD.md"] } } });
   assert.equal(await runDraftTeam(repo, false, stub), 1);
   let invoked = false;
-  assert.equal(await runDraftExistingPrd(repo, { env: { FORGE_RUN_WITH: "copilot", ...offline }, dependencies: { runLogged: async () => {
+  assert.equal(await runDraftExistingPrd(repo, { env: { FORGE_RUN_WITH: "copilot" }, dependencies: { ...offline, runLogged: async () => {
     invoked = true;
     write(repo, "docs/PRD.md", "# Vision\n## 14. Features\n| # | Feature | File | Dependencies |\n| 1 | Behavior | features/behavior.md | None |\n");
     write(repo, "docs/features/behavior.md", validPrd());
@@ -116,7 +115,7 @@ test("failed feature contracts can be repaired in place without rewriting the or
   const original = validPrd();
   write(repo, "docs/PRD.md", original);
   let repair = false;
-  const options: LauncherOptions = { env: { FORGE_RUN_WITH: "copilot", ...offline }, dependencies: { runLogged: async (_cmd, args) => {
+  const options: LauncherOptions = { env: { FORGE_RUN_WITH: "copilot" }, dependencies: { ...offline, runLogged: async (_cmd, args) => {
     assert.doesNotMatch(args[1]!, /repair its task contracts/);
     if (repair) assert.match(args[1]!, /Repair the failed feature documents in place: docs\/features\/new.md/);
     write(repo, "docs/features/new.md", repair ? validPrd("NEW-1") : "# Incomplete feature\n");
@@ -195,8 +194,8 @@ test("the saved runner's provenance reaches the authoring state file", async (t)
   saveAuthoringConfig(repo, { version: 1, models: {}, runner: "claude" });
   const spawned: string[] = [];
   assert.equal(await runDraftPrd(repo, {
-    env: { FORGE_RUN_WITH: undefined, ...offline },
-    dependencies: { runLogged: async (cmd) => {
+    env: { FORGE_RUN_WITH: undefined },
+    dependencies: { ...offline, runLogged: async (cmd) => {
       spawned.push(cmd);
       write(repo, "docs/PRD.md", "# Saved runner PRD");
       return { code: 0, stdout: "", stderr: "" };
@@ -516,9 +515,9 @@ test("failed skills resume without rerunning a current team and changed outputs 
   let skillsRuns = 0;
   let failSkills = true;
   const options: LauncherOptions = {
-    env: { FORGE_RUN_WITH: "copilot", ...offline },
+    env: { FORGE_RUN_WITH: "copilot" },
     models: { team: "team-2", skills: "skills-3" },
-    dependencies: { runLogged: async (cmd, args) => {
+    dependencies: { ...offline, runLogged: async (cmd, args) => {
       if (cmd === process.execPath) return { code: 0, stdout: "", stderr: "" };
       const message = args[1]!;
       if (message.startsWith("/forge-build-agent-team")) {
@@ -554,8 +553,8 @@ test("PRD sessions use independent model argv and repo paths concurrently", asyn
   inventory(b);
   const calls: Array<{ repo: string; model: string | undefined }> = [];
   const options = (repo: string, model: string): LauncherOptions => ({
-    env: { FORGE_RUN_WITH: "copilot", ...offline }, models: { prd: model },
-    dependencies: { runLogged: async (_cmd, args, opts) => {
+    env: { FORGE_RUN_WITH: "copilot" }, models: { prd: model },
+    dependencies: { ...offline, runLogged: async (_cmd, args, opts) => {
       await new Promise((resolve) => setTimeout(resolve, repo === a ? 5 : 1));
       assert.equal(opts.cwd, repo);
       calls.push({ repo, model: args[args.indexOf("--model") + 1] });
@@ -572,8 +571,8 @@ test("PRD sessions use independent model argv and repo paths concurrently", asyn
 test("retired persisted and environment harness config is rejected before authoring spawn", async (t) => {
   const repo = fixture(t);
   const options: LauncherOptions = {
-    env: { FORGE_RUN_WITH: "copilot", ...offline },
-    dependencies: { runLogged: async () => { throw new Error("unexpected subprocess"); } },
+    env: { FORGE_RUN_WITH: "copilot" },
+    dependencies: { ...offline, runLogged: async () => { throw new Error("unexpected subprocess"); } },
   };
   writeAuthoringJson(path.join(repo, "docs/engine-config.json"), { harness: "flowforge-kernel" });
   await assert.rejects(runDraftPrd(repo, options), /flowforge-kernel.*retired/);
@@ -588,8 +587,8 @@ test("feature increment dispatches PRD, team and skills with distinct models bef
   write(repo, ".github/skills/forge-execution-adapter/package.json", '{"name":"fixture-adapter"}');
   const calls: Array<{ command: string; model?: string }> = [];
   const options: LauncherOptions = {
-    env: { FORGE_RUN_WITH: "copilot", ...offline }, models: { prd: "prd-1", team: "team-2", skills: "skills-3" },
-    dependencies: { runLogged: async (cmd, args) => {
+    env: { FORGE_RUN_WITH: "copilot" }, models: { prd: "prd-1", team: "team-2", skills: "skills-3" },
+    dependencies: { ...offline, runLogged: async (cmd, args) => {
       if (cmd === process.execPath) return { code: 0, stdout: "", stderr: "" };
       if (cmd === "npm") {
         if (args.includes("compile")) {
@@ -704,7 +703,7 @@ test("a mixed handoff authors only its create and extend candidates", async (t) 
   assert.equal(authoringReadiness(repo, ".github").ready, true);
 });
 
-test("settings CLI saves and clears stage values and direct draft argv preserves OpenCode IDs", (t) => {
+test("settings CLI saves and clears stage values and direct draft argv preserves OpenCode IDs", async (t) => {
   const repo = fixture(t);
   const cli = fileURLToPath(new URL("./cli.ts", import.meta.url));
   const invoke = (args: string[], env: NodeJS.ProcessEnv = {}) => execFileSync(process.execPath, ["--import", "tsx", cli, ...args], {
@@ -713,7 +712,7 @@ test("settings CLI saves and clears stage values and direct draft argv preserves
   invoke(["authoring-config", "--repo", repo, "--prd-model", "anthropic/team-2", "--skills-model", "skills-3"]);
   assert.deepEqual(loadAuthoringConfig(repo).models, { prd: "anthropic/team-2", skills: "skills-3" });
   inventory(repo);
-  const output = invoke(["draft-prd", "--repo", repo, "--dry-run"], { FORGE_RUN_WITH: "opencode", ...offline });
+  const output = await draftPrdDryRun(repo, { FORGE_RUN_WITH: "opencode" });
   assert.match(output, /--model "anthropic\/team-2"/);
   assert.equal(fs.existsSync(path.join(repo, "docs/PRD.md")), false);
   assert.equal(readAuthoringState(repo).stages.prd, undefined);
@@ -734,22 +733,24 @@ test("settings CLI saves and clears the authoring runner", (t) => {
   assert.equal(loadAuthoringConfig(repo).runner, undefined);
 });
 
-/**
- * Runs `draft-prd --dry-run` in a subprocess so the launcher's own PATH probe
- * runs for real. Pass `PATH` to decide which authoring CLIs the run can see.
- */
-function draftPrdDryRun(repo: string, env: NodeJS.ProcessEnv = {}): string {
-  // ADR-060: the dry run prints a requirements command that a real runner would
-  // refuse to execute, so the suite sets the test-only lock.
-  const base = { ...process.env, FORGE_TEST_ALLOW_NONINTERACTIVE: "1", ...env };
-  if (!Object.hasOwn(env, "FORGE_RUN_WITH")) delete base.FORGE_RUN_WITH;
-  // Windows inherits `Path`, and the probe reads `PATH ?? Path`, so a caller
-  // pinning PATH must not leave the machine's real one behind for it to find.
-  if (Object.hasOwn(env, "PATH")) delete base.Path;
-  delete base.FORGE_PRD_MODEL;
-  return execFileSync(process.execPath, ["--import", "tsx", AUTHORING_CLI, "draft-prd", "--repo", repo, "--dry-run"], {
-    encoding: "utf8", env: base,
-  });
+/** Runs a requirements dry-run with the test-only authorization injected as a dependency. */
+async function draftPrdDryRun(repo: string, env: NodeJS.ProcessEnv = {}): Promise<string> {
+  const output: string[] = [];
+  const write = process.stdout.write;
+  process.stdout.write = ((chunk: string | Uint8Array) => {
+    output.push(typeof chunk === "string" ? chunk : Buffer.from(chunk).toString());
+    return true;
+  }) as typeof process.stdout.write;
+  try {
+    await runDraftPrd(repo, {
+      dryRun: true,
+      env: { ...process.env, ...env },
+      dependencies: offline,
+    });
+  } finally {
+    process.stdout.write = write;
+  }
+  return output.join("");
 }
 
 test("an unsupported --runner fails at parse time, before any project work", (t) => {
@@ -794,15 +795,15 @@ function fakeBin(t: { after: (fn: () => void) => void }, ...commands: string[]):
   return dir;
 }
 
-test("headless draft picks the runner from the environment, the saved project choice, then the harness", (t) => {
+test("headless draft picks the runner from the environment, the saved project choice, then the harness", async (t) => {
   const explicit = fixture(t);
-  const chosen = commandLine(draftPrdDryRun(explicit, { FORGE_RUN_WITH: "claude" }), "claude");
+  const chosen = commandLine(await draftPrdDryRun(explicit, { FORGE_RUN_WITH: "claude" }), "claude");
   assert.match(chosen, /^claude -p /);
   assert.match(chosen, /--permission-mode bypassPermissions/);
   assert.equal(chosen.endsWith("--debug"), false);
 
   const debug = fixture(t);
-  const debugged = commandLine(draftPrdDryRun(debug, { FORGE_RUN_WITH: "claude", FORGE_LAUNCHER_DEBUG: "1" }), "claude");
+  const debugged = commandLine(await draftPrdDryRun(debug, { FORGE_RUN_WITH: "claude", FORGE_LAUNCHER_DEBUG: "1" }), "claude");
   assert.match(debugged, /^claude -p /);
   assert.equal(debugged.endsWith("--debug"), true);
 
@@ -810,39 +811,39 @@ test("headless draft picks the runner from the environment, the saved project ch
   // claude runner is opt-in, so the harness alone does not select it. The PATH
   // is pinned to a fake opencode because inheritance now consults the machine.
   const harnessDefault = fixture(t, ".claude");
-  assert.match(commandLine(draftPrdDryRun(harnessDefault, { PATH: fakeBin(t, "opencode") }), "opencode"), /^opencode run /);
+  assert.match(commandLine(await draftPrdDryRun(harnessDefault, { PATH: fakeBin(t, "opencode") }), "opencode"), /^opencode run /);
 
   // A saved project runner selects claude with FORGE_RUN_WITH unset, and the
   // environment still outranks the saved choice.
   const saved = fixture(t, ".claude");
   saveAuthoringConfig(saved, { version: 1, models: {}, runner: "claude" });
-  assert.match(commandLine(draftPrdDryRun(saved), "claude"), /^claude -p /);
-  assert.match(commandLine(draftPrdDryRun(saved, { FORGE_RUN_WITH: "opencode" }), "opencode"), /^opencode run /);
+  assert.match(commandLine(await draftPrdDryRun(saved), "claude"), /^claude -p /);
+  assert.match(commandLine(await draftPrdDryRun(saved, { FORGE_RUN_WITH: "opencode" }), "opencode"), /^opencode run /);
 });
 
-test("inherited runner falls back to the harness CLI only when the inherited CLI is missing", (t) => {
+test("inherited runner falls back to the harness CLI only when the inherited CLI is missing", async (t) => {
   const withOpencode = fakeBin(t, "opencode");
   const withClaude = fakeBin(t, "claude");
   const withNeither = fakeBin(t);
 
   // The inherited runner is installed, so it stands.
-  assert.match(commandLine(draftPrdDryRun(fixture(t, ".claude"), { PATH: withOpencode }), "opencode"), /^opencode run /);
+  assert.match(commandLine(await draftPrdDryRun(fixture(t, ".claude"), { PATH: withOpencode }), "opencode"), /^opencode run /);
 
   // OpenCode is missing and the harness's own CLI is present, so inherit resolves to it.
-  assert.match(commandLine(draftPrdDryRun(fixture(t, ".claude"), { PATH: withClaude }), "claude"), /^claude -p /);
+  assert.match(commandLine(await draftPrdDryRun(fixture(t, ".claude"), { PATH: withClaude }), "claude"), /^claude -p /);
 
   // Neither is installed: unchanged, so the spawn error still names the configured runner.
-  assert.match(commandLine(draftPrdDryRun(fixture(t, ".claude"), { PATH: withNeither }), "opencode"), /^opencode run /);
+  assert.match(commandLine(await draftPrdDryRun(fixture(t, ".claude"), { PATH: withNeither }), "opencode"), /^opencode run /);
 
   // A harness whose inherited runner is already its native CLI is never substituted,
   // even with another runner's CLI the only one installed. This pins the outcome, not
   // the inherited !== native guard: with inherited === native the rest of the
   // condition is self-contradictory, so the case passes with the guard removed too.
-  assert.match(commandLine(draftPrdDryRun(fixture(t, ".github"), { PATH: withClaude }), "copilot"), /^copilot /);
+  assert.match(commandLine(await draftPrdDryRun(fixture(t, ".github"), { PATH: withClaude }), "copilot"), /^copilot /);
 
   // An explicit selection is never substituted: it must still fail loudly later.
   assert.match(
-    commandLine(draftPrdDryRun(fixture(t, ".claude"), { FORGE_RUN_WITH: "opencode", PATH: withClaude }), "opencode"),
+    commandLine(await draftPrdDryRun(fixture(t, ".claude"), { FORGE_RUN_WITH: "opencode", PATH: withClaude }), "opencode"),
     /^opencode run /,
   );
 });
@@ -860,10 +861,10 @@ test("candidate validation rejects unsafe paths and malformed handoff rather tha
 test("explicit discovery failure records failed stage without spawning an author", async (t) => {
   const repo = fixture(t);
   await assert.rejects(runDraftPrd(repo, {
-    env: { FORGE_RUN_WITH: "copilot", ...offline }, models: { prd: "unavailable-1" },
+    env: { FORGE_RUN_WITH: "copilot" }, models: { prd: "unavailable-1" },
     dependencies: {
       inventoryProbe: async () => ({ code: 1, stdout: "", stderr: "offline" }),
-      runLogged: async () => { throw new Error("author must not be spawned"); },
+      ...offline, runLogged: async () => { throw new Error("author must not be spawned"); },
     },
   }), /model discovery failed/);
   assert.equal(readAuthoringState(repo).stages.prd?.status, "failed");
@@ -873,8 +874,8 @@ test("explicit discovery failure records failed stage without spawning an author
 test("authoring cannot silently take ownership of compiler outputs", async (t) => {
   const repo = fixture(t);
   await assert.rejects(runDraftPrd(repo, {
-    env: { FORGE_RUN_WITH: "copilot", ...offline },
-    dependencies: { runLogged: async () => {
+    env: { FORGE_RUN_WITH: "copilot" },
+    dependencies: { ...offline, runLogged: async () => {
       write(repo, "docs/PRD.md", "# PRD");
       writeAuthoringJson(path.join(repo, "docs/EXECUTION-MANIFEST.json"), { version: "1.0", phases: [] });
       return { code: 0, stdout: "", stderr: "" };

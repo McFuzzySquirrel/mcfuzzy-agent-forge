@@ -117,6 +117,7 @@ test("draft-prd with a real runner hands off instead of authoring", async (t) =>
 
   const { code, out } = await runCli(["draft-prd", "--repo", repo], {
     FORGE_RUN_WITH: "claude",
+    FORGE_TEST_ALLOW_NONINTERACTIVE: "1",
     PATH: `${bin}${path.delimiter}${process.env.PATH ?? ""}`,
   });
   assert.equal(code, 1, out);

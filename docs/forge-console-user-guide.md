@@ -112,21 +112,13 @@ application files are preserved, and Forge files are overwritten only when
 **Authoring runner**, which defaults to inheriting the runner from the harness;
 picking one saves it into the repository's `docs/authoring-config.json`.
 
-After a build completes, use **Add a feature** on Overview. **Author Feature
-PRD (interactive)** interviews you in the terminal, while **Auto-build feature
-(headless)** runs `forge-build-feature-prd` against the existing codebase and
-team directly. Both write an additive document under `docs/features/` and leave
-the original PRD intact.
-Choose **Prepare increment** to update affected agents and reconcile the manifest,
-or enable **Run new feature tasks** to execute only tasks emitted by that feature.
-The Overview reconciliation panel lists preserved, new, changed, and removed task
-IDs. Changed completed tasks are preserved but flagged for review.
-
-For a complete increment, use **Run Feature Increment**. The launcher performs
-Feature PRD authoring, an affected-team update, and manifest compilation. It
-then stops for review or selects only the new feature task IDs for execution.
-Stable task IDs preserve completed work; new tasks start pending, changed
-contracts are called out for review, and removed tasks are not runnable.
+After a build completes, use **Add a feature** on Overview and choose **Author
+Feature PRD (interactive)**. The terminal session interviews you and writes an
+additive document under `docs/features/`, leaving the original PRD intact. Once
+the feature document is saved, choose **Continue after authoring** to update
+affected agents and reconcile the manifest. Review the new tasks before running
+them; stable task IDs preserve completed work, and changed contracts are called
+out for review.
 
 ---
 
@@ -355,11 +347,11 @@ untouched.
 
 ## 6. Review incremental changes
 
-After a project has a PRD and agent team, **Add a feature** on Overview authors
-an additive Feature PRD under `docs/features/`. It does not replace the
-original PRD or start the engine. **Run Feature Increment** prepares the
-affected team and recompiles the manifest; enable **Run the workflow after
-preparing** only when the new feature tasks should run immediately.
+After a project has a PRD and agent team, **Add a feature** on Overview opens an
+interactive authoring session for an additive Feature PRD under `docs/features/`.
+It does not replace the original PRD or start the engine. After authoring, choose
+**Continue after authoring** to prepare the affected team and recompile the
+manifest.
 
 The Manifest panel shows preserved, new, changed, and removed task IDs. Stable
 task IDs preserve completed work. Review changed contracts, use **Reset changed
