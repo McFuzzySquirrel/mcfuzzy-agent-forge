@@ -39,8 +39,8 @@ Invoke `forge-build-prd` with the confirmed source material and invocation mode.
 It authors the vision and feature set directly, reviews scope, stack currency,
 security, privacy, accessibility, performance, task sizing, acceptance checks
 and separate human-review gates. Do not answer an interactive interview on the
-user's behalf. Headless approval of requirements never approves implementation
-evidence, native-language review, or any later human gate.
+user's behalf or approve requirements headlessly. Implementation evidence,
+native-language review, and any later human gate remain separate.
 
 ## Step 3: Verify
 

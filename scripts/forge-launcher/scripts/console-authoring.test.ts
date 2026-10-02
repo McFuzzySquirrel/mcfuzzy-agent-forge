@@ -15,7 +15,7 @@ import type { TaskRow } from "./console/types.ts";
 import { resolveResources } from "./resources.ts";
 import { currentJobForRepo } from "./console/jobs.ts";
 import { authoringConfigPath, saveAuthoringConfig } from "./authoring-config.ts";
-import { fingerprintFiles, saveAuthoringStage, stageInputFingerprint } from "./authoring-state.ts";
+import { authoringReadiness, authoringStageIsCurrent, fingerprintFiles, saveAuthoringStage, stageInputFingerprint } from "./authoring-state.ts";
 import { writeFeatureFixture } from "./feature-fixture.ts";
 
 let port = 46700;
@@ -502,6 +502,25 @@ test("legacy projects remain ready but failed skill authoring blocks native disp
   summary(repoPaths(root));
   assert.equal(currentJobForRepo(root)?.status, "failed");
   assert.match(currentJobForRepo(root)?.message ?? "", /Skill package is incomplete/);
+});
+
+test("successful PRD validation reconciles a failed authoring stage", async (t) => {
+  const root = fixture(t);
+  saveAuthoringStage(root, "prd", {
+    status: "failed", inputFingerprint: "before-repair", outputs: ["docs/PRD.md"], error: "Repair required.",
+  });
+  const server = await startConsoleServer({ repoRoot: root, port: port++, open: false });
+  t.after(() => server.stop());
+  const response = await fetch(`${server.url}/api/authoring/validate`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", "X-Forge-Token": server.token },
+    body: "{}",
+  });
+  assert.equal(response.status, 200);
+  assert.equal((await response.json()).ok, true);
+  assert.equal(JSON.parse(fs.readFileSync(path.join(root, "docs", "authoring-state.json"), "utf8")).stages.prd.status, "complete");
+  assert.equal(authoringStageIsCurrent(root, "prd", ".github"), true);
+  assert.equal(authoringReadiness(root, ".github").ready, true);
 });
 
 test("summary identifies the recoverable stage when completed authoring becomes stale", (t) => {

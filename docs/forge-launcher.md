@@ -1156,10 +1156,12 @@ external-service integration. These are semantic authoring requirements, not
 claims that the structural validator proves reachability or tests real services.
 See the [authoring contract](../templates/skills/forge-build-prd/references/task-contract.md#reachability-and-live-integration).
 
-`forge-launcher draft-prd --repo <path>` can author a PRD directly from an
-existing repository; `docs/IDEA.md` is optional. It inspects the repository
-context through the selected harness. For additive work, author the Feature PRD in an interactive harness session, then
-continue its mechanical derivation:
+For an existing repository, author the PRD in an interactive harness session
+with `/forge-build-prd`; `docs/IDEA.md` is optional because the skill inspects
+the repository context. The `forge-launcher draft-prd --repo <path>` command
+reports this handoff for real runners; it does not author the PRD. For additive
+work, author the Feature PRD in an interactive harness session, then continue
+its mechanical derivation:
 
 ```bash
 forge-launcher feature-increment-continue --repo <path>

@@ -12,10 +12,9 @@ Detailed release and change notes for MyForge.
   the one field that decides whether an agent can drive the session or can only
   be dispatched. Nothing in the forge constrained it, so the writing model chose
   it — and "specialist agent" is a strong prior for `mode: subagent`, which
-  removes the agent from primary-agent cycling and `@` discovery. A generated
-  team was therefore reachable only by dispatch (`project-orchestrator`, or the
-  engine's `opencode run --agent <name>`), never by picking the agent you want
-  to work with.
+  removes the agent from primary-agent cycling. It remains reachable by dispatch
+  or `@` mention, but cannot be selected as the agent driving the session. A
+  generated team was therefore not directly selectable as the primary agent.
 
 - **Every generated agent now declares `mode: all` explicitly.** One specialist
   file serves both roles: selectable as the session's agent *and* dispatchable

@@ -14,7 +14,7 @@ import { engineRunCli } from "./engine-run.ts";
 import { createSessionScope } from "./launcher-session.ts";
 import { type AuthoringOptions, type AuthoringRunnerChoice, type AuthoringRunnerSelection, type AuthoringStage, loadAuthoringConfig, saveAuthoringConfig, selectAuthoringModel, selectAuthoringRunner } from "./authoring-config.ts";
 import { authoringArgv, inventoryForRunner, readAuthoringInventory, refreshAuthoringInventory, resolveAuthoringModel, type AuthoringInvocation, type AuthoringRunner, type InventoryProbe } from "./authoring-inventory.ts";
-import { authoringReadiness, authoringStageIsCurrent, fingerprintFiles, readAuthoringState, readSkillCandidates, saveAuthoringStage, stageInputFingerprint, type AuthoringStageState } from "./authoring-state.ts";
+import { authoringReadiness, authoringStageIsCurrent, clearFeatureIncrementHandoff, featureIncrementHandoffHasChange, fingerprintFiles, readAuthoringState, readSkillCandidates, recordAuthoringStageSuccess, recordFeatureIncrementHandoff, saveAuthoringStage, stageInputFingerprint, type AuthoringStageState } from "./authoring-state.ts";
 import { selectHarnessRoot, selectProjectHarnessRoot, type HarnessRoot } from "./repo-metadata.ts";
 import { resolveResources } from "./resources.ts";
 import { validateAuthoredPrd } from "./prd-validation.ts";
@@ -2095,11 +2095,12 @@ async function runDraftPrdInternal(repoDir: string): Promise<number> {
   return 1;
 }
 
-async function existingPrdIsValid(): Promise<boolean> {
+async function existingPrdIsValid(validateAllFeatures = false): Promise<boolean> {
   const prior = readAuthoringState(state.repoDir).stages.prd;
-  const featureFiles = prior?.outputs.length && prior.outputs.every((file) => file.startsWith("docs/features/")) ? prior.outputs : undefined;
+  const featureFiles = !validateAllFeatures && prior?.outputs.length && prior.outputs.every((file) => file.startsWith("docs/features/")) ? prior.outputs : undefined;
   try {
-    await validateAuthoredPrd(state.repoDir, { allowLegacy: !prior, featureFiles });
+    const outputs = await validateAuthoredPrd(state.repoDir, { allowLegacy: !prior, featureFiles });
+    recordAuthoringStageSuccess(state.repoDir, "prd", outputs, harnessRootDir());
     return true;
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
@@ -2152,6 +2153,7 @@ async function runFeaturePrdInternal(repoDir: string, featurePrompt?: string): P
   // ADR-060: a feature document is requirements, so it is authored in a session.
   // The stub runner is the sole non-interactive path (offline tests only).
   if (!requirementsAuthoringAllowed(headlessRunner(), state.options.dependencies?.allowNonInteractiveRequirements)) {
+    recordFeatureIncrementHandoff(repoDir);
     authoringEvent("authoring.failed", { operation: "feature-prd", stage: "interactive-required" });
     out("");
     fail("Feature authoring is interactive (ADR-060); it is not run headlessly.");
@@ -2206,8 +2208,14 @@ async function prepareFeatureIncrementInternal(repoDir: string): Promise<number>
     fail("Feature increment continuation requires an existing PRD and generated agent team.");
     return 1;
   }
-  if (!await existingPrdIsValid()) return 1;
-  return continueFeatureIncrementStages(repoDir, [], false);
+  if (!featureIncrementHandoffHasChange(repoDir)) {
+    fail("Feature increment continuation requires a feature added or changed after opening an interactive feature-authoring session.");
+    return 1;
+  }
+  if (!await existingPrdIsValid(true)) return 1;
+  const code = await continueFeatureIncrementStages(repoDir, [], false);
+  if (code === 0) clearFeatureIncrementHandoff(repoDir);
+  return code;
 }
 
 async function continueFeatureIncrementStages(repoDir: string, featureOutputs: string[], run: boolean): Promise<number> {

@@ -404,6 +404,20 @@ test("feature-prd accepts a newly created non-empty feature document", async () 
   assert.equal(JSON.parse(event!.slice("FORGE_EVENT ".length)).type, "authoring.started");
 });
 
+test("interactive feature handoff records the pre-session feature fingerprints", async () => {
+  const repo = tmpDir();
+  execFileSync("git", ["init", "-q", repo]);
+  writeFeatureFixture(repo);
+
+  const result = await runCli(["feature-prd", "--repo", repo, "--prompt", "safe feature"], {
+    FORGE_RUN_WITH: "opencode",
+  });
+
+  assert.equal(result.code, 1, result.out);
+  const state = JSON.parse(fs.readFileSync(path.join(repo, "docs", "authoring-state.json"), "utf8"));
+  assert.deepEqual(Object.keys(state.featureIncrementHandoff.featureFingerprints), ["fixture.md"]);
+});
+
 test("feature increment selection excludes unrelated manifest tasks", () => {
   const selected = featureTaskIds({ phases: [
     { id: "OLD-1", feature: "Old Feature", tasks: [{ id: "OLD-1.1" }] },

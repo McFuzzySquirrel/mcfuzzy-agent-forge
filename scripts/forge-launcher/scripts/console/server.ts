@@ -16,6 +16,7 @@ import { consoleAuthoringInventory, selectedAuthoringRunner } from "./authoring.
 import { isRunnerChoice, loadAuthoringConfig, saveAuthoringConfig, validateAuthoringConfig } from "../authoring-config.ts";
 import { resolveAuthoringModel, type AuthoringRunner, type InventoryProbe } from "../authoring-inventory.ts";
 import { validateAuthoredPrd } from "../prd-validation.ts";
+import { featureIncrementHandoffHasChange, recordAuthoringStageSuccess, recordFeatureIncrementHandoff } from "../authoring-state.ts";
 import {
   detectHarnessRoot,
   loadRegistry,
@@ -500,6 +501,9 @@ export async function startConsoleServer(options: ConsoleServerOptions = {}): Pr
           const action = body.action as ControlAction;
           const taskId = typeof body.taskId === "string" ? body.taskId : undefined;
           if (!currentRepo) return sendJson(res, 400, { ok: false, message: "no repo selected" });
+          if (action === "feature-increment-continue" && !featureIncrementHandoffHasChange(currentRepo)) {
+            return sendJson(res, 200, { ok: false, message: "Add or change a feature in the interactive authoring session before continuing." });
+          }
           // ADR-060: feature authoring is interactive, so the prompt is only
           // needed to pre-seed the session; the response names the session
           // rather than starting a background job.
@@ -684,6 +688,7 @@ export async function startConsoleServer(options: ConsoleServerOptions = {}): Pr
           }
           const message = spec.message(prompt);
           const args = interactiveAuthoringArgs(runner, message, model);
+          if (target === "feature-prd") recordFeatureIncrementHandoff(currentRepo);
           const launched = await launchCli(runner, currentRepo, args);
           const command = `${runner} ${args.map((arg) => JSON.stringify(arg)).join(" ")}`;
           return sendJson(res, 200, {
@@ -700,6 +705,8 @@ export async function startConsoleServer(options: ConsoleServerOptions = {}): Pr
           if (!currentRepo) return sendJson(res, 400, { ok: false, message: "no repo selected" });
           try {
             const outputs = await validateAuthoredPrd(currentRepo);
+            recordAuthoringStageSuccess(currentRepo, "prd", outputs, detectHarnessRoot(currentRepo) ?? ".agents");
+            broadcast("snapshot", snapshotEvent());
             return sendJson(res, 200, { ok: true, message: `PRD validated (${outputs.length} output${outputs.length === 1 ? "" : "s"}).` });
           } catch (error) {
             return sendJson(res, 200, { ok: false, message: error instanceof Error ? error.message : String(error) });

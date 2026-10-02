@@ -12,7 +12,7 @@ wants to pick that specialist directly as the agent driving the session.
 
 OpenCode is where those two roles are expressed in one field. `mode` accepts
 `primary`, `subagent`, or `all`; `subagent` removes the agent from
-primary-agent cycling and `@` discovery, leaving dispatch as the only way in.
+primary-agent cycling. It can still be reached by dispatch or `@` mention.
 The docs state that an omitted `mode` defaults to `all`, but relying on an
 implicit default is not a contract the forge can hold: `forge-build-agent-team`
 never constrained the field, so the writing model chose it. Emitting

@@ -8,6 +8,7 @@ import { get as httpGet, request as httpRequest } from "node:http";
 import { startConsoleServer, type ConsoleServer } from "./console/server.ts";
 import type { SpawnOptions } from "./console/control.ts";
 import { writeFeatureFixture } from "./feature-fixture.ts";
+import { featureIncrementHandoffHasChange, recordFeatureIncrementHandoff } from "./authoring-state.ts";
 
 const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
@@ -534,8 +535,18 @@ test("feature-increment requires a prompt and then reports the interactive hando
   });
 });
 
-test("feature-increment continuation starts only the post-authoring derivation", async () => {
-  await withServer(async (server, _repo, spawned) => {
+test("feature-increment continuation requires a changed feature after the interactive handoff", async () => {
+  await withServer(async (server, repo, spawned) => {
+    const spawnedBefore = spawned.calls.length;
+    const premature = await postJson(`${server.url}/api/control`, {
+      action: "feature-increment-continue",
+    }, { "X-Forge-Token": server.token });
+    assert.equal((premature.body as { ok: boolean }).ok, false);
+    assert.equal(spawned.calls.length, spawnedBefore);
+
+    recordFeatureIncrementHandoff(repo);
+    writeFileSync(join(repo, "docs", "features", "new-feature.md"), "# New feature\n\nA new requirement.\n");
+    assert.equal(featureIncrementHandoffHasChange(repo), true);
     const result = await postJson(`${server.url}/api/control`, {
       action: "feature-increment-continue",
     }, { "X-Forge-Token": server.token });
@@ -1014,6 +1025,9 @@ test("authoring session endpoint launches an interactive grill session", async (
       assert.equal((feature.body as { ok: boolean }).ok, true);
       assert.match(calls[2]?.args[1] ?? "", /forge-build-feature-prd/);
       assert.match(calls[2]?.args[1] ?? "", /add billing/);
+      const handoff = JSON.parse(readFileSync(join(repo, "docs", "authoring-state.json"), "utf8")).featureIncrementHandoff;
+      assert.deepEqual(Object.keys(handoff.featureFingerprints), ["fixture.md"]);
+      assert.equal(featureIncrementHandoffHasChange(repo), false, "the session receipt captures the pre-session feature fingerprint");
 
       const unknown = await postJson(`${replacement.url}/api/authoring/session`, { target: "nope" }, { "X-Forge-Token": replacement.token });
       assert.equal(unknown.status, 400);
