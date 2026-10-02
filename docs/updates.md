@@ -4,6 +4,48 @@ Detailed release and change notes for MyForge.
 
 ---
 
+## October 2026 - v3.91
+
+### Generated agents declare `mode: all` instead of landing as subagent-only
+
+- **Specialists were disappearing from OpenCode's agent switcher.** `mode` is
+  the one field that decides whether an agent can drive the session or can only
+  be dispatched. Nothing in the forge constrained it, so the writing model chose
+  it — and "specialist agent" is a strong prior for `mode: subagent`, which
+  removes the agent from primary-agent cycling and `@` discovery. A generated
+  team was therefore reachable only by dispatch (`project-orchestrator`, or the
+  engine's `opencode run --agent <name>`), never by picking the agent you want
+  to work with.
+
+- **Every generated agent now declares `mode: all` explicitly.** One specialist
+  file serves both roles: selectable as the session's agent *and* dispatchable
+  as a subagent. `forge-build-agent-team` requires it in Steps 2 and 3, explains
+  it in Gotchas, and checks it in its Validation checklist.
+  `feature-increment-mode.md` covers the incremental path — new agents get
+  `mode: all`, and normalizing the `mode` key is the one permitted frontmatter
+  edit on an agent the feature otherwise leaves untouched, so teams generated
+  before this change converge on the next increment instead of staying frozen.
+  `vision-features-mode.md` inherits the parent rule.
+
+- **The shipped personas comply.** `forge-team-builder`,
+  `project-orchestrator`, and `workflow-orchestrator` all declare `mode: all`,
+  as do the launcher's offline stub agent and the Console screenshot fixture.
+  `forge-assign-models` Apply mode is unaffected: it rewrites only `model:` and
+  `modelFallback:` and preserves every other key.
+
+- **The frontmatter gate warns rather than blocks.** `validate-frontmatter.mjs`
+  reports agent files that omit `mode` or declare something other than `all`,
+  and leaves the exit code alone. `mode` is OpenCode-specific — Copilot and
+  Claude Code agent frontmatter does not define it — so a hard gate would either
+  impose an OpenCode concept on every harness or make the contract depend on
+  which root a repository uses. The forge already writes portable fields that
+  non-honoring harnesses ignore (`modelFallback`, ADR-003/ADR-006); this keeps
+  that position, and an already-bootstrapped repository keeps building.
+
+- See [ADR-061](adr/061-agent-mode-all.md). It extends ADR-028 (native
+  `--agent` selection only helps if the agent is selectable at all) and the team
+  stage's existing frontmatter gate from ADR-041.
+
 ## October 2026 - v3.90
 
 ### The PRD is no longer auto-drafted — requirements authoring is always interactive

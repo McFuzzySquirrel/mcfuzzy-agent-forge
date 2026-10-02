@@ -39,6 +39,7 @@ function agentFrontmatter(name: string, description: string, model: string, mode
     "---",
     `name: ${name}`,
     `description: ${description}`,
+    "mode: all",
     `model: ${model}`,
     `modelFallback: ${modelFallback}`,
     "---",

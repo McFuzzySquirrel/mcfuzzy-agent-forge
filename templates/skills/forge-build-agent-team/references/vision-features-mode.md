@@ -65,7 +65,8 @@ skill packages during team generation.
 Follow Step 5 of the parent skill, then persist the
 candidate handoff. The independent `forge-build-project-skills` stage owns
 skill creation and review, including headless authorization and model routing.
-Preserve unaffected existing skills.
+Preserve unaffected existing skills. Every agent written here carries
+`mode: all` in its frontmatter.
 
 - **Key Reference sections** should list both the PRD and the specific feature documents relevant to each agent:
   ```markdown
