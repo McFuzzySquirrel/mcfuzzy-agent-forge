@@ -304,14 +304,27 @@ function buildAuthoringSettings(panel: HTMLElement, initial: AuthoringConfig, in
     const actionButton = el("button", { className: "btn btn-sm", type: "button", "data-authoring-stage-action": "true" }) as HTMLButtonElement;
     retryButtons.push({ button: actionButton, stage });
     actionButton.hidden = !(state?.status === "failed" || stale) || Boolean(state?.noSkillsRequired);
-    actionButton.textContent = stale ? `Regenerate ${label.replace(" authoring model", "")}` : `Retry ${label.replace(" authoring model", "")}`;
+    // ADR-060: the PRD stage is a handoff to an interactive session; only the
+    // derivation stages retry as headless background jobs.
+    const prdStage = stage === "prd";
+    actionButton.textContent = prdStage
+      ? `Author ${label.replace(" authoring model", "")} in a session (interactive)`
+      : `${stale ? "Regenerate" : "Retry"} ${label.replace(" authoring model", "")}`;
     actionButton.addEventListener("click", () => {
       if (dirty || saveInFlight) {
         toast("Save authoring model changes before retrying this stage.");
         return;
       }
+      if (prdStage) {
+        // Fire-and-forget: the session runs in an external terminal, so the
+        // Overview is what observes the committed result.
+        void api.startAuthoringSession("prd")
+          .then((res) => toast(res.message || "interactive PRD session requested"))
+          .catch((error) => toast(error instanceof Error ? error.message : "could not open the PRD session"));
+        return;
+      }
       actionButton.disabled = true;
-      void api.control(stage === "prd" ? "draft-prd" : stage === "team" ? "draft-team" : "draft-skills")
+      void api.control(stage === "team" ? "draft-team" : "draft-skills")
         .then((result) => toast(result.message))
         .catch((error) => toast(error instanceof Error ? error.message : "retry failed"))
         .finally(() => { actionButton.disabled = false; });

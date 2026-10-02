@@ -75,7 +75,7 @@ If you prefer to drive the PRD yourself, use `forge-build-prd` directly (Step 2 
 
 ## Full Auto Build - Terminal Fast-Path (Requires an Existing PRD)
 
-`forge-auto-build` is the **terminal/headless execution fast-path**: it takes an existing, reviewed PRD and runs the entire build pipeline with no manual hand-offs. It does **not** generate a PRD - that is a deliberate, separate stage. It is driven by `forge-launcher` (`--headless`, or the auto-draft flow) rather than invoked as an in-harness slash command - inside a chat harness use `@project-orchestrator` (interactive) or `@workflow-orchestrator` (autonomous) instead.
+`forge-auto-build` is the **terminal/headless execution fast-path**: it takes an existing, reviewed PRD and runs the derivation and build pipeline with no manual hand-offs. It does **not** generate a PRD - requirements authoring is always interactive and must happen first. It is driven by `forge-launcher --headless` or the derivation options of `--draft`, rather than invoked as an in-harness slash command - inside a chat harness use `@project-orchestrator` (interactive) or `@workflow-orchestrator` (autonomous) instead.
 
 `forge-build-agent-team` → `forge-build-project-skills` → `forge-execution-adapter` → `forge-orchestrate-build` **(each stage has its own review boundary)**
 
@@ -480,7 +480,7 @@ Only modify skills I've approved in the audit report.
 | **Full auto build (terminal/headless, requires PRD)** | `forge-launcher --headless` (drives `opencode run --auto "/forge-auto-build Use docs/PRD.md as the project PRD. GO"` / `copilot -p "..." --yolo`) |
 | **Full auto build (workflow-engine path)** | `opencode run --auto (cwd=<repo>) "/forge-auto-build Use docs/PRD.md as the project PRD. GO --workflow-engine"` |
 | **Launcher headless (whole pipeline)** | `forge-launcher --headless` (add `--dry-run` to print the command) |
-| **Launcher auto-draft (idea → PRD → team)** | `forge-launcher --draft` (non-interactive: set `FORGE_AUTO_DRAFT=1`) |
+| **Launcher derivation fast-path (reviewed PRD → team → build)** | `forge-launcher --draft` (non-interactive: set `FORGE_AUTO_DRAFT=1`; it never authors the PRD) |
 | Bootstrap (default) | `forge-launcher bootstrap ~/Projects/my-project` |
 | Bootstrap (GitHub Copilot) | `forge-launcher bootstrap ~/Projects/my-project --harness github` |
 | Bootstrap (Claude Code) | `forge-launcher bootstrap ~/Projects/my-project --harness claude` |
@@ -519,7 +519,7 @@ Only modify skills I've approved in the audit report.
 
 - **Open your target project first** - agents and skills resolve from the current workspace or repo directory.
 - **Review before executing** - always run the execution plan prompt (Step 5a) before asking the orchestrator to build anything.
-- **Headless runs get the same quality checks** - the headless/auto-draft PRD flow runs the Step 2b gap check (acceptance criteria, tech stack, NFRs, phases) and fills gaps before approving, and the skills' built-in validations (decomposition Step 6, team Step 7) always run - headless or not.
+- **Headless runs start after requirements authoring** - a reviewed PRD and canonical feature documents are prerequisites. Headless derivation still runs the skills' built-in validations (decomposition Step 6, team Step 7), but it never fills gaps or approves requirements on the user's behalf.
 - **One phase at a time** - resist asking the orchestrator to "build everything". Phases are checkpoints; review each one.
 - **Commit after each phase** - the orchestrator will prompt you, but make a habit of it. `git add . && git commit -m "feat: complete Phase N"`.
 - **The PRD is the source of truth** - if something looks wrong, fix the PRD first, then re-run the affected steps.

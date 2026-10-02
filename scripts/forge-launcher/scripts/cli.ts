@@ -4,7 +4,7 @@ import { bootstrapCli } from "./bootstrap.ts";
 import { consoleCli } from "./console/cli.ts";
 import { engineRunCli } from "./engine-run.ts";
 import { fail } from "./format.ts";
-import { runCompileManifest, runDraftExistingPrd, runDraftPrd, runDraftTeam, runDraftSkills, runFeaturePrd, runLauncher, runResume } from "./launcher.ts";
+import { continueFeatureIncrement, runCompileManifest, runDraftExistingPrd, runDraftPrd, runDraftTeam, runDraftSkills, runFeaturePrd, runLauncher, runResume } from "./launcher.ts";
 import { AUTHORING_STAGES, isRunnerChoice, loadAuthoringConfig, saveAuthoringConfig, type AuthoringModels, type AuthoringOptions, type AuthoringRunnerChoice } from "./authoring-config.ts";
 import { readAuthoringInventory, refreshAuthoringInventory } from "./authoring-inventory.ts";
 import { detectRepoRoot } from "./paths.ts";
@@ -30,8 +30,8 @@ Usage:
                             [--selected-tasks <id,id,...>] [--stop] [--pause]
                             [--stop] [--pause]
   forge-launcher resume [--repo <path>] [--non-interactive] [--dry-run]
-  forge-launcher draft-prd [--repo <path>]      # headless: idea → PRD (Forge Console pipeline)
-  forge-launcher draft-existing-prd [--repo <path>] # headless: existing repo → project PRD
+  forge-launcher draft-prd [--repo <path>]      # reports the interactive PRD handoff (ADR-060)
+  forge-launcher draft-existing-prd [--repo <path>] # reports the interactive PRD handoff
   forge-launcher draft-team [--repo <path>]     # headless: PRD → agent team
   forge-launcher draft-skills [--repo <path>]   # headless: skill candidates → project skills
   forge-launcher authoring-config [--repo <path>] [--prd-model <id|inherit>] [--team-model <id|inherit>] [--skills-model <id|inherit>]
@@ -39,6 +39,7 @@ Usage:
   forge-launcher authoring-models [--repo <path>] [--runner copilot|opencode|claude] [--refresh]
   forge-launcher feature-prd [--repo <path>] [--prompt <text>] # author in docs/features/
   forge-launcher feature-increment [--repo <path>] [--prompt <text>] [--run] # author, update team, compile, optionally run
+  forge-launcher feature-increment-continue [--repo <path>] # update team and compile after interactive feature authoring
   forge-launcher compile-manifest [--repo <path>]  # headless: team → execution manifest
 
 Launcher options:
@@ -50,7 +51,10 @@ Launcher options:
   --non-interactive   Skip all interactive prompts (requires env vars; see docs/forge-launcher.md).
   --headless          Drive the queued skill directly from the terminal via
                       'opencode run --auto' or 'copilot -p --yolo' instead of opening a CLI.
-  --draft             Pre-answer "yes" to the optional auto-draft stages (PRD and/or agent team).
+                      Stops with a handoff when no PRD exists; the PRD is never
+                      authored headlessly (ADR-060).
+  --draft             Pre-answer "yes" to the optional auto-draft stages (agent team
+                      and project skills). The PRD is always interactive.
   --dry-run           Print commands without executing them.
   --debug             Print the skill-run log tail after headless runs (also FORGE_LAUNCHER_DEBUG=1).
   --no-update-check   Skip the daily npm update check.
@@ -82,8 +86,10 @@ Resume options:
   --dry-run           Print what would run without executing.
 
 Forge skills run with FORGE_HEADLESS=1 so their headless gate fires
-deterministically. Set FORGE_RUN_WITH=stub (plus FORGE_STUB_NOOP=1) to run the
-auto-draft stages offline against canned artifacts.
+deterministically. Requirements stages (PRD, feature documents, legacy
+conversion) are never run headlessly: FORGE_HEADLESS is withheld from them and
+they report an interactive handoff instead. Set FORGE_RUN_WITH=stub (plus
+FORGE_STUB_NOOP=1) to run the authoring stages offline against canned artifacts.
 `;
 
 async function main(): Promise<number> {
@@ -157,7 +163,7 @@ async function main(): Promise<number> {
   }
   if (args[0] === "console") return consoleCli(args.slice(1));
   if (args[0] === "engine-run") return engineRunCli(args.slice(1));
-  if (args[0] === "draft-prd" || args[0] === "draft-existing-prd" || args[0] === "draft-team" || args[0] === "draft-skills" || args[0] === "compile-manifest" || args[0] === "feature-prd" || args[0] === "feature-increment") {
+  if (args[0] === "draft-prd" || args[0] === "draft-existing-prd" || args[0] === "draft-team" || args[0] === "draft-skills" || args[0] === "compile-manifest" || args[0] === "feature-prd" || args[0] === "feature-increment" || args[0] === "feature-increment-continue") {
     let repo: string | undefined;
     let featurePrompt: string | undefined;
     let runIncrement = false;
@@ -191,6 +197,7 @@ async function main(): Promise<number> {
     if (args[0] === "draft-skills") return runDraftSkills(repoDir, options);
     if (args[0] === "feature-prd") return runFeaturePrd(repoDir, featurePrompt, options);
     if (args[0] === "feature-increment") return (await import("./launcher.ts")).runFeatureIncrement(repoDir, featurePrompt, runIncrement, options);
+    if (args[0] === "feature-increment-continue") return continueFeatureIncrement(repoDir, options);
     return runCompileManifest(repoDir, options);
   }
   if (args[0] === "resume") {

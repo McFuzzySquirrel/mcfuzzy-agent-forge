@@ -93,12 +93,36 @@ test("draft-prd writes docs/PRD.md via the stub runner", async () => {
   assert.ok(out.includes("PRD generated"), out);
 });
 
-test("draft-prd with no idea uses existing repository context", async () => {
+test("draft-prd with no idea still routes to interactive authoring", async () => {
   const repo = makeRepo();
+  // No IDEA.md and no requirements source: an existing repository needs the
+  // interview about what the code cannot say, so the interactive path is used.
   const { code, out } = await runCli(["draft-prd", "--repo", repo], { FORGE_RUN_WITH: "stub" });
   assert.equal(code, 0, out);
-  assert.ok(out.includes("existing repository"), out);
+  assert.ok(out.includes("PRD generated"), out);
   assert.ok(fs.existsSync(path.join(repo, "docs", "PRD.md")), "PRD.md should be written");
+});
+
+test("draft-prd with a real runner hands off instead of authoring", async (t) => {
+  const repo = makeRepo();
+  write(repo, "docs/IDEA.md", "# Project Idea\n\nA thing.\n");
+  // ADR-060: a real runner must never author requirements unattended. A PATH
+  // holding only a fake `claude` keeps node resolvable while making the runner
+  // a real (non-stub) one, so the production guard is what refuses.
+  const bin = fs.mkdtempSync(path.join(os.tmpdir(), "fl-draft-bin-"));
+  t.after(() => fs.rmSync(bin, { recursive: true, force: true }));
+  const fake = path.join(bin, "claude");
+  fs.writeFileSync(fake, "#!/bin/sh\nexit 0\n");
+  fs.chmodSync(fake, 0o755);
+
+  const { code, out } = await runCli(["draft-prd", "--repo", repo], {
+    FORGE_RUN_WITH: "claude",
+    FORGE_TEST_ALLOW_NONINTERACTIVE: "1",
+    PATH: `${bin}${path.delimiter}${process.env.PATH ?? ""}`,
+  });
+  assert.equal(code, 1, out);
+  assert.match(out, /interactive/i, out);
+  assert.equal(fs.existsSync(path.join(repo, "docs", "PRD.md")), false, "no PRD should be written");
 });
 
 test("draft-existing-prd uses the project PRD authoring path", async () => {

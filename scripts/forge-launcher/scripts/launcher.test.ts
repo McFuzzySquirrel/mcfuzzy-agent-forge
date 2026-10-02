@@ -12,6 +12,7 @@ import {
   engineDetachedCommand,
   featureTaskIds,
   headlessSkillMsg,
+  runResume,
   snapshotFeatureIncrementFiles,
 } from "./launcher.ts";
 import { spawnDetached } from "./format.ts";
@@ -222,16 +223,20 @@ test("GitHub projects default to the copilot engine harness", () => {
   assert.equal(defaultEngineHarness("agents"), "opencode");
 });
 
-test("headless PRD message includes the gap check the manual flow runs", () => {
+test("the PRD authoring message requires an interview and still runs the gap check", () => {
   const msg = headlessSkillMsg();
   assert.ok(msg.startsWith("/forge-auto-build-prd "), msg);
+  assert.ok(msg.includes("Interview me to fill the gaps"), msg);
   assert.ok(msg.includes("acceptance criteria"), msg);
   assert.ok(msg.includes("security, privacy, accessibility"), msg);
-  assert.ok(msg.includes("every solution, including a one-feature project"), msg);
-  assert.ok(msg.includes("Run validate-prd"), msg);
+  assert.ok(msg.includes("including for a one-feature project"), msg);
+  assert.ok(msg.includes("run validate-prd"), msg);
   assert.ok(msg.includes("docs/PRD.md"), msg);
   assert.ok(msg.includes("docs/features/*.md"), msg);
   assert.ok(!msg.includes("otherwise keep"), msg);
+  // ADR-060: the queued message must never authorize a non-interactive draft.
+  assert.ok(!msg.includes("auto-proceed"), msg);
+  assert.ok(!/headless mode/i.test(msg), msg);
 });
 
 test("team-generation prompt targets the selected harness directories", () => {
@@ -399,6 +404,20 @@ test("feature-prd accepts a newly created non-empty feature document", async () 
   assert.equal(JSON.parse(event!.slice("FORGE_EVENT ".length)).type, "authoring.started");
 });
 
+test("interactive feature handoff records the pre-session feature fingerprints", async () => {
+  const repo = tmpDir();
+  execFileSync("git", ["init", "-q", repo]);
+  writeFeatureFixture(repo);
+
+  const result = await runCli(["feature-prd", "--repo", repo, "--prompt", "safe feature"], {
+    FORGE_RUN_WITH: "opencode",
+  });
+
+  assert.equal(result.code, 1, result.out);
+  const state = JSON.parse(fs.readFileSync(path.join(repo, "docs", "authoring-state.json"), "utf8"));
+  assert.deepEqual(Object.keys(state.featureIncrementHandoff.featureFingerprints), ["fixture.md"]);
+});
+
 test("feature increment selection excludes unrelated manifest tasks", () => {
   const selected = featureTaskIds({ phases: [
     { id: "OLD-1", feature: "Old Feature", tasks: [{ id: "OLD-1.1" }] },
@@ -407,30 +426,61 @@ test("feature increment selection excludes unrelated manifest tasks", () => {
   assert.deepEqual(selected, ["NEW-FEATURE-1.1", "NEW-FEATURE-1.2"]);
 });
 
-test("headless skill command omits --dir (removed in OpenCode v2)", async () => {
-  const parent = tmpDir();
-  const { code, out } = await runCli(["--non-interactive", "--dry-run"], {
-    FORGE_HARNESS_CHOICE: "4",
-    FORGE_REPO_NAME: "dir-app",
-    FORGE_REPO_PARENT_DIR: parent,
-    FORGE_IDEA: "A thing",
-    FORGE_YN_DEFAULT: "n",
-    FORGE_AUTO_DRAFT: "1",
+test("non-interactive resume prints an interactive OpenCode requirements command", async (t) => {
+  const repo = tmpDir();
+  execFileSync("git", ["init", "-q", repo]);
+  fs.mkdirSync(path.join(repo, "docs"), { recursive: true });
+  fs.mkdirSync(path.join(repo, ".opencode"), { recursive: true });
+  fs.writeFileSync(path.join(repo, "docs", "IDEA.md"), "# Idea\n\nA thing.\n");
+  const bin = fs.mkdtempSync(path.join(os.tmpdir(), "fl-opencode-bin-"));
+  t.after(() => fs.rmSync(bin, { recursive: true, force: true }));
+  fs.writeFileSync(path.join(bin, "opencode"), "#!/bin/sh\nexit 0\n");
+  fs.chmodSync(path.join(bin, "opencode"), 0o755);
+  const { code, out } = await runCli(["resume", "--repo", repo, "--non-interactive"], {
     FORGE_RUN_WITH: "opencode",
+    PATH: `${bin}${path.delimiter}${process.env.PATH ?? ""}`,
   });
 
   assert.equal(code, 0, out);
-  const repo = path.join(parent, "dir-app");
-  // OpenCode v2 removed `run --dir` and has no path argument: a trailing path
-  // would be swallowed into the prompt. v2 resolves the project from the
-  // child's spawn cwd, which runLoggedStep already pins to the repo, so the
-  // command must carry no path at all.
-  assert.match(out, /opencode run --auto/, out);
-  assert.ok(!out.includes("--dir"), `headless command still passes --dir: ${out}`);
-  assert.ok(
-    !new RegExp(`opencode run[^\\n]*"[^"]*[\\\\/]${path.basename(repo)}"`).test(out),
-    `headless command leaks a path argument that v2 would read as prompt text: ${out}`,
-  );
+  assert.match(out, /opencode "--prompt"/);
+  assert.match(out, /\/forge-auto-build-prd/);
+  assert.doesNotMatch(out, /opencode run --auto/);
+  assert.doesNotMatch(out, /--dir/);
+});
+
+test("resume dry-run prints an interactive authoring command", async (t) => {
+  const repo = tmpDir();
+  execFileSync("git", ["init", "-q", repo]);
+  fs.mkdirSync(path.join(repo, "docs"), { recursive: true });
+  fs.mkdirSync(path.join(repo, ".opencode"), { recursive: true });
+  fs.writeFileSync(path.join(repo, "docs", "IDEA.md"), "# Idea\n\nA thing.\n");
+  const bin = fs.mkdtempSync(path.join(os.tmpdir(), "fl-opencode-bin-"));
+  t.after(() => fs.rmSync(bin, { recursive: true, force: true }));
+  fs.writeFileSync(path.join(bin, "opencode"), "#!/bin/sh\nexit 0\n");
+  fs.chmodSync(path.join(bin, "opencode"), 0o755);
+  const output: string[] = [];
+  const write = process.stdout.write;
+  process.stdout.write = ((chunk: string | Uint8Array) => {
+    output.push(typeof chunk === "string" ? chunk : Buffer.from(chunk).toString());
+    return true;
+  }) as typeof process.stdout.write;
+  let code: number;
+  try {
+    code = await runResume({
+      repo,
+      dryRun: true,
+      env: { ...process.env, FORGE_RUN_WITH: "opencode", PATH: `${bin}${path.delimiter}${process.env.PATH ?? ""}` },
+      dependencies: { promptSelect: async () => "cli" },
+    });
+  } finally {
+    process.stdout.write = write;
+  }
+  const out = output.join("");
+  assert.equal(code!, 0, out);
+  assert.match(out, /Dry-run: not opening an interactive session/);
+  assert.match(out, /opencode "--prompt"/);
+  assert.match(out, /\/forge-auto-build-prd/);
+  assert.doesNotMatch(out, /opencode run --auto/);
 });
 
 test("imported requirements remain source material and queue feature authoring", async () => {
@@ -559,8 +609,11 @@ test("auto-draft compiles the native manifest after team and skills without auth
   assert.ok(out.includes("engine-run --repo"), out);
 });
 
-test("auto-draft PRD failure is diagnosed with log tail and no commit", async () => {
+test("a stubbed PRD stage that produces nothing fails validation with no commit", async () => {
   const parent = tmpDir();
+  // The stub runner is the one sanctioned non-interactive requirements path
+  // (ADR-060), so this covers the offline validation gate rather than the
+  // interactive handoff a real runner would take.
   const { code, out } = await runCli(["--non-interactive"], {
     FORGE_HARNESS_CHOICE: "4",
     FORGE_REPO_NAME: "draft-fail-app",
@@ -577,7 +630,6 @@ test("auto-draft PRD failure is diagnosed with log tail and no commit", async ()
   assert.ok(!fs.existsSync(path.join(repo, "docs", "PRD.md")), "no PRD should exist");
   assert.ok(out.includes("PRD authoring validation failed"), out);
   assert.ok(out.includes("Missing docs/PRD.md"), out);
-  assert.ok(out.includes("forge-launcher draft-prd"));
   assert.ok(out.includes("[stub] invoking forge-auto-build-prd"));
   // nothing was committed beyond the bootstrap commit
   const log = execFileSync("git", ["-C", repo, "log", "--oneline"], { encoding: "utf8" });

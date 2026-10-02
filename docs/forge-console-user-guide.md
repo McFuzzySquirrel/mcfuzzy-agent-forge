@@ -1,6 +1,6 @@
 # Forge Console user guide
 
-This walkthrough covers the everyday flow for opening the Forge Console, creating or switching projects, and monitoring a build without leaving the browser. It is kept in step with the console UI — see [updates.md](updates.md) for what changed in each release.
+This walkthrough covers the everyday flow for opening the Forge Console, creating or switching projects, authoring reviewed requirements, and monitoring a build. It is kept in step with the console UI — see [updates.md](updates.md) for what changed in each release.
 
 > [!WARNING]
 > The committed screenshots were captured from the current Console build
@@ -53,17 +53,19 @@ Uploaded files must be plain text or Markdown (`.md` or `.txt`) because the
 browser staging path reads text directly. Existing PRDs are copied to
 `docs/PRD.md`; research/seed files are copied to `docs/research/` and inform
 the PRD build,
-- and whether setup should run automatically after creation. The auto-draft
-  checkbox is the **headless** path (draft the PRD and generate the agent team
-  with no questions); leave it off to author the PRD interactively.
+- and optional authoring runner/model preferences. Project creation does not
+auto-draft a PRD. After the repository is ready, open Overview and start the
+interactive PRD authoring session.
 - **Concurrency preference** (optional): a stored engine setting carried into
   `docs/engine-config.json` and later runs. Leave blank to use the engine
   default or adjust it later from the Overview Controls panel.
 
 Once it finishes, the console opens that project's Overview view, where the
-interactive PRD authoring options live. If creation continues in the background,
+interactive PRD authoring action lives. If creation continues in the background,
 the wizard shows a live status card with a **Select this project** button so you
-can open Overview as soon as the repository is ready.
+can open Overview as soon as the repository is ready. Supplying an existing PRD
+does not start authoring; it imports that document and lets you continue with
+validation and downstream derivation.
 
 ---
 
@@ -81,18 +83,17 @@ The Overview is the main control center for a project. It shows:
 
 When a project is still at an earlier stage, the pipeline card advances the workflow one step at a time. The same actions are available from the terminal launcher, but the console lets you review the generated artifacts before moving on.
 
-The PRD and Feature PRD steps lead with the **interactive** path on the Overview
-pipeline card: the primary button opens your authoring runner in a new terminal
-with the skill queued, so the skill interviews you before drafting. The headless
-alternative sits beside it and drafts without questions. Interactive sessions run
-outside the Console, so use **Refresh** on the pipeline card (or reopen the view)
-once the terminal finishes. Once a PRD exists, the pipeline card also offers
-**Validate PRD**, which runs the read-only validation for documents authored
-outside the Console.
+The PRD and Feature PRD steps use the **interactive** path on the Overview
+pipeline card: the button opens your authoring runner in a new terminal with the
+skill queued, so the skill interviews you before drafting. There is no headless
+PRD alternative. Interactive sessions run outside the Console, so use
+**Refresh** on the pipeline card (or reopen the view) once the terminal
+finishes. Once a PRD exists, the pipeline card also offers **Validate PRD**,
+which runs the read-only validation for documents authored outside the Console.
 
 Typical progression:
 
-1. **Idea → PRD**: **Author PRD (interactive)** interviews you, or **Auto-draft PRD (headless)** drafts directly. If `docs/IDEA.md` exists you can also **Grill the idea first (interactive)** to sharpen it before authoring.
+1. **Idea → PRD**: **Author PRD (interactive)** interviews you before writing the PRD and feature documents. If `docs/IDEA.md` exists you can also **Grill the idea first (interactive)** to sharpen it before authoring.
 2. **PRD → team**: generate the agent team and ownership metadata.
 3. **Team → project skills**: generate or review project-specific skills.
 4. **Skills → manifest**: compile `docs/EXECUTION-MANIFEST.json`.
@@ -111,21 +112,13 @@ application files are preserved, and Forge files are overwritten only when
 **Authoring runner**, which defaults to inheriting the runner from the harness;
 picking one saves it into the repository's `docs/authoring-config.json`.
 
-After a build completes, use **Add a feature** on Overview. **Author Feature
-PRD (interactive)** interviews you in the terminal, while **Auto-build feature
-(headless)** runs `forge-build-feature-prd` against the existing codebase and
-team directly. Both write an additive document under `docs/features/` and leave
-the original PRD intact.
-Choose **Prepare increment** to update affected agents and reconcile the manifest,
-or enable **Run new feature tasks** to execute only tasks emitted by that feature.
-The Overview reconciliation panel lists preserved, new, changed, and removed task
-IDs. Changed completed tasks are preserved but flagged for review.
-
-For a complete increment, use **Run Feature Increment**. The launcher performs
-Feature PRD authoring, an affected-team update, and manifest compilation. It
-then stops for review or selects only the new feature task IDs for execution.
-Stable task IDs preserve completed work; new tasks start pending, changed
-contracts are called out for review, and removed tasks are not runnable.
+After a build completes, use **Add a feature** on Overview and choose **Author
+Feature PRD (interactive)**. The terminal session interviews you and writes an
+additive document under `docs/features/`, leaving the original PRD intact. Once
+the feature document is saved, choose **Continue after authoring** to update
+affected agents and reconcile the manifest. Review the new tasks before running
+them; stable task IDs preserve completed work, and changed contracts are called
+out for review.
 
 ---
 
@@ -354,11 +347,11 @@ untouched.
 
 ## 6. Review incremental changes
 
-After a project has a PRD and agent team, **Add a feature** on Overview authors
-an additive Feature PRD under `docs/features/`. It does not replace the
-original PRD or start the engine. **Run Feature Increment** prepares the
-affected team and recompiles the manifest; enable **Run the workflow after
-preparing** only when the new feature tasks should run immediately.
+After a project has a PRD and agent team, **Add a feature** on Overview opens an
+interactive authoring session for an additive Feature PRD under `docs/features/`.
+It does not replace the original PRD or start the engine. After authoring, choose
+**Continue after authoring** to prepare the affected team and recompile the
+manifest.
 
 The Manifest panel shows preserved, new, changed, and removed task IDs. Stable
 task IDs preserve completed work. Review changed contracts, use **Reset changed

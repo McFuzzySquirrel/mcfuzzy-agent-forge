@@ -15,7 +15,7 @@ import type { TaskRow } from "./console/types.ts";
 import { resolveResources } from "./resources.ts";
 import { currentJobForRepo } from "./console/jobs.ts";
 import { authoringConfigPath, saveAuthoringConfig } from "./authoring-config.ts";
-import { fingerprintFiles, saveAuthoringStage, stageInputFingerprint } from "./authoring-state.ts";
+import { authoringReadiness, authoringStageIsCurrent, fingerprintFiles, saveAuthoringStage, stageInputFingerprint } from "./authoring-state.ts";
 import { writeFeatureFixture } from "./feature-fixture.ts";
 
 let port = 46700;
@@ -504,6 +504,25 @@ test("legacy projects remain ready but failed skill authoring blocks native disp
   assert.match(currentJobForRepo(root)?.message ?? "", /Skill package is incomplete/);
 });
 
+test("successful PRD validation reconciles a failed authoring stage", async (t) => {
+  const root = fixture(t);
+  saveAuthoringStage(root, "prd", {
+    status: "failed", inputFingerprint: "before-repair", outputs: ["docs/PRD.md"], error: "Repair required.",
+  });
+  const server = await startConsoleServer({ repoRoot: root, port: port++, open: false });
+  t.after(() => server.stop());
+  const response = await fetch(`${server.url}/api/authoring/validate`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", "X-Forge-Token": server.token },
+    body: "{}",
+  });
+  assert.equal(response.status, 200);
+  assert.equal((await response.json()).ok, true);
+  assert.equal(JSON.parse(fs.readFileSync(path.join(root, "docs", "authoring-state.json"), "utf8")).stages.prd.status, "complete");
+  assert.equal(authoringStageIsCurrent(root, "prd", ".github"), true);
+  assert.equal(authoringReadiness(root, ".github").ready, true);
+});
+
 test("summary identifies the recoverable stage when completed authoring becomes stale", (t) => {
   const root = fixture(t);
   for (const stage of ["team", "skills"] as const) {
@@ -543,7 +562,7 @@ test("Console execution-model edits do not invalidate completed authoring", (t) 
   assert.equal(summary(repoPaths(root)).authoringReady, true);
 });
 
-test("new project request passes three distinct model flags and marks auto-setup", (t) => {
+test("new project request passes three distinct model flags without PRD auto-draft setup", (t) => {
   const root = fixture(t);
   let captured: { args: string[]; options: SpawnOptions } | undefined;
   const controller = new RunController(root, { spawner: (_cmd, args, options) => {
@@ -551,7 +570,7 @@ test("new project request passes three distinct model flags and marks auto-setup
     return { pid: 987655 };
   } });
   const result = controller.createProject({
-    name: "new-project", parentDir: root, idea: "Build something", autoDraft: true, harness: "github",
+    name: "new-project", parentDir: root, idea: "Build something", harness: "github",
     authoringConfig: { version: 1, models: { prd: "gpt-6-astra", team: "gpt-5.6-luna", skills: "gpt-6-astra" } },
   });
   assert.equal(result.ok, true);
@@ -560,7 +579,7 @@ test("new project request passes three distinct model flags and marks auto-setup
   assert.equal(args[args.indexOf("--prd-model") + 1], "gpt-6-astra");
   assert.equal(args[args.indexOf("--team-model") + 1], "gpt-5.6-luna");
   assert.equal(args[args.indexOf("--skills-model") + 1], "gpt-6-astra");
-  assert.equal(result.job?.autoDraft, true);
+  assert.equal(result.job?.autoDraft, undefined);
 });
 
 test("new project request forwards an explicit authoring runner to the launcher", (t) => {
@@ -571,7 +590,7 @@ test("new project request forwards an explicit authoring runner to the launcher"
     return { pid: 987656 };
   } });
   const result = controller.createProject({
-    name: "runner-project", parentDir: root, idea: "Build something", autoDraft: false, harness: "claude",
+    name: "runner-project", parentDir: root, idea: "Build something", harness: "claude",
     authoringConfig: { version: 1, models: {}, runner: "claude" },
   });
   assert.equal(result.ok, true);

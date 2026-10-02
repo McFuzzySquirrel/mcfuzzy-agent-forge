@@ -182,6 +182,9 @@ export const api = {
   featureIncrement(prompt: string, run = false): Promise<ControlResult> {
     return post<ControlResult>("/api/control", { action: "feature-increment", prompt, run });
   },
+  continueFeatureIncrement(): Promise<ControlResult> {
+    return post<ControlResult>("/api/control", { action: "feature-increment-continue" });
+  },
   setTaskTimeout(taskId: string, timeoutMs: number): Promise<TimeoutUpdateResult> {
     return post<TimeoutUpdateResult>("/api/tasks/timeout", { taskId, timeoutMs });
   },

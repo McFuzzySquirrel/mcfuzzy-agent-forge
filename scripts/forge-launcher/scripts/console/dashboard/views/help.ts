@@ -89,11 +89,11 @@ function tabButton(label: string): HTMLElement {
 function quickHelp(): HTMLElement {
   return el("div", null, [
     helpSection("What is this?", [
-      "Forge Console is a local web UI that fronts forge-launcher and the workflow engine. It lets you create a project, draft its PRD and agent team, run the build, and monitor/control it - all from your browser, without remembering terminal commands. It is served on 127.0.0.1 and reads the same files the terminal tools write.",
+      "Forge Console is a local web UI that fronts forge-launcher and the workflow engine. It lets you create a project, start interactive PRD authoring, generate the agent team, run the build, and monitor/control it - all from your browser, without remembering terminal commands. It is served on 127.0.0.1 and reads the same files the terminal tools write.",
     ]),
     helpSection("The pipeline", [
       "Projects flow through four stages: Idea → PRD → Agent team → Build.",
-      "The Continue button on the Overview page advances one stage at a time, running the same steps the terminal launcher runs - so you can review each result (for example the drafted PRD in Plan & Team) and come back later to continue. Nothing runs until you click it.",
+      "The Continue button on the Overview page advances one stage at a time. PRD and feature requirements open an interactive terminal session; downstream team, skills, manifest, and build stages can run from the Console after you review the requirements. Nothing runs until you click it.",
       dl([
         ["Idea", "your project description in docs/IDEA.md."],
         ["Requirements", "reviewed docs/PRD.md plus docs/features/*.md, required for every solution."],
@@ -115,7 +115,7 @@ function quickHelp(): HTMLElement {
     ]),
     helpSection("Incremental work", [
       "Add a feature authors an additive document under docs/features/ without replacing the original PRD.",
-      "Run Feature Increment updates affected agents and recompiles the manifest, optionally running only the new feature tasks.",
+      "Author a Feature PRD interactively, then continue the increment to update affected agents and recompile the manifest.",
       "Review preserved, new, changed, and removed task IDs in Manifest. Reset changed tasks for review only when changed completed tasks should run again.",
     ]),
     helpSection("Views", [dl([

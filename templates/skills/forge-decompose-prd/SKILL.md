@@ -28,10 +28,12 @@ existing IDs instead of re-IDing requirements merely to match a feature prefix.
 Shared stories belong in the vision with participating feature references.
 Traceability tables contain IDs, links and relationships, not copied prose.
 
-Present feature names, source-ID coverage and the dependency DAG. Interactive
-conversion requires approval; authorized headless conversion records assumptions
-and proceeds without another opt-in. Never renumber completed work. If existing
-completed work needs changed IDs or boundaries, report the required migration.
+Present feature names, source-ID coverage and the dependency DAG, and get the
+user's approval before writing canonical files. Conversion is always interactive:
+it decides feature boundaries and task partitioning, so an unreviewed result
+feeds every downstream stage with invented structure. Never renumber completed
+work. If existing completed work needs changed IDs or boundaries, report the
+required migration.
 
 ## Step 3: Write Canonical Documents
 

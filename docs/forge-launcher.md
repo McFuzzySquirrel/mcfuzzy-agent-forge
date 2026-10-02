@@ -114,6 +114,7 @@ npx forge-launcher@beta draft-existing-prd --repo <path> [model flags]
 npx forge-launcher@beta draft-team --repo <path> [model flags]
 npx forge-launcher@beta feature-prd --repo <path> --prompt "Describe the feature"
 npx forge-launcher@beta feature-increment --repo <path> --prompt "Describe the increment"
+npx forge-launcher@beta feature-increment-continue --repo <path>
 npx forge-launcher@beta compile-manifest --repo <path>
 npx forge-launcher@beta draft-skills [--repo <path>] [--prd-model <id|inherit>]
                               [--team-model <id|inherit>] [--skills-model <id|inherit>]
@@ -182,16 +183,35 @@ check `latest`. Disable it with `--no-update-check` or
 
 ### Draft (auto-author) mode
 
-The optional **auto-draft** flow generates the applicable PRD, team, and project
-skills stages non-interactively (best answers, every unknown recorded as an Open
-Question), then compiles the native manifest. Interactive runs stop at review
-boundaries before build execution. `--headless` additionally starts the native
-engine after preparation. A supplied PRD skips PRD drafting. Use `--draft` to
-pre-answer "yes" to the interactive auto-draft prompts:
+The optional **auto-draft** flow generates the agent team and project skills
+non-interactively, then compiles the native manifest. Interactive runs stop at
+review boundaries before build execution. `--headless` additionally starts the
+native engine after preparation. A supplied PRD skips requirements authoring.
+Use `--draft` to pre-answer "yes" to the interactive auto-draft prompts:
 
 ```bash
 forge-launcher --draft
 ```
+
+**Requirements are never auto-drafted** (see
+[ADR-060](adr/060-interactive-requirements-authoring.md)). The PRD, feature
+documents, and converted legacy documents are always authored in an interactive
+session, because the team, execution manifest, and workflow engine are all
+derived mechanically from them. The rule is: **authoring requirements is
+interactive; deriving from a reviewed PRD is headless.**
+
+A `forge-launcher` run with no PRD therefore opens a session rather than
+drafting one. In non-interactive and `--headless` runs it stops with the exact
+command to run and exits without authoring:
+
+```bash
+forge-launcher --non-interactive   # bootstraps, then stops with a PRD handoff
+forge-launcher resume              # continue once the PRD is committed
+```
+
+CI that needs unattended operation should supply a reviewed `docs/PRD.md` plus
+`docs/features/*.md` and resume from there; the team, skills, manifest, and
+build stages still run unattended.
 
 ### Independent authoring models
 
@@ -300,7 +320,10 @@ export FORGE_AUTO_DRAFT="1"
 forge-launcher --non-interactive
 ```
 
-See the [Auto-draft (optional)](#auto-draft-optional-idea--prd--team-with-review-boundaries)
+This covers the team and project-skill stages only. It does not author
+requirements; a run with no PRD stops with a handoff.
+
+See the [Auto-draft (optional)](#auto-draft-optional-interactive-prd--team--project-skills-with-review-boundaries)
 section below for the full flow.
 
 ### Non-interactive mode (CI / automation)
@@ -312,10 +335,14 @@ export FORGE_REPO_PARENT_DIR="/home/user/projects"
 export FORGE_IDEA="A task management web app with a React frontend and a Node.js API"
 export FORGE_PRD_FILE="/path/to/my-prd.md"          # optional
 export FORGE_RESEARCH_FILES="/path/to/research.md,/path/to/notes.md"  # optional
-export FORGE_AUTO_DRAFT="1"                        # optional: run the auto-draft stages headlessly
+export FORGE_AUTO_DRAFT="1"                        # optional: team + project skills headlessly (never the PRD)
 export FORGE_YN_DEFAULT="y"
 forge-launcher --non-interactive
 ```
+
+A run with no `docs/PRD.md` bootstraps the repository, prints the interactive
+requirements command, and stops. Author the PRD in a session, then re-run
+`forge-launcher resume`.
 
 ```powershell
 $env:FORGE_IDEA = "A task management web app with a React frontend and a Node.js API"
@@ -348,8 +375,9 @@ forge-launcher engine-run --harness copilot --yes    # per-task: copilot -p --yo
 forge-launcher engine-run --harness claude --yes     # per-task: claude -p --output-format json
 ```
 
-A `--headless` launcher run can therefore go from idea to finished build without
-opening any interactive CLI.
+A `--headless` launcher run can therefore go from a reviewed PRD to a finished
+build without opening any interactive CLI. It cannot author the PRD: with no
+`docs/PRD.md` it stops and prints the interactive requirements command.
 
 ```bash
 # Drive the queued skill now (prints and runs the command)
@@ -367,15 +395,14 @@ What gets queued:
 
 | Repo state | Queued command |
 |---|---|
-| PRD captured in Step 6 (or a decomposed PRD exists) | `opencode run --auto (cwd=<repo>) "/forge-auto-build Use docs/PRD.md as the project PRD. GO [--workflow-engine]"` |
-| No PRD captured | `opencode run --auto (cwd=<repo>) "/forge-auto-build-prd Use docs/IDEA.md as the project idea. Headless mode: auto-proceed with default assumptions and approve the PRD. After drafting, run a PRD gap check: every major component must have clear acceptance criteria, a defined tech stack, non-functional requirements (performance, security, privacy), and implementation phases; fill any gaps before approving."` |
+| PRD captured in Step 6 (or a decomposed PRD exists) | `opencode run --auto (cwd=<repo>) "/forge-auto-build Use docs/PRD.md and docs/features/*.md as canonical requirements. GO [--workflow-engine]"` |
+| No PRD captured | Nothing is queued. The run stops with the interactive requirements command, because `--headless` cannot author the PRD. |
 
-The embedded `GO` satisfies `forge-auto-build`'s pre-flight gate, and the
-headless `forge-auto-build-prd` invocation skips its interactive confirmation
-and clarifying questions (every unknown is recorded as an Open Question with a
-default assumption in the PRD). `FORGE_RUN_WITH` selects the authoring runner
-and its command shape: `opencode` emits `opencode run --auto`, `copilot` emits
-`copilot -p "<message>" --yolo`, and `claude` emits
+The embedded `GO` satisfies `forge-auto-build`'s pre-flight gate. That skill never
+authors requirements either; it requires a validated `docs/PRD.md` plus
+`docs/features/*.md` and stops if they are missing. `FORGE_RUN_WITH` selects the
+authoring runner and its command shape: `opencode` emits `opencode run --auto`,
+`copilot` emits `copilot -p "<message>" --yolo`, and `claude` emits
 `claude -p "<message>" --permission-mode bypassPermissions [--model <alias>]`.
 It outranks the `runner` saved in `docs/authoring-config.json`, and is itself
 outranked only by the `--runner` flag, except at `FORGE_RUN_WITH=stub`, which
@@ -436,7 +463,7 @@ links to `docs/IDEA.md`, `docs/PRD.md`, the agent/skills dirs, and
 `docs/WORKFLOW-STATE.json` when a run exists), then offers the right next action:
 
 - Nothing captured yet → capture the idea / open the harness for `forge-auto-build-prd`.
-- Idea, no PRD → auto-draft the PRD headlessly, or open the harness to draft it manually.
+- Idea, no PRD → open an interactive session for `forge-auto-build-prd` (or grill the idea first). A non-interactive resume prints that command and stops.
 - PRD, no team → auto-draft the agent team headlessly, or open the harness for `forge-build-agent-team`.
 - Team, skills incomplete → run `draft-skills` or open the harness for `forge-build-project-skills`.
 - Skills ready, no manifest → compile the manifest with `forge-execution-adapter`.
@@ -466,7 +493,8 @@ resume/replay). It is a projection over the same `docs/*` files the terminal
 tools write, so the CLI paths stay first-class and interchangeable.
 
 Full reference (views, the Continue pipeline, the project registry, the
-`draft-prd`/`draft-team`/`compile-manifest` headless subcommands, and security):
+`draft-team`/`draft-skills`/`compile-manifest` headless subcommands, interactive
+authoring sessions, and security):
 **[docs/forge-console.md](forge-console.md)**.
 
 ### Stop here and resume later
@@ -494,28 +522,26 @@ does not author the engine progress file as a separate plan-and-validate step.
 Compilation failure blocks the engine decision and reports the adapter
 diagnostics for correction or retry.
 
-### Auto-draft (optional): idea → PRD → team → project skills, with review boundaries
+### Auto-draft (optional): interactive PRD → team → project skills, with review boundaries
 
-The **auto-draft** option lets you run the authoring stages non-interactively
-("best answers provided", every unknown recorded as an Open Question with a
-default assumption) and still keep human review between stages:
+The **auto-draft** option runs the derivation stages non-interactively and
+still keeps human review between stages. It never authors requirements.
 
-1. **Idea → PRD.** With no PRD yet, Step 8 asks *"Generate the PRD from
-   `docs/IDEA.md` automatically now?"*. Answering yes runs `forge-auto-build-prd`
-  headless (via `opencode run --auto`, `copilot -p --yolo`, or `claude -p`), producing
-  `docs/PRD.md` + `docs/features/*.md` directly for every solution,
-  committed as `docs: add auto-drafted PRD`.
-   Review it, then choose: draft the team now, launch the harness CLI to be
-   interviewed/refine interactively, or stop.
-2. **PRD → team.** With a PRD present, Step 8 asks *"Generate the agent team
+1. **Idea → PRD (always interactive).** With no PRD yet, Step 8 offers to open a
+   session for `forge-auto-build-prd`, or to run `forge-grill-idea` first to
+   sharpen the idea. The skill interviews you and then produces
+   `docs/PRD.md` + `docs/features/*.md`. There is no headless alternative: see
+   [ADR-060](adr/060-interactive-requirements-authoring.md). Non-interactive and
+   `--headless` runs print the command and stop instead.
+2. **PRD → team (headless).** With a PRD present, Step 8 asks *"Generate the agent team
    from the PRD automatically now?"*. Answering yes runs `forge-build-agent-team`
    headless, producing the agent files and ownership metadata, committed as
    `feat: generate auto-drafted agent team`. The team is always built from the
    PRD and canonical feature graph. Review them, then:
-3. **Team → project skills.** Generate or review project-specific skills in a
-   separate invocation. A failed or missing skills result is reported as a
-   blocked stage, not silently treated as a successful empty set.
-4. **Skills → manifest → build.** Compile the manifest with
+3. **Team → project skills (headless).** Generate or review project-specific
+   skills in a separate invocation. A failed or missing skills result is
+   reported as a blocked stage, not silently treated as a successful empty set.
+4. **Skills → manifest → build (headless).** Compile the manifest with
    `forge-execution-adapter`, review it, then run the workflow engine now
    (detached), print its command to run later, or launch the CLI for a manual
    build.
@@ -625,9 +651,9 @@ as a checkbox on the Overview, and `resume`/monitor commands honour it. See
 > The spinner is skipped for piped/CI output. The elapsed message honours
 > `FORGE_HEARTBEAT_INTERVAL` (default `15` seconds).
 >
-> Want a quick way to try it? The [testing guide Part 8](testing-guide.md#part-8--launcher-auto-draft-smoke-test-reusable-test-idea)
+> Want a quick way to try it? The [testing guide](testing-guide.md#3-manual-smoke-test-for-a-full-local-run)
 > ships a copy-paste test idea (a small expense-tracker CLI) that exercises the
-> whole auto-draft → decompose → team → engine flow.
+> whole interactive PRD → team → engine flow.
 
 ---
 
@@ -796,22 +822,24 @@ If you skip this step, the pipeline queues `forge-auto-build-prd`, which builds 
 
 ### Step 8 -Launch auto-build
 
-Step 8 first offers the optional **auto-draft** stages. When no PRD was captured,
-it asks whether to generate one non-interactively; after review it generates the
-agent team and then project skills as separate stages (from the decomposed
-vision + features when present, otherwise from `docs/PRD.md`). Each stage
-commits its artifacts and stops for review before the next step. The manifest is
-then compiled and the launcher asks how to run the workflow engine - now
-(detached), later (prints the command), or manually:
+Step 8 first offers the optional **auto-draft** stages. When no PRD was captured it
+offers to open an interactive authoring session, because requirements are never
+auto-drafted. After you review the PRD, it generates the agent team and then
+project skills as separate headless stages (from the vision + features). Each
+stage commits its artifacts and stops for review before the next step. The
+manifest is then compiled and the launcher asks how to run the workflow engine -
+now (detached), later (prints the command), or manually:
 
 ```
-Generate the PRD from docs/IDEA.md automatically now (headless, auto-proceed with best answers)? [y/N]: y
-  Auto-drafting the PRD from docs/IDEA.md (headless) …
-    opencode run --auto "/forge-auto-build-prd Use docs/IDEA.md as the project idea. Headless mode: auto-proceed with default assumptions and approve the PRD. After drafting, run a PRD gap check: every major component must have clear acceptance criteria, a defined tech stack, non-functional requirements (performance, security, privacy), and implementation phases; fill any gaps before approving."
-  ✔  Committed: 'docs: add auto-drafted PRD'
-  ✔  PRD generated.
-  Review it before continuing:
-    - /home/user/projects/my-cool-app/docs/PRD.md
+  The PRD is the one artifact a human must judge, so it is always authored
+  in an interactive session. Everything after it - team, skills, manifest,
+  build - runs headless from what you approve.
+Open a session to author the PRD interactively now? (requirements are never auto-drafted) [y/N]: y
+  ✔  opencode launched in a separate terminal.
+    Then run only this stage: /forge-auto-build-prd Use docs/IDEA.md as the project idea
+    Continue with forge-launcher resume to select the next stage's model independently.
+  ... author docs/PRD.md + docs/features/*.md in that terminal, then commit ...
+$ forge-launcher resume
 Generate the agent team from the PRD automatically now (headless)? [y/N]: y
   Auto-drafting the agent team from the PRD (headless) …
     opencode run --auto "/forge-build-agent-team Use docs/PRD.md to build the agent team. Auto-proceed with default assumptions and no questions."
@@ -973,7 +1001,7 @@ reflect the running build (monitor + resume) rather than the manual
 | `FORGE_PRD_FILE` | 6 | Path to a source document to copy in as `docs/requirements-source.md` for canonical feature authoring. Accepts relative, `~`/`~/...`, and `$VAR`/`${VAR}` paths (e.g. `~/docs/prd.md`) |
 | `FORGE_RESEARCH_FILES` | 6 | Comma-separated list of paths to research/seed documents copied to `docs/research/`. Each path accepts relative, `~`/`~/...`, and `$VAR`/`${VAR}` forms |
 | `FORGE_YN_DEFAULT` | 3, 7 | Default answer for yes/no prompts (`y` or `n`) |
-| `FORGE_AUTO_DRAFT` | 8 | `1` to run PRD → team → project skills → native manifest compilation non-interactively |
+| `FORGE_AUTO_DRAFT` | 8 | `1` to run team → project skills → native manifest compilation non-interactively. Never authors the PRD. |
 | `FORGE_RUN_WITH` | 8 | Authoring runner: `opencode`, `copilot`, `claude`, or `stub`. Outranks the `runner` saved in `docs/authoring-config.json`; only the `--runner` flag outranks it. With none of those set, the default is `copilot` for the GitHub harness, `opencode` otherwise, including for the Claude harness, except that when the inherited runner's CLI is not installed and the harness's own CLI is, the harness's CLI is used; explicit selections are never substituted. `stub` is environment-only and runs offline fixtures - it is an offline lock that even `--runner` cannot override; combine with `FORGE_STUB_NOOP=1` to test failure diagnostics |
 | `FORGE_STUB_NOOP` | 8 | `1` makes the stub skill runner (`FORGE_RUN_WITH=stub`) write nothing, exercising the auto-draft failure diagnostics |
 | `FORGE_LAUNCHER_DEBUG` | 8 | `1` (or the `--debug` flag) prints the skill-run log tail after every headless skill run; also passes `--print-logs` to `opencode` |
@@ -1113,8 +1141,11 @@ directory outputs, empty phases and invalid dependency graphs stop the stage.
 The recorded output fingerprint covers canonical vision and feature files, not
 historical source documents. Exit zero from the model alone does not mean success.
 
-Repair errors using `draft-prd` or `draft-existing-prd`; use `feature-prd` for an
-additive feature retry. Existing small legacy checkbox plans remain readable,
+Repair errors in an interactive session for `forge-auto-build-prd` (or
+`forge-build-prd` for an existing repository); use `forge-build-feature-prd` for
+an additive feature retry. The `draft-prd`, `draft-existing-prd` and
+`feature-prd` subcommands report the handoff instead of authoring. Existing small
+legacy checkbox plans remain readable,
 but new authoring uses structured contracts. Nothing silently rewrites completed
 tasks or target-project files. See [Task Contracts](task-contracts.md) for the
 standalone validator, migration rules and semantic review limits.
@@ -1125,18 +1156,22 @@ external-service integration. These are semantic authoring requirements, not
 claims that the structural validator proves reachability or tests real services.
 See the [authoring contract](../templates/skills/forge-build-prd/references/task-contract.md#reachability-and-live-integration).
 
-`forge-launcher draft-prd --repo <path>` can author a PRD directly from an
-existing repository; `docs/IDEA.md` is optional. It inspects the repository
-context through the selected harness. For additive work use:
+For an existing repository, author the PRD in an interactive harness session
+with `/forge-build-prd`; `docs/IDEA.md` is optional because the skill inspects
+the repository context. The `forge-launcher draft-prd --repo <path>` command
+reports this handoff for real runners; it does not author the PRD. For additive
+work, author the Feature PRD in an interactive harness session, then continue
+its mechanical derivation:
 
 ```bash
-forge-launcher feature-increment --repo <path> --prompt "Add ..."
-forge-launcher feature-increment --repo <path> --prompt "Add ..." --run
+forge-launcher feature-increment-continue --repo <path>
 ```
 
-This authors `docs/features/*.md`, updates affected agents in Feature Increment
-Mode, refreshes `docs/EXECUTION-MANIFEST.json` and
+This expects a reviewed feature document in `docs/features/`; it updates affected
+agents in Feature Increment Mode, refreshes `docs/EXECUTION-MANIFEST.json` and
 `docs/agent-responsibility-matrix.md`, and reports
 preserved/new/removed/changed task IDs. Existing task definitions must stay
 additive-only; the launcher rejects manifest rewrites that alter or remove
-pre-existing tasks. The optional `--run` starts the engine after review.
+pre-existing tasks. Use the Overview task controls to select and run the new
+tasks after review. The `feature-increment --prompt ...` command remains available
+for the offline stub runner, which can author requirements without a human session.

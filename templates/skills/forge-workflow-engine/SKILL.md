@@ -528,8 +528,10 @@ Each task is retried up to `--max-retries` times (default: 2) before being marke
 
 ## Integration with forge-launcher (terminal-driven build path)
 
-The launcher is the canonical terminal entry point. Its auto-draft stages run
-`forge-build-agent-team` headlessly and then offer to start the engine detached;
+The launcher is the canonical terminal entry point. Its derivation stages run
+`forge-build-agent-team` headlessly and then offer to start the engine detached.
+Requirements are never authored headlessly: a run with no `docs/PRD.md` stops and
+prints the interactive authoring command (ADR-060).
 `forge-launcher engine-run` compiles the manifest and runs/resumes the engine as
 a foreground or detached process:
 

@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { execFileSync } from "node:child_process";
+import { spawnSync } from "node:child_process";
 import { mkdtempSync, mkdirSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -16,13 +16,8 @@ function harnessFixture() {
 }
 
 function run(root) {
-  try {
-    const out = execFileSync(process.execPath, [CLI, "--harness-root", root], { encoding: "utf8" });
-    return { status: 0, out };
-  } catch (err) {
-    const e = err;
-    return { status: e.status ?? 1, out: String(e.stdout ?? "") + String(e.stderr ?? "") };
-  }
+  const result = spawnSync(process.execPath, [CLI, "--harness-root", root], { encoding: "utf8" });
+  return { status: result.status, out: `${result.stdout ?? ""}${result.stderr ?? ""}` };
 }
 
 function agent(root, name, body) {
@@ -31,9 +26,10 @@ function agent(root, name, body) {
 
 test("passes clean single-line double-quoted frontmatter", () => {
   const root = harnessFixture();
-  agent(root, "api-engineer", '---\nname: api-engineer\ndescription: "Owns the API and validation."\nmodel: gpt-4o\n---\n\n## Expertise\n- Testing\n');
+  agent(root, "api-engineer", '---\nname: api-engineer\ndescription: "Owns the API and validation."\nmode: all\nmodel: gpt-4o\n---\n\n## Expertise\n- Testing\n');
   const { status, out } = run(root);
   assert.equal(status, 0, out);
+  assert.doesNotMatch(out, /⚠/);
 });
 
 test("rejects a folded block scalar description (> )", () => {
@@ -75,3 +71,29 @@ test("rejects a missing description", () => {
   assert.notEqual(status, 0);
   assert.match(out, /missing 'description'/);
 });
+
+test("warns but passes when an agent omits mode", () => {
+  const root = harnessFixture();
+  agent(root, "api-engineer", '---\nname: api-engineer\ndescription: "Owns the API routes."\n---\n');
+  const { status, out } = run(root);
+  assert.equal(status, 0, out);
+  assert.match(out, /⚠ .*api-engineer\.md.*mode: all/);
+});
+
+test("warns but passes when an agent declares mode: subagent", () => {
+  const root = harnessFixture();
+  agent(root, "api-engineer", '---\nname: api-engineer\ndescription: "Owns the API routes."\nmode: subagent\n---\n');
+  const { status, out } = run(root);
+  assert.equal(status, 0, out);
+  assert.match(out, /⚠ .*api-engineer\.md.*mode: subagent.*mode: all/);
+});
+
+test("skill frontmatter is never asked for a mode", () => {
+  const root = harnessFixture();
+  agent(root, "api-engineer", '---\nname: api-engineer\ndescription: "Owns the API routes."\nmode: all\n---\n');
+  writeFileSync(join(root, "skills", "demo-skill", "SKILL.md"), '---\nname: demo-skill\ndescription: "A demo skill."\n---\n\n# Demo\n', "utf8");
+  const { status, out } = run(root);
+  assert.equal(status, 0, out);
+  assert.doesNotMatch(out, /demo-skill/);
+});
+

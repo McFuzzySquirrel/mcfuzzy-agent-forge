@@ -12,6 +12,13 @@
 //   - Missing `name` / `description`, and missing or unterminated frontmatter
 //     blocks.
 //
+// Advisories (never fatal, exit code unaffected):
+//   - An agent file that omits `mode`, or declares `mode: subagent` /
+//     `mode: primary`, is warned about. Generated agents declare `mode: all`
+//     so OpenCode keeps them usable as the session's primary agent and as a
+//     dispatched subagent; the key is OpenCode-specific and other harnesses
+//     ignore it, so the forge warns instead of blocking (ADR-061).
+//
 // Scans the same file set the execution adapter parses: every `.md` under
 // <harness>/agents/ (excluding SKILL.md) and every file named SKILL.md under
 // <harness>/skills/.
@@ -124,24 +131,42 @@ function problemsIn(file, text) {
   return probs;
 }
 
+function modeWarning(text) {
+  const block = frontmatterBlock(text);
+  if (block === null) return null;
+  const line = block.find((l) => !/^\s/.test(l) && l.trimStart().startsWith("mode:"));
+  if (line === undefined) return "declare 'mode: all' in agent frontmatter — OpenCode reads it, other harnesses ignore it";
+  const value = line.slice(line.indexOf(":") + 1).trim().replace(/^["']|["']$/g, "");
+  if (value === "all") return null;
+  return `'mode: ${value || "(empty)"}' limits this agent in OpenCode — generated agents declare 'mode: all'`;
+}
+
 const harness = detectHarnessRoot();
 const agentDir = join(harness, "agents");
 const skillDir = join(harness, "skills");
 
 const files = [
-  ...(skillsOnly ? [] : walk(agentDir).filter((f) => f.endsWith(".md") && !f.endsWith("SKILL.md"))),
+  ...(skillsOnly ? [] : walk(agentDir).filter((f) => f.endsWith(".md") && !f.endsWith("SKILL.md")).map((file) => ({ file, kind: "agent" }))),
   ...(agentsOnly ? [] : (explicitSkillFiles.length > 0
     ? explicitSkillFiles.map((file) => resolve(repoRoot ?? process.cwd(), file))
-    : walk(skillDir).filter((f) => f.endsWith("SKILL.md")))),
+    : walk(skillDir).filter((f) => f.endsWith("SKILL.md"))).map((file) => ({ file, kind: "skill" }))),
 ];
 
 let problems = 0;
-for (const file of files) {
-  const probs = problemsIn(file, readFileSync(file, "utf8"));
+let advisories = 0;
+for (const { file, kind } of files) {
+  const text = readFileSync(file, "utf8");
+  const probs = problemsIn(file, text);
   if (probs.length > 0) {
     problems += 1;
     console.error(`✖ ${file}`);
     for (const p of probs) console.error(`    ${p}`);
+    continue;
+  }
+  const warning = kind === "agent" ? modeWarning(text) : null;
+  if (warning) {
+    advisories += 1;
+    console.warn(`⚠ ${file}: ${warning}`);
   }
 }
 
@@ -151,3 +176,4 @@ if (problems > 0) {
   process.exit(1);
 }
 console.log(`validate-frontmatter: OK — ${files.length} agent/skill file(s) parsed cleanly (harness: ${harness})`);
+if (advisories > 0) console.log(`validate-frontmatter: ${advisories} agent file(s) should declare 'mode: all' (advisory only, ADR-061)`);

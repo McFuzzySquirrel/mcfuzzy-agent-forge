@@ -70,8 +70,8 @@ For each change category:
 
 ### Step 5i: Write Only Changed or New Agents and Candidates
 
-- **For modified agents:** Present the specific additions (what's being added to Responsibilities, Collaboration, and Key Reference sections) as a clear diff or addendum. If the agent was created before the Process and Workflow section was added to the template, add this section as well to bring it up to current standards. Present changes for user review and confirmation before applying them to the existing agent files.
-- **For new agents:** Write complete agent files at `HARNESS_AGENTS_DIR/{agent-name}.md` following the standard template from Step 5.
+- **For modified agents:** Present the specific additions (what's being added to Responsibilities, Collaboration, and Key Reference sections) as a clear diff or addendum. If the agent was created before the Process and Workflow section was added to the template, add this section as well to bring it up to current standards. Normalizing `mode` to `all` is the only permitted frontmatter edit on an otherwise untouched agent: add `mode: all` when the key is missing and replace `mode: subagent` or `mode: primary` with `mode: all`. Present changes for user review and confirmation before applying them to the existing agent files.
+- **For new agents:** Write complete agent files at `HARNESS_AGENTS_DIR/{agent-name}.md` following the standard template from Step 5, including `mode: all` in the frontmatter.
 - **For new skills:** Add or update a candidate in the immutable
   `docs/SKILL-CANDIDATES.json`; the independent `forge-build-project-skills`
   stage writes `.agents/skills/{skill-name}/SKILL.md` after `skill-creator` and
@@ -86,7 +86,8 @@ Before finalizing, verify:
 - [ ] No new boundary overlaps have been introduced between agents.
 - [ ] Collaboration sections are updated for all affected agents (both directions).
 - [ ] Existing unaffected agents remain completely unchanged.
-- [ ] New agents follow all naming and format conventions (lowercase-hyphenated, valid YAML frontmatter).
+- [ ] New agents follow all naming and format conventions (lowercase-hyphenated, valid YAML frontmatter, `mode: all`).
+- [ ] Every agent in the harness declares `mode: all`, including the ones this feature left otherwise unchanged.
 - [ ] New agents include the currency verification constraint.
 - [ ] Feature PRD section references use the correct path and section numbers.
 

@@ -16,6 +16,7 @@ import { consoleAuthoringInventory, selectedAuthoringRunner } from "./authoring.
 import { isRunnerChoice, loadAuthoringConfig, saveAuthoringConfig, validateAuthoringConfig } from "../authoring-config.ts";
 import { resolveAuthoringModel, type AuthoringRunner, type InventoryProbe } from "../authoring-inventory.ts";
 import { validateAuthoredPrd } from "../prd-validation.ts";
+import { featureIncrementHandoffHasChange, recordAuthoringStageSuccess, recordFeatureIncrementHandoff } from "../authoring-state.ts";
 import {
   detectHarnessRoot,
   loadRegistry,
@@ -282,7 +283,10 @@ export async function startConsoleServer(options: ConsoleServerOptions = {}): Pr
   const clientDir = options.clientDir ?? CLIENT_DIR;
   const boardAssets = options.boardDir ?? boardDir();
   const onLog = options.onLog ?? ((m: string) => console.log(m));
-  const launchCli = options.launchCli ?? launchCliInTerminal;
+  // The Console exists to open terminals on the user's behalf, so it opts out of
+  // the no-TTY guard the launcher applies to its own handoffs.
+  const launchCli = options.launchCli
+    ?? ((cli: string, dir: string, args: string[]) => launchCliInTerminal(cli, dir, args, { allowWithoutTty: true }));
   const token = randomBytes(16).toString("hex");
 
   const controller = new RunController(options.repoRoot ?? "", options.deps);
@@ -497,15 +501,21 @@ export async function startConsoleServer(options: ConsoleServerOptions = {}): Pr
           const action = body.action as ControlAction;
           const taskId = typeof body.taskId === "string" ? body.taskId : undefined;
           if (!currentRepo) return sendJson(res, 400, { ok: false, message: "no repo selected" });
+          if (action === "feature-increment-continue" && !featureIncrementHandoffHasChange(currentRepo)) {
+            return sendJson(res, 200, { ok: false, message: "Add or change a feature in the interactive authoring session before continuing." });
+          }
+          // ADR-060: feature authoring is interactive, so the prompt is only
+          // needed to pre-seed the session; the response names the session
+          // rather than starting a background job.
           if (action === "feature-prd") {
             const prompt = typeof body.prompt === "string" ? body.prompt.trim() : "";
             if (!prompt) return sendJson(res, 400, { ok: false, message: "prompt is required" });
-            return sendJson(res, 200, controller.featurePrd(prompt));
+            return sendJson(res, 200, controller.featurePrd());
           }
           if (action === "feature-increment") {
             const prompt = typeof body.prompt === "string" ? body.prompt.trim() : "";
             if (!prompt) return sendJson(res, 400, { ok: false, message: "prompt is required" });
-            return sendJson(res, 200, controller.featureIncrement(prompt, body.run === true));
+            return sendJson(res, 200, controller.featureIncrement());
           }
           return sendJson(res, 200, controller.dispatch(action, taskId));
         }
@@ -678,6 +688,7 @@ export async function startConsoleServer(options: ConsoleServerOptions = {}): Pr
           }
           const message = spec.message(prompt);
           const args = interactiveAuthoringArgs(runner, message, model);
+          if (target === "feature-prd") recordFeatureIncrementHandoff(currentRepo);
           const launched = await launchCli(runner, currentRepo, args);
           const command = `${runner} ${args.map((arg) => JSON.stringify(arg)).join(" ")}`;
           return sendJson(res, 200, {
@@ -694,6 +705,8 @@ export async function startConsoleServer(options: ConsoleServerOptions = {}): Pr
           if (!currentRepo) return sendJson(res, 400, { ok: false, message: "no repo selected" });
           try {
             const outputs = await validateAuthoredPrd(currentRepo);
+            recordAuthoringStageSuccess(currentRepo, "prd", outputs, detectHarnessRoot(currentRepo) ?? ".agents");
+            broadcast("snapshot", snapshotEvent());
             return sendJson(res, 200, { ok: true, message: `PRD validated (${outputs.length} output${outputs.length === 1 ? "" : "s"}).` });
           } catch (error) {
             return sendJson(res, 200, { ok: false, message: error instanceof Error ? error.message : String(error) });

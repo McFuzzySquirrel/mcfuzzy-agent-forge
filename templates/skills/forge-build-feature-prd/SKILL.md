@@ -11,6 +11,13 @@ This skill supports two modes, auto-detected in Step 0:
 - **Post-project mode** - Adding to an existing project with a completed PRD, agents, and codebase.
 - **Greenfield mode** - Part of initial project decomposition from a PRD.
 
+**Authoring a feature document is always interactive.** Step 1's confirmation
+and the Step 5 review gate are mandatory; there is no headless or auto-proceed
+mode. A feature's boundaries and acceptance criteria feed the agent team and
+execution manifest directly, so an unreviewed one propagates silently. If
+invoked non-interactively, stop and report the decisions you need instead of
+assuming them.
+
 ---
 
 ## Process

@@ -14,7 +14,7 @@ import { engineRunCli } from "./engine-run.ts";
 import { createSessionScope } from "./launcher-session.ts";
 import { type AuthoringOptions, type AuthoringRunnerChoice, type AuthoringRunnerSelection, type AuthoringStage, loadAuthoringConfig, saveAuthoringConfig, selectAuthoringModel, selectAuthoringRunner } from "./authoring-config.ts";
 import { authoringArgv, inventoryForRunner, readAuthoringInventory, refreshAuthoringInventory, resolveAuthoringModel, type AuthoringInvocation, type AuthoringRunner, type InventoryProbe } from "./authoring-inventory.ts";
-import { authoringReadiness, authoringStageIsCurrent, fingerprintFiles, readAuthoringState, readSkillCandidates, saveAuthoringStage, stageInputFingerprint, type AuthoringStageState } from "./authoring-state.ts";
+import { authoringReadiness, authoringStageIsCurrent, clearFeatureIncrementHandoff, featureIncrementHandoffHasChange, fingerprintFiles, readAuthoringState, readSkillCandidates, recordAuthoringStageSuccess, recordFeatureIncrementHandoff, saveAuthoringStage, stageInputFingerprint, type AuthoringStageState } from "./authoring-state.ts";
 import { selectHarnessRoot, selectProjectHarnessRoot, type HarnessRoot } from "./repo-metadata.ts";
 import { resolveResources } from "./resources.ts";
 import { validateAuthoredPrd } from "./prd-validation.ts";
@@ -53,6 +53,7 @@ export interface LauncherOptions extends AuthoringOptions {
     runLogged?: typeof runLogged;
     spawnDetached?: typeof spawnDetached;
     inventoryProbe?: InventoryProbe;
+    allowNonInteractiveRequirements?: (runner: AuthoringRunner) => boolean;
     prompt?: typeof defaultPrompt;
     promptSelect?: typeof defaultPromptSelect;
     promptYesNo?: typeof defaultPromptYesNo;
@@ -187,8 +188,8 @@ function runLoggedStep(
   );
 }
 
-function envFlag(name: string): boolean {
-  return state.env[name] === "1";
+function envFlag(name: string, env: NodeJS.ProcessEnv = state.env): boolean {
+  return env[name] === "1";
 }
 
 /** Returns the env flag when the variable is set, else undefined (unset). */
@@ -450,14 +451,28 @@ export function buildTeamPrompt(prdSource: string, harness: HarnessName): string
 
 // --- auto-build command selection ------------------------------------------
 
-/** Headless PRD-creation invocation: auto-proceed with defaults, then run the
- * same PRD gap check the manual flow does (acceptance criteria, tech stack,
- * non-functional requirements, phases) and fill any gaps before approving. */
-const PRD_HEADLESS_MSG =
-  "Use docs/IDEA.md and any docs/requirements-source.md as source material. Headless mode: auto-proceed with explicit assumptions. Author docs/PRD.md plus docs/features/*.md directly for every solution, including a one-feature project. Keep shared requirements in the vision and feature requirements and executable tasks in their owning feature only. Use canonical IDs and compact version-2 task contracts; do not duplicate requirements in traceability tables. Do not create a monolithic PRD or a second task catalogue. Validate coverage, acceptance criteria, technology stack, security, privacy, accessibility and feature dependencies before approval. Run validate-prd. Do not generate agents or project skills, compile a manifest, or start execution; the launcher invokes those stages separately.";
+/** Requirements stages are always interactive (ADR-060). The team and
+ * project-skill stages remain headless because they are mechanical derivations
+ * of a human-reviewed PRD. */
+
+/** Requirements authoring is interactive: a session, not a headless run. Both
+ * handoffs use the same skill so an existing repository gets the repo-inspection
+ * interview rather than a fabricated one. */
+const PRD_INTERACTIVE_MSG =
+  "Interview me to fill the gaps, then author docs/PRD.md plus docs/features/*.md directly, including for a one-feature project. " +
+  "Keep shared requirements in the vision and feature requirements and executable tasks in their owning feature only. " +
+  "Use canonical IDs and compact version-2 task contracts; do not duplicate requirements in traceability tables. " +
+  "Do not create a monolithic PRD or a second task catalogue. Validate coverage, acceptance criteria, technology stack, " +
+  "security, privacy, accessibility and feature dependencies before approval, then run validate-prd. " +
+  "Do not generate agents or project skills, compile a manifest, or start execution.";
 
 const EXISTING_PROJECT_PRD_MSG =
-  "Author the project's requirements using forge-build-prd. Inspect existing code, documentation, tests, configuration and git history as source material. Headless mode: ask no questions and record assumptions. Produce docs/PRD.md plus docs/features/*.md directly, even for one feature. Feature-based authoring is mandatory for every solution; there is no size threshold or monolithic execution path. Preserve accepted requirement meanings and stable task IDs, but keep each definition and task in one canonical document. Use compact version-2 contracts and ID-only traceability. Supplied legacy documents are historical source material, never active task catalogues. Do not implement code, generate agents or skills, compile a manifest, or start the workflow engine.";
+  "Author the project's requirements using forge-build-prd. Inspect existing code, documentation, tests, configuration and git history as source material, " +
+  "then interview me about what the code cannot tell you (intended product, scope, priorities, acceptance criteria) before drafting. " +
+  "Produce docs/PRD.md plus docs/features/*.md directly, even for one feature. Feature-based authoring is mandatory for every solution; " +
+  "there is no size threshold or monolithic execution path. Preserve accepted requirement meanings and stable task IDs, but keep each definition and " +
+  "task in one canonical document. Use compact version-2 contracts and ID-only traceability. Supplied legacy documents are historical source " +
+  "material, never active task catalogues. Do not implement code, generate agents or skills, compile a manifest, or start the workflow engine.";
 
 const TASK_AUTHORING_CHECK = " Author bounded executable tasks inside Phase N headings, not one task per roadmap increment. Separate independently testable behaviors and ownership boundaries; retain atomic safety invariants together. Name concrete output files and validation commands covering every touched surface, including UI and infrastructure. Separate human rubric scores and sign-off into dependent human-review tasks. Name the composition root that mounts each new component in some task's outputs, and give every external-service integration a dependent live integration check. References and outputs must not overlap. Review each task against forge-build-prd/references/task-contract.md.";
 
@@ -470,7 +485,7 @@ const TASK_AUTHORING_CHECK = " Author bounded executable tasks inside Phase N he
  *   - no PRD         → /forge-auto-build-prd (idea → PRD)
  */
 function autobuildCommand(): string {
-  if (!hasPrd()) return "/forge-auto-build-prd Use docs/IDEA.md as the project idea. Author the PRD only; continue separate team and skills stages with forge-launcher resume.";
+  if (!hasPrd()) return `/forge-auto-build-prd Use docs/IDEA.md as the project idea. ${PRD_INTERACTIVE_MSG} Author the PRD only; continue separate team and skills stages with forge-launcher resume.`;
   if (hasGeneratedTeam()) {
     const readiness = authoringReadiness(state.repoDir, harnessRootDir());
     if (readiness.nextStage === "skills") return buildSkillsPrompt();
@@ -501,7 +516,9 @@ function headlessSkillMsgForSession(): string {
     }
     return "/forge-auto-build Use docs/PRD.md and docs/features/*.md as canonical requirements. GO";
   }
-  return `/forge-auto-build-prd ${PRD_HEADLESS_MSG}`;
+  // No PRD: a headless session cannot author requirements (ADR-060). The team
+  // prompt is still correct, and authoring the PRD is a separate interactive step.
+  return `/forge-auto-build-prd Use docs/IDEA.md as the project idea. ${PRD_INTERACTIVE_MSG}`;
 }
 
 function headlessRunnerSelection(): AuthoringRunnerSelection {
@@ -519,6 +536,21 @@ async function headlessCmdFor(msg: string): Promise<string> {
     ? { ...await resolveAuthoringModel(state.repoDir, stage, runner, state.options.models, state.env, state.options.dependencies?.inventoryProbe), runnerSource }
     : { runner, source: "inherit" as const, runnerSource };
   return `${runner} ${authoringArgv(invocation, state.repoDir, msg).map((arg) => /^[a-zA-Z0-9_-]+$/.test(arg) ? arg : JSON.stringify(arg)).join(" ")}`;
+}
+
+async function authoringHandoffCmdFor(msg: string): Promise<string> {
+  const runner = headlessRunner();
+  if (runner === "stub" || authoringStageForSkill(skillNameFromMsg(msg)) !== "prd") {
+    return headlessCmdFor(msg);
+  }
+  const invocation = await resolveAuthoringModel(state.repoDir, "prd", runner, state.options.models, state.env, state.options.dependencies?.inventoryProbe);
+  const modelArgs = invocation.effectiveModel ? ["--model", invocation.effectiveModel] : [];
+  const args = runner === "copilot"
+    ? ["-i", msg, "--yolo", ...modelArgs]
+    : runner === "claude"
+      ? [...modelArgs, msg]
+      : ["--prompt", msg, ...modelArgs];
+  return `${runner} ${args.map((arg) => JSON.stringify(arg)).join(" ")}`;
 }
 
 /** Extracts the skill name from a skill invocation message ("/name rest…"). */
@@ -582,11 +614,27 @@ async function validateAuthoringOutputs(stage: AuthoringStage, skill: string, be
   return outputs;
 }
 
+/** ADR-060: requirements stages are never run non-interactively in production.
+ * The offline stub runner, or an explicit test-only override, is the sole
+ * exception so the automated suite can still exercise the pipeline. */
+export function requirementsAuthoringAllowed(
+  runner: AuthoringRunner,
+  allowNonInteractiveRequirements?: (runner: AuthoringRunner) => boolean,
+): boolean {
+  return runner === "stub" || allowNonInteractiveRequirements?.(runner) === true;
+}
+
+function headlessEnvFor(stage: AuthoringStage | undefined, runner: AuthoringRunner, allowNonInteractiveRequirements?: (runner: AuthoringRunner) => boolean): NodeJS.ProcessEnv {
+  if (stage === "prd" && !requirementsAuthoringAllowed(runner, allowNonInteractiveRequirements)) return {};
+  return { FORGE_HEADLESS: "1" };
+}
+
 /**
  * Runs a skill invocation headlessly. Returns true when the skill was found and
  * executed (exit 0), false when the skill file is missing from the harness dir.
  * Sets FORGE_HEADLESS=1 for the child so the forge skills' headless gate fires
- * deterministically. Honors FORGE_RUN_WITH=stub for offline testing.
+ * deterministically, except for requirements stages (ADR-060). Honors
+ * FORGE_RUN_WITH=stub for offline testing.
  */
 async function runSkillHeadless(msg: string, opts: LauncherOptions): Promise<boolean> {
   opts = { ...state.options, ...opts };
@@ -657,7 +705,7 @@ async function runSkillHeadless(msg: string, opts: LauncherOptions): Promise<boo
     else {
       const code = await runLoggedStep("Running the skill (may take a while)", runner, args, {
         cwd: state.repoDir, dryRun: opts.dryRun,
-        env: { FORGE_HEADLESS: "1", FORGE_HARNESS: state.harness },
+        env: { ...headlessEnvFor(stage, runner, state.options.dependencies?.allowNonInteractiveRequirements), FORGE_HARNESS: state.harness },
       });
       if (code !== 0) throw new Error(`Skill runner exited with code ${code}`);
     }
@@ -758,6 +806,7 @@ async function runStubSkill(msg: string, opts: LauncherOptions): Promise<boolean
       "---",
       "name: stub-project-agent",
       'description: "Stub project agent generated by the forge-launcher stub skill runner."',
+      "mode: all",
       "---",
       "# Stub Project Agent",
       "",
@@ -895,13 +944,13 @@ async function diagnoseAutoDraftFail(skillName: string): Promise<void> {
   }
 }
 
-/** Offers to run the failed skill interactively (or prints the command). */
+/** Offers to open a session for a failed authoring stage (or prints it). */
 async function offerManualRun(skillName: string, opts: LauncherOptions): Promise<void> {
   if (opts.nonInteractive) {
     out(`    Run it manually in the repo: /${skillName} Use docs/IDEA.md as the project idea`);
     return;
   }
-  const answer = await promptYesNo(`Open the harness CLI now to run /${skillName} manually?`, "n");
+  const answer = await promptYesNo(`Open the harness CLI now to run /${skillName}?`, "n");
   if (answer === "n") {
     info("To run it manually:");
     out(`    cd "${state.repoDir}"`);
@@ -911,41 +960,72 @@ async function offerManualRun(skillName: string, opts: LauncherOptions): Promise
   await openCliFor(`/${skillName} Use docs/IDEA.md as the project idea. Run only this authoring stage.`);
 }
 
-async function autoDraftPrd(opts: LauncherOptions): Promise<void> {
+/** Requirements authoring is always interactive (ADR-060). `opts.draft` and
+ * FORGE_AUTO_DRAFT still decide whether the step runs at all, but the only
+ * non-interactive implementation is the offline stub runner. */
+async function interactivePrdStep(opts: LauncherOptions): Promise<void> {
   if (hasPrd()) return;
-  if (opts.nonInteractive) {
-    if (!envFlag("FORGE_AUTO_DRAFT") && !opts.draft) return;
-  } else {
-    const def = opts.draft ? "y" : "n";
-    const answer = await promptYesNo(
-      "Generate the PRD from docs/IDEA.md automatically now (headless, auto-proceed with best answers)?",
-      def,
-    );
-    if (answer === "n") return;
-  }
-
-  out("");
-  info("Auto-drafting the PRD from docs/IDEA.md (headless) …");
-  const skill = "forge-auto-build-prd";
-  const ran = await runSkillHeadless(
-    `/${skill} ${PRD_HEADLESS_MSG}`,
-    opts,
-  );
-  if (!ran) return;
-  await draftCommit("docs: add auto-drafted PRD");
-
-  if (hasPrd()) {
-    state.prdAdded = true;
-    ok("PRD generated.");
+  if (opts.nonInteractive ? (!envFlag("FORGE_AUTO_DRAFT") && !opts.draft) : !(await confirmPrdStep(opts))) return;
+  const invocation = prdAuthoringInvocation();
+  // The offline stub runner is the single sanctioned non-interactive
+  // requirements path, so the automated suite can still exercise this stage.
+  if (requirementsAuthoringAllowed(headlessRunner(), state.options.dependencies?.allowNonInteractiveRequirements)) {
     out("");
-    out("  Review it before continuing:");
-    out(`    - ${link(path.join(state.repoDir, "docs", "PRD.md"))}`);
-    out("    - docs/features/*.md");
-    await pauseForResume(opts, "PRD drafted");
-  } else {
-    await diagnoseAutoDraftFail(skill);
-    await offerManualRun(skill, opts);
+    info("Auto-drafting the PRD (offline stub runner) …");
+    if (await runSkillHeadless(invocation, opts)) await draftCommit("docs: add auto-drafted PRD");
+    if (hasPrd()) {
+      state.prdAdded = true;
+      ok("PRD generated.");
+      out("");
+      out("  Review it before continuing:");
+      out(`    - ${link(path.join(state.repoDir, "docs", "PRD.md"))}`);
+      out("    - docs/features/*.md");
+    } else {
+      await diagnoseAutoDraftFail(skillNameFromMsg(invocation));
+      await offerManualRun(skillNameFromMsg(invocation), opts);
+    }
+    return;
   }
+  out("");
+  info("The PRD is the one artifact a human must judge, so it is always authored");
+  info("in an interactive session. Everything after it - team, skills, manifest,");
+  info("build - runs headless from what you approve.");
+  await openCliFor(invocation);
+  await pauseForResume(opts, "the PRD session was opened");
+}
+
+/** Step 8 still asks before opening a session; there is simply no headless choice. */
+async function confirmPrdStep(opts: LauncherOptions): Promise<boolean> {
+  out("");
+  const answer = await promptYesNo(
+    "Open a session to author the PRD interactively now? (requirements are never auto-drafted)",
+    opts.draft ? "y" : "n",
+  );
+  return answer === "y";
+}
+
+/** The skill to invoke for the current project's source material. Both branches
+ * author vision + features; only the prompt differs. */
+function prdAuthoringInvocation(): string {
+  return hasIdeaOrSource()
+    ? `/forge-auto-build-prd Use docs/IDEA.md and any docs/requirements-source.md as source material. ${PRD_INTERACTIVE_MSG}`
+    : EXISTING_PROJECT_PRD_INVOCATION;
+}
+
+const EXISTING_PROJECT_PRD_INVOCATION = `/forge-build-prd ${EXISTING_PROJECT_PRD_MSG}`;
+
+function hasIdea(): boolean {
+  return fs.existsSync(path.join(state.repoDir, "docs", "IDEA.md"));
+}
+
+/** An imported requirements source is authored from the same skill as an idea. */
+function hasIdeaOrSource(): boolean {
+  return hasIdea() || fs.existsSync(path.join(state.repoDir, "docs", "requirements-source.md"));
+}
+
+/** Retained name for the Step 8 call site; now always hands off to a session. */
+async function autoDraftPrd(opts: LauncherOptions): Promise<void> {
+  await interactivePrdStep(opts);
 }
 
 function engineRunArgs(): string[] {
@@ -1089,8 +1169,11 @@ async function runEngineDetached(opts: LauncherOptions): Promise<void> {
   if (!hasPrd()) {
     warn("Canonical requirements are missing (docs/PRD.md + docs/features/*.md).");
     warn("The engine compiles the manifest from the PRD, so the detached run will");
-    warn("fail at the compile step until a PRD exists. Generate one with forge-auto-build-prd first.");
+    warn("fail at the compile step until a PRD exists.");
+    warn("Requirements are always authored interactively (ADR-060):");
+    command(`    /forge-auto-build-prd Use docs/IDEA.md as the project idea. ${PRD_INTERACTIVE_MSG}`);
     out("");
+    return;
   }
   const logDir = path.join(state.repoDir, "docs");
   fs.mkdirSync(logDir, { recursive: true });
@@ -1201,8 +1284,11 @@ async function autoDraftTeam(opts: LauncherOptions): Promise<void> {
 
 async function autoDraftMenu(opts: LauncherOptions): Promise<void> {
   if (!hasPrd() && !fs.existsSync(path.join(state.repoDir, "docs", "IDEA.md"))) return;
+  // PRD first: it is a handoff to an interactive session, and the team stage is a
+  // derivation of an approved PRD, so it never runs against absent requirements.
   await autoDraftPrd(opts);
   if (state.stopped) return;
+  if (!hasPrd()) return;
   await autoDraftTeam(opts);
 }
 
@@ -1609,15 +1695,16 @@ async function launchAutobuild(opts: LauncherOptions): Promise<void> {
       out("  orchestrator) for an interactive build, or forge-launcher engine-run");
       out("  for autonomous execution through the workflow engine.");
     } else {
-      out("  The repository is bootstrapped and ready for forge-auto-build.");
-      out("  forge-auto-build will generate the agent team, then execute the build");
-      out("  (add 'GO --workflow-engine' at its pre-flight gate to run via the");
-      out("  workflow engine instead of the prompt-driven orchestrator).");
+      out("  The repository is bootstrapped and ready for team generation.");
+      out("  Requirements are authored in an interactive session first; once your");
+      out("  PRD is in place, forge-auto-build generates the agent team, then executes");
+      out("  the build (add 'GO --workflow-engine' at its pre-flight gate to run via");
+      out("  the workflow engine instead of the prompt-driven orchestrator).");
     }
   } else {
-    out("  The repository is bootstrapped. forge-auto-build-prd will turn your idea");
-    out("  into a reviewed PRD, then forge-auto-build will generate the agent team");
-    out("  and execute the build.");
+    out("  The repository is bootstrapped. Author the PRD next in an interactive");
+    out("  session - requirements are always interviewed, never auto-drafted -");
+    out("  then forge-auto-build generates the agent team and executes the build.");
   }
   out("");
 
@@ -1625,7 +1712,16 @@ async function launchAutobuild(opts: LauncherOptions): Promise<void> {
     info("Headless mode: driving the queued skill directly from the terminal");
     out("  (no interactive CLI session will be opened).");
     out("");
-    if (!hasPrd() && await runDraftPrdInternal(state.repoDir) !== 0) throw new Error("PRD authoring failed.");
+    if (!hasPrd()) {
+      // ADR-060: requirements authoring is always interactive, so a headless run
+      // stops with a handoff rather than authoring a PRD nobody reviewed.
+      fail("No canonical requirements. A headless run cannot author the PRD (ADR-060).");
+      info("Author the PRD in an interactive session first, then re-run:");
+      command(`/forge-auto-build-prd ${PRD_INTERACTIVE_MSG}`);
+      out("");
+      info("Then: forge-launcher resume   (or add --headless to run the rest unattended)");
+      return;
+    }
     if (await runDraftTeamInternal(state.repoDir) !== 0) throw new Error("Team authoring failed.");
     if (await runDraftSkillsInternal(state.repoDir) !== 0) throw new Error("Skill authoring failed.");
     if (await runCompileManifestInternal(state.repoDir) !== 0) throw new Error("Manifest compilation failed.");
@@ -1647,7 +1743,7 @@ async function launchAutobuild(opts: LauncherOptions): Promise<void> {
     const answer = await promptYesNo(`Launch ${cli} in the new repository now?`, "n");
     if (answer === "n") {
       info("To launch manually:");
-      if (authoringStageForSkill(skillNameFromMsg(autobuildCommand()))) command(await headlessCmdFor(autobuildCommand()));
+      if (authoringStageForSkill(skillNameFromMsg(autobuildCommand()))) command(await authoringHandoffCmdFor(autobuildCommand()));
       else {
         out(`    cd "${state.repoDir}" && ${cli} ${extra.join(" ")}`);
         out(`    Then: ${autobuildCommand()}`);
@@ -1694,7 +1790,7 @@ async function launchAutobuild(opts: LauncherOptions): Promise<void> {
     case "agents":
       info("Open the repository in your agent harness and run:");
       out("");
-      if (authoringStageForSkill(skillNameFromMsg(autobuildCommand()))) command(await headlessCmdFor(autobuildCommand()));
+      if (authoringStageForSkill(skillNameFromMsg(autobuildCommand()))) command(await authoringHandoffCmdFor(autobuildCommand()));
       else out(`    ${autobuildCommand()}`);
       out("");
       info("Agent templates are in:");
@@ -1884,38 +1980,33 @@ async function resumePrdStep(opts: ResumeOptions): Promise<boolean> {
   const prior = readAuthoringState(state.repoDir).stages.prd;
   if (hasPrd() && (!prior || prior.status === "complete")) return true;
   if (!fs.existsSync(path.join(state.repoDir, "docs", "IDEA.md")) && !fs.existsSync(path.join(state.repoDir, "docs", "requirements-source.md"))) return true;
+  // ADR-060: there is no headless branch here. Requirements are authored in a
+  // session, so both interactive and non-interactive callers get a handoff.
+  const invocation = prdAuthoringInvocation();
   if (opts.nonInteractive) {
-    out("  No PRD yet. Next: author canonical features from the idea or imported requirements source:");
-    command(await headlessCmdFor(`/forge-auto-build-prd ${PRD_HEADLESS_MSG}`));
+    warn("No PRD yet, and requirements authoring is always interactive (ADR-060).");
+    warn("This run stops with a handoff instead of drafting requirements for you.");
+    out("");
+    out("  Author it in a harness session with the queued skill:");
+    command(await authoringHandoffCmdFor(invocation));
+    out("");
+    out("  Then re-run: forge-launcher resume");
     return false;
   }
   out("  No PRD yet. The idea or imported source is ready for canonical feature authoring.");
+  out("  This stage is always interactive: it interviews you so the requirements are");
+  out("  right before the team, manifest and engine stages are derived from them.");
   out("");
   const choice = await promptSelect("How do you want to create the PRD?", [
-    { value: "draft", label: "Auto-draft it now", hint: "headless forge-auto-build-prd" },
-    { value: "cli", label: "Open the harness CLI to draft it manually" },
+    { value: "cli", label: "Open the harness CLI to author it interactively" },
+    { value: "grill", label: "First grill the idea to sharpen it", hint: "forge-grill-idea, then the PRD" },
     { value: "stop", label: "Stop here" },
-  ], { initial: "draft" });
+  ], { initial: "cli" });
   if (choice === "stop") return false;
-  if (choice === "cli") {
-    await openCliFor("/forge-auto-build-prd Use docs/IDEA.md as the project idea");
-    return false;
-  }
-  const ran = await runSkillHeadless(`/forge-auto-build-prd ${PRD_HEADLESS_MSG}`, opts);
-  if (!ran) return false;
-  await draftCommit("docs: add auto-drafted PRD");
-  if (hasPrd()) {
-    state.prdAdded = true;
-    ok("PRD generated.");
-    out("");
-    out("  Review it before continuing:");
-    out(`    - ${link(path.join(state.repoDir, "docs", "PRD.md"))}`);
-    out("    - docs/features/*.md");
-  } else {
-    await diagnoseAutoDraftFail("forge-auto-build-prd");
-    return false;
-  }
-  return true;
+  await openCliFor(choice === "grill"
+    ? "/forge-grill-idea Read docs/IDEA.md and any docs/research/*.md, then grill me in rounds to sharpen the idea. After I confirm shared understanding, rewrite docs/IDEA.md (and the root IDEA.md copy) and commit. Do not author the PRD, generate the team, or start a build."
+    : invocation);
+  return false;
 }
 
 /** Stage: generate the agent team from the PRD. */
@@ -1965,6 +2056,24 @@ async function resumeTeamStep(opts: ResumeOptions): Promise<boolean> {
  * docs/IDEA.md (when absent). Non-interactive by design — the console triggers
  * it, the user reviews the result (and comes back) in the UI.
  */
+/**
+ * ADR-060: the Console pipeline cannot author requirements. This reports why and
+ * points at the interactive session instead; the caller (a headless job) then
+ * fails rather than writing an unreviewed PRD.
+ */
+function interactivePrdHandoff(repoDir: string, skill: "forge-auto-build-prd" | "forge-build-prd"): number {
+  out("");
+  fail("Requirements authoring is interactive (ADR-060); it is not run as a background job.");
+  info("Open an interactive session and answer the interview:");
+  command(`    ${skill} …`);
+  out("");
+  info("The Forge Console offers this directly as the primary action on the Overview card.");
+  info("Then: forge-launcher resume");
+  return 1;
+}
+
+/** ADR-060: `draft-prd` keeps the stub-runner path for offline use and otherwise
+ * reports the interactive handoff. */
 async function runDraftPrdInternal(repoDir: string): Promise<number> {
   setupStateForRepo(repoDir);
   const prior = readAuthoringState(repoDir).stages.prd;
@@ -1972,13 +2081,9 @@ async function runDraftPrdInternal(repoDir: string): Promise<number> {
     out("PRD already exists.");
     return 0;
   }
-  const ideaPath = path.join(repoDir, "docs", "IDEA.md");
-  const context = fs.existsSync(ideaPath)
-    ? "Use docs/IDEA.md as the project idea."
-    : "This is an existing repository with no IDEA.md. Inspect the existing source code, docs, tests, package manifests, and git history as the project context; infer the product purpose and ask no questions.";
-  out(fs.existsSync(ideaPath) ? "Auto-drafting the PRD from docs/IDEA.md (headless) …" : "Auto-drafting a context-aware PRD from the existing repository (headless) …");
-  const ran = await runSkillHeadless(`/forge-auto-build-prd ${context} ${PRD_HEADLESS_MSG.replace("Use docs/IDEA.md as the project idea. ", "")}`, { nonInteractive: true });
-  if (!ran) return 1;
+  if (!requirementsAuthoringAllowed(headlessRunner(), state.options.dependencies?.allowNonInteractiveRequirements)) return interactivePrdHandoff(repoDir, "forge-auto-build-prd");
+  out("Auto-drafting the PRD (offline stub runner) …");
+  if (!await runSkillHeadless(prdAuthoringInvocation(), { nonInteractive: true })) return 1;
   if (state.options.dryRun) return 0;
   await draftCommit("docs: add auto-drafted PRD");
   if (hasPrd()) {
@@ -1990,11 +2095,12 @@ async function runDraftPrdInternal(repoDir: string): Promise<number> {
   return 1;
 }
 
-async function existingPrdIsValid(): Promise<boolean> {
+async function existingPrdIsValid(validateAllFeatures = false): Promise<boolean> {
   const prior = readAuthoringState(state.repoDir).stages.prd;
-  const featureFiles = prior?.outputs.length && prior.outputs.every((file) => file.startsWith("docs/features/")) ? prior.outputs : undefined;
+  const featureFiles = !validateAllFeatures && prior?.outputs.length && prior.outputs.every((file) => file.startsWith("docs/features/")) ? prior.outputs : undefined;
   try {
-    await validateAuthoredPrd(state.repoDir, { allowLegacy: !prior, featureFiles });
+    const outputs = await validateAuthoredPrd(state.repoDir, { allowLegacy: !prior, featureFiles });
+    recordAuthoringStageSuccess(state.repoDir, "prd", outputs, harnessRootDir());
     return true;
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
@@ -2004,15 +2110,15 @@ async function existingPrdIsValid(): Promise<boolean> {
   }
 }
 
-/** Authors a project PRD from an existing repository without an IDEA.md. */
+/** ADR-060: existing-repository requirements are authored in a session. The stub
+ * runner keeps the offline path; every other runner gets the handoff. */
 async function runDraftExistingPrdInternal(repoDir: string): Promise<number> {
   setupStateForRepo(repoDir);
   const prior = readAuthoringState(repoDir).stages.prd;
   if (hasPrd() && (!prior || prior.status === "complete") && await existingPrdIsValid()) { out("PRD already exists."); return 0; }
-  out("Authoring a project PRD from the existing repository (headless) …");
-  const skill = "forge-build-prd";
-  const ran = await runSkillHeadless(`/${skill} ${EXISTING_PROJECT_PRD_MSG}`, { nonInteractive: true });
-  if (!ran) return 1;
+  if (!requirementsAuthoringAllowed(headlessRunner(), state.options.dependencies?.allowNonInteractiveRequirements)) return interactivePrdHandoff(repoDir, "forge-build-prd");
+  out("Authoring a project PRD from the existing repository (offline stub runner) …");
+  if (!await runSkillHeadless(EXISTING_PROJECT_PRD_INVOCATION, { nonInteractive: true })) return 1;
   if (state.options.dryRun) return 0;
   await draftCommit("docs: add project PRD");
   if (hasPrd()) {
@@ -2020,7 +2126,7 @@ async function runDraftExistingPrdInternal(repoDir: string): Promise<number> {
     out(`    - ${link(path.join(repoDir, "docs", "PRD.md"))}`);
     return 0;
   }
-  await diagnoseAutoDraftFail(skill);
+  await diagnoseAutoDraftFail("forge-build-prd");
   return 1;
 }
 
@@ -2044,6 +2150,19 @@ async function runFeaturePrdInternal(repoDir: string, featurePrompt?: string): P
     featurePrompt = await prompt("What feature should be added?", "");
   }
   if (!featurePrompt.trim()) return 1;
+  // ADR-060: a feature document is requirements, so it is authored in a session.
+  // The stub runner is the sole non-interactive path (offline tests only).
+  if (!requirementsAuthoringAllowed(headlessRunner(), state.options.dependencies?.allowNonInteractiveRequirements)) {
+    recordFeatureIncrementHandoff(repoDir);
+    authoringEvent("authoring.failed", { operation: "feature-prd", stage: "interactive-required" });
+    out("");
+    fail("Feature authoring is interactive (ADR-060); it is not run headlessly.");
+    info("Open an interactive session and answer the interview:");
+    command(`    /forge-build-feature-prd I want to add ${featurePrompt.trim()} to this project.`);
+    out("");
+    info("Then re-run: forge-launcher resume");
+    return 1;
+  }
   const message = `/forge-build-feature-prd I want to add ${featurePrompt.trim()} to this project. Analyze the existing PRD, features, codebase and team. Author the new canonical feature under docs/features/ and register it in the PRD feature table with exact dependency names. Preserve existing feature definitions and task IDs; reuse shared canonical requirements via version-2 contracts. Do not generate agents or skills, compile a manifest, or start the workflow engine.` + (retryFiles.length ? ` Repair the failed feature documents in place: ${retryFiles.join(", ")}. Preserve unrelated existing features.` : "");
   const ran = await runSkillHeadless(message, { nonInteractive: true });
   if (state.options.dryRun) return 0;
@@ -2073,10 +2192,33 @@ async function runFeaturePrdInternal(repoDir: string, featurePrompt?: string): P
 async function runFeatureIncrementInternal(repoDir: string, featurePrompt: string | undefined, run = false): Promise<number> {
   setupStateForRepo(repoDir);
   authoringEvent("authoring.started", { operation: "feature-increment", run });
+  // The feature stage needs a session (ADR-060) and reports its own handoff;
+  // team/skills/compile below it are headless derivations.
   const featureCode = await runFeaturePrdInternal(repoDir, featurePrompt);
   if (featureCode !== 0) { authoringEvent("authoring.failed", { operation: "feature-increment", stage: "feature-prd", code: featureCode }); return featureCode; }
   const featureOutputs = readAuthoringState(repoDir).stages.prd?.outputs ?? [];
   authoringEvent("authoring.stage.completed", { operation: "feature-increment", stage: "feature-prd" });
+  return continueFeatureIncrementStages(repoDir, featureOutputs, run);
+}
+
+async function prepareFeatureIncrementInternal(repoDir: string): Promise<number> {
+  setupStateForRepo(repoDir);
+  authoringEvent("authoring.started", { operation: "feature-increment", continuation: true });
+  if (!hasPrd() || !hasGeneratedTeam()) {
+    fail("Feature increment continuation requires an existing PRD and generated agent team.");
+    return 1;
+  }
+  if (!featureIncrementHandoffHasChange(repoDir)) {
+    fail("Feature increment continuation requires a feature added or changed after opening an interactive feature-authoring session.");
+    return 1;
+  }
+  if (!await existingPrdIsValid(true)) return 1;
+  const code = await continueFeatureIncrementStages(repoDir, [], false);
+  if (code === 0) clearFeatureIncrementHandoff(repoDir);
+  return code;
+}
+
+async function continueFeatureIncrementStages(repoDir: string, featureOutputs: string[], run: boolean): Promise<number> {
   const teamCode = await runDraftTeamInternal(repoDir, true);
   if (teamCode !== 0) { authoringEvent("authoring.failed", { operation: "feature-increment", stage: "team", code: teamCode }); return teamCode; }
   authoringEvent("authoring.stage.completed", { operation: "feature-increment", stage: "team" });
@@ -2285,6 +2427,14 @@ function printMonitorCommands(): void {
 }
 
 async function openCliFor(cmd: string): Promise<void> {
+  // A dry run prints commands instead of opening anything. Without this a dry run
+  // (including the automated suite's) spawns a real detached terminal per stage,
+  // and those detached `bash → cli` chains hold their stdio open indefinitely.
+  if (state.options.dryRun) {
+    warn("Dry-run: not opening an interactive session.");
+    command(await authoringHandoffCmdFor(cmd));
+    return;
+  }
   const stage = authoringStageForSkill(skillNameFromMsg(cmd));
   if (stage) {
     const runner = headlessRunner();
@@ -2293,7 +2443,7 @@ async function openCliFor(cmd: string): Promise<void> {
     const args = invocation.effectiveModel ? ["--model", invocation.effectiveModel] : [];
     if (runner === "opencode") args.unshift(state.repoDir);
     const launched = await launchCliInTerminal(runner, state.repoDir, args);
-    if (!launched) warn(`Could not open the authoring terminal. Run: ${await headlessCmdFor(cmd)}`);
+    if (!launched) warn(`Could not open the authoring terminal. Run: ${await authoringHandoffCmdFor(cmd)}`);
     authoringEvent("authoring.handoff", { stage, ...invocation, argv: args });
     out(`    Then run only this stage: ${cmd}`);
     out("    Continue with forge-launcher resume to select the next stage's model independently.");
@@ -2564,6 +2714,9 @@ export function runFeaturePrd(repoDir: string, featurePrompt?: string, options: 
 }
 export function runFeatureIncrement(repoDir: string, featurePrompt: string | undefined, run = false, options: LauncherOptions = {}): Promise<number> {
   return withLauncherSession({ ...options, nonInteractive: true }, () => runFeatureIncrementInternal(repoDir, featurePrompt, run));
+}
+export function continueFeatureIncrement(repoDir: string, options: LauncherOptions = {}): Promise<number> {
+  return withLauncherSession({ ...options, nonInteractive: true }, () => prepareFeatureIncrementInternal(repoDir));
 }
 export function runDraftTeam(repoDir: string, featureIncrement = false, options: LauncherOptions = {}): Promise<number> {
   return withLauncherSession({ ...options, nonInteractive: true }, () => runDraftTeamInternal(repoDir, featureIncrement));

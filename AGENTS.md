@@ -24,7 +24,8 @@ Guidance for AI coding agents working in this repository (MyForge).
 - **Changelog:** every user-visible change adds a new
   `## <Month> <Year> - v<ver>` section at the top of `docs/updates.md` and bumps
   the README's `**Latest:**` line. Notable features also get a new ADR under
-  `docs/adr/NNN-*.md` (increment the number; ADR-055 is the latest).
+  `docs/adr/NNN-*.md` (increment the number; ADR-061 is the latest). Two ADR-028
+  files exist from a numbering collision; use the next unused number.
 - **Documentation and reference checks:** use
   [`docs/documentation-map.md`](docs/documentation-map.md) to identify the
   authoritative documents and update triggers before changing code. Update

@@ -2,18 +2,30 @@ import spawn from "cross-spawn";
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
-import { command, warn } from "./format.ts";
+import { command, isInteractiveTty, warn } from "./format.ts";
 
 /**
  * Launches a CLI (copilot/opencode/claude) inside a new terminal window in the
  * given directory. Returns true on success, false when no supported terminal
  * emulator is found (caller prints fallback instructions).
+ *
+ * Refuses outright when the process has no TTY, unless the caller explicitly
+ * allows it. A detached terminal launched from a pipe or a test harness is
+ * unreachable, and because the script ends in `; exec bash` the emulator holds
+ * a shell open with nobody able to close it. The Forge Console is the one
+ * legitimate non-TTY caller: it exists to open terminals on the user's behalf.
  */
 export function launchCliInTerminal(
   cliName: string,
   repoDir: string,
   args: string[] = [],
+  options: { allowWithoutTty?: boolean } = {},
 ): Promise<boolean> {
+  if (!options.allowWithoutTty && !isInteractiveTty()) {
+    warn("No interactive terminal available; open a terminal manually and run:");
+    command(`cd "${repoDir}" && ${cliName} ${args.join(" ")}`);
+    return Promise.resolve(false);
+  }
   if (os.platform() === "win32") {
     return launchWindows(cliName, repoDir, args);
   }

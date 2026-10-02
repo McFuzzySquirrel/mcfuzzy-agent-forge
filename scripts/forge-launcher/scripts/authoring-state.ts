@@ -25,7 +25,15 @@ export interface AuthoringStageState {
   /** Skills-stage candidates with `action: "reuse"`, satisfied outside this repo. */
   reusedSkills?: string[];
 }
-export interface AuthoringState { version: 1; stages: Partial<Record<AuthoringStage, AuthoringStageState>> }
+export interface FeatureIncrementHandoff {
+  featureFingerprints: Record<string, string>;
+  createdAt: string;
+}
+export interface AuthoringState {
+  version: 1;
+  stages: Partial<Record<AuthoringStage, AuthoringStageState>>;
+  featureIncrementHandoff?: FeatureIncrementHandoff;
+}
 export const authoringStatePath = (repo: string) => path.join(repo, "docs", "authoring-state.json");
 
 export function readAuthoringState(repo: string): AuthoringState {
@@ -47,6 +55,50 @@ export function readAuthoringState(repo: string): AuthoringState {
 export function saveAuthoringStage(repo: string, stage: AuthoringStage, value: AuthoringStageState): void {
   const state = readAuthoringState(repo);
   state.stages[stage] = value;
+  writeAuthoringJson(authoringStatePath(repo), state);
+}
+
+export function recordAuthoringStageSuccess(repo: string, stage: AuthoringStage, outputs: string[], harnessRoot: string): void {
+  const prior = readAuthoringState(repo).stages[stage];
+  saveAuthoringStage(repo, stage, {
+    status: "complete",
+    inputFingerprint: stageInputFingerprint(repo, stage, harnessRoot),
+    outputs,
+    outputFingerprint: fingerprintFiles(repo, outputs),
+    completedAt: new Date().toISOString(),
+    ...(prior?.invocation ? { invocation: prior.invocation } : {}),
+  });
+}
+
+function featureDocumentFingerprints(repo: string): Record<string, string> {
+  const directory = path.join(repo, "docs", "features");
+  if (!fs.existsSync(directory) || !fs.statSync(directory).isDirectory()) return {};
+  return Object.fromEntries(fs.readdirSync(directory).filter((name) => name.endsWith(".md"))
+    .filter((name) => fs.statSync(path.join(directory, name)).isFile())
+    .sort()
+    .map((name) => [name, createHash("sha256").update(fs.readFileSync(path.join(directory, name))).digest("hex")]));
+}
+
+export function recordFeatureIncrementHandoff(repo: string): void {
+  const state = readAuthoringState(repo);
+  state.featureIncrementHandoff = {
+    featureFingerprints: featureDocumentFingerprints(repo),
+    createdAt: new Date().toISOString(),
+  };
+  writeAuthoringJson(authoringStatePath(repo), state);
+}
+
+export function featureIncrementHandoffHasChange(repo: string): boolean {
+  const baseline = readAuthoringState(repo).featureIncrementHandoff?.featureFingerprints;
+  if (!baseline || typeof baseline !== "object" || Array.isArray(baseline)) return false;
+  const current = featureDocumentFingerprints(repo);
+  return Object.entries(current).some(([name, fingerprint]) => baseline[name] !== fingerprint);
+}
+
+export function clearFeatureIncrementHandoff(repo: string): void {
+  const state = readAuthoringState(repo);
+  if (!state.featureIncrementHandoff) return;
+  delete state.featureIncrementHandoff;
   writeAuthoringJson(authoringStatePath(repo), state);
 }
 

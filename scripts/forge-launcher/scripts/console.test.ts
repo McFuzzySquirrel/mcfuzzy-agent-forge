@@ -8,6 +8,7 @@ import { get as httpGet, request as httpRequest } from "node:http";
 import { startConsoleServer, type ConsoleServer } from "./console/server.ts";
 import type { SpawnOptions } from "./console/control.ts";
 import { writeFeatureFixture } from "./feature-fixture.ts";
+import { featureIncrementHandoffHasChange, recordFeatureIncrementHandoff } from "./authoring-state.ts";
 
 const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
@@ -487,17 +488,18 @@ test("timeout update rejects invalid values and missing token", async () => {
   });
 });
 
-test("PRD, team, and manifest actions dispatch and return ok", async () => {
+test("requirements actions are refused; team, skills, and manifest still dispatch", async () => {
   await withServer(async (server, repo, spawned) => {
     const token = server.token;
+    const spawnedBefore = spawned.calls.length;
 
-    const prd = await postJson(`${server.url}/api/control`, { action: "draft-prd" }, { "X-Forge-Token": token });
-    assert.equal((prd.body as { ok: boolean }).ok, true);
-    assert.ok((prd.body as { message: string }).message.includes("PRD"), "message should mention PRD");
-
-    const existingPrd = await postJson(`${server.url}/api/control`, { action: "draft-existing-prd" }, { "X-Forge-Token": token });
-    assert.equal((existingPrd.body as { ok: boolean }).ok, true);
-    assert.ok(spawned.calls.at(-1)?.args.includes("draft-existing-prd"), "existing-project PRD action should spawn its dedicated subcommand");
+    // ADR-060: a requirements stage is not a background job.
+    for (const action of ["draft-prd", "draft-existing-prd", "feature-prd"]) {
+      const body = (await postJson(`${server.url}/api/control`, { action, prompt: "a search box" }, { "X-Forge-Token": token })).body as { ok: boolean; message: string };
+      assert.equal(body.ok, false, `${action} should not report success`);
+      assert.match(body.message, /interactive/i, `${action} should name the interactive path`);
+    }
+    assert.equal(spawned.calls.length, spawnedBefore, "requirements actions must not spawn a job");
 
     const team = await postJson(`${server.url}/api/control`, { action: "draft-team" }, { "X-Forge-Token": token });
     assert.equal((team.body as { ok: boolean }).ok, true);
@@ -508,32 +510,49 @@ test("PRD, team, and manifest actions dispatch and return ok", async () => {
     assert.equal((compile.body as { ok: boolean }).ok, true);
     assert.ok((compile.body as { message: string }).message.includes("Manifest"), "message should mention manifest");
     assert.ok(spawned.calls.at(-1)?.args.includes("compile-manifest"), "compile-manifest action should spawn the compile-manifest subcommand");
-    for (const call of spawned.calls.slice(-3)) {
+    for (const call of spawned.calls.slice(-2)) {
       assert.equal(call.opts.logFile, join(repo, "docs", "engine-run.log"));
     }
   });
 });
 
-test("feature-increment accepts a prompt and optional run flag", async () => {
+test("feature-increment requires a prompt and then reports the interactive handoff", async () => {
   await withServer(async (server, repo, spawned) => {
     const token = server.token;
     const missing = await postJson(`${server.url}/api/control`, { action: "feature-increment" }, { "X-Forge-Token": token });
     assert.equal(missing.status, 400);
 
+    const spawnedBefore = spawned.calls.length;
     const result = await postJson(`${server.url}/api/control`, {
       action: "feature-increment",
       prompt: "Add a search screen",
       run: true,
     }, { "X-Forge-Token": token });
+    // ADR-060: the feature stage is requirements, so it cannot be one job.
+    assert.equal((result.body as { ok: boolean }).ok, false);
+    assert.match((result.body as { message: string }).message, /interactive/i);
+    assert.equal(spawned.calls.length, spawnedBefore, "no job should be spawned");
+  });
+});
+
+test("feature-increment continuation requires a changed feature after the interactive handoff", async () => {
+  await withServer(async (server, repo, spawned) => {
+    const spawnedBefore = spawned.calls.length;
+    const premature = await postJson(`${server.url}/api/control`, {
+      action: "feature-increment-continue",
+    }, { "X-Forge-Token": server.token });
+    assert.equal((premature.body as { ok: boolean }).ok, false);
+    assert.equal(spawned.calls.length, spawnedBefore);
+
+    recordFeatureIncrementHandoff(repo);
+    writeFileSync(join(repo, "docs", "features", "new-feature.md"), "# New feature\n\nA new requirement.\n");
+    assert.equal(featureIncrementHandoffHasChange(repo), true);
+    const result = await postJson(`${server.url}/api/control`, {
+      action: "feature-increment-continue",
+    }, { "X-Forge-Token": server.token });
+    assert.equal(result.status, 200);
     assert.equal((result.body as { ok: boolean }).ok, true);
-    const call = spawned.calls.at(-1);
-    assert.ok(call?.args.includes("feature-increment"));
-    assert.ok(call?.args.includes("--prompt"));
-    assert.ok(call?.args.includes("Add a search screen"));
-    assert.ok(call?.args.includes("--run"));
-    assert.equal((result.body as { job: { type: string; run: boolean } }).job.type, "feature-increment");
-    assert.equal((result.body as { job: { type: string; run: boolean } }).job.run, true);
-    assert.equal(call?.opts.cwd, repo);
+    assert.ok(spawned.calls.at(-1)?.args.join(" ").includes("feature-increment-continue"));
   });
 });
 
@@ -1006,6 +1025,9 @@ test("authoring session endpoint launches an interactive grill session", async (
       assert.equal((feature.body as { ok: boolean }).ok, true);
       assert.match(calls[2]?.args[1] ?? "", /forge-build-feature-prd/);
       assert.match(calls[2]?.args[1] ?? "", /add billing/);
+      const handoff = JSON.parse(readFileSync(join(repo, "docs", "authoring-state.json"), "utf8")).featureIncrementHandoff;
+      assert.deepEqual(Object.keys(handoff.featureFingerprints), ["fixture.md"]);
+      assert.equal(featureIncrementHandoffHasChange(repo), false, "the session receipt captures the pre-session feature fingerprint");
 
       const unknown = await postJson(`${replacement.url}/api/authoring/session`, { target: "nope" }, { "X-Forge-Token": replacement.token });
       assert.equal(unknown.status, 400);

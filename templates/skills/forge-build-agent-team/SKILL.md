@@ -53,14 +53,15 @@ architecture/build and QA; add domain agents only when the source requires
 them. For each agent define expertise, references, responsibilities by path or
 requirement, constraints, output standards, validation, gotchas, and
 collaboration. Agent `name` must match its filename and every description must
-be single-line, double-quoted YAML.
+be single-line, double-quoted YAML. Every agent declares `mode: all` in its
+frontmatter; never write `mode: subagent` or `mode: primary`.
 
 ### Step 3: Write the team
 
 Write only new or affected files under the resolved harness agents directory.
 Do not create a permanent persona for skill generation. Generated agents must
-use stable names and qualified ownership references. Preserve existing
-manifest IDs and downstream artifacts in incremental work.
+use stable names, `mode: all`, and qualified ownership references. Preserve
+existing manifest IDs and downstream artifacts in incremental work.
 
 ### Step 4: Identify skill candidates
 
@@ -110,6 +111,12 @@ block any failing axis rather than relying on an average.
 
 ## Gotchas
 
+- **A specialist is not a subagent.** `mode: subagent` makes an agent
+  subagent-only in OpenCode: it disappears from primary-agent cycling and can
+  only be reached by dispatch or `@` mention. Generated agents must declare
+  `mode: all` so the same file serves as the session agent and as a
+  Task-dispatched specialist. Copilot and Claude Code ignore the key, like
+  `modelFallback`.
 - **Team/package boundary.** Creating a skill package here bypasses the
   independent skills model and makes retries regenerate valid teams.
 - **Candidate names are stable.** Preserve the existing candidate name and
@@ -128,6 +135,8 @@ block any failing axis rather than relying on an average.
 - [ ] Every requirement maps to exactly one agent.
 - [ ] No agent ownership overlaps or orphan required roles exist.
 - [ ] Existing unaffected files and manifest IDs are unchanged.
+- [ ] Every agent's frontmatter declares `mode: all` (no `subagent`, no
+      `primary`).
 - [ ] `docs/SKILL-CANDIDATES.json` validates against the versioned handoff.
 - [ ] Every non-omit candidate consumer resolves to a generated agent name.
 - [ ] `validate-frontmatter.mjs` and `validate-team.mjs` pass with structural

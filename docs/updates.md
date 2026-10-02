@@ -4,6 +4,114 @@ Detailed release and change notes for MyForge.
 
 ---
 
+## October 2026 - v3.91
+
+### Generated agents declare `mode: all` instead of landing as subagent-only
+
+- **Specialists were disappearing from OpenCode's agent switcher.** `mode` is
+  the one field that decides whether an agent can drive the session or can only
+  be dispatched. Nothing in the forge constrained it, so the writing model chose
+  it — and "specialist agent" is a strong prior for `mode: subagent`, which
+  removes the agent from primary-agent cycling. It remains reachable by dispatch
+  or `@` mention, but cannot be selected as the agent driving the session. A
+  generated team was therefore not directly selectable as the primary agent.
+
+- **Every generated agent now declares `mode: all` explicitly.** One specialist
+  file serves both roles: selectable as the session's agent *and* dispatchable
+  as a subagent. `forge-build-agent-team` requires it in Steps 2 and 3, explains
+  it in Gotchas, and checks it in its Validation checklist.
+  `feature-increment-mode.md` covers the incremental path — new agents get
+  `mode: all`, and normalizing the `mode` key is the one permitted frontmatter
+  edit on an agent the feature otherwise leaves untouched, so teams generated
+  before this change converge on the next increment instead of staying frozen.
+  `vision-features-mode.md` inherits the parent rule.
+
+- **The shipped personas comply.** `forge-team-builder`,
+  `project-orchestrator`, and `workflow-orchestrator` all declare `mode: all`,
+  as do the launcher's offline stub agent and the Console screenshot fixture.
+  `forge-assign-models` Apply mode is unaffected: it rewrites only `model:` and
+  `modelFallback:` and preserves every other key.
+
+- **The frontmatter gate warns rather than blocks.** `validate-frontmatter.mjs`
+  reports agent files that omit `mode` or declare something other than `all`,
+  and leaves the exit code alone. `mode` is OpenCode-specific — Copilot and
+  Claude Code agent frontmatter does not define it — so a hard gate would either
+  impose an OpenCode concept on every harness or make the contract depend on
+  which root a repository uses. The forge already writes portable fields that
+  non-honoring harnesses ignore (`modelFallback`, ADR-003/ADR-006); this keeps
+  that position, and an already-bootstrapped repository keeps building.
+
+- See [ADR-061](adr/061-agent-mode-all.md). It extends ADR-028 (native
+  `--agent` selection only helps if the agent is selectable at all) and the team
+  stage's existing frontmatter gate from ADR-041.
+
+## October 2026 - v3.90
+
+### The PRD is no longer auto-drafted — requirements authoring is always interactive
+
+- **Auto-building a PRD produced a confidently wrong spec that everything
+  downstream implemented faithfully.** The team, the execution manifest, and the
+  workflow engine are all mechanical derivations of `docs/PRD.md` plus
+  `docs/features/*.md`, so a headless requirements stage that inferred scope,
+  stack, and acceptance criteria from defaults yielded a green, passing,
+  entirely wrong build. That is the one failure mode nothing downstream can
+  detect, and it costs the whole project rather than one stage.
+
+- **Every operation that writes requirements is now interactive.** That covers
+  idea → PRD, existing-repository → PRD, feature documents, `forge-grill-idea`,
+  and `forge-decompose-prd` conversion. The rule is one sentence: **authoring
+  requirements is interactive; deriving from a reviewed PRD is headless.** The
+  team and project-skill stages stay headless, so CI and offline rebuilds still
+  work once a reviewed PRD exists.
+
+- **The five skills no longer contain a headless allowance.** `forge-build-prd`,
+  `forge-auto-build-prd`, `forge-build-feature-prd`, `forge-decompose-prd`, and
+  `forge-grill-idea` each had an opt-out that skipped the interview and recorded
+  default assumptions. Each fired on `FORGE_HEADLESS=1`, embedded
+  "auto-proceed" text, *or* a noninteractive invocation — so removing only the
+  visible toggle would have left three doors open. A noninteractive invocation now
+  reports the decisions it needs as blocking questions instead of assuming them.
+
+- **`--draft` and `FORGE_AUTO_DRAFT` are retargeted** to the team and
+  project-skill stages. A launcher run with no PRD opens a session or prints the
+  exact command and stops; it no longer drafts one. The `draft-prd`,
+  `draft-existing-prd`, and `feature-prd` subcommands report that handoff
+  instead of authoring.
+
+- **The Console no longer offers a headless alternative for the PRD stage.** The
+  Overview pipeline card already made interactive authoring primary; the
+  secondary "Auto-draft PRD (headless)" button is gone, and the documents-view
+  retry button for the PRD stage now opens the same interactive session. The
+  `draft-prd` / `draft-existing-prd` / `feature-prd` control actions return a
+  message pointing at it rather than a 400, so older clients degrade clearly.
+  Feature authoring is interactive too; **Continue after authoring** runs the
+  affected-team and manifest derivation without attempting to author requirements.
+
+- **A latent terminal-spawning leak is fixed.** `launchCliInTerminal` had no TTY
+  guard, so any piped or `--dry-run` launcher run could spawn a real detached
+  `gnome-terminal → bash → <cli>` chain. Because the posix launch script ends in
+  `; exec bash`, each one held a shell and its file descriptors open that
+  nothing could reach to close — enough of them produced `EMFILE: too many open
+  files`. It now refuses without a TTY and prints the command instead; the
+  Console passes an explicit `allowWithoutTty` opt-out, since opening terminals
+  on the user's behalf is its purpose. `openCliFor` also honors `--dry-run`,
+  which it previously did not.
+
+- **Offline coverage is preserved through the existing stub convention.**
+  Requirements authoring is allowed non-interactively only under
+  `FORGE_RUN_WITH=stub`; real runners never author requirements unattended.
+
+- **Deliberate capability loss:** a run can no longer go from `FORGE_IDEA` to a
+  finished build unattended. This is accepted, not overlooked — the removed flow
+  produced false confidence rather than throughput. Unattended operation now
+  begins at the team stage, gated on a reviewed PRD already existing.
+
+- See [ADR-060](adr/060-interactive-requirements-authoring.md). It amends
+  ADR-051 (which kept headless authoring "as an explicit alternative"), ADR-020,
+  ADR-018, and ADR-037 (which sanctioned inferring a project PRD from source
+  code without questions), and is consistent with ADR-009's existing "the PRD is
+  a quality gate, not an input to be manufactured" principle.
+
 ## October 2026 - v3.89
 
 ### Console concurrency labels now say "parallel tasks", not "parallel agents"
