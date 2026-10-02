@@ -4,6 +4,15 @@ Detailed release and change notes for MyForge.
 
 ---
 
+## October 2026 - v3.92
+
+### Fix Console human-review approval in globally installed launcher
+
+- The Console now loads its bundled workflow-engine TypeScript modules through
+  the launcher's existing `tsx` runtime. This avoids Node's native type-stripping
+  restriction on `.ts` files located under `node_modules`, which previously
+  returned a 400 error when confirming a human review.
+
 ## October 2026 - v3.91
 
 ### Generated agents declare `mode: all` instead of landing as subagent-only

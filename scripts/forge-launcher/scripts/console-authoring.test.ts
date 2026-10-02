@@ -60,6 +60,16 @@ test("authoring settings API is token-gated, validates shape, and clears to inhe
 
 test("human-review Console action records evidence and rejects non-review tasks", async (t) => {
   const root = fixture(t);
+  const engineScriptsDir = path.join(root, "node_modules", "forge-test", "resources", "templates", "skills", "forge-workflow-engine", "scripts");
+  const sourceTemplates = resolveResources().templatesDir;
+  fs.mkdirSync(path.dirname(engineScriptsDir), { recursive: true });
+  fs.cpSync(path.join(sourceTemplates, "skills", "forge-workflow-engine", "scripts"), engineScriptsDir, { recursive: true });
+  fs.cpSync(
+    path.join(sourceTemplates, "skills", "forge-execution-adapter", "scripts"),
+    path.join(engineScriptsDir, "..", "..", "forge-execution-adapter", "scripts"),
+    { recursive: true },
+  );
+  fs.writeFileSync(path.join(root, "node_modules", "forge-test", "package.json"), '{"type":"module"}\n');
   const manifestPath = path.join(root, "docs", "EXECUTION-MANIFEST.json");
   const implementation = {
     id: "REVIEW-1",
@@ -89,7 +99,7 @@ test("human-review Console action records evidence and rejects non-review tasks"
   implementation.expectedOutputs = [];
   implementation.validationCommands = [];
   fs.writeFileSync(manifestPath, `${JSON.stringify(manifest, null, 2)}\n`);
-  const server = await startConsoleServer({ repoRoot: root, port: port++, open: false });
+  const server = await startConsoleServer({ repoRoot: root, port: port++, open: false, engineScriptsDir });
   t.after(() => server.stop());
   const post = (body: unknown) => fetch(`${server.url}/api/tasks/human-review`, {
     method: "POST", headers: { "Content-Type": "application/json", "X-Forge-Token": server.token }, body: JSON.stringify(body),

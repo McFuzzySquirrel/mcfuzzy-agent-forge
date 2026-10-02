@@ -6,6 +6,7 @@ import os from "node:os";
 import path from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import { spawn } from "node:child_process";
+import { tsImport } from "tsx/esm/api";
 
 import { resolveResources } from "../resources.ts";
 import { resolveInputFile } from "../paths.ts";
@@ -45,6 +46,7 @@ export interface ConsoleServerOptions {
   /** Test overrides. */
   clientDir?: string;
   boardDir?: string;
+  engineScriptsDir?: string;
   deps?: ControlDeps;
   allowExternalOpen?: boolean;
   /** Injectable "launch a harness CLI in a terminal" seam (defaults to launchCliInTerminal). */
@@ -65,10 +67,9 @@ function boardDir(): string {
   return path.join(templatesDir, "skills", "forge-workflow-engine", "scripts", "viz", "dashboard");
 }
 
-async function approveConsoleHumanReview(repoRoot: string, taskId: string, reviewer: string, notes: string): Promise<string> {
-  const { templatesDir } = resolveResources();
-  const engineScripts = path.join(templatesDir, "skills", "forge-workflow-engine", "scripts");
-  const context = await import(pathToFileURL(path.join(engineScripts, "task-context.ts")).href) as {
+async function approveConsoleHumanReview(repoRoot: string, taskId: string, reviewer: string, notes: string, engineScriptsDir?: string): Promise<string> {
+  const engineScripts = engineScriptsDir ?? path.join(resolveResources().templatesDir, "skills", "forge-workflow-engine", "scripts");
+  const context = await tsImport(pathToFileURL(path.join(engineScripts, "task-context.ts")).href, import.meta.url) as {
     writeHumanReviewEvidence: (repoRoot: string, task: ManifestTask, reviewer: string, notes: string) => string;
     approveHumanTask: (repoRoot: string, task: ManifestTask, reviewer: string, evidence: string[]) => void;
   };
@@ -77,7 +78,7 @@ async function approveConsoleHumanReview(repoRoot: string, taskId: string, revie
   // copy may not have `node_modules` installed, so importing `engine.ts` here
   // would drag in the harness and fail. `task-graph.ts` is the shared
   // definition, and the engine re-exports it.
-  const engine = await import(pathToFileURL(path.join(engineScripts, "task-graph.ts")).href) as {
+  const engine = await tsImport(pathToFileURL(path.join(engineScripts, "task-graph.ts")).href, import.meta.url) as {
     unmetPrerequisites: (manifest: unknown, state: unknown, taskId: string) => string[];
   };
   const manifest = repo.loadManifest(repoPaths(repoRoot));
@@ -550,7 +551,7 @@ export async function startConsoleServer(options: ConsoleServerOptions = {}): Pr
           const notes = typeof body.notes === "string" ? body.notes.trim() : "";
           if (!taskId || !reviewer || !notes) return sendJson(res, 400, { ok: false, message: "taskId, reviewer, and review notes are required." });
           try {
-            const reviewFile = await approveConsoleHumanReview(currentRepo, taskId, reviewer, notes);
+            const reviewFile = await approveConsoleHumanReview(currentRepo, taskId, reviewer, notes, options.engineScriptsDir);
             let job;
             if (body.resume !== false) {
               const result = controller.run("engine-resume");
