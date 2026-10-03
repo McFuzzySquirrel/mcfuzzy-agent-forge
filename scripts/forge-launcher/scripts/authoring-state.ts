@@ -200,6 +200,23 @@ export interface StalenessExplanation {
   staleInputs: StaleInput[];
 }
 
+/**
+ * Repository-relative paths are display identifiers, not filesystem paths.
+ *
+ * `listFiles` joins children with `path.join`, so a walked path arrives as
+ * `docs\features\auth.md` on Windows. That string is what the Console prints and
+ * what a reader copies into a git command, so separators are normalised where a
+ * path becomes text — otherwise one sentence mixes `docs/PRD.md` (a literal input)
+ * with `docs\features\auth.md` (a walked one).
+ *
+ * Deliberately *not* applied inside `listFiles` or `fingerprintFiles`: those
+ * strings are hashed, so changing them would invalidate every recorded
+ * fingerprint on Windows and make unchanged projects look stale.
+ */
+function displayPath(relative: string): string {
+  return relative.replace(/\\/g, "/");
+}
+
 function modifiedAt(repo: string, relative: string): string | null {
   const full = path.join(repo, relative);
   try {
@@ -220,7 +237,7 @@ function changedInputsSince(repo: string, stage: AuthoringStage, harnessRoot: st
       if (seen.has(file)) continue;
       seen.add(file);
       const at = modifiedAt(repo, file);
-      if (at && Date.parse(at) > threshold) changed.push({ path: file, modifiedAt: at });
+      if (at && Date.parse(at) > threshold) changed.push({ path: displayPath(file), modifiedAt: at });
     }
   }
   return changed.sort((a, b) => Date.parse(b.modifiedAt) - Date.parse(a.modifiedAt));

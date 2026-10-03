@@ -254,6 +254,28 @@ test("several changed inputs are all named", (t) => {
   assert.deepEqual(named, ["docs/PRD.md", "docs/features/board.md"]);
 });
 
+test("a changed file under the harness directory is named with POSIX separators", (t) => {
+  const root = repo(t);
+  const agent = `${HARNESS}/agents/api-engineer.md`;
+  write(root, "docs/PRD.md", "# PRD\n");
+  write(root, agent, "# api-engineer\n");
+  backdate(root, "docs/PRD.md");
+  backdate(root, agent);
+  saveAuthoringStage(root, "skills", { ...completeStage(root, "skills"), completedAt: PAST });
+  assert.equal(explainStaleness(root, "skills", HARNESS).stale, false, "precondition: the stage starts out current");
+
+  write(root, agent, "# api-engineer\n\nmodel: some/model\n");
+
+  const explanation = explainStaleness(root, "skills", HARNESS);
+  assert.equal(explanation.stale, true);
+  // The skills stage names the harness agents directory via `path.join`, so
+  // without normalisation this reads `.agents\agents\api-engineer.md` on Windows.
+  assert.deepEqual(explanation.staleInputs.map((entry) => entry.path), [".agents/agents/api-engineer.md"]);
+  // The reason is the string a user actually reads, so it is the contract worth
+  // pinning: one sentence must not mix `docs/PRD.md` with a Windows path.
+  assert.ok(!explanation.reason.includes("\\"), `reason leaked a separator: ${explanation.reason}`);
+});
+
 test("a deleted generated output explains staleness without blaming the inputs", (t) => {
   const root = repo(t);
   write(root, "docs/PRD.md", "# PRD\n");
