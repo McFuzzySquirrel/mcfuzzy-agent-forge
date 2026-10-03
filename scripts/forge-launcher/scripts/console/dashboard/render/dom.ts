@@ -70,6 +70,29 @@ export function fmtTime(iso: string | null | undefined): string {
   return date.toLocaleString();
 }
 
+/**
+ * Formats an ISO timestamp as an age ("3h ago", "just now"). Used to explain
+ * *why* something is stale — "docs/PRD.md changed 3h ago, after this stage
+ * completed" lands better than an absolute time the reader has to subtract.
+ * Returns "—" for absent or unparseable input so callers can render it inline.
+ */
+export function fmtAgo(iso: string | null | undefined, now = Date.now()): string {
+  if (!iso) return "—";
+  const then = Date.parse(iso);
+  if (Number.isNaN(then)) return "—";
+  const seconds = Math.round((now - then) / 1000);
+  if (seconds < 45) return "just now";
+  const minutes = Math.round(seconds / 60);
+  if (minutes < 60) return `${minutes}m ago`;
+  const hours = Math.round(minutes / 60);
+  if (hours < 24) return `${hours}h ago`;
+  const days = Math.round(hours / 24);
+  if (days < 30) return `${days}d ago`;
+  const months = Math.round(days / 30);
+  if (months < 12) return `${months}mo ago`;
+  return `${Math.round(months / 12)}y ago`;
+}
+
 /** Formats a millisecond timeout as minutes ("600000" → "10", "90000" → "1.5"). */
 export function timeoutToMinutes(ms: number | null): string {
   if (ms === null || !Number.isFinite(ms)) return "";

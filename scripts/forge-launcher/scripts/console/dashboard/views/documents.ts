@@ -2,10 +2,11 @@
 
 import { api } from "../api.js";
 import { store } from "../state.js";
-import { el, toast } from "../render/dom.js";
+import { el, fmtAgo, toast } from "../render/dom.js";
 import { renderMarkdown } from "../render/md.js";
 import { AUTHORING_RUNNER_OPTIONS, effectiveRunner } from "../runners.js";
-import type { AgentInfo, AuthoringConfig, AuthoringInventory, AuthoringStage, AuthoringStageState, DocEntry, DocsIndex, SkillInfo, TeamIndex } from "../types.js";
+import { AUTHORING_STAGES } from "../types.js";
+import type { AgentInfo, AuthoringConfig, AuthoringInventory, AuthoringStage, AuthoringStageDetail, AuthoringStageState, BackgroundJobType, DocEntry, DocsIndex, SkillInfo, TeamIndex } from "../types.js";
 
 let unsub: Array<() => void> = [];
 let docsHost: HTMLElement | null = null;
@@ -14,6 +15,9 @@ let generation = 0;
 let authoringStagesHost: HTMLElement | null = null;
 let agentsHost: HTMLElement | null = null;
 let skillsHost: HTMLElement | null = null;
+let rederiveHost: HTMLElement | null = null;
+/** Stage requested via `#/documents?stage=<id>`; highlighted on mount. */
+let focusStage: AuthoringStage | null = null;
 
 export function unmountDocuments(): void {
   for (const u of unsub) u();
@@ -24,8 +28,16 @@ export function unmountDocuments(): void {
   authoringStagesHost = null;
   agentsHost = null;
   skillsHost = null;
+  rederiveHost = null;
+  focusStage = null;
   generation += 1;
   authoringGeneration += 1;
+}
+
+/** Reads `#/documents?stage=team`, so Overview can link straight at a stage. */
+function stageFromHash(): AuthoringStage | null {
+  const match = /[?&]stage=(prd|team|skills)\b/.exec(location.hash);
+  return match ? match[1] as AuthoringStage : null;
 }
 
 interface Section {
@@ -46,6 +58,7 @@ function section(title: string): Section {
 export function renderDocuments(container: HTMLElement): void {
   unmountDocuments();
   container.textContent = "";
+  focusStage = stageFromHash();
 
   container.appendChild(renderAuthoringSettings());
 
@@ -93,6 +106,17 @@ export function renderDocuments(container: HTMLElement): void {
     void refreshDocList();
     refreshDocuments();
   }));
+
+  // `#/documents?stage=team` arrives from the Overview's staleness reasons, so
+  // bring the card into view once the settings panel has rendered it. Done after
+  // the async load above settles, since the panel replaces its own children.
+  if (focusStage) {
+    void window.setTimeout(() => {
+      const card = authoringStagesHost?.querySelector<HTMLElement>(`[data-authoring-stage="${focusStage}"]`);
+      card?.scrollIntoView({ block: "center", behavior: "smooth" });
+      card?.focus({ preventScroll: true });
+    }, 0);
+  }
 }
 
 let docsGeneration = 0;
@@ -110,34 +134,90 @@ async function refreshDocList(): Promise<void> {
   }
 }
 
+/**
+ * Whether a stage's action can be taken right now, and — when it cannot — the
+ * reason, which is rendered next to the disabled button.
+ *
+ * The action used to be hidden unless the stage had failed or was the next one
+ * the server named, which meant the UI looked inert at exactly the moment the
+ * user needed it. A visible, disabled, explained button is strictly more
+ * informative than an absent one.
+ */
+function stageActionState(
+  stage: AuthoringStage,
+  detail: AuthoringStageDetail | undefined,
+  state: AuthoringStageState | undefined,
+  ctx: { authoringBusy: boolean; unsavedModels: boolean },
+): { label: string; enabled: boolean; reason: string; interactive: boolean } {
+  const status = detail?.status ?? "untracked";
+  const label = stage === "prd" ? "Author PRD (interactive)" : `${detail?.stale || status === "failed" ? "Regenerate" : "Retry"} ${stage.toUpperCase()}`;
+  if (stage === "prd") {
+    // ADR-060: requirements are never authored headlessly.
+    return {
+      label,
+      enabled: !ctx.authoringBusy && !ctx.unsavedModels,
+      reason: ctx.authoringBusy ? "Another authoring job is running." : ctx.unsavedModels ? "Save authoring model changes first." : "Opens your harness in a terminal.",
+      interactive: true,
+    };
+  }
+  if (ctx.authoringBusy) return { label, enabled: false, reason: "Another authoring job is running.", interactive: false };
+  if (ctx.unsavedModels) return { label, enabled: false, reason: "Save authoring model changes first.", interactive: false };
+  if (state?.noSkillsRequired) return { label, enabled: false, reason: "The skills stage recorded no skills required.", interactive: false };
+  if (detail?.stale) return { label, enabled: true, reason: "", interactive: false };
+  if (status === "failed") return { label, enabled: true, reason: "", interactive: false };
+  if (status === "untracked") return { label, enabled: true, reason: "This Console has not authored this stage.", interactive: false };
+  if (status === "complete") return { label, enabled: false, reason: "Already up to date with its inputs.", interactive: false };
+  return { label, enabled: true, reason: "", interactive: false };
+}
+
 export function refreshDocuments(): void {
   if (!authoringStagesHost) return;
-  for (const [stage] of [["prd"], ["team"], ["skills"]] as const) {
-    const state = store.summary?.authoring?.stages[stage];
+  const summary = store.summary;
+  const details = new Map((summary?.authoringStages ?? []).map((entry) => [entry.stage, entry]));
+  const authoringBusy = summary?.job?.status === "running"
+    && AUTHORING_JOB_TYPES.has(summary.job.type);
+  for (const stage of AUTHORING_STAGES) {
     const card = authoringStagesHost.querySelector<HTMLElement>(`[data-authoring-stage="${stage}"]`);
     if (!card) continue;
+    const detail = details.get(stage);
+    const state = summary?.authoring?.stages[stage];
     const badge = card.querySelector<HTMLElement>("[data-authoring-stage-status]");
     const model = card.querySelector<HTMLElement>("[data-authoring-stage-model]");
-    const error = card.querySelector<HTMLElement>("[data-authoring-stage-error]");
+    const why = card.querySelector<HTMLElement>("[data-authoring-stage-why]");
+    const outputs = card.querySelector<HTMLElement>("[data-authoring-stage-outputs]");
     const action = card.querySelector<HTMLButtonElement>("[data-authoring-stage-action]");
+    const actionNote = card.querySelector<HTMLElement>("[data-authoring-stage-action-note]");
     const presentation = stagePresentation(stage, state);
+
     if (badge) {
-      badge.className = `badge badge-${presentation.className}`;
-      badge.textContent = presentation.label;
+      // A stale stage is not "complete" any more, whatever its last run said.
+      badge.className = `badge badge-${detail?.stale ? "stale" : presentation.className}`;
+      badge.textContent = detail?.stale ? "stale" : presentation.label;
     }
     if (model) model.textContent = `${state?.invocation?.effectiveModel ?? "runner default"}${state?.outputs.length ? ` · ${state.outputs.length} output${state.outputs.length === 1 ? "" : "s"}` : ""}`;
-    if (error) {
-      error.textContent = state?.error ?? "";
-      error.hidden = !state?.error;
+    if (why) {
+      const reason = detail?.stale ? detail.reason : state?.error ?? "";
+      why.textContent = reason;
+      why.hidden = !reason;
     }
-    if (action) {
-      const stale = state?.status === "complete" && store.summary?.authoringNextStage === stage;
-      const available = (state?.status === "failed" || stale) && !state.noSkillsRequired;
-      action.hidden = !available;
-      action.textContent = stale ? `Regenerate ${stage.toUpperCase()}` : `Retry ${stage.toUpperCase()}`;
-      action.disabled = !available;
+    if (outputs) {
+      const at = detail?.completedAt;
+      outputs.textContent = at ? `last completed ${fmtAgo(at)}` : "";
+      outputs.hidden = !at;
+    }
+    if (action && actionNote) {
+      const actionState = stageActionState(stage, detail, state, {
+        authoringBusy,
+        unsavedModels: card.dataset.dirty === "true",
+      });
+      action.textContent = actionState.label;
+      action.disabled = !actionState.enabled;
+      action.classList.toggle("authoring-stage-action-disabled", !actionState.enabled);
+      actionNote.textContent = actionState.reason;
+      actionNote.hidden = !actionState.reason;
     }
   }
+  if (rederiveHost) renderRederiveFooter(rederiveHost);
 }
 
 function renderAuthoringSettings(): HTMLElement {
@@ -152,6 +232,12 @@ function renderAuthoringSettings(): HTMLElement {
 }
 
 let authoringGeneration = 0;
+
+/** Job types that occupy the authoring pipeline, so a stage action must defer. */
+const AUTHORING_JOB_TYPES = new Set<BackgroundJobType>([
+  "draft-prd", "draft-existing-prd", "draft-team", "draft-skills", "rederive",
+  "feature-prd", "feature-increment", "create-project",
+]);
 
 function stagePresentation(stage: AuthoringStage, state: AuthoringStageState | undefined): { label: string; className: string } {
   if (state?.noSkillsRequired) return { label: "not required", className: "complete" };
@@ -168,6 +254,10 @@ async function loadAuthoringSettings(panel: HTMLElement, generation: number): Pr
     const [config, inventory] = await Promise.all([api.authoringConfig(), api.authoringInventory()]);
     if (generation !== authoringGeneration) return;
     panel.replaceChildren(buildAuthoringSettings(panel, config, inventory));
+    // A live snapshot can arrive while the settings panel is still loading, when
+    // there are no stage cards to update yet, and nothing else re-runs the
+    // refresh — so the fresh cards would keep their placeholder text.
+    refreshDocuments();
   } catch (error) {
     if (generation !== authoringGeneration) return;
     panel.replaceChildren(
@@ -298,18 +388,17 @@ function buildAuthoringSettings(panel: HTMLElement, initial: AuthoringConfig, in
 
   const stageCards = stages.map(([stage, label]) => {
     const state = store.summary?.authoring?.stages[stage];
+    const detail = store.summary?.authoringStages?.find((entry) => entry.stage === stage);
     const output = state?.outputs.length ? ` · ${state.outputs.length} output${state.outputs.length === 1 ? "" : "s"}` : "";
     const presentation = stagePresentation(stage, state);
-    const stale = state?.status === "complete" && store.summary?.authoringNextStage === stage;
     const actionButton = el("button", { className: "btn btn-sm", type: "button", "data-authoring-stage-action": "true" }) as HTMLButtonElement;
     retryButtons.push({ button: actionButton, stage });
-    actionButton.hidden = !(state?.status === "failed" || stale) || Boolean(state?.noSkillsRequired);
     // ADR-060: the PRD stage is a handoff to an interactive session; only the
     // derivation stages retry as headless background jobs.
     const prdStage = stage === "prd";
     actionButton.textContent = prdStage
       ? `Author ${label.replace(" authoring model", "")} in a session (interactive)`
-      : `${stale ? "Regenerate" : "Retry"} ${label.replace(" authoring model", "")}`;
+      : stageActionState(stage, detail, state, { authoringBusy: false, unsavedModels: dirty }).label;
     actionButton.addEventListener("click", () => {
       if (dirty || saveInFlight) {
         toast("Save authoring model changes before retrying this stage.");
@@ -329,29 +418,91 @@ function buildAuthoringSettings(panel: HTMLElement, initial: AuthoringConfig, in
         .catch((error) => toast(error instanceof Error ? error.message : "retry failed"))
         .finally(() => { actionButton.disabled = false; });
     });
-    return el("div", { className: "authoring-stage", "data-authoring-stage": stage }, [
+    const card = el("div", { className: "authoring-stage", "data-authoring-stage": stage, tabindex: "-1" }, [
       el("div", { className: "row between wrap" }, [
         el("strong", null, label.replace(" model", "")),
-        el("span", { className: `badge badge-${presentation.className}`, "data-authoring-stage-status": "true" }, presentation.label),
+        el("span", { className: `badge badge-${detail?.stale ? "stale" : presentation.className}`, "data-authoring-stage-status": "true" }, detail?.stale ? "stale" : presentation.label),
       ]),
       el("span", { className: "dim small", "data-authoring-stage-model": "true" }, `${state?.invocation?.effectiveModel ?? (presentation.className === "no-run" ? "existing project artifact" : config.models[stage] ?? "runner default")}${output}`),
-      el("span", { className: "error-text small", "data-authoring-stage-error": "true", hidden: state?.error ? null : true }, state?.error ?? ""),
+      el("span", { className: "dim small", "data-authoring-stage-outputs": "true", hidden: true }),
+      el("span", { className: "error-text small", "data-authoring-stage-why": "true", hidden: true }),
       actionButton,
+      el("span", { className: "dim small", "data-authoring-stage-action-note": "true", hidden: true }),
     ]);
+    if (stage === focusStage) card.classList.add("authoring-stage-focus");
+    return card;
   });
   updateRetryState();
   const stageHost = el("div", { className: "authoring-stages" }, stageCards);
   authoringStagesHost = stageHost;
+  // The footer lives inside the rebuilt panel: `panel.replaceChildren(...)`
+  // discards anything appended before the async load finished, so a footer
+  // mounted outside it silently disappears on the first refresh.
+  rederiveHost = el("div", { className: "rederive-footer" });
+  rederiveHost.replaceChildren(renderRederiveFooter(rederiveHost));
 
   return el("div", null, [
     el("div", { className: "field" }, [el("label", { for: "authoring-runner" }, "Authoring runner"), runnerSelect]),
     el("div", { className: "form-row" }, stages.map(([stage, label]) => el("div", { className: "field" }, [el("label", { for: `authoring-model-${stage}` }, label), selects.get(stage)!]))),
     el("div", { className: "row gap wrap" }, [save, refresh, status]),
     stageHost,
+    rederiveHost,
     store.summary?.authoringReady === false
       ? el("p", { className: "error-text", role: "alert" }, "Authoring is incomplete; build controls remain unavailable until the active stages are ready.")
       : null,
   ]);
+}
+
+/**
+ * "Re-derive all" footer with live chain progress.
+ *
+ * Regenerating the team and the project skills in the right order is the one
+ * action a user almost always wants together, and doing it as two separate
+ * clicks in two collapsed sections was the main complaint about this view. The
+ * chain never authors requirements and never resets completed tasks.
+ */
+function renderRederiveFooter(host: HTMLElement): HTMLElement {
+  const summary = store.summary;
+  const progress = summary?.rederive ?? null;
+  const staleStages = (summary?.authoringStages ?? []).filter(
+    (entry) => (entry.stage === "team" || entry.stage === "skills") && (entry.stale || entry.status === "failed"),
+  );
+  const actionable = staleStages.length > 0 || Boolean(progress?.failedStep);
+  const children: HTMLElement[] = [];
+
+  const button = el("button", { className: "btn btn-primary btn-sm", type: "button" },
+    progress?.failedStep ? `Retry from ${progress.failedStep}` : "Re-derive team & skills") as HTMLButtonElement;
+  const busy = summary?.job?.status === "running" && AUTHORING_JOB_TYPES.has(summary.job.type);
+  button.disabled = Boolean(busy) || !actionable;
+  if (busy) children.push(el("span", { className: "dim small" }, "An authoring job is running."));
+  else if (!actionable) children.push(el("span", { className: "dim small" }, "Nothing to re-derive: the team and project skills match their inputs."));
+  button.addEventListener("click", () => {
+    button.disabled = true;
+    void api.rederive(progress?.failedStep ?? undefined)
+      .then((result) => toast(result.message))
+      .catch((error) => toast(error instanceof Error ? error.message : "re-derivation failed to start"))
+      .finally(() => { button.disabled = false; });
+  });
+  children.push(button);
+
+  if (staleStages.length > 0) {
+    children.push(el("ul", { className: "rederive-causes" }, staleStages.map((entry) => el("li", null, [
+      el("strong", null, `${entry.stage === "team" ? "Team" : "Skills"}: `),
+      entry.reason,
+    ]))));
+  }
+  if (progress && progress.steps.length > 0) {
+    children.push(el("ul", { className: "rederive-steps", role: "status", "aria-live": "polite" },
+      progress.steps.map((entry) => el("li", { className: `rederive-step rederive-step-${entry.status}` }, [
+        el("div", { className: "row gap wrap" }, [
+          el("span", { className: `badge badge-${entry.status === "complete" ? "complete" : entry.status}` }, entry.status),
+          el("span", null, entry.label),
+          entry.status === "running" ? el("span", { className: "spinner", "aria-hidden": "true" }) : null,
+        ].filter(Boolean) as HTMLElement[]),
+        entry.message ? el("div", { className: "dim small" }, entry.message) : null,
+      ]))));
+  }
+  return el("div", { className: "rederive-footer" }, children);
 }
 
 async function refreshGeneratedListings(): Promise<void> {

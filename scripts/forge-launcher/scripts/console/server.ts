@@ -17,7 +17,9 @@ import { consoleAuthoringInventory, selectedAuthoringRunner } from "./authoring.
 import { isRunnerChoice, loadAuthoringConfig, saveAuthoringConfig, validateAuthoringConfig } from "../authoring-config.ts";
 import { resolveAuthoringModel, type AuthoringRunner, type InventoryProbe } from "../authoring-inventory.ts";
 import { validateAuthoredPrd } from "../prd-validation.ts";
+import { loadEngineConfig } from "../engine-config.ts";
 import { featureIncrementHandoffHasChange, recordAuthoringStageSuccess, recordFeatureIncrementHandoff } from "../authoring-state.ts";
+import { REDERIVE_STEPS, rederiveProgress, type RederiveStepId } from "../rederive-state.ts";
 import {
   detectHarnessRoot,
   loadRegistry,
@@ -65,6 +67,76 @@ export interface ConsoleServer {
 function boardDir(): string {
   const { templatesDir } = resolveResources();
   return path.join(templatesDir, "skills", "forge-workflow-engine", "scripts", "viz", "dashboard");
+}
+
+// ─── Board layout ─────────────────────────────────────────────────────────────
+//
+// The Console used to answer `/api/layout` with `null`, so the embedded board
+// re-derived its own geometry in JavaScript (`kanbanFromManifest`) while the
+// tested TypeScript layout in the engine served only the standalone `--viz`
+// server. That is two implementations of the same board, and for the Gantt —
+// whose forecast must agree with the engine's dispatch rule — it would be two
+// implementations of a scheduling algorithm.
+//
+// The engine's viz modules are imported through the same `tsx` seam the
+// human-review approval already uses, and memoized: `tsImport` re-transpiles on
+// every call, which would be paid on every layout request.
+
+type LayoutModules = {
+  layoutManifest: (manifest: unknown, options?: unknown) => unknown;
+  layoutGantt: (manifest: unknown, state: unknown, options?: unknown) => unknown;
+};
+
+const layoutModuleCache = new Map<string, Promise<LayoutModules>>();
+
+function loadLayoutModules(engineScriptsDir?: string): Promise<LayoutModules> {
+  const engineScripts = engineScriptsDir ?? path.join(resolveResources().templatesDir, "skills", "forge-workflow-engine", "scripts");
+  const cached = layoutModuleCache.get(engineScripts);
+  if (cached) return cached;
+  const loaded = (async () => {
+    const layout = await tsImport(pathToFileURL(path.join(engineScripts, "viz", "layout.ts")).href, import.meta.url) as LayoutModules;
+    const gantt = await tsImport(pathToFileURL(path.join(engineScripts, "viz", "gantt.ts")).href, import.meta.url) as LayoutModules;
+    return { layoutManifest: layout.layoutManifest, layoutGantt: gantt.layoutGantt };
+  })();
+  layoutModuleCache.set(engineScripts, loaded);
+  // A failed import must not be cached, or one transient error would leave the
+  // board without a layout until the Console restarts.
+  loaded.catch(() => layoutModuleCache.delete(engineScripts));
+  return loaded;
+}
+
+/**
+ * Durations observed so far in this run, keyed by task id.
+ *
+ * Harvested from `task.complete` audit events rather than only from current state
+ * so a task that failed and was retried contributes every attempt, which is what
+ * makes the median meaningful. This is the Gantt's best available evidence; the
+ * estimate ladder falls back to the owning agent's median and then a constant.
+ */
+function observedDurations(audit: ReturnType<typeof repo.loadAudit>): Record<string, number[]> {
+  const samples: Record<string, number[]> = {};
+  for (const event of audit) {
+    if (event.action !== "task.complete" || !event.taskId || typeof event.durationMs !== "number") continue;
+    if (!Number.isFinite(event.durationMs) || event.durationMs <= 0) continue;
+    (samples[event.taskId] ??= []).push(event.durationMs);
+  }
+  return samples;
+}
+
+async function buildLayout(repoRoot: string, engineScriptsDir?: string): Promise<unknown> {
+  const p = repoPaths(repoRoot);
+  const manifest = repo.loadManifest(p);
+  if (!manifest) return null;
+  const state = repo.loadState(p);
+  const { layoutManifest, layoutGantt } = await loadLayoutModules(engineScriptsDir);
+  const concurrency = Math.max(0, Number(loadEngineConfig(repoRoot)?.concurrency) || 0);
+  return {
+    kanban: layoutManifest(manifest, {}),
+    gantt: layoutGantt(manifest, state, {
+      concurrency,
+      observedDurationsMs: observedDurations(repo.loadAudit(p)),
+    }),
+  };
 }
 
 async function approveConsoleHumanReview(repoRoot: string, taskId: string, reviewer: string, notes: string, engineScriptsDir?: string): Promise<string> {
@@ -312,10 +384,22 @@ export async function startConsoleServer(options: ConsoleServerOptions = {}): Pr
 
   function snapshotEvent(): unknown {
     const p = currentPaths();
+    if (!p) return { summary: null, manifest: null, state: null, layout: null };
+    // Each source is read independently. A repository in a half-authored state (a
+    // harness root that does not exist yet, an unreadable manifest) must not take
+    // down the whole event stream, or every other view stops updating as well.
+    const safe = <T,>(read: () => T): T | null => {
+      try {
+        return read();
+      } catch (error) {
+        onLog(`console snapshot: ${error instanceof Error ? error.message : String(error)}`);
+        return null;
+      }
+    };
     return {
-      summary: p ? repo.summary(p) : null,
-      manifest: p ? repo.loadManifest(p) : null,
-      state: p ? repo.loadState(p) : null,
+      summary: safe(() => repo.summary(p)),
+      manifest: safe(() => repo.loadManifest(p)),
+      state: safe(() => repo.loadState(p)),
       layout: null,
     };
   }
@@ -440,6 +524,8 @@ export async function startConsoleServer(options: ConsoleServerOptions = {}): Pr
           }
           case "/api/actions":
             return p ? sendJson(res, 200, repo.actions(p)) : sendJson(res, 200, { canRun: false, canResume: false, canPause: false, canStop: false, failedTasks: [] });
+          case "/api/rederive":
+            return p ? sendJson(res, 200, rederiveProgress(p.repoRoot)) : sendJson(res, 200, null);
           case "/api/projects": {
             repo.refreshJobs();
             const projects = loadRegistry()
@@ -452,7 +538,15 @@ export async function startConsoleServer(options: ConsoleServerOptions = {}): Pr
           case "/api/state":
             return p ? sendJson(res, 200, repo.loadState(p)) : sendJson(res, 200, null);
           case "/api/layout":
-            return sendJson(res, 200, null);
+            if (!p) return sendJson(res, 200, null);
+            return buildLayout(p.repoRoot, options.engineScriptsDir)
+              .then((layout) => sendJson(res, 200, layout))
+              .catch((error: unknown) => {
+                // The board degrades to its own client-side geometry rather than
+                // showing nothing, so a layout failure must not blank the view.
+                onLog(`board layout unavailable: ${error instanceof Error ? error.message : String(error)}`);
+                return sendJson(res, 200, null);
+              });
           case "/api/token":
             return sendJson(res, 200, { token });
         }
@@ -501,6 +595,12 @@ export async function startConsoleServer(options: ConsoleServerOptions = {}): Pr
         if (urlPath === "/api/control") {
           const action = body.action as ControlAction;
           const taskId = typeof body.taskId === "string" ? body.taskId : undefined;
+          // Only the re-derivation chain accepts a starting step; anything else
+          // in `from` is ignored rather than rejected so an older client that
+          // sends the field cannot break an unrelated action.
+          const from = typeof body.from === "string" && REDERIVE_STEPS.includes(body.from as RederiveStepId)
+            ? body.from as RederiveStepId
+            : undefined;
           if (!currentRepo) return sendJson(res, 400, { ok: false, message: "no repo selected" });
           if (action === "feature-increment-continue" && !featureIncrementHandoffHasChange(currentRepo)) {
             return sendJson(res, 200, { ok: false, message: "Add or change a feature in the interactive authoring session before continuing." });
@@ -518,7 +618,7 @@ export async function startConsoleServer(options: ConsoleServerOptions = {}): Pr
             if (!prompt) return sendJson(res, 400, { ok: false, message: "prompt is required" });
             return sendJson(res, 200, controller.featureIncrement());
           }
-          return sendJson(res, 200, controller.dispatch(action, taskId));
+          return sendJson(res, 200, controller.dispatch(action, taskId, from));
         }
         if (urlPath === "/api/tasks/reset-changed") {
           if (!currentRepo) return sendJson(res, 400, { ok: false, message: "no repo selected" });
@@ -838,8 +938,17 @@ export async function startConsoleServer(options: ConsoleServerOptions = {}): Pr
       sendText(res, 404, "not found");
     } catch (err) {
       const message = err instanceof Error ? err.message : "internal error";
-      if (urlPath.startsWith("/api/")) sendJson(res, 500, { ok: false, message });
-      else sendText(res, 500, message);
+      // Name the route: a bare 500 with a message the client never reads is not
+      // diagnosable once the request has gone.
+      onLog(`console ${res.statusCode === 200 ? "handler" : "error"} ${urlPath}: ${message}`);
+      if (!res.headersSent) {
+        if (urlPath.startsWith("/api/")) sendJson(res, 500, { ok: false, message });
+        else sendText(res, 500, message);
+      } else {
+        // The response is already on the wire; writing again would throw inside
+        // the catch and take the server down. End the socket instead.
+        res.end();
+      }
     }
   });
 

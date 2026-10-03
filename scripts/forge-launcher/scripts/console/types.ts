@@ -17,6 +17,13 @@ export interface AuditEvent {
   outputFiles?: string[];
 }
 
+export interface TaskAttemptSummary {
+  attempt: number;
+  outcome: "passed" | "failed" | "cancelled";
+  resultPath: string;
+  reason?: string;
+}
+
 export interface TaskRecord {
   taskId: string;
   status: string;
@@ -30,6 +37,12 @@ export interface TaskRecord {
   artifactId?: string;
   inputArtifactIds?: string[];
   validationLimitations?: string[];
+  /**
+   * Per-attempt history the engine already persists. Not part of the dispatch
+   * contract; the Board reads it to estimate how long a task takes when the
+   * current run has not measured it yet.
+   */
+  attemptHistory?: TaskAttemptSummary[];
 }
 
 export interface WorkflowState {
@@ -138,6 +151,14 @@ export interface Summary {
   authoringReady: boolean;
   authoringBlocker?: string;
   authoringNextStage?: import("../authoring-config.ts").AuthoringStage;
+  /**
+   * Per-stage authoring detail including the plain-language cause of any
+   * staleness, so the UI can name the changed input instead of only reporting
+   * that authoring is "not ready".
+   */
+  authoringStages: import("../authoring-state.ts").AuthoringStageDetail[];
+  /** Progress of the team → skills → manifest re-derivation chain. */
+  rederive: RederiveProgress | null;
   repoRoot: string;
   repoName: string;
   harness: string | null;
@@ -310,7 +331,10 @@ export interface FileContent {
   content: string;
 }
 
-export type ControlAction = "run" | "resume" | "pause" | "stop" | "replay" | "reset-changed" | "draft-prd" | "draft-existing-prd" | "draft-team" | "draft-skills" | "compile-manifest" | "feature-prd" | "feature-increment" | "feature-increment-continue";
+export type ControlAction = "run" | "resume" | "pause" | "stop" | "replay" | "reset-changed" | "draft-prd" | "draft-existing-prd" | "draft-team" | "draft-skills" | "rederive" | "compile-manifest" | "feature-prd" | "feature-increment" | "feature-increment-continue";
+
+import type { RederiveProgress } from "../rederive-state.ts";
+export type { RederiveProgress, RederiveStep, RederiveStepId, RederiveStepStatus } from "../rederive-state.ts";
 
 export type ExecutionMode = "auto" | "manual";
 export type SelectionScope = "single" | "range" | "list";
@@ -324,6 +348,7 @@ export type BackgroundJobType =
   | "draft-existing-prd"
   | "draft-team"
   | "draft-skills"
+  | "rederive"
   | "compile-manifest"
   | "engine-run"
   | "engine-resume"

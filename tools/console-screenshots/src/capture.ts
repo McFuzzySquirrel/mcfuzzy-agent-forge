@@ -76,13 +76,53 @@ function detailTargets(): CaptureTarget[] {
       viewport: WIDE,
       prepare: async (page) => { await clickByText(page, ".help-btn", "Help"); },
     },
+    {
+      name: "board-gantt-1440",
+      route: "board",
+      viewport: WIDE,
+      prepare: async (page) => { await setBoardMode(page, "gantt"); },
+    },
+    {
+      name: "board-table-1440",
+      route: "board",
+      viewport: WIDE,
+      prepare: async (page) => { await openBoardTable(page); },
+    },
   ];
 }
 
+/**
+ * The board frame's URL carries the view mode and filters (`/board?mode=…`), so
+ * matching on `endsWith("/board")` silently stops finding it.
+ */
+function boardFrame(page: Awaited<ReturnType<Browser["newPage"]>>) {
+  return page.frames().find((candidate) => /\/board(\?|$)/.test(candidate.url()));
+}
+
 async function waitForBoard(page: Awaited<ReturnType<Browser["newPage"]>>): Promise<void> {
-  const frame = page.frames().find((candidate) => candidate.url().endsWith("/board"));
+  const frame = boardFrame(page);
   if (frame) await frame.waitForSelector("canvas", { timeout: 8000 }).catch(() => {});
   await new Promise((resolve) => setTimeout(resolve, 1200));
+}
+
+/** Switches the board to a mode through the Console chrome above the frame. */
+async function setBoardMode(page: Awaited<ReturnType<Browser["newPage"]>>, mode: "kanban" | "gantt"): Promise<void> {
+  await page.evaluate((target) => {
+    document.querySelector(`.board-toolbar [data-mode="${target}"]`)?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+  }, mode);
+  // The chrome reloads the frame for the new mode, so wait for the canvas again.
+  await new Promise((resolve) => setTimeout(resolve, 600));
+  const frame = boardFrame(page);
+  await frame?.waitForSelector("canvas", { timeout: 10000 }).catch(() => {});
+  await frame?.waitForFunction((expected) => document.body.dataset.boardMode === expected, { timeout: 10000 }, mode).catch(() => {});
+  await new Promise((resolve) => setTimeout(resolve, 900));
+}
+
+/** Opens the board's accessible table view from inside the frame. */
+async function openBoardTable(page: Awaited<ReturnType<Browser["newPage"]>>): Promise<void> {
+  const frame = boardFrame(page);
+  await frame?.evaluate(() => document.getElementById("table-toggle")?.click());
+  await new Promise((resolve) => setTimeout(resolve, 700));
 }
 
 /** Expands the collapsed Documents section, opens a document in the wide popup, and waits for it to render. */

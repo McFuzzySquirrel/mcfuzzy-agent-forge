@@ -3,39 +3,13 @@ import path from "node:path";
 import { randomUUID } from "node:crypto";
 
 import { registryPath } from "./paths.ts";
+import type { BackgroundJob, BackgroundJobStatus, BackgroundJobType } from "./types.ts";
 
-export type BackgroundJobType =
-  | "create-project"
-  | "bootstrap"
-  | "feature-prd"
-  | "feature-increment"
-  | "draft-prd"
-  | "draft-existing-prd"
-  | "draft-team"
-  | "draft-skills"
-  | "compile-manifest"
-  | "engine-run"
-  | "engine-resume"
-  | "engine-replay";
-
-export type BackgroundJobStatus = "running" | "complete" | "failed" | "paused";
-
-export interface BackgroundJob {
-  id: string;
-  type: BackgroundJobType;
-  repoPath: string;
-  pid?: number;
-  taskId?: string;
-  logPath?: string;
-  startedAt: string;
-  updatedAt: string;
-  finishedAt?: string;
-  resultPath?: string;
-  status: BackgroundJobStatus;
-  message: string;
-  run?: boolean;
-  autoDraft?: boolean;
-}
+// The job shapes live in the Console's JSON contract, which the browser client
+// mirrors. They used to be declared here as well, and the two unions drifted:
+// adding a job type to this file without adding it there type-checked fine and
+// only surfaced as a compile error in the caller. One declaration, re-exported.
+export type { BackgroundJob, BackgroundJobStatus, BackgroundJobType } from "./types.ts";
 
 export function jobsPath(): string {
   return path.join(path.dirname(registryPath()), "jobs.json");

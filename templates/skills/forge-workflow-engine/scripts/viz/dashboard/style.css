@@ -44,7 +44,102 @@ html, body {
   padding: 14px 18px;
   pointer-events: none;
   user-select: none;
+  z-index: 20;
 }
+
+/* The HUD is a pointer-event shield, so controls inside it opt back in. */
+#hud-top button, #mode-switch { pointer-events: auto; }
+
+.mode-btn {
+  font: inherit;
+  font-size: 11px;
+  color: var(--text-dim);
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid var(--panel-border);
+  border-radius: 6px;
+  padding: 3px 9px;
+  cursor: pointer;
+}
+.mode-btn:hover { color: var(--text); }
+.mode-btn.active,
+.mode-btn[aria-selected="true"],
+.mode-btn[aria-pressed="true"] {
+  color: #14171f;
+  background: var(--accent);
+  border-color: transparent;
+  font-weight: 600;
+}
+.mode-btn:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+#mode-switch { display: inline-flex; gap: 4px; margin-top: 8px; }
+#table-toggle { margin-top: 8px; }
+
+/* ── Accessible table view ─────────────────────────────── */
+
+/*
+  Full-bleed and opaque, so the canvas behind it cannot bleed through and read as
+  part of the table. It sits below the HUD (z-index 20) so the mode switch, the
+  progress bar and the Table toggle stay reachable while it is open.
+*/
+#table-view {
+  position: fixed;
+  inset: 0;
+  z-index: 15;
+  background: rgba(7, 11, 22, 0.98);
+  backdrop-filter: blur(2px);
+  display: flex;
+  flex-direction: column;
+}
+#table-view.hidden { display: none; }
+#table-caption { padding: 12px 0 10px; }
+#table-scroll { flex: 1; overflow: auto; padding: 96px 18px 82px; }
+
+/*
+  With the table open the canvas is covered, so the HUD keeps only its controls:
+  the title, run counters, clock and legend describe a board nobody is looking
+  at, and they sit on top of the table's first column.
+*/
+body.table-open #title,
+body.table-open #meta,
+body.table-open #done-count,
+body.table-open #done-label,
+body.table-open #progress-bar,
+body.table-open #elapsed,
+body.table-open #legend,
+body.table-open #failed-list { display: none; }
+body.table-open #hud-left,
+body.table-open #hud-right { padding: 8px 12px; }
+body.table-open #mode-switch,
+body.table-open #table-toggle { margin-top: 0; }
+body.table-open #hud-right { min-width: 0; }
+#task-table { width: 100%; border-collapse: collapse; font-size: 12px; }
+#task-table caption {
+  caption-side: top;
+  text-align: left;
+  padding: 12px 14px 8px;
+  color: var(--text-dim);
+  font-size: 11px;
+}
+#task-table th, #task-table td {
+  text-align: left;
+  padding: 6px 12px;
+  border-bottom: 1px solid rgba(140, 170, 255, 0.12);
+  vertical-align: top;
+}
+#task-table thead th {
+  /* Not sticky: the scrollport is the full-bleed overlay, so a sticky header
+     pins against the viewport top and fights the fixed HUD above it. The table
+     is short enough that scrolling past the header is not a problem. */
+  background: rgba(7, 11, 22, 0.98);
+  color: var(--text-dim);
+  font-size: 10px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  border-bottom: 1px solid var(--panel-border);
+}
+#task-table tbody th { font-weight: 600; }
+#task-table .mono { font-family: ui-monospace, "SFMono-Regular", Menlo, Consolas, monospace; color: var(--text-dim); }
+#task-table tbody tr:hover { background: rgba(140, 170, 255, 0.07); }
 
 #hud-left, #hud-right {
   background: var(--panel-bg);
@@ -124,7 +219,64 @@ html, body {
   pointer-events: none;
   user-select: none;
   gap: 12px;
+  z-index: 20;
 }
+
+/* The failed list is a control, so it opts back into pointer events. */
+#failed-list {
+  pointer-events: auto;
+  display: grid;
+  gap: 4px;
+  max-width: 46%;
+  background: var(--panel-bg);
+  border: 1px solid rgba(255, 143, 143, 0.4);
+  border-radius: 10px;
+  padding: 8px 10px;
+}
+#failed-list.hidden { display: none; }
+#failed-list .failed-title {
+  font-size: 10px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: #ff8f8f;
+}
+#failed-list .failed-row {
+  font: inherit;
+  font-size: 11px;
+  text-align: left;
+  color: var(--text);
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid var(--panel-border);
+  border-radius: 6px;
+  padding: 3px 7px;
+  cursor: pointer;
+}
+#failed-list .failed-row:hover { background: rgba(255, 143, 143, 0.16); }
+#failed-list .failed-row:focus-visible { outline: 2px solid #ff8f8f; outline-offset: 2px; }
+
+/* Tooltip navigation strip: the tooltip is pointer-events:none, so this is the
+   part that makes the board navigable and must opt back in. */
+#tooltip .tt-actions {
+  pointer-events: auto;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px;
+  margin-top: 7px;
+  padding-top: 7px;
+  border-top: 1px solid var(--panel-border);
+}
+#tooltip .tt-actions button {
+  font: inherit;
+  font-size: 10px;
+  color: var(--text);
+  background: rgba(255, 255, 255, 0.07);
+  border: 1px solid var(--panel-border);
+  border-radius: 5px;
+  padding: 2px 7px;
+  cursor: pointer;
+}
+#tooltip .tt-actions button:hover { background: rgba(245, 197, 66, 0.2); }
+#tooltip .tt-actions button:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
 
 #legend, #status-chips {
   display: flex;
@@ -255,3 +407,15 @@ html, body {
 }
 
 .hidden { display: none !important; }
+
+/*
+  Reduced motion. The running-card pulse is suppressed in JS because it is a
+  per-frame ticker effect, not a CSS animation; these are the CSS-driven ones.
+  Both the banner pop-in and the failure tint are decorative, so they collapse
+  to a plain static appearance rather than losing the information they convey.
+*/
+@media (prefers-reduced-motion: reduce) {
+  #banner { animation: none; }
+  #failed-tint { animation: none; opacity: 0.35; }
+  #progress-fill { transition: none; }
+}

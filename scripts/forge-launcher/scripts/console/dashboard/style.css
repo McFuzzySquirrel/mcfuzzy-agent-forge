@@ -389,6 +389,38 @@ dialog.doc-dialog::backdrop { background: rgba(4, 6, 12, 0.8); backdrop-filter: 
 .authoring-stage { display: grid; gap: 4px; padding: 10px; border: 1px solid var(--panel-border); border-radius: 8px; background: rgba(7, 11, 22, 0.35); }
 .authoring-stage .badge { justify-self: start; }
 
+/* Re-derivation panel and its step machine. */
+.rederive-panel { border-left: 3px solid var(--accent); }
+.rederive-causes { margin: 8px 0; padding-left: 18px; }
+.rederive-causes li { margin-bottom: 4px; }
+.rederive-steps-wrap { margin-top: 12px; }
+.rederive-steps { list-style: none; margin: 8px 0 0; padding: 0; display: grid; gap: 6px; }
+.rederive-step {
+  display: grid; gap: 2px; padding: 8px 10px;
+  border: 1px solid var(--panel-border); border-left-width: 3px; border-radius: 6px;
+  background: rgba(7, 11, 22, 0.35);
+}
+.rederive-step-pending { opacity: 0.6; }
+.rederive-step-running { border-left-color: var(--blue); }
+.rederive-step-complete { border-left-color: var(--green); }
+.rederive-step-failed { border-left-color: var(--red); }
+/* An unavailable action stays visible and explains itself, rather than
+   vanishing and leaving the user wondering what happened. */
+.authoring-stage-action-disabled { cursor: not-allowed; }
+.rederive-footer {
+  display: grid; gap: 8px; justify-items: start;
+  margin: 12px 0 4px; padding: 10px;
+  border: 1px solid var(--panel-border); border-left: 3px solid var(--accent);
+  border-radius: 8px; background: rgba(7, 11, 22, 0.35);
+}
+.rederive-footer .rederive-steps { width: 100%; }
+/* The card a `#/documents?stage=` link points at. */
+.authoring-stage-focus { border-color: var(--accent); box-shadow: 0 0 0 1px var(--accent); }
+.authoring-stage:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.badge-stale { background: rgba(255, 143, 143, 0.16); color: var(--red); }
+.reconcile-list { list-style: none; margin: 4px 0; padding: 0; display: grid; gap: 2px; }
+.reconcile-list li { display: flex; gap: 6px; align-items: baseline; }
+
 .timeline { position: relative; padding-left: 22px; }
 .timeline::before { content: ""; position: absolute; left: 5px; top: 4px; bottom: 4px; width: 2px; background: var(--panel-border); }
 .tl-item { position: relative; padding: 6px 0 12px; }

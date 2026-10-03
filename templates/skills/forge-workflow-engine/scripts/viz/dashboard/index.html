@@ -13,21 +13,53 @@
     <div id="hud-left">
       <div id="title">The Forge Board</div>
       <div id="meta">connecting&hellip;</div>
+      <div id="mode-switch" role="tablist" aria-label="Board view">
+        <button type="button" role="tab" data-mode="kanban" aria-selected="true" class="mode-btn active">Kanban</button>
+        <button type="button" role="tab" data-mode="gantt" aria-selected="false" class="mode-btn">Gantt</button>
+      </div>
     </div>
     <div id="hud-right">
       <div id="done-count">0 / 0</div>
       <div id="done-label">tasks</div>
       <div id="progress-bar"><div id="progress-fill"></div></div>
       <div id="elapsed">0s</div>
+      <button type="button" id="table-toggle" class="mode-btn" aria-pressed="false">Table</button>
     </div>
   </div>
 
   <div id="hud-bottom">
+    <div id="failed-list" class="hidden"></div>
     <div id="legend"></div>
     <div id="status-chips"></div>
   </div>
 
   <div id="tooltip" class="hidden"></div>
+
+  <!--
+    The canvas carries no text a screen reader can reach, so the same data is
+    also served as a real table. It is a view of the same layout, not a
+    separate source, and it stays in step with it.
+  -->
+  <div id="table-view" class="hidden" role="region" aria-label="Tasks table">
+    <div id="table-scroll">
+      <table id="task-table">
+        <caption id="table-caption">Every task in this build</caption>
+        <thead>
+          <tr>
+            <th scope="col">Task</th>
+            <th scope="col">Owner</th>
+            <th scope="col">Status</th>
+            <th scope="col">Phase</th>
+            <th scope="col">Start</th>
+            <th scope="col">End</th>
+            <th scope="col">Duration</th>
+            <th scope="col">Depends on</th>
+          </tr>
+        </thead>
+        <tbody id="table-body"></tbody>
+      </table>
+    </div>
+  </div>
 
   <div id="banner" class="hidden"></div>
   <div id="failed-tint" class="hidden"></div>
