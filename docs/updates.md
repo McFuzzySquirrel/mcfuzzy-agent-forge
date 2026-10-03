@@ -4,6 +4,13 @@ Detailed release and change notes for MyForge.
 
 ---
 
+## October 2026 - v3.93
+
+### Document MyForge's position in the agentic development value chain
+
+- Added research explaining how MyForge relates to agent harnesses, workflow
+  engines, CI/CD, and the longer-term software-factory model.
+
 ## October 2026 - v3.92
 
 ### Fix Console human-review approval in globally installed launcher

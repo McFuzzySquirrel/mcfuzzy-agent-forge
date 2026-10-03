@@ -7,7 +7,7 @@
 
 > MyForge turns an idea into a reviewed PRD, a specialist agent team, and an autonomous build.
 
-**Latest: v3.92** — see [docs/updates.md](docs/updates.md) for release notes.
+**Latest: v3.93** — see [docs/updates.md](docs/updates.md) for release notes.
 
 MyForge is a PRD-first workflow for turning product requirements into working software. It combines structured planning, agent-based implementation, and execution orchestration in one path so a project can move from concept to build without losing the review checkpoints that matter.
 
@@ -105,6 +105,7 @@ For the manual prompting flow and the CLI’s expected prompts, see [docs/prompt
 - [docs/workflow-engine.md](docs/workflow-engine.md)
 - [docs/workflow-engine-deep-dive.md](docs/workflow-engine-deep-dive.md)
 - [docs/artifact-store-deep-dive.md](docs/artifact-store-deep-dive.md)
+- [docs/research/myforge-agentic-development-value-chain.md](docs/research/myforge-agentic-development-value-chain.md)
 - [docs/THE-STORY.md](docs/THE-STORY.md)
 - [docs/THE-STORY-PART-2.md](docs/THE-STORY-PART-2.md)
 - [docs/THE-STORY-PART-3.md](docs/THE-STORY-PART-3.md)
