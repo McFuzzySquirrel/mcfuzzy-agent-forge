@@ -44,6 +44,7 @@ export type Spawner = (cmd: string, args: string[], opts: SpawnOptions) => Spawn
 export interface ControlDeps {
   spawner?: Spawner;
   kill?: (pid: number, signal: NodeJS.Signals) => void;
+  isPidAlive?: (pid: number | null) => boolean;
 }
 
 function defaultSpawner(cmd: string, args: string[], opts: SpawnOptions): SpawnResult {
@@ -92,6 +93,7 @@ export class RunController {
   repoRoot: string;
   private readonly spawner: Spawner;
   private readonly kill: (pid: number, signal: NodeJS.Signals) => void;
+  private readonly isPidAlive: (pid: number | null) => boolean;
 
   constructor(
     repoRoot: string,
@@ -103,6 +105,7 @@ export class RunController {
     this.repoRoot = path.resolve(repoRoot);
     this.spawner = deps.spawner ?? defaultSpawner;
     this.kill = deps.kill ?? defaultKill;
+    this.isPidAlive = deps.isPidAlive ?? isPidAlive;
   }
 
   private get p() {
@@ -161,7 +164,7 @@ export class RunController {
   ) {
     const target = options.repoPath ?? this.repoRoot;
     const active = currentJobForRepo(target);
-    if (active?.status === "running" && isPidAlive(active.pid ?? null)) {
+    if (active?.status === "running" && this.isPidAlive(active.pid ?? null)) {
       throw new Error(`A ${active.type} job is already running in this repository.`);
     }
     const id = randomUUID();

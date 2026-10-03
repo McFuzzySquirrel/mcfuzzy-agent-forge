@@ -237,6 +237,7 @@ async function withServer<T>(
     deps: {
       spawner: (cmd, args, o) => { spawn.calls.push({ cmd, args, opts: o }); return { pid: 9000 + spawn.calls.length }; },
       kill: (pid, signal) => { kills.push({ pid, signal }); },
+      isPidAlive: () => false,
     },
   });
   try {
