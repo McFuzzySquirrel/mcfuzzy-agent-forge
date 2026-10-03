@@ -2,7 +2,8 @@ import fs from "node:fs";
 import path from "node:path";
 import matter from "gray-matter";
 import { parseMetadata } from "../repo-metadata.ts";
-import { authoringReadiness, authoringStageIsCurrent, readAuthoringState } from "../authoring-state.ts";
+import { authoringReadiness, authoringStageDetails, authoringStageIsCurrent, readAuthoringState } from "../authoring-state.ts";
+import { rederiveProgress } from "../rederive-state.ts";
 import type { AuthoringStage } from "../authoring-config.ts";
 
 import type {
@@ -295,7 +296,7 @@ function currentJob(repoRoot: string): BackgroundJob | null {
   return currentJobForRepo(repoRoot);
 }
 
-const AUTHORING_JOB_TYPES = new Set(["draft-prd", "draft-existing-prd", "draft-team", "draft-skills", "feature-prd", "feature-increment", "create-project"]);
+const AUTHORING_JOB_TYPES = new Set(["draft-prd", "draft-existing-prd", "draft-team", "draft-skills", "rederive", "feature-prd", "feature-increment", "create-project"]);
 
 export function authoringBlocker(p: RepoPaths, readiness?: ReturnType<typeof authoringReadiness>): string | undefined {
   const job = currentJob(p.repoRoot);
@@ -379,6 +380,8 @@ export function summary(p: RepoPaths): Summary {
     authoringReady: !blocker,
     authoringBlocker: blocker,
     authoringNextStage: readiness.nextStage,
+    authoringStages: authoringStageDetails(p.repoRoot, harness ?? ".agents"),
+    rederive: rederiveProgress(p.repoRoot),
     repoRoot: p.repoRoot,
     repoName: path.basename(p.repoRoot),
     harness,
@@ -1028,6 +1031,21 @@ function resolveJobOutcome(job: BackgroundJob): { status: BackgroundJob["status"
         : { status: "failed", message: "Agent team generation exited without producing a team." };
     case "draft-skills":
       return { status: "failed", message: "Project-skill generation exited without recording its completion." };
+    case "rederive": {
+      // The chain records its own progress, so it is the authority on how far it
+      // got. `complete` is only ever true for a recorded three-step chain.
+      const progress = rederiveProgress(job.repoPath);
+      const failed = progress.steps.find((entry) => entry.status === "failed");
+      if (failed) {
+        return { status: "failed", message: `${failed.label} failed: ${failed.message ?? "re-derivation did not complete."}` };
+      }
+      if (progress.complete) {
+        return fs.existsSync(p.manifestPath)
+          ? { status: "complete", message: "Team, project skills, and the execution manifest were re-derived." }
+          : { status: "failed", message: "Re-derivation finished without producing an execution manifest." };
+      }
+      return { status: "failed", message: "Re-derivation exited before completing every step." };
+    }
     case "compile-manifest":
       return fs.existsSync(p.manifestPath)
         ? { status: "complete", message: "Execution manifest compiled." }

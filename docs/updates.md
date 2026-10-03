@@ -4,6 +4,91 @@ Detailed release and change notes for MyForge.
 
 ---
 
+## October 2026 - v3.94
+
+### Re-derive the team and project skills in one click
+
+- **One button fixes a stale team.** Editing a PRD or feature document used to
+  require a five-hop hunt across three views: reset changed tasks, read a
+  comma-joined list of task IDs, click Regenerate Team, wait, then click
+  Regenerate Skills — and each button was *hidden* until the stage it regenerated
+  went stale. **Re-derive team & skills** now runs team → project skills →
+  manifest as one background job.
+- **Progress survives a reload.** Each step's status, message and timing are
+  persisted to `docs/rederive-state.json`, so reloading mid-run resumes the step
+  machine. A failure names the step and offers **Retry from a step**, which
+  re-runs it and its tail.
+- **The Console now says *why* something is stale.** Each stage's input
+  fingerprint is compared against a fresh one, and the offending files are named
+  with their age — "Inputs changed after this stage completed: docs/PRD.md,
+  changed 3h ago" — on Overview and in Plan & Team. Deleted or edited outputs are
+  reported as such.
+- **Stage actions are no longer hidden.** A stage you cannot run yet shows a
+  disabled button with the reason instead of nothing.
+- **The chain will not do two dangerous things.** It never authors requirements
+  (requirements authoring stays interactive), and it never resets completed tasks.
+  **Reset changed tasks for review** moved into the Manifest panel beside the
+  reconciliation it acts on, listing each changed task and behind a confirmation
+  that names everything it will discard.
+- **CLI:** `forge-launcher rederive [--repo <path>] [--from team|skills|manifest]`.
+
+See [ADR-062](adr/062-console-rederivation-chain.md).
+
+### A live dependency Gantt on the Forge Board
+
+- **New Gantt mode** alongside Kanban, sharing the same live stream, camera, HUD
+  and legend. Measured bars are filled; forecast bars are outlined and hatched.
+- **The forecast follows the engine's own rules.** Dependencies come from
+  `task-graph.ts` — direct dependencies plus every task of a depended-on phase —
+  and the schedule respects the configured concurrency, so it never promises a
+  sequence the engine will not run.
+- **Estimates are inferred from observed durations** and labelled as such: the
+  task's own attempts across the run, then the same agent's other tasks, then a
+  default. Retried tasks contribute every attempt.
+- **Phase rollups, human-review milestones, a highlighted critical path and a
+  moving "now" line**, with a time axis that follows your local clock.
+- **Mode and filters are remembered per project.**
+
+See [ADR-064](adr/064-forge-board-gantt-mode.md).
+
+### Make the Forge Board navigable, honest and accessible
+
+- **Board chrome.** A **Kanban | Gantt** switch and status filters above the
+  frame; filters dim tasks rather than hiding them so the build's shape stays
+  visible.
+- **A Table view** renders the same data as a real table, and the mode control is
+  a proper tablist. The board is a canvas and previously had no text a keyboard or
+  screen-reader user could reach.
+- **The board is no longer a dead end.** Hovering a card or bar offers **Open in
+  Tasks**, **Logs** and **Artifacts**.
+- **Failures persist.** A failed-task list stays in the corner with a link into
+  Tasks, instead of a one-off screen tint.
+- **Distinct states.** "Cannot reach the Console server", "No execution manifest
+  yet" and "Ready to build" are now told apart, and a dropped event stream reports
+  how stale the picture is instead of only saying "disconnected".
+- **Reduced motion is honoured** in both modes.
+
+See [ADR-063](adr/063-forge-board-chrome-and-accessibility.md).
+
+### Fixes
+
+- **`/api/layout` no longer returns `null`.** The Console now serves the tested
+  board layouts from the engine instead of having the board re-derive its own
+  geometry in JavaScript — two implementations of the same board, only one of
+  them tested.
+- **A half-authored repository no longer takes down the event stream.** Each
+  snapshot source is read independently, so an unreadable manifest or a missing
+  harness root stops updating that field instead of every view.
+- **A failing request can no longer crash the Console.** The error path reports
+  which route failed and ends the socket instead of writing headers twice.
+- **One `BackgroundJobType` definition.** The job union was declared twice and
+  had already drifted; adding a job type to one copy type-checked fine and only
+  failed in the caller.
+- **Board tooltips are positioned** beside the pointer, flipped and clamped to the
+  window, instead of rendering at their static position.
+- **Task start and end times are retained** on the board, so timings appear in the
+  table view and expanded card detail.
+
 ## October 2026 - v3.93
 
 ### Document MyForge's position in the agentic development value chain

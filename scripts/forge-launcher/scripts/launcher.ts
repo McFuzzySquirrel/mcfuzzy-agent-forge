@@ -15,6 +15,15 @@ import { createSessionScope } from "./launcher-session.ts";
 import { type AuthoringOptions, type AuthoringRunnerChoice, type AuthoringRunnerSelection, type AuthoringStage, loadAuthoringConfig, saveAuthoringConfig, selectAuthoringModel, selectAuthoringRunner } from "./authoring-config.ts";
 import { authoringArgv, inventoryForRunner, readAuthoringInventory, refreshAuthoringInventory, resolveAuthoringModel, type AuthoringInvocation, type AuthoringRunner, type InventoryProbe } from "./authoring-inventory.ts";
 import { authoringReadiness, authoringStageIsCurrent, clearFeatureIncrementHandoff, featureIncrementHandoffHasChange, fingerprintFiles, readAuthoringState, readSkillCandidates, recordAuthoringStageSuccess, recordFeatureIncrementHandoff, saveAuthoringStage, stageInputFingerprint, type AuthoringStageState } from "./authoring-state.ts";
+import {
+  REDERIVE_STEPS,
+  completeRederiveStep,
+  failRederiveStep,
+  readRederiveState,
+  startRederive,
+  startRederiveStep,
+  type RederiveStepId,
+} from "./rederive-state.ts";
 import { selectHarnessRoot, selectProjectHarnessRoot, type HarnessRoot } from "./repo-metadata.ts";
 import { resolveResources } from "./resources.ts";
 import { validateAuthoredPrd } from "./prd-validation.ts";
@@ -2394,6 +2403,107 @@ async function runCompileManifestInternal(repoDir: string): Promise<number> {
   return 0;
 }
 
+// ─── Re-derivation chain ──────────────────────────────────────────────────────
+//
+// Regenerating the team and project skills after a requirements change was a
+// five-hop scavenger hunt across three Console views, with each action button
+// hidden until the stage it regenerates went stale. This runs the whole tail as
+// one background job and records per-step progress so the UI can show where it
+// is and retry from a failure.
+//
+// Two deliberate limits:
+//
+//   * There is no PRD step. ADR-060 makes requirements authoring interactive, so
+//     the chain starts at the first derivation and refuses to run without a
+//     committed PRD rather than authoring one headlessly.
+//   * The chain never resets changed completed tasks. That discards finished
+//     work and stays an explicit, confirmed Console action.
+
+const REDERIVE_FAILURE_MESSAGES: Record<RederiveStepId, string> = {
+  team: "Agent team generation failed. Resolve the reported cause, then retry from this step.",
+  skills: "Project-skill generation failed after the team was regenerated. Retry from this step.",
+  manifest: "Manifest compilation failed after the team and skills were regenerated. Retry from this step.",
+};
+
+const REDERIVE_RUNNING_MESSAGES: Record<RederiveStepId, string> = {
+  team: "Regenerating the agent team from the PRD…",
+  skills: "Regenerating project skills from the new team…",
+  manifest: "Recompiling the execution manifest…",
+};
+
+const REDERIVE_DONE_MESSAGES: Record<RederiveStepId, string> = {
+  team: "Agent team regenerated.",
+  skills: "Project skills regenerated.",
+  manifest: "Execution manifest recompiled.",
+};
+
+/** A committed PRD plus at least one canonical feature document, or null. */
+function hasCanonicalRequirements(repoDir: string): boolean {
+  const features = path.join(repoDir, "docs", "features");
+  return fs.existsSync(path.join(repoDir, "docs", "PRD.md")) && fs.existsSync(features) &&
+    fs.statSync(features).isDirectory() &&
+    fs.readdirSync(features).some((file) => file.endsWith(".md"));
+}
+
+/**
+ * Re-derives team → project skills → execution manifest.
+ *
+ * `from` restarts the chain at a specific step (the Console's "retry from
+ * here"), which re-runs that step and its tail and leaves earlier completed
+ * steps alone. Without it the chain resumes at the first step that has not
+ * completed, so re-invoking after a crash continues rather than restarting the
+ * whole team generation.
+ */
+async function runRederiveInternal(repoDir: string, from?: RederiveStepId): Promise<number> {
+  setupStateForRepo(repoDir);
+  // Requirements are never authored headlessly (ADR-060), so a project without
+  // them cannot be re-derived at all. Fail before writing any state.
+  if (!hasCanonicalRequirements(repoDir)) {
+    fail("No docs/PRD.md + docs/features/*.md; requirements authoring is always interactive.");
+    info("Use the primary action on the Overview pipeline card to open the authoring session in a terminal.");
+    return 1;
+  }
+
+  const requested = from ? REDERIVE_STEPS.indexOf(from) : -1;
+  if (from && requested < 0) { fail(`Unknown re-derivation step '${from}'.`); return 1; }
+
+  const existing = readRederiveState(repoDir);
+  // An explicit retry starts a new run so the UI can tell it apart from the
+  // failed one; an implicit resume keeps the run id and its step history.
+  const state = from || !existing ? startRederive(repoDir) : existing;
+  const startIndex = requested >= 0
+    ? requested
+    : Math.max(0, state.steps.findIndex((step) => step.status !== "complete"));
+  if (startIndex >= REDERIVE_STEPS.length) {
+    ok("Team, project skills, and the execution manifest are all up to date.");
+    return 0;
+  }
+
+  // A feature increment means the PRD set changed deliberately, so the team
+  // step must preserve untouched agents instead of regenerating wholesale.
+  const featureIncrement = featureIncrementHandoffHasChange(repoDir);
+
+  for (const index of Array.from({ length: REDERIVE_STEPS.length - startIndex }, (_unused, offset) => startIndex + offset)) {
+    const id = REDERIVE_STEPS[index]!;
+    step(`Re-derive ${index + 1} of ${REDERIVE_STEPS.length}: ${id}`);
+    startRederiveStep(repoDir, id, REDERIVE_RUNNING_MESSAGES[id]);
+    const code = id === "team"
+      ? await runDraftTeamInternal(repoDir, featureIncrement)
+      : id === "skills"
+        ? await runDraftSkillsInternal(repoDir)
+        : await runCompileManifestInternal(repoDir);
+    if (code !== 0) {
+      failRederiveStep(repoDir, id, REDERIVE_FAILURE_MESSAGES[id]);
+      return code;
+    }
+    completeRederiveStep(repoDir, id, REDERIVE_DONE_MESSAGES[id]);
+  }
+
+  ok("Team, project skills, and the execution manifest are up to date.");
+  info("Changed tasks are preserved by stable task ID; reset them for review from the Overview manifest panel if they must run again.");
+  return 0;
+}
+
 function printEngineStatus(engine: ResumeEngineState): void {
   info("Engine run state:");
   out(`    - Run id   : ${engine.runId ?? "unknown"}`);
@@ -2726,6 +2836,13 @@ export function runDraftSkills(repoDir: string, options: LauncherOptions = {}): 
 }
 export function runCompileManifest(repoDir: string, options: LauncherOptions = {}): Promise<number> {
   return withLauncherSession({ ...options, nonInteractive: true }, () => runCompileManifestInternal(repoDir));
+}
+/**
+ * Re-derives the team, project skills, and execution manifest as one chain.
+ * `from` restarts at a named step, which is how the Console retries a failure.
+ */
+export function runRederive(repoDir: string, from?: RederiveStepId, options: LauncherOptions = {}): Promise<number> {
+  return withLauncherSession({ ...options, nonInteractive: true }, () => runRederiveInternal(repoDir, from));
 }
 export function runResume(options: ResumeOptions = {}): Promise<number> {
   return withLauncherSession(options, () => runResumeInternal(options));

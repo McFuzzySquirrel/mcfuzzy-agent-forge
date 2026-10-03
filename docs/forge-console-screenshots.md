@@ -45,10 +45,25 @@ build. (The Overview capture is full-page so the Controls are visible.)
 
 ## 3. Board
 
-The PixiJS **Forge Board**, embedded full-screen: tasks as name-tag cards flowing
-through **To Do · In Progress · Done · Failed**, grouped by phase.
+The PixiJS **Forge Board**, embedded full-screen, in one of two modes.
+
+**Kanban** — tasks as name-tag cards flowing through **To Do · In Progress ·
+Done · Failed**, grouped by phase.
 
 ![Board - kanban](images/forge-console/03-board.png)
+
+**Gantt** — the same run against time on its dependencies. Filled bars are
+measured, outlined hatched bars are forecast; phase rollups span each phase, the
+critical path is outlined in gold, and the axis follows the local clock. The
+forecast continues from where the run last did something, so a stale run stays on
+its own window instead of stretching out to the present.
+
+![Board - gantt](images/forge-console/03b-board-gantt.png)
+
+**Table** — the same data as a real table. The board is a canvas, so this is the
+route for keyboard and screen-reader use.
+
+![Board - table](images/forge-console/03c-board-table.png)
 
 ## 4. Tasks
 

@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { mkdtempSync, mkdirSync, writeFileSync, appendFileSync, readFileSync, renameSync, existsSync } from "node:fs";
+import { mkdtempSync, mkdirSync, writeFileSync, appendFileSync, readFileSync, renameSync, existsSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { basename, join } from "node:path";
 import { get as httpGet, request as httpRequest } from "node:http";
@@ -884,6 +884,45 @@ test("updating manual selection also updates paused state selection", async () =
     assert.deepEqual(summary.selectedTaskIds, ["1.2"]);
     assert.equal(summary.selectedTaskCount, 1);
   });
+});
+
+test("the board layout endpoint serves both the kanban and the gantt layout", async () => {
+  const repo = makeRepo();
+  // A completed task contributes a measured duration the Gantt can estimate from.
+  writeFileSync(join(repo, "docs", "EXECUTION-AUDIT.jsonl"),
+    `${JSON.stringify({ timestamp: "2026-01-01T00:02:00.000Z", action: "task.complete", taskId: "1.1", durationMs: 120000 })}\n`, "utf8");
+  const logs: string[] = [];
+  const server = await startConsoleServer({ repoRoot: repo, port: nextPort(), open: false, onLog: (message) => logs.push(message) });
+  try {
+    const layout = await getJson(`${server.url}/api/layout`) as {
+      kanban: { columns: unknown[]; phases: unknown[]; tasks: unknown[] };
+      gantt: { rows: unknown[]; bars: Array<{ taskId: string; kind: string }>; axis: { min: number }; forecastEndMs: number };
+    };
+    assert.equal(layout.kanban.columns.length, 4);
+    assert.equal(layout.kanban.tasks.length, 2);
+    assert.deepEqual(layout.gantt.bars.map((bar) => bar.taskId).sort(), ["1.1", "1.2"]);
+    // 1.1 is complete, so it renders as an actual bar; 1.2 is running, and an
+    // in-flight task reaches "now" rather than its estimate.
+    assert.equal(layout.gantt.bars.find((bar) => bar.taskId === "1.1")?.kind, "actual");
+    assert.equal(layout.gantt.bars.find((bar) => bar.taskId === "1.2")?.kind, "actual");
+    assert.ok(layout.gantt.rows.length >= 2);
+    assert.ok(Number.isFinite(layout.gantt.axis.min));
+    assert.ok(layout.gantt.forecastEndMs >= layout.gantt.axis.min);
+    assert.deepEqual(logs.filter((line) => line.includes("board layout unavailable")), []);
+  } finally {
+    await server.stop();
+  }
+});
+
+test("the board layout endpoint is null without a manifest, and survives an engine that cannot load", async () => {
+  const repo = makeRepo();
+  rmSync(join(repo, "docs", "EXECUTION-MANIFEST.json"), { force: true });
+  const server = await startConsoleServer({ repoRoot: repo, port: nextPort(), open: false, onLog: () => {} });
+  try {
+    assert.equal(await getJson(`${server.url}/api/layout`), null);
+  } finally {
+    await server.stop();
+  }
 });
 
 test("launch-cli opens the harness CLI in a terminal (opencode for .agents)", async () => {

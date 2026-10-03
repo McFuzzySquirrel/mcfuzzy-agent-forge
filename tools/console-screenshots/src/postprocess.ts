@@ -7,6 +7,8 @@ export const NUMBERED: Array<{ numbered: string; from: string }> = [
   { numbered: "01-home", from: "home-1024" },
   { numbered: "02-overview", from: "overview-1024" },
   { numbered: "03-board", from: "board-1440" },
+  { numbered: "03b-board-gantt", from: "board-gantt-1440" },
+  { numbered: "03c-board-table", from: "board-table-1440" },
   { numbered: "04-tasks", from: "tasks-1440" },
   { numbered: "05-tasks-detail", from: "tasks-detail-1440" },
   { numbered: "06-logs", from: "logs-1440" },

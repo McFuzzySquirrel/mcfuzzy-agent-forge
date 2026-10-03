@@ -126,7 +126,21 @@ out for review.
 
 Once the build starts, switch between the views to follow the work:
 
-- **Board**: a live kanban view for tasks in To Do, In Progress, Done, and Failed.
+- **Board**: the live build, in **Kanban** or **Gantt** mode.
+  - **Kanban** is one band per phase with To Do / In Progress / Done / Failed
+    columns; cards flow left to right as their status changes.
+  - **Gantt** plots the same run against time on its dependencies. Filled bars are
+    measured, outlined hatched bars are forecast; human reviews appear as
+    milestone diamonds; the critical path is highlighted; a "now" line advances
+    continuously.
+  - **Filters** dim tasks by status rather than hiding them, so the shape of the
+    build stays visible.
+  - **Table** renders the same data as a real table — the Board is a canvas, so
+    this is the route for keyboard and screen-reader use.
+  - Hovering a card or bar offers **Open in Tasks**, **Logs** and **Artifacts**, so
+    you can follow a card into the task that produced it.
+  - Failed tasks stay listed at the lower left with a link into Tasks.
+  - The mode and filters are remembered per project.
 - **Tasks**: a sortable, filterable task table with a detail drawer for each task.
 - **Logs**: the engine and authoring log tail plus the live audit event stream.
 - **Plan & Team**: the project documents as a table (kind, title, path, status)
@@ -357,6 +371,48 @@ The Manifest panel shows preserved, new, changed, and removed task IDs. Stable
 task IDs preserve completed work. Review changed contracts, use **Reset changed
 tasks for review** when those tasks need to run again, and select new pending
 tasks in **Tasks** before a targeted run.
+
+**Reset changed tasks for review** sits in the Manifest panel, next to the
+reconciliation it acts on, and lists each changed task with a link into **Tasks**.
+The reset is behind a confirmation naming every task it will discard, because it
+clears their recorded outputs, artifacts and timings so they run again.
+
+### When the requirements change
+
+Editing a PRD or feature document makes the team and project skills stale. The
+Console tells you which one and why — "*Inputs changed after this stage
+completed: docs/PRD.md*, changed 3h ago" — on Overview and in **Plan & Team**.
+
+**Re-derive team & skills** then runs the whole fix as one background job:
+
+1. regenerate the agent team from the PRD,
+2. regenerate the project skills from the new team,
+3. recompile the execution manifest.
+
+You can watch each step complete, and reloading the page mid-run keeps the
+progress rather than losing it. If a step fails, the chain stops there, names the
+step, and offers **Retry from \<step\>** — which re-runs that step and everything
+after it.
+
+Two things it deliberately will not do:
+
+- **Author requirements.** Requirements authoring is always interactive, so the
+  chain starts at the team. Without a committed PRD and feature documents it
+  points you at the interactive session instead.
+- **Reset your completed tasks.** That stays the separate, confirmed action
+  described above.
+
+The same chain from a terminal:
+
+```bash
+forge-launcher rederive --repo <path>                    # whole tail
+forge-launcher rederive --repo <path> --from skills      # retry from a step
+```
+
+On **Plan & Team**, each authoring stage keeps its action button visible. When a
+stage cannot be run the button is disabled *and says why* — "already up to date
+with its inputs", "save authoring model changes first", "another authoring job is
+running" — rather than disappearing.
 
 ## 7. Tune task timeouts
 
