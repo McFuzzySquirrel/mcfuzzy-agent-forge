@@ -4,6 +4,40 @@ Detailed release and change notes for MyForge.
 
 ---
 
+## October 2026 - v3.95
+
+### Author PRD works again on the default authoring runner
+
+- **The dead button is fixed.** Plan & Team → **Author PRD (interactive)** (and
+  its equivalents on Overview and the launcher) opened a terminal running
+  `opencode --prompt … --model <id>`. OpenCode v2's root command has no
+  `--model` flag, so it rejected the argument before starting and the new
+  terminal showed `Unrecognized flag: --model in command opencode`. Sessions now
+  open in `opencode mini`, the one interactive surface that takes both a queued
+  prompt and a model — so the interview still runs and your PRD-stage model is
+  still honoured.
+- **It was not only OpenCode harnesses.** OpenCode is the default *authoring
+  runner* for every harness except GitHub Copilot, so Claude-harness and generic
+  `.agents` repositories were affected too. It looked intermittent because with
+  no model pinned there was no `--model` to reject.
+- **Other runners are untouched.** Copilot and Claude Code still open exactly the
+  commands they always did; their arguments are unchanged.
+- **One mapping instead of four.** The Console's Author PRD button, the launcher's
+  printed handoff, `forge-launcher resume`'s "open the CLI" step, and the Agents
+  model-planning terminal each carried a separate copy of the runner-to-command
+  mapping. They now share one builder, and a test asserts no OpenCode command can
+  put `--model` on a subcommand that cannot parse it.
+- **Two behaviour notes for OpenCode.** Authoring sessions now use the
+  prompt-focused `mini` interface instead of the full-screen TUI, and because
+  `mini` has no auto-approve flag, OpenCode asks you to approve each tool call.
+  `forge-launcher resume` additionally queues the skill prompt for OpenCode;
+  Copilot and Claude Code still open a bare session there and print the command.
+
+See [ADR-065](adr/065-opencode-mini-interactive-authoring.md) for the decision
+and its constraints.
+
+---
+
 ## October 2026 - v3.94
 
 ### Re-derive the team and project skills in one click

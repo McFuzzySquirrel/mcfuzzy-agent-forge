@@ -31,6 +31,25 @@ function tmpDir(): string {
   return fs.mkdtempSync(path.join(os.tmpdir(), "fl-launcher-"));
 }
 
+/**
+ * Collects everything `body` writes to stdout. The in-process resume wizard
+ * prints its handoff commands with `out()`, which writes straight to
+ * `process.stdout`, so there is no return value to assert on instead.
+ */
+async function captureStdout(body: () => Promise<number>): Promise<{ code: number; out: string }> {
+  const chunks: string[] = [];
+  const write = process.stdout.write;
+  process.stdout.write = ((chunk: string | Uint8Array) => {
+    chunks.push(typeof chunk === "string" ? chunk : Buffer.from(chunk).toString());
+    return true;
+  }) as typeof process.stdout.write;
+  try {
+    return { code: await body(), out: chunks.join("") };
+  } finally {
+    process.stdout.write = write;
+  }
+}
+
 function runCli(args: string[], env: Record<string, string>): Promise<{ code: number; out: string }> {
   return new Promise((resolve, reject) => {
     execFile(
@@ -442,7 +461,7 @@ test("non-interactive resume prints an interactive OpenCode requirements command
   });
 
   assert.equal(code, 0, out);
-  assert.match(out, /opencode "--prompt"/);
+  assert.match(out, /opencode "mini" "--prompt"/);
   assert.match(out, /\/forge-auto-build-prd/);
   assert.doesNotMatch(out, /opencode run --auto/);
   assert.doesNotMatch(out, /--dir/);
@@ -478,9 +497,48 @@ test("resume dry-run prints an interactive authoring command", async (t) => {
   const out = output.join("");
   assert.equal(code!, 0, out);
   assert.match(out, /Dry-run: not opening an interactive session/);
-  assert.match(out, /opencode "--prompt"/);
+  assert.match(out, /opencode "mini" "--prompt"/);
   assert.match(out, /\/forge-auto-build-prd/);
   assert.doesNotMatch(out, /opencode run --auto/);
+});
+
+test("resume's interactive handoff builds argv each runner can actually parse", async (t) => {
+  // OpenCode's root command has no --model, so `opencode --model <id>` fails
+  // argument parsing before any session starts and the handoff has to route
+  // through `mini`. copilot and claude are asserted here too because their argv
+  // is deliberately left alone: queueing their prompt on this path would newly
+  // auto-approve permissions via --yolo in a step that has always asked.
+  for (const [runner, expected, forbidden] of [
+    ["opencode", /opencode mini --prompt/, /opencode --model|opencode "\/forge/],
+    ["copilot", /copilot --model/, /copilot -i/],
+  ] as const) {
+    const repo = tmpDir();
+    t.after(() => fs.rmSync(repo, { recursive: true, force: true }));
+    execFileSync("git", ["init", "-q", repo]);
+    fs.mkdirSync(path.join(repo, "docs"), { recursive: true });
+    fs.writeFileSync(path.join(repo, "docs", "IDEA.md"), "# Idea\n\nA thing.\n");
+    const bin = fs.mkdtempSync(path.join(os.tmpdir(), "fl-handoff-bin-"));
+    t.after(() => fs.rmSync(bin, { recursive: true, force: true }));
+    for (const cli of [runner, "opencode", "copilot"]) {
+      fs.writeFileSync(path.join(bin, cli), "#!/bin/sh\nexit 0\n");
+      fs.chmodSync(path.join(bin, cli), 0o755);
+    }
+    const { code, out } = await captureStdout(() => runResume({
+      repo,
+      env: { ...process.env, FORGE_RUN_WITH: runner, FORGE_PRD_MODEL: "anthropic/prd-1", PATH: `${bin}${path.delimiter}${process.env.PATH ?? ""}` },
+      dependencies: {
+        promptSelect: async () => "cli",
+        inventoryProbe: async () => ({
+          code: 0,
+          stdout: "anthropic/prd-1\nanthropic/team-2\n",
+          stderr: "",
+        }),
+      },
+    }));
+    assert.equal(code, 0, out);
+    assert.match(out, expected, out);
+    assert.doesNotMatch(out, forbidden, out);
+  }
 });
 
 test("imported requirements remain source material and queue feature authoring", async () => {

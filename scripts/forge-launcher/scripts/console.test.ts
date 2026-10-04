@@ -1051,20 +1051,21 @@ test("authoring session endpoint launches an interactive grill session", async (
       const idea = await postJson(`${replacement.url}/api/authoring/session`, { target: "idea" }, { "X-Forge-Token": replacement.token });
       assert.equal((idea.body as { ok: boolean }).ok, true);
       assert.equal(calls[0]?.cli, "opencode");
-      assert.equal(calls[0]?.args[0], "--prompt");
-      assert.match(calls[0]?.args[1] ?? "", /forge-grill-idea/);
+      assert.equal(calls[0]?.args[0], "mini");
+      assert.equal(calls[0]?.args[1], "--prompt");
+      assert.match(calls[0]?.args[2] ?? "", /forge-grill-idea/);
 
       const prd = await postJson(`${replacement.url}/api/authoring/session`, { target: "prd" }, { "X-Forge-Token": replacement.token });
       assert.equal((prd.body as { ok: boolean }).ok, true);
-      assert.match(calls[1]?.args[1] ?? "", /forge-auto-build-prd/);
+      assert.match(calls[1]?.args[2] ?? "", /forge-auto-build-prd/);
 
       const missingPrompt = await postJson(`${replacement.url}/api/authoring/session`, { target: "feature-prd" }, { "X-Forge-Token": replacement.token });
       assert.equal(missingPrompt.status, 400);
 
       const feature = await postJson(`${replacement.url}/api/authoring/session`, { target: "feature-prd", prompt: "add billing" }, { "X-Forge-Token": replacement.token });
       assert.equal((feature.body as { ok: boolean }).ok, true);
-      assert.match(calls[2]?.args[1] ?? "", /forge-build-feature-prd/);
-      assert.match(calls[2]?.args[1] ?? "", /add billing/);
+      assert.match(calls[2]?.args[2] ?? "", /forge-build-feature-prd/);
+      assert.match(calls[2]?.args[2] ?? "", /add billing/);
       const handoff = JSON.parse(readFileSync(join(repo, "docs", "authoring-state.json"), "utf8")).featureIncrementHandoff;
       assert.deepEqual(Object.keys(handoff.featureFingerprints), ["fixture.md"]);
       assert.equal(featureIncrementHandoffHasChange(repo), false, "the session receipt captures the pre-session feature fingerprint");

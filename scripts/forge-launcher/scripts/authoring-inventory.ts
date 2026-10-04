@@ -297,3 +297,35 @@ export function authoringArgv(invocation: AuthoringInvocation, _repo: string, me
       return ["run", "--auto", ...model, ...extra, message];
   }
 }
+
+/**
+ * Builds the argv for an *interactive* authoring session: one a human answers
+ * in, which is the only shape requirements authoring is allowed to take
+ * (ADR-060). This is the interactive counterpart to `authoringArgv`, and it
+ * exists so the Console and the launcher cannot drift apart — they used to
+ * carry separate copies of the same runner mapping and both were wrong.
+ *
+ * `opencode` needs the `mini` subcommand, which is not a stylistic choice:
+ *
+ * - OpenCode v2's *root* command accepts `--prompt` but has no `--model`; the
+ *   flag only exists on `run`. Passing it anyway fails argument parsing before
+ *   any session starts, with `Unrecognized flag: --model in command opencode`.
+ * - `run` is the non-interactive path, so it cannot be used here at all.
+ * - `mini` is the one interactive surface that takes both a queued prompt and a
+ *   model, and a queued `/skill …` prompt is submitted as a command rather than
+ *   as prose, so the forge skills still resolve.
+ *
+ * `copilot` and `claude` need nothing: `copilot -i` starts an interactive
+ * session with the prompt already executed, and `claude "query"` starts an
+ * interactive session with an initial prompt. Both accept `--model`.
+ */
+export function interactiveAuthoringArgv(
+  runner: Exclude<AuthoringRunner, "stub">, message: string, model?: string,
+): string[] {
+  const modelArgs = model ? ["--model", model] : [];
+  switch (runner) {
+    case "copilot": return ["-i", message, "--yolo", ...modelArgs];
+    case "claude": return [...modelArgs, message];
+    default: return ["mini", "--prompt", message, ...modelArgs];
+  }
+}

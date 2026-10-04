@@ -73,7 +73,7 @@ test("resume with an idea queues PRD drafting", async () => {
   assert.equal(code, 0, out);
   assert.ok(out.includes("No PRD yet"), out);
   assert.ok(out.includes("forge-auto-build-prd"), out);
-  assert.match(out, /opencode "--prompt"/);
+  assert.match(out, /opencode "mini" "--prompt"/);
   assert.doesNotMatch(out, /opencode run --auto/);
   assert.ok(!out.includes("--dir"), out);
 });
