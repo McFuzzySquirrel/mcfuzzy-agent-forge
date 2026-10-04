@@ -13,7 +13,7 @@ import { assertEngineHarnessAvailable, loadEngineConfig, saveEngineConfig } from
 import { engineRunCli } from "./engine-run.ts";
 import { createSessionScope } from "./launcher-session.ts";
 import { type AuthoringOptions, type AuthoringRunnerChoice, type AuthoringRunnerSelection, type AuthoringStage, loadAuthoringConfig, saveAuthoringConfig, selectAuthoringModel, selectAuthoringRunner } from "./authoring-config.ts";
-import { authoringArgv, inventoryForRunner, readAuthoringInventory, refreshAuthoringInventory, resolveAuthoringModel, type AuthoringInvocation, type AuthoringRunner, type InventoryProbe } from "./authoring-inventory.ts";
+import { authoringArgv, interactiveAuthoringArgv, inventoryForRunner, readAuthoringInventory, refreshAuthoringInventory, resolveAuthoringModel, type AuthoringInvocation, type AuthoringRunner, type InventoryProbe } from "./authoring-inventory.ts";
 import { authoringReadiness, authoringStageIsCurrent, clearFeatureIncrementHandoff, featureIncrementHandoffHasChange, fingerprintFiles, readAuthoringState, readSkillCandidates, recordAuthoringStageSuccess, recordFeatureIncrementHandoff, saveAuthoringStage, stageInputFingerprint, type AuthoringStageState } from "./authoring-state.ts";
 import {
   REDERIVE_STEPS,
@@ -553,12 +553,11 @@ async function authoringHandoffCmdFor(msg: string): Promise<string> {
     return headlessCmdFor(msg);
   }
   const invocation = await resolveAuthoringModel(state.repoDir, "prd", runner, state.options.models, state.env, state.options.dependencies?.inventoryProbe);
-  const modelArgs = invocation.effectiveModel ? ["--model", invocation.effectiveModel] : [];
-  const args = runner === "copilot"
-    ? ["-i", msg, "--yolo", ...modelArgs]
-    : runner === "claude"
-      ? [...modelArgs, msg]
-      : ["--prompt", msg, ...modelArgs];
+  return formatRunnerCommand(runner, interactiveAuthoringArgv(runner, msg, invocation.effectiveModel));
+}
+
+/** Shell-quoted one-line form of a runner invocation, for printed handoffs. */
+function formatRunnerCommand(runner: string, args: string[]): string {
   return `${runner} ${args.map((arg) => JSON.stringify(arg)).join(" ")}`;
 }
 
@@ -2550,12 +2549,21 @@ async function openCliFor(cmd: string): Promise<void> {
     const runner = headlessRunner();
     if (runner === "stub") { command(await headlessCmdFor(cmd)); return; }
     const invocation = await resolveAuthoringModel(state.repoDir, stage, runner, state.options.models, state.env, state.options.dependencies?.inventoryProbe);
-    const args = invocation.effectiveModel ? ["--model", invocation.effectiveModel] : [];
-    if (runner === "opencode") args.unshift(state.repoDir);
+    // OpenCode only: its root command has no `--model`, so the bare
+    // `opencode --model <id>` this used to build never started, and the session
+    // had to be handed the prompt explicitly. `interactiveAuthoringArgv` maps it
+    // onto `opencode mini`, the one interactive surface that takes both. copilot
+    // and claude keep the bare session plus a printed command — they work, and
+    // queueing their prompt here would newly auto-approve permissions via
+    // `--yolo` in a path that has always asked.
+    const args = runner === "opencode"
+      ? interactiveAuthoringArgv(runner, cmd, invocation.effectiveModel)
+      : invocation.effectiveModel ? ["--model", invocation.effectiveModel] : [];
     const launched = await launchCliInTerminal(runner, state.repoDir, args);
     if (!launched) warn(`Could not open the authoring terminal. Run: ${await authoringHandoffCmdFor(cmd)}`);
     authoringEvent("authoring.handoff", { stage, ...invocation, argv: args });
-    out(`    Then run only this stage: ${cmd}`);
+    if (runner === "opencode") command(formatRunnerCommand(runner, args));
+    else out(`    Then run only this stage: ${cmd}`);
     out("    Continue with forge-launcher resume to select the next stage's model independently.");
     return;
   }

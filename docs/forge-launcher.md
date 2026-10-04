@@ -421,7 +421,28 @@ CLI is missing. A repository that falls back this way comes under the same
 stage-model constraint, so a saved OpenCode-shaped ID fails closed at model
 resolution with an actionable message rather than at spawn. Note that
 `bypassPermissions` can be disabled by a managed Claude Code policy, in which
-case the runner exits non-zero before authoring starts. Set
+case the runner exits non-zero before authoring starts.
+
+The *interactive* handoffs — the ones that open a session for you to answer the
+requirements interview in — use a different shape, because they must stay
+interactive (ADR-060) and must carry the stage model:
+
+| Runner | Interactive handoff |
+|---|---|
+| `opencode` | `opencode mini --prompt "<message>" [--model provider/model]` |
+| `copilot` | `copilot -i "<message>" --yolo [--model <model>]` |
+| `claude` | `claude [--model <model>] "<message>"` |
+
+OpenCode's root command accepts `--prompt` but has no `--model` — the flag only
+exists on `run` — so a pinned stage model used to abort the whole session with
+`Unrecognized flag: --model in command opencode`. `opencode mini` is the one
+interactive surface that takes both, and it has no auto-approve flag, so OpenCode
+prompts you for each tool call. `forge-launcher resume`'s "open the CLI" step
+additionally queues the prompt for `opencode`; `copilot` and `claude` still open
+a bare session there and print the command to paste, so their behaviour is
+unchanged. See [ADR-065](adr/065-opencode-mini-interactive-authoring.md).
+
+Set
 `FORGE_WORKFLOW_ENGINE=1` to append
 `GO --workflow-engine` so the build executes through the workflow engine. On that path the engine runs **detached** (not as a
 blocking child of the session) and the per-task harness is selected with

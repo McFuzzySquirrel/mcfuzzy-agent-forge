@@ -6,7 +6,7 @@ import path from "node:path";
 import { execFileSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
 import { loadAuthoringConfig, saveAuthoringConfig, selectAuthoringModel, selectAuthoringRunner, writeAuthoringJson, type AuthoringConfig } from "./authoring-config.ts";
-import { authoringArgv, inventoryForRunner, parseClaudeModelOutput, parseModelInventoryOutput, readAuthoringInventory, refreshAuthoringInventory, resolveAuthoringModel, type AuthoringRunner } from "./authoring-inventory.ts";
+import { authoringArgv, interactiveAuthoringArgv, inventoryForRunner, parseClaudeModelOutput, parseModelInventoryOutput, readAuthoringInventory, refreshAuthoringInventory, resolveAuthoringModel, type AuthoringRunner } from "./authoring-inventory.ts";
 import { authoringReadiness, authoringStageIsCurrent, fingerprintFiles, readAuthoringState, readSkillCandidates } from "./authoring-state.ts";
 import { runDraftPrd, runDraftExistingPrd, runDraftSkills, runDraftTeam, runFeaturePrd, runFeatureIncrement, runLauncher, runResume, type LauncherOptions } from "./launcher.ts";
 import { createSessionScope } from "./launcher-session.ts";
@@ -415,6 +415,43 @@ test("inherited defaults stay unresolved and never get a frozen default model", 
   const result = await resolveAuthoringModel(repo, "prd", "copilot", {}, {}, async () => { throw new Error("must not guess"); });
   assert.deepEqual(result, { runner: "copilot", source: "inherit" });
   assert.equal(authoringArgv(result, repo, "/fixture").includes("--model"), false);
+});
+
+test("interactive argv keeps every runner on an interactive surface", () => {
+  // copilot -i and `claude "query"` are already interactive sessions, so their
+  // argv is unchanged by this rule and must stay that way.
+  assert.deepEqual(interactiveAuthoringArgv("copilot", "/fixture"), ["-i", "/fixture", "--yolo"]);
+  assert.deepEqual(interactiveAuthoringArgv("copilot", "/fixture", "prd-1"), ["-i", "/fixture", "--yolo", "--model", "prd-1"]);
+  assert.deepEqual(interactiveAuthoringArgv("claude", "/fixture"), ["/fixture"]);
+  assert.deepEqual(interactiveAuthoringArgv("claude", "/fixture", "opus"), ["--model", "opus", "/fixture"]);
+  // OpenCode is the only runner that moves: its root command has no --model, so
+  // the pinned model has to ride on `mini`.
+  assert.deepEqual(interactiveAuthoringArgv("opencode", "/fixture"), ["mini", "--prompt", "/fixture"]);
+  assert.deepEqual(interactiveAuthoringArgv("opencode", "/fixture", "anthropic/prd-1"), ["mini", "--prompt", "/fixture", "--model", "anthropic/prd-1"]);
+});
+
+test("no OpenCode invocation puts --model on a command that cannot parse it", () => {
+  // `run` and `mini` accept --model; OpenCode's root command does not, and it
+  // rejects the flag during argument parsing — "Unrecognized flag: --model in
+  // command opencode" — before any session starts. Interactive sessions are the
+  // case that regressed here, so both builders are pinned to the safe set.
+  // copilot and claude are excluded: their root commands do accept --model, and
+  // nothing about them is in question.
+  const acceptsModel = new Set(["run", "mini"]);
+  const opencodeArgv = [
+    interactiveAuthoringArgv("opencode", "/fixture"),
+    interactiveAuthoringArgv("opencode", "/fixture", "provider/model"),
+    authoringArgv({ runner: "opencode", source: "inherit" }, "/fixture", "/fixture"),
+    authoringArgv({ runner: "opencode", source: "project", effectiveModel: "provider/model" }, "/fixture", "/fixture"),
+  ];
+  for (const args of opencodeArgv) {
+    if (!args.includes("--model")) continue;
+    assert.equal(acceptsModel.has(args[0]), true, `--model on unsupported subcommand: ${args.join(" ")}`);
+  }
+  // The regression itself: an interactive OpenCode session was `opencode
+  // --prompt …`, whose root command has no --model, so a pinned stage model made
+  // the whole session fail to start.
+  assert.equal(interactiveAuthoringArgv("opencode", "/fixture")[0], "mini");
 });
 
 test("dependency, build, and cache directories do not invalidate authored fingerprints", (t) => {

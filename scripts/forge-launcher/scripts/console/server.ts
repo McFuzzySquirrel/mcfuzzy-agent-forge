@@ -15,7 +15,7 @@ import { RunController, type ControlDeps } from "./control.ts";
 import { IncrementalLineReader } from "./incremental-reader.ts";
 import { consoleAuthoringInventory, selectedAuthoringRunner } from "./authoring.ts";
 import { isRunnerChoice, loadAuthoringConfig, saveAuthoringConfig, validateAuthoringConfig } from "../authoring-config.ts";
-import { resolveAuthoringModel, type AuthoringRunner, type InventoryProbe } from "../authoring-inventory.ts";
+import { interactiveAuthoringArgv, resolveAuthoringModel, type InventoryProbe } from "../authoring-inventory.ts";
 import { validateAuthoredPrd } from "../prd-validation.ts";
 import { loadEngineConfig } from "../engine-config.ts";
 import { featureIncrementHandoffHasChange, recordAuthoringStageSuccess, recordFeatureIncrementHandoff } from "../authoring-state.ts";
@@ -273,16 +273,6 @@ const AUTHORING_SESSIONS: Record<AuthoringSessionTarget, AuthoringSessionSpec> =
     message: (prompt) => `/forge-build-feature-prd I want to add ${prompt} to this project. Analyze the existing PRD, features, codebase and team, interview me for any gaps, then author the new canonical feature under docs/features/ and register it in the PRD feature table. Run validate-prd and commit. Do not generate agents or skills, compile a manifest, or start the engine.`,
   },
 };
-
-/** Interactive CLI args that queue a prompt and optional model. */
-function interactiveAuthoringArgs(runner: Exclude<AuthoringRunner, "stub">, message: string, model?: string): string[] {
-  const modelArgs = model ? ["--model", model] : [];
-  switch (runner) {
-    case "copilot": return ["-i", message, "--yolo", ...modelArgs];
-    case "claude": return [...modelArgs, message];
-    default: return ["--prompt", message, ...modelArgs];
-  }
-}
 
 /** Staging dir for browser-uploaded PRD/research files (needed before the new repo exists). */
 function uploadStagingDir(): string {
@@ -788,7 +778,7 @@ export async function startConsoleServer(options: ConsoleServerOptions = {}): Pr
             return sendJson(res, 400, { ok: false, message: error instanceof Error ? error.message : String(error) });
           }
           const message = spec.message(prompt);
-          const args = interactiveAuthoringArgs(runner, message, model);
+          const args = interactiveAuthoringArgv(runner, message, model);
           if (target === "feature-prd") recordFeatureIncrementHandoff(currentRepo);
           const launched = await launchCli(runner, currentRepo, args);
           const command = `${runner} ${args.map((arg) => JSON.stringify(arg)).join(" ")}`;
@@ -830,9 +820,7 @@ export async function startConsoleServer(options: ConsoleServerOptions = {}): Pr
             : body.provider === "claude" ? "claude" : "";
           const message = typeof body.message === "string" ? body.message.trim() : "";
           if (!provider || !message || message.length > 10000) return sendJson(res, 400, { ok: false, message: "provider and a message up to 10000 characters are required" });
-          const args = provider === "copilot" ? ["-i", message, "--yolo"]
-            : provider === "claude" ? [message]
-            : ["--prompt", message];
+          const args = interactiveAuthoringArgv(provider, message);
           const launched = await launchCli(provider, currentRepo, args);
           const command = `${provider} ${args.map((arg) => JSON.stringify(arg)).join(" ")}`;
           return sendJson(res, 200, { ok: true, launched, cli: provider, command, message: launched ? `${provider} launched in a new terminal.` : `Run manually: cd "${currentRepo}" && ${command}` });

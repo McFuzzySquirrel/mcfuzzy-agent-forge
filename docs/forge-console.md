@@ -212,6 +212,23 @@ jobs: the skill validates and commits its own output, and the Console picks the
 result up from the repository. Use **Refresh** on the pipeline card, or reopen
 the view, to see newly authored documents.
 
+Each runner is opened on an interactive surface that accepts the queued prompt
+*and* the resolved stage model:
+
+| Runner | Interactive command |
+|---|---|
+| `opencode` | `opencode mini --prompt "<message>" [--model provider/model]` |
+| `copilot` | `copilot -i "<message>" --yolo [--model <model>]` |
+| `claude` | `claude [--model <model>] "<message>"` |
+
+OpenCode needs the `mini` subcommand: its full-screen TUI accepts `--prompt` but
+has no `--model`, so a pinned PRD-stage model made the whole session fail to
+start with `Unrecognized flag: --model in command opencode`. `mini` is the one
+interactive surface that takes both, and a queued `/skill …` prompt still runs as
+a command. Because `mini` has no auto-approve flag, OpenCode asks you to approve
+each tool call in that terminal. See
+[ADR-065](adr/065-opencode-mini-interactive-authoring.md).
+
 The terminal counterparts of the headless derivation stages are the
 `draft-team` / `draft-skills` / `compile-manifest` subcommands:
 

@@ -26,7 +26,9 @@ and richer Plan & Team document rendering. See
   `docs/IDEA.md` and commits, then stops.
 - Interactive sessions launch with a pre-seeded prompt (`opencode --prompt …`,
   `copilot -i … --yolo`, `claude "<message>"`), matching the existing model
-  planning terminal.
+  planning terminal. (Superseded: OpenCode's root command has no `--model`, so
+  v3.95 routes interactive sessions through `opencode mini` — see
+  [ADR-065](adr/065-opencode-mini-interactive-authoring.md).)
 - Plan & Team documents become a table that opens a wide modal; agents and
   skills stay as cards.
 - Interactive sessions are fire-and-forget: the skill validates and commits; the

@@ -338,10 +338,15 @@ interactive terminal in the repository. Choose OpenCode, Copilot, or Claude
 Code, enter a message, and launch it using one of these commands:
 
 ```bash
-opencode --prompt "<message>"
+opencode mini --prompt "<message>"
 copilot -i "<message>" --yolo
 claude "<message>"
 ```
+
+OpenCode uses the `mini` subcommand because it is the only interactive surface
+that accepts both a queued prompt and `--model`; the full-screen TUI's
+`opencode --prompt` takes a prompt but rejects `--model`. Because `mini` has no
+auto-approve flag, OpenCode asks you to approve each tool call in the terminal.
 
 Claude Code opens interactively with its default permissions, so its tool use is
 approved in the terminal rather than bypassed.
