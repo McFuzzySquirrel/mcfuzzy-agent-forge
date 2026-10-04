@@ -6,12 +6,36 @@
 // `node_modules` may not be present - importing `engine.ts` there would drag in
 // the harness and fail at runtime. Anything the Console and the engine must
 // agree on therefore lives here, with `types.ts` for its shapes.
+//
+// Two consumers schedule from this rule and must not disagree about what the
+// engine can dispatch: the dispatcher, which gates execution on
+// `unmetPrerequisites`, and the Board's Gantt mode, which forecasts from
+// `prerequisites`.
 
 import type { ExecutionManifest, TaskStatus, WorkflowState } from "./types.ts";
 
 /** A task counts as done once it is complete or deliberately skipped. */
 export function isTaskDone(status: TaskStatus | undefined): boolean {
   return status === "complete" || status === "skipped";
+}
+
+/**
+ * Every task that must finish before `taskId` may be dispatched: its direct
+ * dependencies plus every task of each phase it depends on. Empty for an unknown
+ * task id.
+ *
+ * A phase dependency brings in *all* of that phase's tasks, not just its last, so
+ * ordering between phases comes from the compiler's dependency chain rather than
+ * from picking one representative task.
+ */
+export function prerequisites(manifest: ExecutionManifest, taskId: string): string[] {
+  const entry = manifest.phases
+    .flatMap((phase) => phase.tasks.map((task) => ({ phase, task })))
+    .find((candidate) => candidate.task.id === taskId);
+  if (!entry) return [];
+  const phaseDependencies = (entry.phase.dependencies ?? []).flatMap((id) =>
+    (manifest.phases.find((candidate) => candidate.id === id)?.tasks ?? []).map((task) => task.id));
+  return [...new Set([...(entry.task.dependencies ?? []), ...phaseDependencies])];
 }
 
 /**
@@ -29,14 +53,5 @@ export function unmetPrerequisites(
   state: WorkflowState,
   taskId: string,
 ): string[] {
-  const entry = manifest.phases
-    .flatMap((phase, phaseIndex) => phase.tasks.map((task) => ({ phase, phaseIndex, task })))
-    .find((candidate) => candidate.task.id === taskId);
-  if (!entry) return [];
-
-  // A phase dependency brings in every task of that phase, not just its last.
-  const phaseDependencies = (entry.phase.dependencies ?? []).flatMap((id) =>
-    (manifest.phases.find((candidate) => candidate.id === id)?.tasks ?? []).map((task) => task.id));
-  const prerequisites = [...new Set([...(entry.task.dependencies ?? []), ...phaseDependencies])];
-  return prerequisites.filter((id) => !isTaskDone(state.tasks?.[id]?.status));
+  return prerequisites(manifest, taskId).filter((id) => !isTaskDone(state.tasks?.[id]?.status));
 }

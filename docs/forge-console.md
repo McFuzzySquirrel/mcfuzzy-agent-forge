@@ -232,6 +232,96 @@ override it and an offline run never spawns a real runner.
 
 ---
 
+## Re-deriving the team and skills
+
+Editing a PRD or feature document makes the agent team and the project skills
+stale. The Console names the cause and runs the fix.
+
+**Why it is stale.** Each authoring stage records the fingerprint of its inputs
+and when it completed. When those no longer match, the Console compares each
+input file's modification time against the stage's completion time and reports
+the file — "*Inputs changed after this stage completed: docs/PRD.md*", *changed 3h
+ago*. A stage whose generated output was deleted, or edited after completion, is
+reported as such instead. The same detail appears on **Overview** and in
+**Plan & Team → authoring settings**, and each stale stage links straight to its
+card (`#/documents?stage=team`).
+
+**Running the chain.** **Re-derive team & skills** runs the whole tail as one
+background job:
+
+1. regenerate the agent team from the PRD,
+2. regenerate the project skills from the new team,
+3. recompile the execution manifest.
+
+Progress is shown per step and is persisted to `docs/rederive-state.json`, so
+reloading the page mid-run resumes the step machine rather than losing it. A
+failure stops the chain, names the step, and offers **Retry from \<step\>** — which
+re-runs that step and everything after it, because a regenerated team
+invalidates the skills and manifest derived from the previous one.
+
+Two deliberate limits:
+
+- **The chain never authors requirements.** ADR-060 makes requirements authoring
+  interactive, so it starts at the team and refuses to run without a committed
+  `docs/PRD.md` plus `docs/features/*.md`, pointing you at the interactive
+  session instead.
+- **The chain never resets completed tasks.** That discards their recorded
+  outputs and artifacts, so it stays a separate, confirmed action (below).
+
+The same CLI chain is available directly:
+
+```bash
+forge-launcher rederive --repo <path> [--from team|skills|manifest]
+```
+
+---
+
+## Resetting changed tasks for review
+
+Stable task IDs preserve completed work across a recompile. When a task's
+*contract* changed, its record is stale and it must run again. **Reset changed
+tasks for review** lives in the Overview **Manifest** panel, beside the
+reconciliation data it acts on: it lists the changed and new task IDs, each
+linking into **Tasks**, and the reset is behind a confirmation naming every task
+it will discard. It clears those tasks' status, timings, outputs and artifacts,
+setting them back to pending.
+
+The Overview **Controls** panel points here rather than duplicating the button.
+
+---
+
+## The Forge Board
+
+The Board is the engine's PixiJS dashboard, framed inside the Console. It has
+two modes, chosen above the frame and remembered per project.
+
+**Kanban** is the original board: one band per phase, four status columns, task
+cards flowing left to right.
+
+**Gantt** plots the same run against time on its dependencies:
+
+- **Filled bars are measured; outlined, hatched bars are forecast.** A forecast
+  is an inference from observed durations, and the tooltip names its source — the
+  task's own attempts, the same agent's other tasks, or a default.
+- **Bars respect the engine's own dispatch rule** (direct dependencies plus every
+  task of a depended-on phase) and the configured concurrency, so the forecast
+  never promises a sequence the engine will not run.
+- **Phase rollups** span each phase; **human-review tasks** appear as milestone
+  diamonds, since a review is a decision rather than a duration.
+- **The critical path** is highlighted: the longest chain of remaining work.
+- **A "now" line** advances continuously; the axis follows your local clock.
+
+Filters dim tasks rather than hiding them, so the shape of the build stays
+visible. **Table** renders the same data as a real table for keyboard and
+screen-reader use. Hovering a card or bar offers **Open in Tasks**, **Logs** and
+**Artifacts**, so the board is not a dead end. Failures stay listed in the lower
+left with a link into Tasks, rather than only flashing once.
+
+The Board is still available standalone via `workflow-engine run --viz`, where
+it keeps its own mode switch and Table toggle.
+
+---
+
 ## Adding a PRD and research/seed documents
 
 The **New Project wizard** mirrors the CLI's Step 6 (`addPrdAndResearch`): after
@@ -270,11 +360,11 @@ button shows the exact command to run manually.
 | View | What it shows |
 |---|---|
 | **Home** | create a new project or open an existing one (landing), including live status labels for detached work. |
-| **Overview** | run status, progress + counts, blockers, the pipeline next-step card with a **Manual build** checkbox, background-job status, run controls, an **auto-commit** toggle, a **Log harness activity** toggle, and a **Launch \<harness\> CLI** button. |
-| **Board** | the PixiJS Forge Board - a live kanban (To Do · In Progress · Done · Failed). |
+| **Overview** | run status, progress + counts, blockers, the pipeline next-step card with a **Manual build** checkbox, background-job status, run controls, an **auto-commit** toggle, a **Log harness activity** toggle, and a **Launch \<harness\> CLI** button. Also the **Re-derive team & skills** panel when authoring is stale, and manifest reconciliation with a confirmed **Reset changed tasks for review**. |
+| **Board** | the PixiJS Forge Board in **Kanban** or **Gantt** mode, with status filters and a **Table** view of the same data. |
 | **Tasks** | every task in a filterable/sortable table with a detail drawer, editable per-task timeout, explicit/range selection controls for manual mode, and a **Launch \<harness\> CLI** button. |
 | **Logs** | `docs/engine-run.log` tail + the audit event stream (live via SSE). |
-| **Plan & Team** | the project documents (IDEA, PRD, features, progress, model plan) as a table that opens a document in a wide popup, plus agents and skills in collapsible card sections. Requirement and task blocks render as tables. |
+| **Plan & Team** | authoring settings and stage cards — always actionable, each stating why it is stale — plus the project documents (IDEA, PRD, features, progress, model plan) as a table that opens a document in a wide popup, and agents and skills in collapsible card sections. Requirement and task blocks render as tables. |
 | **Artifacts** | the structured outputs tasks produced (`docs/artifacts/`), browsable by type/task with previews. |
 | **Timeline** | chronological audit events, failures highlighted. |
 | **Projects** | switch projects, add a folder, or remove one or more projects from Forge. |

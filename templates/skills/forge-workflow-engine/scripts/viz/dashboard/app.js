@@ -54,6 +54,15 @@ function esc(s) {
   }[c]));
 }
 
+/**
+ * Asks the Console to navigate. The board is an iframe, so a link to another
+ * view has to be handed to the parent rather than followed in place — otherwise
+ * the reader is trapped in a frame with no route to Tasks or Logs.
+ */
+function requestNavigate(hash) {
+  try { parent.postMessage({ type: "forge:navigate", href: hash }, "*"); } catch { /* cross-origin */ }
+}
+
 // The renderer is set once the Pixi app initializes; texture factories below
 // use it to bake procedural Graphics into reusable textures.
 let RENDERER = null;
@@ -204,9 +213,14 @@ function truncate(text, maxChars) {
   const cardLayer = new P.Container();
   cardLayer.sortableChildren = true; // expanded cards float above their neighbors
   const effectLayer = new P.Container();
+  // Gantt mode draws into its own layers rather than mutating the kanban ones, so
+  // switching modes never has to rebuild or tear down the other view's scene.
+  const ganttLayer = new P.Container();
+  const ganttBarLayer = new P.Container();
+  ganttLayer.addChild(ganttBarLayer);
 
   const world = new P.Container();
-  world.addChild(boardGfx, labelLayer, edgeLayer, cardLayer, effectLayer);
+  world.addChild(boardGfx, labelLayer, edgeLayer, cardLayer, effectLayer, ganttLayer);
 
   // Only cards, the board, and the background are interactive; decorative
   // layers (labels/edges/effects) never block pointer events.
@@ -280,9 +294,21 @@ function truncate(text, maxChars) {
   resize();
 
   // ── State ────────────────────────────────────────────────────────────────
+  const params = new URLSearchParams(location.search);
+  const STATUS_FILTER = new Set((params.get("status") || "").split(",").filter(Boolean));
   const state = {
+    /** "kanban" or "gantt". The Console owns this and passes it as a query param. */
+    mode: params.get("mode") === "gantt" ? "gantt" : "kanban",
     manifest: null,
     layout: null,
+    /** `/api/layout` payload: `{ kanban, gantt }` from the engine's viz modules. */
+    serverLayout: null,
+    gantt: null,          // the active GanttLayout, when in Gantt mode
+    ganttBars: new Map(), // taskId -> { root, targetX, targetW, gfx, label }
+    ganttNeedLayout: false,
+    ganttFetchTimer: null,
+    reducedMotion: typeof matchMedia === "function"
+      && matchMedia("(prefers-reduced-motion: reduce)").matches,
     cards: new Map(),    // taskId -> card entry
     ordered: [],         // cards in manifest order (for stable stacking)
     edges: [],
@@ -293,6 +319,8 @@ function truncate(text, maxChars) {
     height: 800,
     hovered: null,
     currentPhase: null,
+    /** ISO time of the last event applied, used to report staleness on disconnect. */
+    lastEventAt: null,
     startedAt: null,
     completedDurationMs: 0,
     status: "idle",
@@ -349,8 +377,17 @@ function truncate(text, maxChars) {
     return { width: w, height, columns, phases, tasks, edges };
   }
 
+  /**
+   * Picks the kanban layout out of whatever `/api/layout` returned.
+   *
+   * Accepts both shapes on purpose: the bare kanban layout (a standalone `--viz`
+   * server, or a Console from before the endpoint was implemented) and the
+   * `{ kanban, gantt }` wrapper the Console now serves. Falling back to deriving
+   * the board from the manifest alone keeps an older or failing server usable.
+   */
   function resolveLayout(manifest, layout) {
-    if (layout && Array.isArray(layout.columns) && layout.columns.length === 4) return layout;
+    const candidate = layout && layout.kanban ? layout.kanban : layout;
+    if (candidate && Array.isArray(candidate.columns) && candidate.columns.length === 4) return candidate;
     return kanbanFromManifest(manifest);
   }
 
@@ -475,9 +512,9 @@ function truncate(text, maxChars) {
       e.stopPropagation();
       if (entry.expanded) collapseCard(entry); else expandCard(entry);
     });
-    root.on("pointerover", () => {
+    root.on("pointerover", (event) => {
       setHover(task.id);
-      if (!entry.expanded) showTooltip(entry);
+      if (!entry.expanded) showTooltip(entry, event);
     });
     root.on("pointerout", () => { setHover(null); hideTooltip(); });
 
@@ -837,8 +874,38 @@ function truncate(text, maxChars) {
       entry.root.position.set(entry.targetX, entry.targetY);
       paintCard(entry);
     }
+    applyStatusFilter();
     drawEdges();
     fitCamera();
+  }
+
+  /**
+   * Dims tasks whose status is filtered out rather than removing them.
+   *
+   * Removing cards would reflow the board and hide the shape of the build — the
+   * filtered-out columns are exactly the context needed to judge the ones you
+   * kept. Applied to both modes so the two agree about what is in view.
+   */
+  function applyStatusFilter() {
+    const filtering = STATUS_FILTER.size > 0;
+    for (const entry of state.ordered) {
+      const visible = !filtering || STATUS_FILTER.has(entry.status);
+      entry.root.visible = visible;
+      if (entry.status === "skipped") entry.root.alpha = 0.55;
+      else if (!visible) entry.root.alpha = 0.18;
+      else entry.root.alpha = 1;
+    }
+    if (state.gantt) {
+      for (const entry of state.ganttBars.values()) {
+        entry.root.visible = !filtering || STATUS_FILTER.has(entry.bar.status);
+      }
+      // Re-tint the bars to match, since the bar fill encodes the same state.
+      if (state.serverLayout && state.serverLayout.gantt) drawGanttLayout(state.serverLayout.gantt);
+    }
+    if (filtering) {
+      const shown = state.ordered.filter((entry) => STATUS_FILTER.has(entry.status)).length;
+      setStatus(`filtered to ${STATUS_FILTER.size} status${STATUS_FILTER.size === 1 ? "" : "es"} · ${shown}/${state.total} tasks`, "live");
+    }
   }
 
   function fitCamera() {
@@ -865,6 +932,7 @@ function truncate(text, maxChars) {
     computeCompletedDurationMs();
     updateHud();
     drawEdges();
+    renderTable();
   }
 
   function computeCounts() {
@@ -885,7 +953,40 @@ function truncate(text, maxChars) {
       }
     }
     $id("status-chips").innerHTML = chips.join("");
+    renderFailedList();
     buildLegend();
+  }
+
+  /**
+   * A persistent list of what failed, each entry linking out to Tasks.
+   *
+   * Failure used to be signalled only by a one-off red screen tint, which leaves
+   * nothing to act on once it fades: the reader has to remember which task broke
+   * and go find it. This is the "what do I do now" list.
+   */
+  function renderFailedList() {
+    const host = $id("failed-list");
+    if (!host) return;
+    const failed = state.ordered.filter((entry) => entry.status === "failed");
+    host.textContent = "";
+    if (failed.length === 0) {
+      host.classList.add("hidden");
+      return;
+    }
+    host.classList.remove("hidden");
+    const title = document.createElement("div");
+    title.className = "failed-title";
+    title.textContent = `${failed.length} failed`;
+    host.appendChild(title);
+    for (const entry of failed) {
+      const row = document.createElement("button");
+      row.type = "button";
+      row.className = "failed-row";
+      row.textContent = `${entry.task.id} · ${truncate(entry.task.title, 34)}`;
+      row.title = entry.errorMessage || "Open this task in Tasks";
+      row.addEventListener("click", () => requestNavigate(`#/tasks?task=${encodeURIComponent(entry.task.id)}`));
+      host.appendChild(row);
+    }
   }
 
   function buildLegend() {
@@ -921,16 +1022,65 @@ function truncate(text, maxChars) {
     return `<span class="status-label status-${status}">${STATUS_LABEL[status]}</span>`;
   }
 
-  function showTooltip(entry) {
-    const tt = $id("tooltip");
+  function showTooltip(entry, event) {
     const task = entry.task;
-    tt.innerHTML =
-      `<div class="tt-title">${esc(task.title)}</div>` +
-      `<div class="tt-sub">${esc(task.id)}${task.ownerAgent ? " · " + esc(task.ownerAgent) : ""}</div>` +
-      `<div class="tt-status">${statusHtml(entry.status)}</div>` +
-      (entry.artifactId ? `<div class="tt-sub">artifact: ${esc(entry.artifactId)}</div>` : "");
+    showDetailTooltip(
+      { x: event.global.x, y: event.global.y },
+      `<div class="tt-title">${esc(task.title)}</div>`
+        + `<div class="tt-sub">${esc(task.id)}${task.ownerAgent ? " · " + esc(task.ownerAgent) : ""}</div>`
+        + `<div class="tt-status">${statusHtml(entry.status)}</div>`
+        + (entry.artifactId ? `<div class="tt-sub">artifact: ${esc(entry.artifactId)}</div>` : ""),
+      task.id,
+    );
+  }
+
+  /**
+   * Renders tooltip content beside a point, with a navigation strip.
+   *
+   * A canvas holds no links, so "open this task in Tasks" previously had nowhere
+   * to live and the only way out of the board was the fallback text. The tooltip
+   * itself is `pointer-events: none` so it never blocks the board, so the strip
+   * opts back in — otherwise its buttons would be unclickable.
+   */
+  function showDetailTooltip(at, html, taskId) {
+    const tt = $id("tooltip");
+    tt.textContent = "";
+    const body = document.createElement("div");
+    body.innerHTML = html;
+    tt.appendChild(body);
+    const strip = document.createElement("div");
+    strip.className = "tt-actions";
+    for (const [label, hash] of [
+      ["Open in Tasks", `#/tasks?task=${encodeURIComponent(taskId)}`],
+      ["Logs", "#/logs"],
+      ["Artifacts", "#/artifacts"],
+    ]) {
+      const button = document.createElement("button");
+      button.type = "button";
+      button.textContent = label;
+      button.addEventListener("click", () => { hideTooltip(); requestNavigate(hash); });
+      strip.appendChild(button);
+    }
+    tt.appendChild(strip);
     tt.classList.remove("hidden");
-    tt.dataset.task = task.id;
+    tt.dataset.task = taskId;
+    positionTooltip(at.x, at.y, tt);
+  }
+
+  /**
+   * Places the tooltip beside a point, flipping and clamping so it never leaves
+   * the window. The element is `position: fixed` with no intrinsic offset, so
+   * without this it rendered at its static position instead of near the pointer.
+   */
+  function positionTooltip(x, y, tt) {
+    const pad = 12;
+    const box = tt.getBoundingClientRect();
+    let left = x + pad;
+    let top = y + pad;
+    if (left + box.width > window.innerWidth - pad) left = Math.max(pad, x - box.width - pad);
+    if (top + box.height > window.innerHeight - pad) top = Math.max(pad, y - box.height - pad);
+    tt.style.left = `${left}px`;
+    tt.style.top = `${top}px`;
   }
 
   function hideTooltip() {
@@ -978,6 +1128,10 @@ function truncate(text, maxChars) {
   // ── Event application ─────────────────────────────────────────────────────
   function applySnapshot(snapshot) {
     if (!state.manifest && snapshot.manifest) buildScene(snapshot.manifest, snapshot.layout);
+    if (snapshot.layout && snapshot.layout.gantt) state.serverLayout = snapshot.layout;
+    if (state.mode === "gantt" && state.serverLayout && state.serverLayout.gantt) {
+      drawGanttLayout(state.serverLayout.gantt);
+    }
     if (snapshot.state) applyState(snapshot.state);
     const st = snapshot.state;
     setStatus(
@@ -998,6 +1152,11 @@ function truncate(text, maxChars) {
         const entry = state.cards.get(record.taskId);
         if (!entry) continue;
         if (record.status === "complete") entry.files = record.outputFiles || [];
+        // Keep the task's own timestamps on the card entry. The Gantt reads them
+        // from the run state, but the card's table view and expanded detail need
+        // them too, and the engine only persists them once per task.
+        if (record.startedAt) entry.startedAt = record.startedAt;
+        if (record.completedAt) entry.completedAt = record.completedAt;
         if (record.completedAt && record.status === "complete") {
           entry.durationMs = record.startedAt
             ? Date.parse(record.completedAt) - Date.parse(record.startedAt)
@@ -1018,9 +1177,17 @@ function truncate(text, maxChars) {
     if (ws.status === "paused") showBanner("Paused", "Run is paused. Resume with `workflow-engine -- run`.", "paused");
   }
 
+  // Audit actions that change what the schedule looks like. Each one invalidates
+  // the Gantt forecast, which is recomputed server-side and re-fetched debounced.
+  const SCHEDULE_ACTIONS = new Set([
+    "run.started", "phase.started", "task.started", "task.complete",
+    "task.failed", "task.skipped", "run.complete", "run.failed",
+  ]);
+
   function applyAuditEvent(event) {
     const action = event.action;
     const entry = event.taskId ? state.cards.get(event.taskId) : undefined;
+    if (SCHEDULE_ACTIONS.has(action) && state.mode === "gantt") scheduleGanttLayout();
 
     switch (action) {
       case "run.started":
@@ -1033,7 +1200,10 @@ function truncate(text, maxChars) {
         }
         break;
       case "task.started":
-        if (entry && entry.status !== "running") applyStatusToCard(entry, "running");
+        if (entry) {
+          if (event.timestamp) entry.startedAt = event.timestamp;
+          if (entry.status !== "running") applyStatusToCard(entry, "running");
+        }
         break;
       case "context.projected":
         if (entry && typeof event.reductionPercent === "number") {
@@ -1051,6 +1221,7 @@ function truncate(text, maxChars) {
         if (entry) {
           entry.durationMs = event.durationMs;
           entry.files = event.outputFiles || entry.files || [];
+          if (event.timestamp) entry.completedAt = event.timestamp;
           applyStatusToCard(entry, "complete");
         }
         break;
@@ -1121,7 +1292,7 @@ function truncate(text, maxChars) {
       const ny = lerp(entry.root.y, entry.targetY, k);
       if (Math.abs(nx - entry.targetX) > 0.5 || Math.abs(ny - entry.targetY) > 0.5) moving = true;
       entry.root.position.set(nx, ny);
-      if (entry.status === "running") {
+      if (entry.status === "running" && !state.reducedMotion) {
         const pulse = 0.55 + 0.45 * Math.abs(Math.sin(now / 300));
         entry.ribbon.alpha = pulse;
       } else {
@@ -1131,6 +1302,9 @@ function truncate(text, maxChars) {
 
     updateTravellers(dt);
     if (moving) drawEdges();
+    // The "now" marker has to advance every frame or a Gantt would look frozen
+    // between task events. It is cheap (one line) and skipped entirely in kanban.
+    if (state.mode === "gantt") updateNowMarker();
 
     const s = Math.floor(state.completedDurationMs / 1000);
     const mm = String(Math.floor(s / 60)).padStart(2, "0");
@@ -1138,18 +1312,462 @@ function truncate(text, maxChars) {
     $id("elapsed").textContent = `${mm}:${ss}`;
   });
 
+  // ── Gantt mode ─────────────────────────────────────────────────────────────
+  //
+  // The bar geometry is a pure function of the manifest and run state, computed
+  // by the engine's `viz/gantt.ts` and served on `/api/layout`. Nothing here
+  // re-implements scheduling: the board only draws what the engine decided, which
+  // is what keeps the forecast agreeing with what the engine will actually run.
+
+  const ganttGrid = new P.Graphics();
+  const ganttBarsGfx = new P.Graphics();
+  const ganttTextLayer = new P.Container();
+  const ganttNowGfx = new P.Graphics();
+  ganttLayer.addChild(ganttGrid, ganttBarsGfx, ganttTextLayer, ganttNowGfx);
+  ganttLayer.eventMode = "none";
+  ganttTextLayer.eventMode = "none";
+  ganttNowGfx.eventMode = "none";
+
+  const GANTT = { layoutDebounceMs: 250, minSpanMs: 60_000 };
+
+  /**
+   * Projects a timestamp onto the plot. The engine's `gantt.ts` ships the domain
+   * (axis extents and plot geometry) as plain numbers, because a function on the
+   * payload would be dropped by JSON.stringify and arrive as `undefined`. The
+   * projection itself is a rendering concern, so it lives here.
+   */
+  function xFor(layout, ms) {
+    const span = Math.max(layout.axis.max - layout.axis.min, GANTT.minSpanMs);
+    return layout.plot.left + ((ms - layout.axis.min) / span) * layout.plot.width;
+  }
+
+  const ESTIMATE_LABEL = {
+    actual: "measured",
+    audit: "from this task's own attempts",
+    owner: "from this agent's other tasks",
+    default: "default estimate",
+  };
+
+  function estimateSourceText(bar) {
+    return ESTIMATE_LABEL[bar.estimateSource] ?? "estimated";
+  }
+
+  function formatClock(ms) {
+    const date = new Date(ms);
+    return `${String(date.getHours()).padStart(2, "0")}:${String(date.getMinutes()).padStart(2, "0")}`;
+  }
+
+  function formatDuration(ms) {
+    const seconds = Math.round(ms / 1000);
+    if (seconds < 60) return `${seconds}s`;
+    const minutes = Math.floor(seconds / 60);
+    if (minutes < 60) return `${minutes}m`;
+    return `${Math.floor(minutes / 60)}h ${minutes % 60}m`;
+  }
+
+  /** Diamonds mark zero-length review gates, which are not durations. */
+  function drawMilestone(g, x, y, size, color) {
+    g.moveTo(x, y - size).lineTo(x + size, y).lineTo(x, y + size).lineTo(x - size, y).closePath()
+      .fill({ color, alpha: 0.95 }).stroke({ width: 1.2, color: 0xffffff, alpha: 0.5 });
+  }
+
+  function drawGanttLayout(layout) {
+    state.gantt = layout;
+    ganttGrid.clear();
+    ganttBarsGfx.clear();
+    ganttNowGfx.clear();
+    for (const child of ganttTextLayer.removeChildren()) child.destroy();
+    for (const entry of state.ganttBars.values()) entry.root.destroy();
+    state.ganttBars.clear();
+    if (!layout || !layout.bars) return;
+
+    const { axis, plot } = layout;
+    // The axis gutter comes from the layout, so tick labels and the first phase
+    // rollup cannot collide however the geometry is tuned.
+    const top = layout.axisHeight;
+    const project = (ms) => xFor(layout, ms);
+
+    // Day rules first, so bars draw over them.
+    for (const tick of axis.ticks) {
+      const x = project(tick.at);
+      ganttGrid.moveTo(x, top - 6).lineTo(x, layout.height).stroke({
+        width: tick.dayBoundary ? 1 : 1,
+        color: tick.dayBoundary ? 0xffffff : 0xffffff,
+        alpha: tick.dayBoundary ? 0.16 : 0.06,
+      });
+      const label = new P.Text({
+        text: tick.label,
+        style: textStyle({ fontSize: 10, fill: tick.dayBoundary ? 0xc7cde0 : 0x8b96b8 }),
+      });
+      label.anchor.set(0.5, 0);
+      label.position.set(x, top - 20);
+      ganttTextLayer.addChild(label);
+    }
+
+    for (const row of layout.rows) {
+      if (row.kind === "phase") {
+        ganttGrid.rect(plot.left - 8, row.y, plot.width + 16, row.height)
+          .fill({ color: 0xffffff, alpha: row.id === state.currentPhase ? 0.07 : 0.03 });
+        // Phase name in the rail. Without it the rollup bars are anonymous spans
+        // and the reader has to infer grouping from the row order alone.
+        const label = new P.Text({
+          text: truncate(row.label, 30),
+          style: textStyle({
+            fontSize: 11,
+            fontWeight: "700",
+            fill: row.id === state.currentPhase ? 0x9be3a6 : 0xc7cde0,
+          }),
+        });
+        label.anchor.set(1, 0.5);
+        label.position.set(plot.left - 14, row.y + row.height / 2);
+        ganttTextLayer.addChild(label);
+      }
+    }
+
+    // Phase rollups, then the task bars on top.
+    for (const rollup of layout.phaseBars) {
+      const row = layout.rows[rollup.row];
+      if (!row) continue;
+      const x = project(rollup.startMs);
+      const w = Math.max(2, project(rollup.endMs) - x);
+      ganttBarsGfx.roundRect(x, row.y + row.height / 2 - 5, w, 10, 5)
+        .fill({ color: rollup.critical ? 0xf5c542 : 0x8b96b8, alpha: 0.22 })
+        .stroke({ width: 1, color: rollup.critical ? 0xf5c542 : 0x8b96b8, alpha: 0.5 });
+    }
+
+    for (const bar of layout.bars) {
+      const row = layout.rows[bar.row];
+      if (!row) continue;
+      const color = STATUS_COLORS[bar.status] ?? STATUS_COLORS.pending;
+      const agent = agentColor(bar.ownerAgent);
+      const cy = row.y + row.height / 2;
+      const barH = Math.min(16, row.height - 8);
+
+      if (bar.milestone) {
+        drawMilestone(ganttBarsGfx, project(bar.endMs), cy, 7, color);
+      } else {
+        const x = project(bar.startMs);
+        // A forecast is a guess, so it is drawn as an outline; only measured work
+        // is filled. That distinction is the whole point of showing both.
+        const w = Math.max(3, project(bar.endMs) - x);
+        if (bar.kind === "planned") {
+          ganttBarsGfx.roundRect(x, cy - barH / 2, w, barH, 4)
+            .fill({ color, alpha: 0.1 })
+            .stroke({ width: 1, color, alpha: 0.75 });
+          for (let hatch = x + 4; hatch < x + w - 2; hatch += 6) {
+            ganttBarsGfx.moveTo(hatch, cy + barH / 2 - 2).lineTo(hatch + 4, cy - barH / 2 + 2)
+              .stroke({ width: 1, color, alpha: 0.3 });
+          }
+        } else {
+          ganttBarsGfx.roundRect(x, cy - barH / 2, w, barH, 4)
+            .fill({ color, alpha: bar.status === "running" ? 0.9 : 0.75 })
+            .stroke({ width: bar.critical ? 2 : 1, color: bar.critical ? 0xf5c542 : agent, alpha: 1 });
+        }
+      }
+
+      // Left rail: task identity, matching the kanban's name-tag convention.
+      const label = new P.Text({
+        text: truncate(row.label, 34),
+        style: textStyle({
+          fontSize: row.kind === "phase" ? 11 : 10,
+          fontWeight: row.kind === "phase" ? "700" : "500",
+          fill: row.kind === "phase" ? 0xc7cde0 : 0xb6c0dc,
+        }),
+      });
+      label.anchor.set(1, 0.5);
+      label.position.set(plot.left - 14, cy);
+      ganttTextLayer.addChild(label);
+
+      // Hit target + tooltip, so a bar carries the same detail a card does.
+      const target = new P.Container();
+      target.eventMode = "static";
+      target.cursor = "pointer";
+      const hit = new P.Graphics();
+      hit.rect(project(bar.startMs) - 3, row.y, Math.max(8, project(bar.endMs) - project(bar.startMs) + 6), row.height)
+        .fill({ color: 0xffffff, alpha: 0.001 });
+      target.addChild(hit);
+      target.on("pointerover", () => showGanttTooltip(bar, target));
+      target.on("pointerout", () => hideTooltip());
+      target.visible = !STATUS_FILTER.size || STATUS_FILTER.has(bar.status);
+      ganttLayer.addChild(target);
+      state.ganttBars.set(bar.taskId, { root: target, bar });
+    }
+
+    state.width = layout.width;
+    state.height = layout.height;
+    fitCamera();
+    updateNowMarker();
+  }
+
+  function showGanttTooltip(bar, node) {
+    const start = formatClock(bar.startMs);
+    const end = formatClock(bar.endMs);
+    const lines = [
+      `<div class="tt-title">${esc(bar.taskId)}</div>`,
+      `<div class="tt-sub">${esc(agentLabel(bar.ownerAgent))}</div>`,
+      `<div class="tt-status">${statusHtml(bar.status)}</div>`,
+      `<div class="tt-sub">${esc(start)} → ${esc(end)} · ${esc(formatDuration(bar.durationMs))}</div>`,
+      `<div class="tt-sub">${bar.kind === "planned" ? "forecast" : "measured"} · ${esc(estimateSourceText(bar))}</div>`,
+    ];
+    if (bar.milestone) lines.push(`<div class="tt-sub">human review gate</div>`);
+    if (bar.critical) lines.push(`<div class="tt-sub" style="color:#f5c542">on the critical path</div>`);
+    // `toGlobal` resolves the canvas transform, so the point lands in the same
+    // screen space the fixed-position tooltip expects.
+    showDetailTooltip(node.toGlobal({ x: 0, y: 0 }), lines.join(""), bar.taskId);
+  }
+
+  /** Redraws the "now" marker. Runs every frame; only the geometry changes. */
+  function updateNowMarker() {
+    const layout = state.gantt;
+    ganttNowGfx.clear();
+    if (!layout || state.mode !== "gantt") return;
+    const now = Date.now();
+    if (now < layout.axis.min || now > layout.axis.max) return;
+    const x = xFor(layout, now);
+    ganttNowGfx.moveTo(x, GANTT.axisTop - 6).lineTo(x, layout.height)
+      .stroke({ width: 1.5, color: 0xff8f8f, alpha: 0.55 });
+  }
+
+  /**
+   * Re-fetches the layout after a structural change. Debounced, because a run
+   * emits several events per task and each request re-runs the whole schedule.
+   */
+  function scheduleGanttLayout() {
+    if (state.ganttFetchTimer !== null) return;
+    state.ganttFetchTimer = window.setTimeout(() => {
+      state.ganttFetchTimer = null;
+      void fetch("/api/layout").then((response) => response.json()).then((layout) => {
+        state.serverLayout = layout;
+        if (state.mode === "gantt" && layout && layout.gantt) drawGanttLayout(layout.gantt);
+      }).catch(() => { /* the board keeps its last layout */ });
+    }, GANTT.layoutDebounceMs);
+  }
+
+  function applyMode() {
+    const kanban = state.mode === "kanban";
+    boardGfx.visible = kanban;
+    labelLayer.visible = kanban;
+    edgeLayer.visible = kanban;
+    cardLayer.visible = kanban;
+    effectLayer.visible = kanban;
+    ganttLayer.visible = !kanban;
+    // The kanban owns card expansion; a mode switch must not leave a card open
+    // behind a different view.
+    if (!kanban && expandedEntry) collapseCard(expandedEntry);
+    if (!kanban) {
+      const gantt = state.serverLayout && state.serverLayout.gantt;
+      if (gantt) drawGanttLayout(gantt);
+      else { state.width = 1280; state.height = 800; fitCamera(); }
+    } else {
+      state.width = state.layout ? state.layout.width : 1280;
+      state.height = state.layout ? state.layout.height : 800;
+      fitCamera();
+    }
+    const modeHost = $id("mode-switch");
+    if (modeHost) {
+      applyModeButtons();
+    }
+    // Reflected on <body> so a screenshot tool or test can assert which mode
+    // actually rendered, rather than inferring it from the canvas.
+    document.body.dataset.boardMode = state.mode;
+    setStatus(`${state.mode} · ${state.status === "idle" ? "" : state.status}`.trim(), "live");
+  }
+
+  function wireModeSwitch() {
+    const host = $id("mode-switch");
+    if (!host) return;
+    // Embedded in the Console, the chrome above the frame already offers the
+    // same switch and keeps it in step. Two controls for one setting reads as a
+    // bug when they ever disagree, so the in-frame copy is only kept for the
+    // standalone `--viz` server, where it is the only one.
+    if (window.self !== window.top) {
+      host.remove();
+      applyModeButtons();
+      return;
+    }
+    for (const button of host.querySelectorAll("[data-mode]")) {
+      button.addEventListener("click", () => {
+        state.mode = button.dataset.mode === "gantt" ? "gantt" : "kanban";
+        applyMode();
+        // The Console chrome mirrors the selection so the two stay in step.
+        try { parent.postMessage({ type: "forge:board-mode", mode: state.mode }, "*"); } catch { /* cross-origin */ }
+      });
+      button.addEventListener("keydown", (event) => {
+        if (event.key !== "ArrowRight" && event.key !== "ArrowLeft") return;
+        event.preventDefault();
+        const modes = ["kanban", "gantt"];
+        const next = modes[(modes.indexOf(state.mode) + (event.key === "ArrowRight" ? 1 : modes.length - 1)) % modes.length];
+        state.mode = next;
+        applyMode();
+        const target = host.querySelector(`[data-mode="${next}"]`);
+        if (target) target.focus();
+        try { parent.postMessage({ type: "forge:board-mode", mode: next }, "*"); } catch { /* cross-origin */ }
+      });
+    }
+    applyModeButtons();
+  }
+
+  /** Reflects the current mode on whatever mode controls are present. */
+  function applyModeButtons() {
+    const host = $id("mode-switch");
+    if (!host) return;
+    for (const button of host.querySelectorAll("[data-mode]")) {
+      const active = button.dataset.mode === state.mode;
+      button.setAttribute("aria-selected", active ? "true" : "false");
+      button.classList.toggle("active", active);
+    }
+  }
+
+  // ── Accessible table view ───────────────────────────────────────────────────
+  //
+  // The board is a canvas, so it has no text for a screen reader or a keyboard
+  // user to reach. This renders the same layout as a real table: it is a view of
+  // the engine's data, not an independent copy of the numbers.
+
+  let tableVisible = false;
+
+  function formatStamp(ms) {
+    if (!Number.isFinite(ms)) return "—";
+    const date = new Date(ms);
+    return `${String(date.getDate()).padStart(2, "0")}/${String(date.getMonth() + 1).padStart(2, "0")} ${String(date.getHours()).padStart(2, "0")}:${String(date.getMinutes()).padStart(2, "0")}`;
+  }
+
+  function renderTable() {
+    if (!tableVisible) return;
+    const body = $id("table-body");
+    if (!body) return;
+    const rows = [];
+    const tasks = state.manifest
+      ? state.manifest.phases.flatMap((phase) => phase.tasks.map((task) => ({ task, phase })))
+      : [];
+
+    if (state.gantt && state.gantt.bars) {
+      const byId = new Map(state.gantt.bars.map((bar) => [bar.taskId, bar]));
+      const label = new Map(state.gantt.rows.map((row) => [row.id, row.label]));
+      for (const bar of state.gantt.bars) {
+        rows.push(el("tr", null, [
+          el("th", { scope: "row" }, label.get(bar.taskId) ?? bar.taskId),
+          el("td", null, agentLabel(bar.ownerAgent)),
+          el("td", null, statusCell(bar.status)),
+          el("td", null, bar.critical ? "critical path" : bar.kind === "planned" ? "planned" : "measured"),
+          el("td", { className: "mono" }, formatStamp(bar.startMs)),
+          el("td", { className: "mono" }, bar.milestone ? "review gate" : formatStamp(bar.endMs)),
+          el("td", { className: "mono" }, bar.milestone ? "—" : formatDuration(bar.durationMs)),
+          el("td", { className: "mono" }, bar.kind === "planned" ? `forecast · ${estimateSourceText(bar)}` : "measured"),
+        ]));
+      }
+      // A manifest task with no bar (no state and no forecast) still belongs in
+      // the table, or the view would silently hide work.
+      for (const { task, phase } of tasks) {
+        if (byId.has(task.id)) continue;
+        rows.push(el("tr", null, [
+          el("th", { scope: "row" }, `${task.id} · ${task.title}`),
+          el("td", null, agentLabel(task.ownerAgent)),
+          el("td", null, statusCell("pending")),
+          el("td", null, phase.title ?? phase.id),
+          el("td", { className: "mono" }, "—"),
+          el("td", { className: "mono" }, "—"),
+          el("td", { className: "mono" }, "—"),
+          el("td", { className: "mono" }, (task.dependencies ?? []).join(", ") || "—"),
+        ]));
+      }
+    } else {
+      for (const entry of state.ordered) {
+        const task = entry.task;
+        rows.push(el("tr", null, [
+          el("th", { scope: "row" }, `${task.id} · ${task.title}`),
+          el("td", null, agentLabel(task.ownerAgent)),
+          el("td", null, statusCell(entry.status)),
+          el("td", null, task.phaseId ?? "—"),
+          el("td", { className: "mono" }, entry.startedAt ? formatStamp(Date.parse(entry.startedAt)) : "—"),
+          el("td", { className: "mono" }, entry.completedAt ? formatStamp(Date.parse(entry.completedAt)) : "—"),
+          el("td", { className: "mono" }, entry.durationMs ? formatDuration(entry.durationMs) : "—"),
+          el("td", { className: "mono" }, (task.dependencies ?? []).join(", ") || "—"),
+        ]));
+      }
+    }
+    body.replaceChildren(...rows);
+  }
+
+  /** A status badge as a real element, so the table shows a label, not markup. */
+function statusCell(status) {
+    const label = STATUS_LABEL[status] ?? status;
+    const span = document.createElement("span");
+    span.className = `status-label status-${status}`;
+    span.textContent = label;
+    return span;
+  }
+
+  /**
+   * Minimal element builder for the table view. Arrays of children must be
+   * spread: `append(array)` stringifies them, which silently renders
+   * "[object HTMLTableCellElement]" as the cell's text instead of nesting them.
+   */
+  function el(tag, props, children) {
+    const node = document.createElement(tag);
+    if (props) {
+      for (const [key, value] of Object.entries(props)) {
+        if (value !== null && value !== undefined) node.setAttribute(key, String(value));
+      }
+    }
+    if (children !== undefined && children !== null) {
+      for (const child of Array.isArray(children) ? children : [children]) {
+        if (child !== null && child !== undefined) node.append(child);
+      }
+    }
+    return node;
+  }
+
+  function applyTableVisibility() {
+    const view = $id("table-view");
+    const toggle = $id("table-toggle");
+    if (view) view.classList.toggle("hidden", !tableVisible);
+    if (toggle) {
+      toggle.setAttribute("aria-pressed", tableVisible ? "true" : "false");
+      toggle.classList.toggle("active", tableVisible);
+    }
+    document.body.classList.toggle("table-open", tableVisible);
+    renderTable();
+  }
+
+  function wireTableToggle() {
+    const toggle = $id("table-toggle");
+    if (!toggle) return;
+    toggle.addEventListener("click", () => {
+      tableVisible = !tableVisible;
+      applyTableVisibility();
+      if (tableVisible) {
+        const close = $id("table-close");
+        if (close) close.focus();
+      }
+    });
+  }
+
   // ── Data wiring ──────────────────────────────────────────────────────────
   async function fetchSnapshot() {
+    // Distinguish "the server is unreachable" from "this project has nothing to
+    // show yet". They look identical to the user otherwise, and the fix for one
+    // is not the fix for the other.
+    let m = null;
     try {
-      const [m, s, l] = await Promise.all([
-        fetch("/api/manifest").then((r) => r.json()),
-        fetch("/api/state").then((r) => r.json()),
-        fetch("/api/layout").then((r) => r.json()),
-      ]);
-      applySnapshot({ manifest: m, state: s, layout: l });
+      m = await fetch("/api/manifest").then((r) => r.json());
     } catch {
-      setStatus("waiting for the engine server…", "warn");
+      setStatus("cannot reach the Console server · retrying…", "warn");
+      return;
     }
+    const [s, l] = await Promise.all([
+      fetch("/api/state").then((r) => r.json()).catch(() => null),
+      fetch("/api/layout").then((r) => r.json()).catch(() => null),
+    ]);
+    state.serverLayout = l;
+    if (!m) {
+      hideBanner();
+      showBanner("No execution manifest yet", "Compile one from the Overview pipeline panel to see the build on this board.", "paused");
+      setStatus("no execution manifest", "warn");
+      return;
+    }
+    applySnapshot({ manifest: m, state: s, layout: l });
+    if (!s) showBanner("Ready to build", "No run yet. Start one from the Overview Controls panel.", "paused");
   }
 
   const es = new EventSource("/api/events");
@@ -1157,7 +1775,13 @@ function truncate(text, maxChars) {
   es.onopen = () => setStatus("connected · waiting for engine events…", "live");
   es.onerror = () => {
     if (es.readyState === EventSource.CLOSED) {
-      setStatus("disconnected · run finished or server stopped", "dead");
+      // Say how stale the picture is. "disconnected" alone leaves the reader
+      // guessing whether the build stopped or the view simply froze.
+      const age = state.startedAt
+        ? ` · last state ${Math.round((Date.now() - Date.parse(state.lastEventAt ?? state.startedAt)) / 1000)}s ago`
+        : "";
+      setStatus(`disconnected · run finished or server stopped${age}`, "dead");
+      showBanner("Disconnected", "This board stopped receiving events. The Console may have been closed; reopen it to resume.", "paused");
     } else {
       setStatus("connection lost · retrying…", "warn");
     }
@@ -1182,6 +1806,10 @@ function truncate(text, maxChars) {
     setStatus("run finished · dashboard closing", "dead");
   });
 
+  wireModeSwitch();
+  wireTableToggle();
+  applyMode();
+  applyTableVisibility();
   fetchSnapshot();
 
   // Keep the dashboard ticking even if the SSE connection drops (attach mode).
@@ -1192,4 +1820,10 @@ function truncate(text, maxChars) {
       if (s) applyState(s);
     } catch { /* server gone */ }
   }, 2000);
+
+  // Keeps the table view in step with the board it mirrors.
+  window.setInterval(() => {
+    state.lastEventAt = new Date().toISOString();
+    renderTable();
+  }, 4000);
 })();

@@ -17,6 +17,8 @@ import type {
   LogsResponse,
   OpenResult,
   ProjectsIndex,
+  RederiveProgress,
+  RederiveStepId,
   RemoveProjectsResult,
   SelectionScope,
   SelectResult,
@@ -170,8 +172,15 @@ export const api = {
   launchCli(): Promise<LaunchCliResult> {
     return post<LaunchCliResult>("/api/launch-cli", {});
   },
-  control(action: ControlAction, taskId?: string): Promise<ControlResult> {
-    return post<ControlResult>("/api/control", { action, taskId });
+  control(action: ControlAction, taskId?: string, from?: RederiveStepId): Promise<ControlResult> {
+    return post<ControlResult>("/api/control", { action, taskId, from });
+  },
+  /**
+   * Regenerates the team, project skills, and manifest as one chain. `from`
+   * restarts at a named step, which is how a failed chain is retried.
+   */
+  rederive(from?: RederiveStepId): Promise<ControlResult> {
+    return post<ControlResult>("/api/control", { action: "rederive", from });
   },
   bootstrap(req: { path: string; harness?: string; force?: boolean; initGit?: boolean; runner?: string }): Promise<ControlResult> {
     return post<ControlResult>("/api/projects/bootstrap", req);
@@ -195,6 +204,7 @@ export const api = {
     return post("/api/tasks/reset-changed", {});
   },
   authoringEvents(): Promise<Record<string, unknown>[]> { return request<Record<string, unknown>[]>("/api/authoring-events"); },
+  rederiveState(): Promise<RederiveProgress | null> { return request<RederiveProgress | null>("/api/rederive"); },
   openExternal(path: string): Promise<OpenResult> {
     return post<OpenResult>("/api/open", { path });
   },

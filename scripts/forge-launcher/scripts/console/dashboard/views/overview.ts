@@ -2,8 +2,20 @@
 
 import { api } from "../api.js";
 import { Epoch, store } from "../state.js";
-import { el, fmtDuration, fmtTime, minutesToTimeoutMs, statusBadge, toast } from "../render/dom.js";
-import type { Actions, AuthoringSessionTarget, AuthoringStageState, BackgroundJob, ControlAction, ExecutionMode, RunSummary, Summary, TaskRow } from "../types.js";
+import { el, fmtAgo, fmtDuration, fmtTime, minutesToTimeoutMs, statusBadge, toast } from "../render/dom.js";
+import type {
+  Actions,
+  AuthoringSessionTarget,
+  AuthoringStageDetail,
+  AuthoringStageState,
+  BackgroundJob,
+  ControlAction,
+  ExecutionMode,
+  RederiveStepStatus,
+  RunSummary,
+  Summary,
+  TaskRow,
+} from "../types.js";
 
 const renderEpoch = new Epoch();
 let unsub: Array<() => void> = [];
@@ -92,6 +104,7 @@ export async function renderOverview(container: HTMLElement): Promise<void> {
     region("overview-actions", renderActions(container, summary, actions, tasks)),
     region("overview-feature", summary.hasPrd && summary.hasTeam ? renderFeatureIncrement(container) : renderFeaturePrd(container)),
   );
+  syncRederiveRegion(container, summary);
   announce(`Opened ${summary.repoName}.`);
 }
 
@@ -136,6 +149,7 @@ async function refreshOverviewData(container: HTMLElement): Promise<void> {
     update("overview-header", renderHeader(summary));
     update("overview-guidance", renderGuidance(container, summary, actions));
     if (summary.authoring) update("overview-authoring", renderAuthoringStatus(summary));
+    syncRederiveRegion(container, summary);
     update("overview-run", renderRun(summary.run));
     update("overview-manifest", renderManifest(summary));
     update("overview-actions", renderActions(container, summary, actions, tasks));
@@ -149,6 +163,143 @@ async function refreshOverviewData(container: HTMLElement): Promise<void> {
   } finally {
     refreshInFlight = false;
   }
+}
+
+// ─── Re-derivation ────────────────────────────────────────────────────────────
+//
+// Regenerating the team and project skills after a requirements change used to
+// be a five-hop scavenger hunt across three views, with each action button
+// hidden until the stage it regenerates went stale. This is the single place
+// that names what went stale, why, and runs the whole chain in order.
+
+const REDERIVE_STEP_BADGE: Record<RederiveStepStatus, string> = {
+  pending: "pending",
+  running: "running",
+  complete: "done",
+  failed: "failed",
+};
+
+/** Stale derivation stages the chain can fix, in pipeline order. */
+function staleDerivationStages(summary: Summary): AuthoringStageDetail[] {
+  return (summary.authoringStages ?? [])
+    .filter((entry) => (entry.stage === "team" || entry.stage === "skills") && (entry.stale || entry.status === "failed"));
+}
+
+/**
+ * The re-derivation panel, or null when there is nothing to act on.
+ *
+ * Shown when a derivation stage is stale or failed (the chain can fix it), or
+ * when a chain is running, failed, or has just completed. Deliberately not
+ * shown for an incomplete PRD stage: requirements authoring is interactive
+ * (ADR-060) and re-deriving cannot produce requirements.
+ */
+function renderRederive(container: HTMLElement, summary: Summary): HTMLElement | null {
+  const stale = staleDerivationStages(summary);
+  const progress = summary.rederive;
+  const chainActive = Boolean(progress?.active);
+  const failed = progress?.failedStep ?? null;
+  const justCompleted = Boolean(progress?.complete) && !chainActive;
+  if (stale.length === 0 && !chainActive && !failed && !justCompleted) return null;
+
+  const running = summary.job?.status === "running";
+  const children: HTMLElement[] = [
+    el("div", { className: "row between wrap" }, [
+      el("h3", null, "Re-derive team & skills"),
+      el("span", { className: "dim small" }, "PRD → team → project skills → manifest"),
+    ]),
+  ];
+
+  if (stale.length > 0) {
+    const causes = stale.map((entry) => el("li", null, [
+      el("strong", null, `${entry.stage === "team" ? "Team" : "Project skills"}: `),
+      entry.reason || "this stage is out of date.",
+      entry.staleInputs.length > 0
+        ? el("span", { className: "dim small" }, ` (changed ${fmtAgo(entry.staleInputs[0]!.modifiedAt)})`)
+        : null,
+    ]));
+    children.push(el("div", { className: "authoring-stage-list" }, [el("ul", { className: "rederive-causes" }, causes)]));
+  }
+
+  const start = el("button", { className: "btn btn-primary" }, failed ? `Retry from ${failed}` : "Re-derive team & skills") as HTMLButtonElement;
+  start.addEventListener("click", () => {
+    if (chainActive) return;
+    start.disabled = true;
+    void api.rederive(failed ?? undefined)
+      .then((result) => {
+        toast(result.message);
+        if (result.job?.status === "running") startPoll(container);
+      })
+      .catch((error) => toast(error instanceof Error ? error.message : "re-derivation failed to start"))
+      .finally(() => { start.disabled = false; void renderOverview(container); });
+  });
+  const actions: HTMLElement[] = [start];
+  if (failed) {
+    const restart = el("button", { className: "btn btn-sm" }, "Restart the whole chain") as HTMLButtonElement;
+    restart.addEventListener("click", () => {
+      restart.disabled = true;
+      void api.rederive()
+        .then((result) => { toast(result.message); startPoll(container); })
+        .catch((error) => toast(error instanceof Error ? error.message : "re-derivation failed to start"))
+        .finally(() => { restart.disabled = false; });
+    });
+    actions.push(restart);
+  }
+  actions.push(el("a", { href: "#/documents", className: "btn btn-sm" }, "Open Plan & Team"));
+  children.push(el("div", { className: "actions" }, actions));
+
+  if (progress && progress.steps.length > 0) {
+    const rows = progress.steps.map((entry) => {
+      const rowChildren: Array<HTMLElement | null> = [
+        el("span", { className: `badge badge-${REDERIVE_STEP_BADGE[entry.status]}` }, REDERIVE_STEP_BADGE[entry.status]),
+        el("span", null, entry.label),
+      ];
+      if (entry.status === "running") {
+        rowChildren.push(el("span", { className: "spinner", "aria-hidden": "true" }));
+      }
+      const note = entry.message ?? (entry.status === "pending" ? "waiting" : "");
+      return el("li", { className: `rederive-step rederive-step-${entry.status}` }, [
+        el("div", { className: "row gap wrap" }, rowChildren.filter(Boolean) as HTMLElement[]),
+        note ? el("div", { className: "dim small" }, note) : null,
+      ]);
+    });
+    children.push(el("div", { className: "rederive-steps-wrap" }, [
+      el("h4", null, chainActive ? "Re-deriving…" : failed ? "Re-derivation failed" : "Re-derivation complete"),
+      el("ul", { className: "rederive-steps", role: "status", "aria-live": "polite" }, rows),
+    ]));
+  }
+
+  if (justCompleted) {
+    const changed = summary.manifest?.reconciliation?.changedTaskIds ?? [];
+    children.push(el("p", { className: "dim small" }, changed.length > 0
+      ? [`Team and skills are up to date. ${changed.length} task contract${changed.length === 1 ? "" : "s"} changed — reset them for review below if they must run again.`]
+      : ["Team and skills are up to date. Completed task records were preserved by stable task ID."]));
+  }
+
+  if (chainActive) {
+    children.push(el("p", { className: "dim small" }, ["Running in the background — watch the ", el("a", { href: "#/logs" }, "Logs"), " tab."]));
+  }
+  if (running && !chainActive) {
+    children.push(el("p", { className: "dim small" }, "Another job is already running in this repository."));
+  }
+
+  return el("div", { className: "panel rederive-panel" }, children);
+}
+
+/**
+ * Replaces the re-derivation region wholesale.
+ *
+ * Unlike the other Overview regions, this one appears and disappears as
+ * staleness comes and goes, so it is removed and re-inserted on every refresh
+ * rather than updated in place — otherwise a panel that stops being relevant
+ * would linger, and one that stays relevant would accumulate copies.
+ */
+function syncRederiveRegion(container: HTMLElement, summary: Summary): void {
+  for (const stale of container.querySelectorAll('[data-overview-region="overview-rederive"]')) stale.remove();
+  const content = renderRederive(container, summary);
+  if (!content) return;
+  // Sits directly above the run panel: it is a pipeline action, not a run stat.
+  const anchor = container.querySelector('[data-overview-region="overview-run"]');
+  container.insertBefore(region("overview-rederive", content), anchor);
 }
 
 function renderFeatureIncrement(container: HTMLElement): HTMLElement {
@@ -186,12 +337,17 @@ function renderAuthoringStatus(summary: Summary): HTMLElement {
     ]),
     el("div", { className: "authoring-stage-list" }, stages.map(([stage, label]) => {
       const state = summary.authoring?.stages[stage];
-      const presentation = authoringStagePresentation(summary, stage, state);
+      const detail = summary.authoringStages?.find((entry) => entry.stage === stage);
+      const presentation = authoringStagePresentation(summary, stage, state, detail);
+      // The derived reason, not just the recorded error: a stage that completed and
+      // then went stale has no `error`, and saying only "complete" here while the
+      // panel below reports the same stage as stale would contradict itself.
+      const reason = detail?.stale ? detail.reason : state?.error;
       return el("div", { className: "authoring-stage" }, [
         el("strong", null, label),
         el("span", { className: `badge badge-${presentation.className}` }, presentation.label),
         el("span", { className: "dim small" }, state?.invocation?.effectiveModel ?? (presentation.untracked ? "existing project artifact" : "runner default")),
-        state?.error ? el("span", { className: "error-text small" }, state.error) : null,
+        reason ? el("span", { className: "error-text small" }, reason) : null,
       ]);
     })),
     summary.authoringReady === false
@@ -204,8 +360,12 @@ function authoringStagePresentation(
   summary: Summary,
   stage: "prd" | "team" | "skills",
   state: AuthoringStageState | undefined,
+  detail?: AuthoringStageDetail,
 ): { label: string; className: string; untracked: boolean } {
   if (state?.noSkillsRequired) return { label: "not required", className: "complete", untracked: false };
+  // A stage that completed and then went stale is not complete, whatever its last
+  // run recorded.
+  if (detail?.stale) return { label: "stale", className: "stale", untracked: false };
   if (state?.status) return { label: state.status, className: state.status, untracked: false };
   const exists = stage === "prd" ? summary.hasPrd : stage === "team" ? summary.hasTeam : summary.hasTeam && summary.authoringReady !== false;
   return exists
@@ -322,25 +482,87 @@ function renderManifest(summary: Summary): HTMLElement {
           stat("Generated", fmtTime(m.generatedAt)),
         ])
       : el("p", { className: "dim" }, "No execution manifest yet."),
-    m?.reconciliation
-      ? el("div", { className: "detail" }, [
-          el("h4", null, "Reconciliation"),
-          el("p", { className: "dim small" }, "Completed task records are preserved by stable task ID. Review changed contracts before running."),
-          el("div", { className: "stats" }, [
-            stat("Preserved", String(m.reconciliation.preservedTaskIds.length)),
-            stat("New", String(m.reconciliation.newTaskIds.length)),
-            stat("Changed", String(m.reconciliation.changedTaskIds.length)),
-            stat("Removed", String(m.reconciliation.removedTaskIds.length)),
-          ]),
-          m.reconciliation.changedTaskIds.length > 0
-            ? el("p", { className: "dim small mono" }, `Changed: ${m.reconciliation.changedTaskIds.join(", ")}`)
-            : null,
-          m.reconciliation.newTaskIds.length > 0
-            ? el("p", { className: "dim small" }, "Next action: review and select the new pending tasks in Tasks, then run the targeted workflow.")
-            : null,
-        ])
-      : null,
+    m?.reconciliation ? renderReconciliation(summary, m.reconciliation) : null,
   ]);
+}
+
+/**
+ * Reconciliation lives here because this is the data it acts on.
+ *
+ * The changed IDs used to render as one mono comma-joined string, which gave no
+ * way to tell a changed task from a new one and no way to reset without
+ * hunting through the Controls panel. Each changed task is now listed with its
+ * current status, and the reset — which discards completed work — is gated
+ * behind a confirmation naming exactly what it will discard.
+ */
+function renderReconciliation(summary: Summary, reconciliation: NonNullable<Summary["manifest"]>["reconciliation"]): HTMLElement | null {
+  if (!reconciliation) return null;
+  const changed = reconciliation.changedTaskIds;
+  const added = reconciliation.newTaskIds;
+  const rows = changed.map((id) => el("li", null, [
+    el("a", { href: `#/tasks?task=${encodeURIComponent(id)}`, className: "mono" }, id),
+    el("span", { className: "dim small" }, " contract changed"),
+  ]));
+  const newRows = added.map((id) => el("li", null, [
+    el("a", { href: `#/tasks?task=${encodeURIComponent(id)}`, className: "mono" }, id),
+    el("span", { className: "dim small" }, " new"),
+  ]));
+
+  const children: HTMLElement[] = [
+    el("h4", null, "Reconciliation"),
+    el("p", { className: "dim small" }, "Completed task records are preserved by stable task ID. Review changed contracts before running."),
+    el("div", { className: "stats" }, [
+      stat("Preserved", String(reconciliation.preservedTaskIds.length)),
+      stat("New", String(added.length)),
+      stat("Changed", String(changed.length)),
+      stat("Removed", String(reconciliation.removedTaskIds.length)),
+    ]),
+  ];
+
+  if (changed.length > 0) {
+    children.push(el("h5", { className: "group-title" }, `Changed tasks (${changed.length})`));
+    children.push(el("ul", { className: "reconcile-list" }, rows));
+    children.push(resetChangedControl(changed));
+  }
+  if (added.length > 0) {
+    children.push(el("h5", { className: "group-title" }, `New tasks (${added.length})`));
+    children.push(el("ul", { className: "reconcile-list" }, newRows));
+    children.push(el("p", { className: "dim small" }, "Review and select the new pending tasks in Tasks, then run the targeted workflow."));
+  }
+  if (changed.length === 0 && added.length === 0) {
+    children.push(el("p", { className: "dim small" }, "No task contracts changed since the previous compile."));
+  }
+  return el("div", { className: "detail" }, children);
+}
+
+/**
+ * Reset completed tasks whose contract changed.
+ *
+ * This discards their recorded outputs and artifacts so the engine will run them
+ * again, so it is never automatic — not even as the tail of a re-derivation —
+ * and never a single unconfirmed click.
+ */
+function resetChangedControl(changedTaskIds: string[]): HTMLElement {
+  const button = el("button", { className: "btn btn-sm" }, "Reset changed tasks for review") as HTMLButtonElement;
+  const host = el("div", { className: "row gap wrap" }, [
+    button,
+    el("span", { className: "dim small" }, "Re-run completed tasks whose contract changed."),
+  ]);
+  button.addEventListener("click", () => {
+    if (!window.confirm(
+      `Reset ${changedTaskIds.length} changed task${changedTaskIds.length === 1 ? "" : "s"} to pending so they run again?\n\n`
+      + `Their recorded outputs, artifacts and timings will be cleared:\n  ${changedTaskIds.join("\n  ")}`,
+    )) return;
+    button.disabled = true;
+    void api.resetChangedTasks()
+      .then((res) => {
+        toast(res.message);
+        if (overviewContainer) void renderOverview(overviewContainer);
+      })
+      .catch((err) => toast(err instanceof Error ? err.message : "reset failed"))
+      .finally(() => { button.disabled = false; });
+  });
+  return host;
 }
 
 interface PipelineStep {
@@ -598,10 +820,12 @@ function renderActions(container: HTMLElement, summary: Summary, actions: Action
   const commit = renderAutoCommitToggle(container, store.summary?.autoCommit ?? true);
   const activity = renderLogHarnessActivityToggle(container, store.summary?.logHarnessActivity ?? false);
   const concurrency = renderConcurrencyControl(container, store.summary?.concurrency ?? 0);
-  const reset = el("button", { className: "btn btn-sm" }, "Reset changed tasks for review");
-  reset.addEventListener("click", () => {
-    void api.resetChangedTasks().then((res) => { toast(res.message); void renderOverview(container); }).catch((err) => toast(err instanceof Error ? err.message : "reset failed"));
-  });
+  // Reset lives with the reconciliation data it acts on, in the Manifest panel
+  // directly above this one, so this is a pointer rather than a second control.
+  const completedTaskIds = new Set(
+    tasks.filter((task) => task.status === "complete" || task.status === "skipped").map((task) => task.id),
+  );
+  const changedCompleted = (summary.manifest?.reconciliation?.changedTaskIds ?? []).filter((id) => completedTaskIds.has(id));
 
   return el("div", { className: "panel" }, [
     el("h4", null, "Controls"),
@@ -618,7 +842,9 @@ function renderActions(container: HTMLElement, summary: Summary, actions: Action
     commit,
     activity,
     concurrency,
-    el("div", { style: "margin-top:10px" }, [reset, el("span", { className: "dim small" }, " Re-run completed tasks whose manifest contract changed.")]),
+    changedCompleted.length > 0
+      ? el("p", { className: "dim small" }, `${changedCompleted.length} changed task${changedCompleted.length === 1 ? " has" : "s have"} already completed; reset them in the Manifest panel above to run them again.`)
+      : null,
   ]);
 }
 

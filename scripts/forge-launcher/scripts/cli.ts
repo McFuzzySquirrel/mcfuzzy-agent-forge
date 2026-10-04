@@ -4,7 +4,8 @@ import { bootstrapCli } from "./bootstrap.ts";
 import { consoleCli } from "./console/cli.ts";
 import { engineRunCli } from "./engine-run.ts";
 import { fail } from "./format.ts";
-import { continueFeatureIncrement, runCompileManifest, runDraftExistingPrd, runDraftPrd, runDraftTeam, runDraftSkills, runFeaturePrd, runLauncher, runResume } from "./launcher.ts";
+import { continueFeatureIncrement, runCompileManifest, runDraftExistingPrd, runDraftPrd, runDraftTeam, runDraftSkills, runFeaturePrd, runLauncher, runRederive, runResume } from "./launcher.ts";
+import { REDERIVE_STEPS, type RederiveStepId } from "./rederive-state.ts";
 import { AUTHORING_STAGES, isRunnerChoice, loadAuthoringConfig, saveAuthoringConfig, type AuthoringModels, type AuthoringOptions, type AuthoringRunnerChoice } from "./authoring-config.ts";
 import { readAuthoringInventory, refreshAuthoringInventory } from "./authoring-inventory.ts";
 import { detectRepoRoot } from "./paths.ts";
@@ -41,6 +42,8 @@ Usage:
   forge-launcher feature-increment [--repo <path>] [--prompt <text>] [--run] # author, update team, compile, optionally run
   forge-launcher feature-increment-continue [--repo <path>] # update team and compile after interactive feature authoring
   forge-launcher compile-manifest [--repo <path>]  # headless: team → execution manifest
+  forge-launcher rederive [--repo <path>] [--from team|skills|manifest]
+                                # headless chain: team → project skills → manifest
 
 Launcher options:
   --prd-model <id|inherit>     Select the PRD authoring model.
@@ -163,11 +166,12 @@ async function main(): Promise<number> {
   }
   if (args[0] === "console") return consoleCli(args.slice(1));
   if (args[0] === "engine-run") return engineRunCli(args.slice(1));
-  if (args[0] === "draft-prd" || args[0] === "draft-existing-prd" || args[0] === "draft-team" || args[0] === "draft-skills" || args[0] === "compile-manifest" || args[0] === "feature-prd" || args[0] === "feature-increment" || args[0] === "feature-increment-continue") {
+  if (args[0] === "draft-prd" || args[0] === "draft-existing-prd" || args[0] === "draft-team" || args[0] === "draft-skills" || args[0] === "compile-manifest" || args[0] === "rederive" || args[0] === "feature-prd" || args[0] === "feature-increment" || args[0] === "feature-increment-continue") {
     let repo: string | undefined;
     let featurePrompt: string | undefined;
     let runIncrement = false;
     let dryRun = false;
+    let rederiveFrom: RederiveStepId | undefined;
     const rest = args.slice(1);
     for (let i = 0; i < rest.length; i++) {
       const a = rest[i];
@@ -178,6 +182,13 @@ async function main(): Promise<number> {
       else if (a === "--prompt") {
         featurePrompt = rest[++i];
         if (!featurePrompt || featurePrompt.startsWith("--")) throw new Error("--prompt requires text.");
+      }
+      else if (a === "--from") {
+        const value = rest[++i];
+        if (!value || !REDERIVE_STEPS.includes(value as RederiveStepId)) {
+          throw new Error(`--from must be one of: ${REDERIVE_STEPS.join(", ")}.`);
+        }
+        rederiveFrom = value as RederiveStepId;
       }
       else if (a === "--run") runIncrement = true;
       else if (a === "--dry-run") dryRun = true;
@@ -195,6 +206,7 @@ async function main(): Promise<number> {
     if (args[0] === "draft-existing-prd") return runDraftExistingPrd(repoDir, options);
     if (args[0] === "draft-team") return runDraftTeam(repoDir, false, options);
     if (args[0] === "draft-skills") return runDraftSkills(repoDir, options);
+    if (args[0] === "rederive") return runRederive(repoDir, rederiveFrom, options);
     if (args[0] === "feature-prd") return runFeaturePrd(repoDir, featurePrompt, options);
     if (args[0] === "feature-increment") return (await import("./launcher.ts")).runFeatureIncrement(repoDir, featurePrompt, runIncrement, options);
     if (args[0] === "feature-increment-continue") return continueFeatureIncrement(repoDir, options);

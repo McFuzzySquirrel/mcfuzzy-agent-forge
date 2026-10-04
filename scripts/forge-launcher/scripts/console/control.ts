@@ -18,6 +18,7 @@ import { engineDetachedCommand } from "../launcher.ts";
 import { currentJobForRepo, startJob, updateJob } from "./jobs.ts";
 import { findEngineDir, inferEngineHarness, repoPaths, upsertProject } from "./paths.ts";
 import { authoringBlocker, isPidAlive, refreshJobs, resetChangedCompletedTasks } from "./repo.ts";
+import type { RederiveStepId } from "../rederive-state.ts";
 import type {
   ControlAction,
   ControlResult,
@@ -230,6 +231,38 @@ export class RunController {
     return this.draft("draft-skills", "Project-skill generation");
   }
 
+  /**
+   * Regenerates the agent team, project skills, and execution manifest as one
+   * chain, so a user who changed the PRD does not have to discover and run each
+   * stale stage by hand. `from` restarts at a named step, which is how the UI
+   * retries a chain that failed partway through.
+   */
+  rederive(from?: RederiveStepId): ControlResult {
+    refreshJobs();
+    const active = currentJobForRepo(this.repoRoot);
+    if (active?.status === "running" && this.isPidAlive(active.pid ?? null)) {
+      return { ok: false, message: `A ${active.type} job is already running in this repository.` };
+    }
+    // ADR-060: the chain never authors requirements, so a project without a
+    // committed PRD and features cannot be re-derived at all. Say so here rather
+    // than letting the job start and fail on its first step.
+    const p = this.p;
+    const hasFeatures = fs.existsSync(p.featuresDir) && fs.statSync(p.featuresDir).isDirectory() &&
+      fs.readdirSync(p.featuresDir).some((file) => file.endsWith(".md"));
+    if (!fs.existsSync(p.visionPath) || !hasFeatures) {
+      return {
+        ok: false,
+        message: "Requirements authoring is always interactive and cannot be re-derived headlessly. "
+          + "Use the primary action on the Overview pipeline card to open the authoring session in a terminal.",
+      };
+    }
+    const args = ["rederive", "--repo", this.repoRoot];
+    if (from) args.push("--from", from);
+    const { cmd, args: fullArgs } = engineDetachedCommand(args);
+    const job = this.launchJob("rederive", "Re-deriving the team, project skills, and manifest.", cmd, fullArgs, p.logPath);
+    return { ok: job.status !== "failed", message: job.message, pid: job.pid, job };
+  }
+
   /** ADR-060: a feature document is requirements, so it needs a session too. */
   featurePrd(): ControlResult {
     return interactiveRequirements();
@@ -393,7 +426,7 @@ export class RunController {
     }
   }
 
-  dispatch(action: ControlAction, taskId?: string): ControlResult {
+  dispatch(action: ControlAction, taskId?: string, from?: RederiveStepId): ControlResult {
     if (action === "run" || action === "resume") {
       const validation = this.manualSelectionRequiredMessage(action);
       if (validation) return validation;
@@ -412,6 +445,7 @@ export class RunController {
       case "draft-existing-prd": return interactiveRequirements();
       case "draft-team": return this.draftTeam();
       case "draft-skills": return this.draftSkills();
+      case "rederive": return this.rederive(from);
       case "feature-prd": return interactiveRequirements();
       case "feature-increment": return this.featureIncrement();
       case "feature-increment-continue": return this.continueFeatureIncrement();

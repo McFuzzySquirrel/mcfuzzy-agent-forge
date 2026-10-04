@@ -159,6 +159,55 @@ export interface Summary {
   authoringReady?: boolean;
   authoringBlocker?: string;
   authoringNextStage?: AuthoringStage;
+  /** Per-stage authoring detail, including the cause of any staleness. */
+  authoringStages?: AuthoringStageDetail[];
+  /** Progress of the team → skills → manifest re-derivation chain. */
+  rederive?: RederiveProgress | null;
+}
+
+export type RederiveStepId = "team" | "skills" | "manifest";
+export type RederiveStepStatus = "pending" | "running" | "complete" | "failed";
+
+export interface RederiveStep {
+  id: RederiveStepId;
+  label: string;
+  status: RederiveStepStatus;
+  message?: string;
+  startedAt?: string;
+  finishedAt?: string;
+}
+
+export interface RederiveProgress {
+  runId: string;
+  /** True while any step is running. */
+  active: boolean;
+  /** Running step, else the first unfinished one. Null once the chain is done. */
+  currentStep: RederiveStepId | null;
+  /** The step that failed, which the UI offers to retry from. */
+  failedStep: RederiveStepId | null;
+  complete: boolean;
+  steps: RederiveStep[];
+}
+
+export interface StaleInput {
+  path: string;
+  modifiedAt: string;
+}
+
+/**
+ * One authoring stage with the plain-language reason it is stale, or why it
+ * cannot run. Lets the UI name the changed input file instead of only reporting
+ * that authoring is "not ready".
+ */
+export interface AuthoringStageDetail {
+  stage: AuthoringStage;
+  status: "untracked" | "pending" | "running" | "complete" | "failed";
+  /** True only when a recorded, completed stage no longer matches its inputs. */
+  stale: boolean;
+  reason: string;
+  staleInputs: StaleInput[];
+  outputs: string[];
+  completedAt?: string;
 }
 
 export interface TaskRow {
@@ -253,6 +302,9 @@ export interface ModelInventory {
 }
 
 export type AuthoringStage = "prd" | "team" | "skills";
+
+/** Authoring stages in pipeline order, mirroring the server's AUTHORING_STAGES. */
+export const AUTHORING_STAGES: readonly AuthoringStage[] = ["prd", "team", "skills"];
 
 export interface AuthoringConfig {
   version: 1;
@@ -355,7 +407,7 @@ export interface FileContent {
 /** ADR-060: `draft-prd` and `draft-existing-prd` are retained as accepted values
  * so older Console clients get a clear message instead of a 400, but they no
  * longer author requirements. Feature authoring is interactive too. */
-export type ControlAction = "run" | "resume" | "pause" | "stop" | "replay" | "reset-changed" | "draft-prd" | "draft-existing-prd" | "draft-team" | "draft-skills" | "compile-manifest" | "feature-prd" | "feature-increment" | "feature-increment-continue";
+export type ControlAction = "run" | "resume" | "pause" | "stop" | "replay" | "reset-changed" | "draft-prd" | "draft-existing-prd" | "draft-team" | "draft-skills" | "rederive" | "compile-manifest" | "feature-prd" | "feature-increment" | "feature-increment-continue";
 
 /** Interactive authoring entry points that open a pre-seeded harness terminal. */
 export type AuthoringSessionTarget = "idea" | "prd" | "feature-prd";
@@ -369,7 +421,10 @@ export type BackgroundJobType =
   | "feature-prd"
   | "feature-increment"
   | "draft-prd"
+  | "draft-existing-prd"
   | "draft-team"
+  | "draft-skills"
+  | "rederive"
   | "compile-manifest"
   | "engine-run"
   | "engine-resume"
