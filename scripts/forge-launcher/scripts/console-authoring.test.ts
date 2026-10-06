@@ -428,22 +428,20 @@ function fakeBin(t: TestContext, ...commands: string[]): string {
   return dir;
 }
 
-test("a .claude repo defaults the authoring runner to opencode and the engine harness to claude", async (t) => {
+test("a .claude repo defaults the authoring runner and engine harness to claude", async (t) => {
   const root = fixture(t, ".claude");
   const previous = process.env.FORGE_RUN_WITH;
   delete process.env.FORGE_RUN_WITH;
   t.after(() => { if (previous === undefined) delete process.env.FORGE_RUN_WITH; else process.env.FORGE_RUN_WITH = previous; });
-  // Inheritance consults the machine, so pin PATH to a fake opencode. Without
-  // this the assertion would pass or fail on whether the developer happens to
-  // have OpenCode installed.
+  // Pin PATH to a fake Claude CLI so the inventory endpoint is deterministic.
   const previousPath = process.env.PATH;
-  process.env.PATH = fakeBin(t, "opencode");
+  process.env.PATH = fakeBin(t, "claude");
   t.after(() => { process.env.PATH = previousPath; });
   assert.equal(inferEngineHarness(root), "claude");
   const server = await startConsoleServer({ repoRoot: root, port: port++, open: false });
   t.after(() => server.stop());
   const inventory = await fetch(`${server.url}/api/authoring-inventory`).then((r) => r.json());
-  assert.equal(inventory.runner, "opencode");
+  assert.equal(inventory.runner, "claude");
 });
 
 test("FORGE_RUN_WITH=claude selects the claude authoring runner for a .claude repo", async (t) => {

@@ -57,8 +57,8 @@ test("harness rules resolve every harness name, harness root and empty input", (
   }> = [
     { input: "github", key: "github", runner: "copilot", engine: "copilot", cli: { cli: "copilot", args: [] } },
     { input: ".github", key: "github", runner: "copilot", engine: "copilot", cli: { cli: "copilot", args: [] } },
-    { input: "claude", key: "claude", runner: "opencode", engine: "claude", cli: { cli: "claude", args: ["."] } },
-    { input: ".claude", key: "claude", runner: "opencode", engine: "claude", cli: { cli: "claude", args: ["."] } },
+    { input: "claude", key: "claude", runner: "claude", engine: "claude", cli: { cli: "claude", args: ["."] } },
+    { input: ".claude", key: "claude", runner: "claude", engine: "claude", cli: { cli: "claude", args: ["."] } },
     { input: "opencode", key: "opencode", runner: "opencode", engine: "opencode", cli: { cli: "opencode", args: ["."] } },
     { input: ".opencode", key: "opencode", runner: "opencode", engine: "opencode", cli: { cli: "opencode", args: ["."] } },
     { input: "agents", key: "agents", runner: "opencode", engine: "opencode", cli: { cli: "opencode", args: ["."] } },
@@ -82,8 +82,8 @@ test("harness rules resolve every harness name, harness root and empty input", (
 test("harness to runner mapping accepts harness names and harness roots alike", () => {
   assert.equal(runnerForHarness("github"), "copilot");
   assert.equal(runnerForHarness(".github"), "copilot");
-  assert.equal(runnerForHarness("claude"), "opencode");
-  assert.equal(runnerForHarness(".claude"), "opencode");
+  assert.equal(runnerForHarness("claude"), "claude");
+  assert.equal(runnerForHarness(".claude"), "claude");
   assert.equal(runnerForHarness("opencode"), "opencode");
   assert.equal(runnerForHarness(".opencode"), "opencode");
   assert.equal(runnerForHarness(".agents"), "opencode");
@@ -97,7 +97,7 @@ test("the authoring runner options are the four the console offers, inherit firs
 
 test("effectiveRunner falls back to the harness rule only for inherit", () => {
   assert.equal(effectiveRunner("inherit", "github"), "copilot");
-  assert.equal(effectiveRunner("inherit", ".claude"), "opencode");
+  assert.equal(effectiveRunner("inherit", ".claude"), "claude");
   assert.equal(effectiveRunner("inherit", ""), "opencode");
   assert.equal(effectiveRunner("", "github"), "copilot");
   assert.equal(effectiveRunner("claude", "github"), "claude");

@@ -2,6 +2,8 @@
 
 This document gives a high-level view of how MyForge is structured and how the main subsystems fit together.
 
+For a detailed, codebase-grounded reference covering package boundaries, runtime data flow, implementation patterns, testing, and extension guidance, see [Project Architecture Blueprint](Project_Architecture_Blueprint.md).
+
 ## Overview
 
 MyForge is a PRD-first orchestration system for turning an idea into an implemented project. The flow is intentionally split into a few layers:

@@ -844,11 +844,9 @@ test("headless draft picks the runner from the environment, the saved project ch
   assert.match(debugged, /^claude -p /);
   assert.equal(debugged.endsWith("--debug"), true);
 
-  // A .claude harness with FORGE_RUN_WITH unset authors through OpenCode: the
-  // claude runner is opt-in, so the harness alone does not select it. The PATH
-  // is pinned to a fake opencode because inheritance now consults the machine.
+  // A .claude harness inherits Claude Code for authoring.
   const harnessDefault = fixture(t, ".claude");
-  assert.match(commandLine(await draftPrdDryRun(harnessDefault, { PATH: fakeBin(t, "opencode") }), "opencode"), /^opencode run /);
+  assert.match(commandLine(await draftPrdDryRun(harnessDefault, { PATH: fakeBin(t, "claude") }), "claude"), /^claude -p /);
 
   // A saved project runner selects claude with FORGE_RUN_WITH unset, and the
   // environment still outranks the saved choice.
@@ -858,24 +856,17 @@ test("headless draft picks the runner from the environment, the saved project ch
   assert.match(commandLine(await draftPrdDryRun(saved, { FORGE_RUN_WITH: "opencode" }), "opencode"), /^opencode run /);
 });
 
-test("inherited runner falls back to the harness CLI only when the inherited CLI is missing", async (t) => {
-  const withOpencode = fakeBin(t, "opencode");
+test("inherited Claude runner defaults to the harness CLI", async (t) => {
   const withClaude = fakeBin(t, "claude");
   const withNeither = fakeBin(t);
 
-  // The inherited runner is installed, so it stands.
-  assert.match(commandLine(await draftPrdDryRun(fixture(t, ".claude"), { PATH: withOpencode }), "opencode"), /^opencode run /);
-
-  // OpenCode is missing and the harness's own CLI is present, so inherit resolves to it.
+  // Claude is the native inherited runner, so it stands when installed.
   assert.match(commandLine(await draftPrdDryRun(fixture(t, ".claude"), { PATH: withClaude }), "claude"), /^claude -p /);
 
-  // Neither is installed: unchanged, so the spawn error still names the configured runner.
-  assert.match(commandLine(await draftPrdDryRun(fixture(t, ".claude"), { PATH: withNeither }), "opencode"), /^opencode run /);
+  // Neither is installed: preserve the configured native runner for the spawn error.
+  assert.match(commandLine(await draftPrdDryRun(fixture(t, ".claude"), { PATH: withNeither }), "claude"), /^claude -p /);
 
-  // A harness whose inherited runner is already its native CLI is never substituted,
-  // even with another runner's CLI the only one installed. This pins the outcome, not
-  // the inherited !== native guard: with inherited === native the rest of the
-  // condition is self-contradictory, so the case passes with the guard removed too.
+  // A harness whose inherited runner is already its native CLI is never substituted.
   assert.match(commandLine(await draftPrdDryRun(fixture(t, ".github"), { PATH: withClaude }), "copilot"), /^copilot /);
 
   // An explicit selection is never substituted: it must still fail loudly later.

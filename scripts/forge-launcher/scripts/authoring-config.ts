@@ -148,15 +148,8 @@ export function selectAuthoringRunner(
     }
     return { runner, source };
   }
-  // Only inheritance consults the machine. A Claude harness inherits the opencode
-  // runner, so on a box with Claude Code but no OpenCode that default cannot run;
-  // fall back to the harness's own CLI. When neither is installed the result is
-  // unchanged so the spawn error still names the runner the operator configured.
-  // The inherited !== native guard keeps every other harness off the filesystem.
-  // It is a cost optimisation, not a correctness control: wherever it short
-  // circuits the rest of the condition is self-contradictory, so dropping it
-  // changes only whether a probe runs, never what this returns. No test can catch
-  // its loss, so keep it when moving this rule.
+  // Only inheritance consults the machine. If a non-native inherited runner is
+  // unavailable, use the harness's own CLI when it is installed.
   const inherited = authoringRunnerForHarness(harness);
   const native = harnessCliForHarness(harness).cli;
   if (inherited !== native && !commandOnPath(env, inherited) && commandOnPath(env, native)) {

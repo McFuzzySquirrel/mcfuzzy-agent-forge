@@ -12,6 +12,9 @@
   "dependencies": {
     "gray-matter": "^4.0.3"
   },
+  "overrides": {
+    "argparse": "2.0.1"
+  },
   "devDependencies": {
     "@types/node": "^22.10.0",
     "tsx": "^4.19.0",
