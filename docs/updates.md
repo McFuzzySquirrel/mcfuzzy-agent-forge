@@ -12,6 +12,14 @@ Detailed release and change notes for MyForge.
   authoring by default, matching their engine and launch-CLI behavior.
 - OpenCode remains available through an explicit runner selection.
 
+## October 2026 - v3.98
+
+### Windows interactive authoring avoids empty Windows Terminal commands
+
+- Interactive authoring now starts PowerShell directly before attempting a
+  Windows Terminal tab, avoiding the `0x80070002` failure when the Console is
+  itself running inside Windows Terminal.
+
 ## October 2026 - v3.96
 
 ### Interactive authoring finds the CLI on desktop platforms

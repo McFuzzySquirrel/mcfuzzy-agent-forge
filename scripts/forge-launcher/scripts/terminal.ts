@@ -85,20 +85,16 @@ async function launchWindows(cliName: string, repoDir: string, args: string[]): 
   const invokeScript = `& '${escapedExe}' ${argStr}`;
   const launchScript = `Set-Location '${escapedDir}'; ${invokeScript}`;
 
-  // Windows Terminal's `wt` command cannot launch a nested tab reliably when
-  // the launcher is running outside an existing Windows Terminal session.
-  const wt = process.env.WT_SESSION ? commandExists("wt") : undefined;
   const pwsh = commandExists("pwsh");
   const ps5 = commandExists("powershell");
-
-  if (wt) {
-    const powershell = pwsh ?? ps5;
-    if (powershell && await spawnDetached(wt, windowsTerminalArgs(powershell, repoDir, invokeScript))) {
-      return true;
-    }
-  }
   const powershell = pwsh ?? ps5;
+  // Calling `wt` from a process already hosted by Windows Terminal can produce
+  // an empty-command 0x80070002 error. Prefer detached PowerShell directly.
   if (powershell && await spawnDetached(powershell, ["-NoProfile", "-NoExit", "-Command", launchScript])) {
+    return true;
+  }
+  const wt = commandExists("wt");
+  if (wt && powershell && await spawnDetached(wt, windowsTerminalArgs(powershell, repoDir, invokeScript))) {
     return true;
   }
   warn("No supported Windows terminal found. Open a terminal manually and run:");
@@ -113,7 +109,7 @@ export function windowsTerminalArgs(powershell: string, repoDir: string, invokeS
 function commandExists(cmd: string): string | undefined {
   const isWin = process.platform === "win32";
   const exts = isWin ? [".com", ".exe", ".bat", ".cmd", ""] : [""];
-  const dirs = (process.env.PATH ?? "").split(path.delimiter);
+  const dirs = (process.env.PATH ?? process.env.Path ?? "").split(path.delimiter);
   if (isWin) {
     const systemRoot = process.env.SystemRoot ?? process.env.WINDIR;
     const localAppData = process.env.LOCALAPPDATA;
