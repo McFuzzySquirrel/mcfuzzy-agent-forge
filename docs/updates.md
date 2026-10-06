@@ -4,6 +4,16 @@ Detailed release and change notes for MyForge.
 
 ---
 
+## October 2026 - v3.96
+
+### Interactive authoring finds the CLI on desktop platforms
+
+- Interactive PRD authoring now pins the discovered harness executable when
+  opening a new terminal, so npm-installed runners are found from macOS login
+  shells as well as Linux.
+- Windows falls back to PowerShell unless the launcher is already running
+  inside Windows Terminal, avoiding the `0x80070002` launch failure.
+
 ## October 2026 - v3.95
 
 ### Author PRD works again on the default authoring runner

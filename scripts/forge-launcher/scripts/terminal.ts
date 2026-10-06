@@ -33,8 +33,12 @@ export function launchCliInTerminal(
 }
 
 function launchPosix(cliName: string, repoDir: string, args: string[]): Promise<boolean> {
+  // Desktop terminals may start a login shell with a different PATH from the
+  // launcher process. Pin the resolved executable when it is discoverable so
+  // npm-installed CLIs are found on macOS as well as Linux.
+  const cliExe = commandExists(cliName) ?? cliName;
   const argStr = args.map((a) => `'${a.replace(/'/g, "'\\''")}'`).join(" ");
-  const launchScript = `cd '${repoDir.replace(/'/g, "'\\''")}' && '${cliName}' ${argStr}; exec bash`;
+  const launchScript = `cd '${repoDir.replace(/'/g, "'\\''")}' && '${cliExe.replace(/'/g, "'\\''")}' ${argStr}; exec bash`;
 
   const candidates: Array<{ cmd: string; args: (dir: string, script: string) => string[] }> = [
     {
@@ -81,7 +85,9 @@ async function launchWindows(cliName: string, repoDir: string, args: string[]): 
   const invokeScript = `& '${escapedExe}' ${argStr}`;
   const launchScript = `Set-Location '${escapedDir}'; ${invokeScript}`;
 
-  const wt = commandExists("wt");
+  // Windows Terminal's `wt` command cannot launch a nested tab reliably when
+  // the launcher is running outside an existing Windows Terminal session.
+  const wt = process.env.WT_SESSION ? commandExists("wt") : undefined;
   const pwsh = commandExists("pwsh");
   const ps5 = commandExists("powershell");
 
