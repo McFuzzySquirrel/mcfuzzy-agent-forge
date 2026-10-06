@@ -23,14 +23,13 @@ export function harnessKey(nameOrRoot: string | null | undefined): HarnessKey {
 }
 
 /**
- * Authoring runner for a harness: github gives copilot, everything else gives
- * opencode. Claude repos author through OpenCode by default because the
- * Console's inventory is per runner and OpenCode's covers every provider;
- * `claude` is selected explicitly with `FORGE_RUN_WITH=claude`.
+ * Authoring runner for a harness: GitHub gives Copilot, Claude gives Claude
+ * Code, and the remaining harnesses give OpenCode.
  */
 export function authoringRunnerForHarness(nameOrRoot: string | null | undefined): AuthoringRunnerName {
   const key = harnessKey(nameOrRoot);
   if (key === "github") return "copilot";
+  if (key === "claude") return "claude";
   return "opencode";
 }
 

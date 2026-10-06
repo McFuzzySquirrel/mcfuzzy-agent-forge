@@ -4,6 +4,14 @@ Detailed release and change notes for MyForge.
 
 ---
 
+## October 2026 - v3.97
+
+### Claude harnesses default to Claude Code for authoring
+
+- Claude harnesses now use Claude Code for interactive PRD and feature
+  authoring by default, matching their engine and launch-CLI behavior.
+- OpenCode remains available through an explicit runner selection.
+
 ## October 2026 - v3.96
 
 ### Interactive authoring finds the CLI on desktop platforms
