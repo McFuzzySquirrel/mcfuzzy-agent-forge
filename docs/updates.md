@@ -4,14 +4,6 @@ Detailed release and change notes for MyForge.
 
 ---
 
-## October 2026 - v3.97
-
-### Claude harnesses default to Claude Code for authoring
-
-- Claude harnesses now use Claude Code for interactive PRD and feature
-  authoring by default, matching their engine and launch-CLI behavior.
-- OpenCode remains available through an explicit runner selection.
-
 ## October 2026 - v3.98
 
 ### Windows interactive authoring avoids empty Windows Terminal commands
@@ -19,6 +11,14 @@ Detailed release and change notes for MyForge.
 - Interactive authoring now starts PowerShell directly before attempting a
   Windows Terminal tab, avoiding the `0x80070002` failure when the Console is
   itself running inside Windows Terminal.
+
+## October 2026 - v3.97
+
+### Claude harnesses default to Claude Code for authoring
+
+- Claude harnesses now use Claude Code for interactive PRD and feature
+  authoring by default, matching their engine and launch-CLI behavior.
+- OpenCode remains available through an explicit runner selection.
 
 ## October 2026 - v3.96
 
