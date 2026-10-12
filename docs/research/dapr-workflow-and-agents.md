@@ -5,9 +5,8 @@
 
 ## Question
 
-Would Dapr Workflow or Dapr Agents improve MyForge by allowing workflow and
-agent state to be resumed from another host, and what other benefits and
-implementation changes would adoption bring?
+Investigating how Dapr Workflow or Dapr Agents could improve MyForge by allowing workflow and
+agent state to be resumed from another host, and other benefits it would bring
 
 ## Current state
 
