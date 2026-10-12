@@ -259,6 +259,20 @@ Open items deliberately not done in this plan - candidates for a follow-up.
   `localhost` wizard) or full-screen terminal UI could be layered on top of
   the same prompt functions.
 
+### Optional Dapr workflow backend
+
+- Investigate Dapr Workflow as an optional distributed orchestration backend
+  for durable runs that can recover on another host, use shared state, wait for
+  external approvals, and publish lifecycle events.
+- Keep the current file-based workflow engine as the default for local,
+  offline, and single-developer use. Preserve the execution manifest, harness
+  adapters, verification gates, artifact projection, sandboxing, and Git
+  integration rather than replacing the engine wholesale.
+- Defer Dapr Agents adoption until the workflow proof of concept establishes a
+  need for long-lived conversational agents or cross-run semantic memory.
+- Follow the research findings, decision gates, and phased implementation plan
+  in [Dapr workflow and agents evaluation](docs/research/dapr-workflow-and-agents.md).
+
 ### Package hygiene
 
 - The package ships compiled `dist/`; runtime deps are just `@clack/prompts`.
