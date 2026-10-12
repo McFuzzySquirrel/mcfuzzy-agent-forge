@@ -68,7 +68,7 @@ for (const [name, spawnWithCwd] of [
   }],
   ["spawnDetached", async (cwd: string) => {
     const record = path.join(path.resolve(cwd), "detached.json");
-    assert.ok(spawnDetached(process.execPath, ["-e", `require("fs").writeFileSync(${JSON.stringify(record)}, JSON.stringify({ cwd: process.cwd(), pwd: process.env.PWD ?? null }))`], { cwd }).pid);
+    assert.ok(spawnDetached(process.execPath, ["-e", `const observed = { cwd: process.cwd(), pwd: process.env.PWD ?? null }; process.chdir(require("node:os").tmpdir()); require("fs").writeFileSync(${JSON.stringify(record)}, JSON.stringify(observed))`], { cwd }).pid);
     for (let attempt = 0; attempt < 100 && !fs.existsSync(record); attempt += 1) {
       await new Promise((resolve) => setTimeout(resolve, 20));
     }
