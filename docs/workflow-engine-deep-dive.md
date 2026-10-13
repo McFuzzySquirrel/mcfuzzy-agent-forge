@@ -478,6 +478,10 @@ The engine maintains three output files and keeps them in sync across running, w
 
 Every task has a full record: status, attempt count, start/end timestamps, output files, agent output text, and error message. The engine reads this file to decide what to run next. It also carries the `runId` (a UUID) which ties together all audit events for a single run.
 
+The `blockers` list describes the current run, not historical failures. It is
+cleared when a new run starts; manifest reconciliation notices detected by that
+run remain visible in the list.
+
 Successful structured completion copies `forge-result.validationLimitations`
 onto the task record. A subsequent successful attempt replaces that list or
 clears it when no limitations are reported. The field is optional for older

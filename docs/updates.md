@@ -4,6 +4,13 @@ Detailed release and change notes for MyForge.
 
 ---
 
+## October 2026 - v3.99
+
+### Workflow blockers describe the current run
+
+- Stale preflight blockers are cleared when a new run starts, while manifest
+  reconciliation notices remain visible for the run that detects them.
+
 ## October 2026 - v3.98
 
 ### Windows interactive authoring avoids empty Windows Terminal commands
