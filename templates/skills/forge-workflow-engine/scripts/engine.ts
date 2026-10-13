@@ -767,7 +767,9 @@ async function runEngineSession(opts: EngineOptions): Promise<WorkflowState> {
 
   let state = loadState(opts.statePath)
     ?? initState(manifest, opts.manifestPath, opts.harness.name);
+  const previousBlockers = state.blockers;
   const reconciledState = reconcileState(state, manifest);
+  const reconciliationBlockers = reconciledState.blockers.slice(previousBlockers.length);
   const wasReconciled = reconciledState !== state;
   state = reconciledState;
   if (wasReconciled) {
@@ -829,7 +831,7 @@ async function runEngineSession(opts: EngineOptions): Promise<WorkflowState> {
     console.log("[engine] Previous run ended in failure. Use `replay` to re-run failed tasks, or `run` to reset.");
   }
 
-  state = { ...state, status: "running", harness: opts.harness.name };
+  state = { ...state, status: "running", harness: opts.harness.name, blockers: reconciliationBlockers };
   saveState(opts.statePath, state);
   writeAuditEvent(opts.auditPath, {
     timestamp: new Date().toISOString(),
