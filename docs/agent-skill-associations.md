@@ -78,6 +78,41 @@ The engine passes names and descriptions, not the complete contents of every `SK
 
 Native agent selection and inline-persona fallback receive the same guidance, so the behavior does not depend on one specific harness.
 
+## The curated toolbox model
+
+The current design is best understood as a **curated toolbox**, not a strict
+capability registry:
+
+```text
+Agent
+ ├── required procedures
+ ├── recommended procedures
+ └── broader skill catalog available when needed
+```
+
+Associations give an agent a useful starting toolbox for its domain while
+preserving access to legitimate cross-cutting procedures. They improve
+discoverability and reduce prompt context without turning every association
+into a permission boundary.
+
+This is valid for MyForge because project skills are currently procedural
+guidance. The harness still controls actual tool and file permissions, and task
+requirements remain authoritative. A skill association does not grant access,
+expand task scope, or prove that a procedure was followed.
+
+### Curated toolbox versus strict capability registry
+
+| Model | Meaning | Best fit |
+|---|---|---|
+| Curated toolbox | Relevant skills are surfaced, but other applicable skills remain available. | General software work, cross-cutting skills, mixed harnesses, incremental adoption |
+| Strict capability registry | An agent may use only explicitly granted capabilities, with enforcement at runtime. | Production operations, sensitive tools, regulated workflows, strong isolation |
+
+A strict registry provides stronger isolation and auditability, but requires
+more configuration and reliable enforcement from every execution harness. It
+can also block legitimate work when a shared procedure was not declared in
+advance. MyForge intentionally uses the curated toolbox model until skill usage
+can be verified consistently across all supported harnesses.
+
 ## Required versus recommended
 
 ### Recommended skills

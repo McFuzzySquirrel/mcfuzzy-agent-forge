@@ -23,6 +23,12 @@ when possible and records availability metadata. The workflow engine includes
 only concise names and descriptions in task instructions. It does not inject
 complete skill bodies and does not treat associations as an allowlist.
 
+This is deliberately a curated-toolbox model rather than a strict capability
+registry. Associations improve relevance and discoverability, while the
+harness remains responsible for permissions. A strict registry remains a valid
+future option for permission-sensitive tools, but it requires enforcement and
+usage evidence below the prompt layer.
+
 Agents without association metadata remain valid and continue to execute as
 before. Missing recommended or globally reused skills are diagnostic metadata,
 not execution-blocking failures.
@@ -34,6 +40,8 @@ not execution-blocking failures.
   skill content into every prompt.
 - The design remains portable across OpenCode, Claude, Copilot, OpenAI, and
   stub harnesses.
+- Agents retain legitimate access to cross-cutting skills that were not
+  predicted during team generation.
 - Existing repositories require no migration because association metadata is
   optional.
 - Required-skill enforcement is intentionally deferred until cross-harness

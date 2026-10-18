@@ -125,6 +125,57 @@ This is useful when skills contain substantial references or scripts and the har
 
 These strategies can be combined. A common default is native discovery plus a short orchestrator-provided context block.
 
+## Curated toolbox versus strict capability registry
+
+The association layer supports two different architectural models. They should
+not be conflated.
+
+### Curated toolbox
+
+```text
+Agent → relevant skills → global fallback
+```
+
+The orchestrator presents a role-specific starting toolbox, while the agent can
+still use another applicable skill. This model is appropriate when:
+
+- skills are primarily procedural guidance;
+- the model can decide whether a procedure applies;
+- the harness already provides global skill discovery;
+- cross-cutting skills are common;
+- incremental adoption and low configuration cost matter.
+
+Benefits include lower prompt cost, better discoverability, less maintenance,
+and compatibility across harnesses with different skill semantics.
+
+### Strict capability registry
+
+```text
+Agent → explicitly allowed skills/tools only
+```
+
+The orchestrator or harness rejects procedures outside the agent's declared
+capabilities. This model is more appropriate when:
+
+- skills can modify production systems;
+- tools have security, financial, or privacy consequences;
+- agents must be strongly sandboxed;
+- compliance requires explicit capability grants;
+- usage must be audited and enforced rather than merely encouraged.
+
+The tradeoffs are more configuration, more maintenance as skills evolve, and a
+higher risk of blocking legitimate cross-cutting work. A strict registry also
+requires enforcement below the prompt layer; a Markdown instruction alone is
+not a security boundary.
+
+### Choosing between them
+
+Use the curated toolbox model when the main problem is relevance and
+discoverability. Use a strict registry when the main problem is authorization
+and isolation. Some systems should use both: a curated toolbox for ordinary
+procedures and a separate strict capability registry for permission-sensitive
+tools.
+
 ## Validation rules
 
 Validate the association graph before execution:
