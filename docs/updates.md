@@ -16,6 +16,11 @@ Detailed release and change notes for MyForge.
 - Added a MyForge guide and a portable pattern guide for adopting the model
   outside MyForge.
 
+### Workflow blockers describe the current run
+
+- Stale preflight blockers are cleared when a new run starts, while manifest
+  reconciliation notices remain visible for the run that detects them.
+
 ## October 2026 - v3.98
 
 ### Windows interactive authoring avoids empty Windows Terminal commands
