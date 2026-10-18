@@ -111,7 +111,23 @@ function validateFile(file, kind, expectedName, root) {
       hasScriptsDirOnDisk: existsSync(join(file, "..", "scripts")),
     })
     : {};
-  return { file: relative(root, file), kind, errors, scores };
+  return { file: relative(root, file), kind, errors, scores, frontmatter: parsed.data };
+}
+
+function skillList(value, field, errors) {
+  if (value === undefined) return [];
+  if (typeof value !== "string" || !/^\[.*\]$/.test(value.trim())) {
+    errors.push(`${field} must be a single-line YAML array`);
+    return [];
+  }
+  const body = value.trim().slice(1, -1).trim();
+  if (!body) return [];
+  const entries = body.split(",").map((entry) => entry.trim().replace(/^["']|["']$/g, ""));
+  if (entries.some((entry) => !/^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(entry))) {
+    errors.push(`${field} must contain lowercase kebab-case skill names`);
+    return [];
+  }
+  return entries;
 }
 
 function validateCandidates(agentResults) {
@@ -127,6 +143,15 @@ function validateCandidates(agentResults) {
     return ["candidate handoff must contain version: 1 and candidates: []"];
   }
   const agentNames = new Set(agentResults.filter((result) => result.kind === "agent").map((result) => result.expectedName));
+  for (const agent of agentResults.filter((result) => result.kind === "agent")) {
+    const skillErrors = [];
+    const required = skillList(agent.frontmatter?.skillsRequired, `${agent.file}: skillsRequired`, skillErrors);
+    const recommended = skillList(agent.frontmatter?.skillsRecommended, `${agent.file}: skillsRecommended`, skillErrors);
+    if (new Set([...required, ...recommended]).size !== required.length + recommended.length) {
+      skillErrors.push(`${agent.file}: skillsRequired and skillsRecommended must not overlap`);
+    }
+    errors.push(...skillErrors);
+  }
   const actions = new Set(["reuse", "extend", "create", "omit"]);
   for (const [index, candidate] of handoff.candidates.entries()) {
     const prefix = `candidate[${index}]`;

@@ -1,5 +1,12 @@
 export type HarnessRoot = ".agents" | ".github" | ".claude" | ".opencode";
 
+export interface AgentSkillReference {
+  name: string;
+  required: boolean;
+  description?: string;
+  available?: boolean;
+}
+
 export interface AgentDescriptor {
   name: string;
   description: string;
@@ -9,6 +16,7 @@ export interface AgentDescriptor {
   expertise: string[];
   collaboration: string[];
   constraints: string[];
+  skillReferences?: AgentSkillReference[];
   rawBody: string;
 }
 

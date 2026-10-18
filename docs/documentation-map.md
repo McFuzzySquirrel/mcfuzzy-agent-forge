@@ -50,6 +50,8 @@ Before completing the change:
 | Document | Authority and purpose | Update when |
 |---|---|---|
 | [`docs/canonical-features.md`](canonical-features.md) | Canonical requirements layout, ownership, references, validation, and migration rules. | PRD/feature structure, requirement ownership, contract resolution, or migration rules change. |
+| [`docs/agent-skill-associations.md`](agent-skill-associations.md) | MyForge guide to declaring, resolving, and using generated agent-to-skill associations. | Agent skill metadata, candidate consumers, discovery, or runtime skill context changes. |
+| [`docs/patterns/agent-skill-associations.md`](patterns/agent-skill-associations.md) | Portable agent-to-skill association pattern for systems outside MyForge. | The reusable pattern, adoption guidance, validation model, or portability guidance changes. |
 | [`docs/task-contracts.md`](task-contracts.md) | Task contract format and execution requirements. | Task contract fields, validation, ownership, or generated execution instructions change. |
 | [`docs/feature...` templates](../templates/skills/forge-decompose-prd/references/feature-document-template.md) | Template for authored feature documents. | Feature-document structure or required authoring fields change. |
 | `templates/skills/*/SKILL.md` | Canonical instructions for each bootstrapped Forge skill. | The skill's inputs, outputs, workflow, commands, constraints, or examples change. |

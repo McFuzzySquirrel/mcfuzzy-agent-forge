@@ -29,3 +29,8 @@ explicit draft-team adoption. The skills stage must preserve the immutable
 handoff, unaffected packages, and manifest IDs. Stage status, fingerprints,
 outputs, errors, timestamps, and invocation provenance belong in
 `docs/authoring-state.json` or separate review artifacts, not this handoff.
+
+Candidate `consumers` are the source for generated agents' recommended skill
+associations. A team author may promote a consumer relationship to `required`
+only when the task cannot be completed safely without the skill. Associations
+are advisory by default and are not a runtime allowlist.

@@ -99,6 +99,11 @@ skill-review artifacts and report stage status through the launcher-owned
 regenerating a valid team. Changed team inputs invalidate readiness only for
 affected candidates.
 
+When a candidate has consumers, preserve the candidate name and description so
+the generated agents' `skills.recommended` associations remain resolvable. A
+globally reused skill may remain unavailable to local discovery; report that as
+diagnostic metadata rather than requiring a project-local copy.
+
 ## Required outputs
 
 - Validated packages under the active harness skills directory.

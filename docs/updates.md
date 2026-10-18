@@ -4,6 +4,18 @@ Detailed release and change notes for MyForge.
 
 ---
 
+## October 2026 - v3.99
+
+### Agents declare relevant project skills
+
+- Generated agents can declare required and recommended project skills with
+  `skillsRequired` and `skillsRecommended` frontmatter arrays.
+- The execution adapter resolves those associations when local skill packages
+  are available and the workflow engine passes concise skill guidance to tasks.
+- Associations remain advisory and preserve compatibility with legacy agents.
+- Added a MyForge guide and a portable pattern guide for adopting the model
+  outside MyForge.
+
 ## October 2026 - v3.98
 
 ### Windows interactive authoring avoids empty Windows Terminal commands

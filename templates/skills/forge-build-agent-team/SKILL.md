@@ -56,6 +56,12 @@ collaboration. Agent `name` must match its filename and every description must
 be single-line, double-quoted YAML. Every agent declares `mode: all` in its
 frontmatter; never write `mode: subagent` or `mode: primary`.
 
+When `docs/SKILL-CANDIDATES.json` names an agent as a candidate consumer, add a
+single-line `skillsRequired` and `skillsRecommended` frontmatter arrays.
+Candidate consumers are recommended by default; only an explicit requirement
+justifies `skillsRequired`. Keep skill associations advisory and do not make
+them an allowlist of skills the agent may use.
+
 ### Step 3: Write the team
 
 Write only new or affected files under the resolved harness agents directory.
