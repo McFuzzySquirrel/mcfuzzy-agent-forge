@@ -67,6 +67,13 @@ function sleep(ms: number): Promise<void> {
 }
 
 /**
+ * The agent that runs every task in a phase when `--session-scope phase` is
+ * enabled. It is the stable `--agent` of the phase session and delegates each
+ * task to its owner specialist as a sub-agent.
+ */
+const PHASE_LEAD_AGENT_NAME = "project-orchestrator";
+
+/**
  * Run `worker` over `items` with at most `limit` invocations in flight at once,
  * returning results in input order. Degrades to a plain sequential map when
  * `limit <= 1` or `items.length <= 1`.
@@ -365,6 +372,14 @@ interface TaskEnvironment {
   workspaceRoot: string;
   /** Single-writer durability hook owned by the engine. */
   checkpoint: (record: TaskRecord) => Promise<void>;
+  /** `"phase"` reuses one harness session per phase; `"task"` is per-task (default). */
+  sessionScope: "task" | "phase";
+  /** Native harness session ID for this task's phase, when sessionScope is "phase". */
+  phaseSessionId?: string;
+  /** Phase lead agent; when set, tasks delegate to their owner instead of running as it. */
+  phaseLead?: AgentDescriptor;
+  /** Persist a native harness session ID captured for a phase (capture harnesses). */
+  captureSession?: (phaseId: string, sessionId: string) => Promise<void>;
 }
 
 async function executeTask(
@@ -398,7 +413,7 @@ async function executeTask(
     return { taskId: task.id, record: completed, artifactId: artifact?.artifactId };
   }
 
-  const agent = findAgentForTask(env.agents, task.ownerAgent);
+  const owner = findAgentForTask(env.agents, task.ownerAgent);
 
   // A stop/pause was requested while this task was queued in the current wave.
   // Leave it pending so the run resumes it later instead of starting it.
@@ -407,9 +422,14 @@ async function executeTask(
     return { taskId: task.id, record: initial };
   }
 
-  if (!agent) {
+  if (!owner) {
     throw new Error(`Task '${task.id}' requires missing owner '${task.ownerAgent ?? "unassigned"}'. Restore its agent file or correct ownerAgent and recompile.`);
   }
+
+  // Under phase scope the phase lead runs every task (a stable `--agent` across
+  // the phase session) and delegates to the task's owner specialist.
+  const agent = env.phaseLead ?? owner;
+  const delegateTo = env.phaseLead ? { owner } : undefined;
 
   // ── Context projection ──────────────────────────────────────────────────────
   // Resolve input artifacts declared in the task manifest and build a
@@ -470,7 +490,8 @@ async function executeTask(
   // engine metadata never counts as task work.
   const baseline = await captureWorktree(workspace);
 
-  console.log(`[engine] Starting task ${task.id}: ${task.title} (@${agent.name})`);
+  const agentLabel = delegateTo ? `${owner.name} via ${agent.name}` : agent.name;
+  console.log(`[engine] Starting task ${task.id}: ${task.title} (@${agentLabel})`);
 
   const cancelAttempt = async (): Promise<TaskOutcome> => {
     current = {
@@ -525,7 +546,7 @@ async function executeTask(
     if (opts.heartbeatMs > 0) {
       heartbeat = setInterval(() => {
         const elapsed = Math.round((Date.now() - invokeStart) / 1000);
-        console.log(`[engine] …still working on task ${task.id} (@${agent.name}, ${elapsed}s elapsed)`);
+        console.log(`[engine] …still working on task ${task.id} (@${agentLabel}, ${elapsed}s elapsed)`);
       }, opts.heartbeatMs);
       heartbeat.unref?.();
     }
@@ -539,6 +560,8 @@ async function executeTask(
         previousFailure, previousResultPath,
         runId: env.runId, signal: opts.signal,
         logHarnessActivity: opts.logHarnessActivity,
+        sessionId: env.phaseSessionId,
+        delegateTo,
       }));
     } catch (error) {
       const message = `Adapter exception: ${error instanceof Error ? error.message : String(error)}`;
@@ -546,6 +569,13 @@ async function executeTask(
         errorMessage: message, failureKind: opts.signal?.aborted ? "cancelled" : "exception" };
     } finally {
       if (heartbeat) clearInterval(heartbeat);
+    }
+
+    // A capture-strategy harness assigns its own session ID on the first task of
+    // a phase; record it so the rest of the phase resumes that same conversation.
+    if (env.sessionScope === "phase" && !env.phaseSessionId) {
+      const captured = opts.harness.sessionStrategy?.captureSessionId?.(result);
+      if (captured) await env.captureSession?.(entry.phaseId, captured);
     }
 
     const gates: TaskGateResult[] = (["harness", "outputs", "handoff", "requirements", "validation"] as const)
@@ -669,7 +699,7 @@ async function executeTask(
           taskId: task.id,
           taskTitle: task.title,
           taskDescription: task.description,
-          producedBy: agent.name,
+          producedBy: owner.name,
           outputFiles: result.outputFiles,
           agentOutput: result.stdout,
           validationEvidence,
@@ -729,6 +759,12 @@ async function preflightOwners(
     const { discoverForgeRepo } = await import("../../forge-execution-adapter/scripts/discovery.ts");
     const { agents } = discoverForgeRepo(opts.repoRoot, manifest.harnessRoot);
     const selected = scopedTaskSet(state.selection);
+    const lead = opts.sessionScope === "phase"
+      ? findAgentForTask(agents, PHASE_LEAD_AGENT_NAME)
+      : undefined;
+    if (opts.sessionScope === "phase" && !lead) {
+      throw new Error(`--session-scope phase requires a '${PHASE_LEAD_AGENT_NAME}' agent under ${manifest.harnessRoot}. The forge generates one by default; restore or regenerate it and recompile.`);
+    }
     const unresolved = flattenManifest(manifest).filter(({ task }) =>
       (!selected || selected.has(task.id)) && !isTaskDone(state.tasks[task.id]?.status) &&
       task.contract?.kind !== "human-review" &&
@@ -743,9 +779,11 @@ async function preflightOwners(
         continue;
       }
       assertTaskCapabilities(task, opts.harness);
-      prepareTaskRequest({ agent: findAgentForTask(agents, task.ownerAgent)!, task,
+      const owner = findAgentForTask(agents, task.ownerAgent)!;
+      prepareTaskRequest({ agent: lead ?? owner, task,
         repoRoot: opts.repoRoot, defaultModel: opts.harness.defaultModel, timeoutMs: opts.taskTimeoutMs,
-        maxRetries: opts.maxRetries });
+        maxRetries: opts.maxRetries,
+        ...(lead ? { delegateTo: { owner } } : {}) });
     }
     return agents;
   } catch (error) {
@@ -841,6 +879,9 @@ async function runEngineSession(opts: EngineOptions): Promise<WorkflowState> {
   });
 
   const agents = await preflightOwners(manifest, state, opts);
+  const phaseLead = opts.sessionScope === "phase"
+    ? agents.find((a) => a.name === PHASE_LEAD_AGENT_NAME)
+    : undefined;
   await opts.harness.prepare?.({ repoRoot: opts.repoRoot, runId: state.runId, signal: opts.signal });
 
   const store = new ArtifactStore({ artifactsPath: opts.artifactsPath });
@@ -849,6 +890,14 @@ async function runEngineSession(opts: EngineOptions): Promise<WorkflowState> {
     supportsConcurrency: opts.harness.supportsConcurrency,
   });
   if (concurrency.notice) console.warn(`[engine] ${concurrency.notice}`);
+
+  // A phase session spans one conversation in one project directory, so it
+  // cannot coexist with per-task git worktree sandboxes (each a different
+  // project). The CLI rejects this combination up front; this is the engine's
+  // own guard so the two can never disagree.
+  if (opts.sessionScope === "phase" && concurrency.sandboxMode) {
+    throw new Error(`--session-scope phase requires --concurrency 1; a phase session cannot span per-task git worktrees.`);
+  }
 
   if (concurrency.sandboxMode) {
     const preflight = await preflightSandboxMode(opts.repoRoot, {
@@ -874,6 +923,14 @@ async function runEngineSession(opts: EngineOptions): Promise<WorkflowState> {
   // One writer for the whole run: state, sandbox integration, and auto-commit
   // are serialized so concurrent tasks can never interleave git or state writes.
   const queue = createSerialQueue();
+
+  // A capture-strategy harness assigns its own session ID on a phase's first
+  // task; record it so the rest of the phase resumes that conversation.
+  const captureSession = (phaseId: string, sessionId: string): Promise<void> => queue.run(async () => {
+    state = { ...state, sessions: { ...(state.sessions ?? {}), [phaseId]: sessionId } };
+    saveState(opts.statePath, state);
+    console.log(`[engine] Captured ${opts.harness.name} session ${sessionId} for phase ${phaseId}`);
+  });
 
   // Stop signal: the in-process flag (SIGINT/SIGTERM) OR a pause/stop request
   // written to the control file by `workflow-engine pause|stop`. Checked at the
@@ -957,6 +1014,19 @@ async function runEngineSession(opts: EngineOptions): Promise<WorkflowState> {
       saveState(opts.statePath, state);
     });
 
+    // Resolve (and, for deterministic harnesses, generate once) the phase's
+    // session ID. A capture harness leaves this undefined on the first task and
+    // records its own ID via `captureSession` after the invoke.
+    let phaseSessionId: string | undefined;
+    if (opts.sessionScope === "phase") {
+      phaseSessionId = state.sessions?.[entry.phaseId];
+      if (!phaseSessionId && opts.harness.sessionStrategy?.kind === "deterministic" && opts.harness.sessionStrategy.newSessionId) {
+        phaseSessionId = opts.harness.sessionStrategy.newSessionId();
+        state = { ...state, sessions: { ...(state.sessions ?? {}), [entry.phaseId]: phaseSessionId } };
+        saveState(opts.statePath, state);
+      }
+    }
+
     const humanReview = entry.task.contract?.kind === "human-review";
     const useSandbox = concurrency.sandboxMode && !humanReview;
     let sandboxPath: string | undefined;
@@ -976,6 +1046,10 @@ async function runEngineSession(opts: EngineOptions): Promise<WorkflowState> {
         engineRoot: opts.repoRoot,
         workspaceRoot: sandboxPath ?? opts.repoRoot,
         checkpoint,
+        sessionScope: opts.sessionScope,
+        phaseSessionId,
+        phaseLead,
+        captureSession,
       });
       await queue.run(() => finishTask(entry, {
         ...outcome,
@@ -1163,6 +1237,9 @@ async function replayTaskSession(taskId: string, opts: EngineOptions): Promise<W
     engineRoot: opts.repoRoot,
     workspaceRoot: opts.repoRoot,
     checkpoint: async (next) => { checkpoint(next); },
+    // A replay is a single task; it always runs a fresh, isolated session rather
+    // than joining a phase conversation (replay semantics are per-task today).
+    sessionScope: "task",
   });
   state = withTaskRecord(state, outcome.record);
   if (outcome.pauseRequested) state = { ...state, status: "paused" };

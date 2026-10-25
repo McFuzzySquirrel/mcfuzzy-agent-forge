@@ -292,3 +292,31 @@ test("a sandbox worktree is selected by cwd, keeping parallel tasks isolated", a
   assert.equal(pwd, resolve(worktree), "a sandboxed task must receive its worktree as PWD");
   assert.ok(!argv.includes(resolve(worktree)), `argv leaks the worktree path: ${argv.join(" ")}`);
 });
+
+// ─── Phase-scoped session reuse ───────────────────────────────────────────────
+
+test("passes --session when the request carries a sessionId, and omits it otherwise", async (t) => {
+  const root = tempDir(t, "forge-opencode-session-repo-");
+  const agent = makeAgent(join(root, ".opencode", "agents", "discovery-engineer.md"));
+
+  const runWith = async (sessionId?: string): Promise<string[]> => {
+    const shim = makeShim(t);
+    const original = process.env.OPENCODE_BIN;
+    process.env.OPENCODE_BIN = shim.bin;
+    try {
+      const adapter = new OpenCodeAdapter();
+      await adapter.invoke(prepareTaskRequest({ agent, task: makeTask(), repoRoot: root, ...(sessionId ? { sessionId } : {}) }));
+    } finally {
+      if (original === undefined) delete process.env.OPENCODE_BIN;
+      else process.env.OPENCODE_BIN = original;
+    }
+    return JSON.parse(readFileSync(shim.argsFile, "utf8")) as string[];
+  };
+
+  const without = await runWith();
+  assert.ok(!without.includes("--session"), `expected no --session: ${without.join(" ")}`);
+
+  const withSession = await runWith("forge-run-phase-1");
+  assert.ok(withSession.includes("--session"));
+  assert.equal(withSession[withSession.indexOf("--session") + 1], "forge-run-phase-1");
+});

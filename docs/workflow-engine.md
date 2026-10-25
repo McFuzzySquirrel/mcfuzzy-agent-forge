@@ -226,6 +226,48 @@ On success, the envelope's `result` text supplies the `forge-result` report to t
 same engine completion gates, attempt archives, and retry feedback as the other
 adapters. A successful CLI envelope alone does not mark a structured task complete.
 
+### Phase-scoped session reuse
+
+By default every task runs in a **fresh, isolated session** (ADR-058). For
+multi-task builds that means each task re-derives the repository and shares no
+context with its siblings — the dominant source of per-task latency.
+
+`--session-scope phase` (or `FORGE_ENGINE_SESSION_SCOPE=phase`) reuses **one
+harness conversation per phase**, so tasks in a phase inherit each other's
+context. A new conversation begins at each phase boundary, which keeps context
+bounded to a coherent chunk of work.
+
+```
+npm run workflow-engine -- run --harness opencode --session-scope phase --yes
+```
+
+How it works:
+
+- **Session identity per harness.** OpenCode (`run --session <id>`) and Copilot
+  (`--session-id <id>`) accept a caller-chosen ID, so the engine generates a UUID
+  once per phase. Claude assigns its own `session_id` (returned in the JSON
+  envelope); the engine captures it from the first task and resumes it with
+  `--resume <id>` for the rest of the phase. The mapping is persisted in
+  `docs/WORKFLOW-STATE.json` under `sessions`.
+- **A stable phase lead.** A phase usually spans several owner agents, but the
+  running `--agent` must stay stable across a session. Phase scope therefore runs
+  every task under `project-orchestrator`, which delegates each task to its owner
+  specialist as a sub-agent (the owner's persona travels inline in the task
+  instructions).
+- **Per-task semantics are unchanged.** Each task is still dispatched, verified,
+  retried, committed, and audited individually; only the session and the running
+  agent differ.
+
+Phase scope is constrained:
+
+| Constraint | Reason |
+|---|---|
+| Requires `--concurrency 1` | Session lookup is project-scoped; a parallel run gives every task its own git worktree, which would fragment the conversation |
+| Requires a `project-orchestrator` agent | The lead that runs and delegates every task |
+| Rejected for `openai` / `stub` | Those adapters have no conversation to resume |
+
+See [ADR-067](adr/067-phase-scoped-session-reuse.md).
+
 ---
 
 ## CLI reference
@@ -234,6 +276,7 @@ adapters. A successful CLI envelope alone does not mark a structured task comple
 npm run workflow-engine -- run     [--repo <path>] [--harness <name>] [--max-retries <n>]
                                    [--retry-delay-ms <ms>] [--heartbeat-ms <ms>]
                                    [--concurrency <n>] [--task-timeout-ms <ms>] [--yes]
+                                   [--session-scope <task|phase>]
                                    [--allow-noop] [--run-validation]
                                    [--log-harness-activity|--no-log-harness-activity]
                                    [--auto-commit|--no-auto-commit] [--commit-message-template <tmpl>]
@@ -256,6 +299,7 @@ npm run workflow-engine -- viz     [--repo <path>] [--port <n>] [--no-open]
 | `--heartbeat-ms <ms>` | `60000` | Heartbeat interval while a task runs; `0` disables |
 | `--concurrency <n>` | `1` | Max ready tasks dispatched at once. Above `1` the harness must declare `supportsConcurrency` and the working tree must be clean; each task then runs in its own git worktree under `.forge-sandboxes/` (see *Execution waves and concurrency*) |
 | `--task-timeout-ms <ms>` | `600000` (10 min) | Per-task timeout before the harness call is killed; a task's own `timeoutMs` in the manifest overrides this |
+| `--session-scope <task\|phase>` | `task` | Reuse one harness conversation per phase (`phase`) or a fresh session per task (`task`, default). Phase scope requires `--concurrency 1`, a `project-orchestrator` lead agent, and a harness that can resume a session (see *Phase-scoped session reuse*) |
 | `--yes` | *(off)* | Skip the interactive pre-run gate |
 | `--keep-alive`, `--keep-alive-port`, `--no-keep-alive`, `--attach` | *(retired)* | Removed in v3.87 with OpenCode v2 (ADR-058); passing them is an error |
 | `--viz [port]` | *(off)* | Launch the live Forge Board dashboard (default port `4299`, next free port if busy) |
@@ -710,6 +754,7 @@ To start fresh (e.g. after recompiling the manifest), delete `docs/WORKFLOW-STAT
 | `FORGE_ENGINE_HEARTBEAT_MS` | `60000` | Heartbeat interval in ms |
 | `FORGE_ENGINE_CONCURRENCY` | `1` | Max concurrent tasks (same as `--concurrency`); above `1` each task runs in its own git worktree and the working tree must be clean |
 | `FORGE_ENGINE_TASK_TIMEOUT_MS` | `600000` | Per-task timeout in ms (same as `--task-timeout-ms`; per-task manifest `timeoutMs` overrides) |
+| `FORGE_ENGINE_SESSION_SCOPE` | `task` | `phase` reuses one harness conversation per phase; `task` runs a fresh session per task (same as `--session-scope`) |
 | `FORGE_ENGINE_HARNESS` | `opencode` | Default harness for the standalone runner |
 | `FORGE_ENGINE_VIZ` | *(unset)* | `1` enables `--viz` on the standalone runner |
 | `FORGE_ENGINE_VIZ_PORT` | `4299` | Dashboard port when `--viz` is enabled |

@@ -13,7 +13,7 @@ import { readControl, writeControl } from "./control.ts";
 import { approveHumanTask } from "./task-context.ts";
 import { ArtifactStore } from "./artifacts.ts";
 import { reconcileState, loadState, saveState, initState } from "./state.ts";
-import type { EngineOptions, ExecutionManifest, HarnessAdapter, ManifestTask, TaskResult, TaskStatus, WorkflowState } from "./types.ts";
+import type { EngineOptions, ExecutionManifest, HarnessAdapter, ManifestTask, SessionResumeStrategy, TaskResult, TaskStatus, WorkflowState } from "./types.ts";
 
 type ManifestPhase = ExecutionManifest["phases"][number];
 
@@ -424,6 +424,7 @@ function engineOptionsFor(
     retryDelayMs: 0,
     heartbeatMs: 0,
     maxConcurrency: 1,
+    sessionScope: "task" as const,
     taskTimeoutMs,
     // These tests target other behaviour (timeout precedence, crash recovery),
     // so the output-verification gate is relaxed unless a test opts into it.
@@ -442,6 +443,76 @@ test("effective task timeout prefers the per-task manifest timeoutMs over the en
 
   assert.equal(state.status, "complete");
   assert.deepEqual(harness.timeouts, [25_000]);
+});
+
+/** Harness that records the session id and running agent of every task it runs. */
+class PhaseRecordingHarness implements HarnessAdapter {
+  readonly name = "phase-recording";
+  readonly supportsConcurrency = false;
+  readonly capabilities = ["text", "repository-tools"] as const;
+  readonly sessionStrategy: SessionResumeStrategy = {
+    kind: "deterministic",
+    resumeFlags: (id) => ["--session", id],
+    newSessionId: () => `sess-${this.seq++}`,
+  };
+  private seq = 0;
+  seen: Array<{ taskId: string; sessionId?: string; agent: string }> = [];
+
+  async invoke(request: Parameters<HarnessAdapter["invoke"]>[0]): Promise<TaskResult> {
+    this.seen.push({ taskId: request.task.id, sessionId: request.sessionId, agent: request.agent.name });
+    return { success: true, outputFiles: [], stdout: "[phase-recording] ok", stderr: "", durationMs: 1 };
+  }
+}
+
+test("phase-scoped sessions reuse one conversation per phase and delegate to the lead", async () => {
+  const root = mkdtempSync(join(tmpdir(), "forge-engine-phase-"));
+  mkdirSync(join(root, ".agents", "agents"), { recursive: true });
+  mkdirSync(join(root, "docs/features"), { recursive: true });
+  writeFileSync(join(root, "docs", "PRD.md"), "# Vision\n## 14. Features\n| # | Feature | File | Dependencies |\n| 1 | Foundation | features/foundation.md | None |\n");
+  writeFileSync(join(root, "docs", "features", "foundation.md"), "# Feature: Foundation\n\n## Phase 1: Foundation\n- Task 1.1: Build a thing\n");
+  for (const name of ["project-orchestrator", "worker", "api"]) {
+    writeFileSync(join(root, ".agents", "agents", `${name}.md`), `---
+name: ${name}
+description: ${name}
+---
+`, "utf8");
+  }
+
+  const makeTask = (id: string, ownerAgent: string): ManifestTask => ({
+    id, title: `Task ${id}`, description: `Task ${id}`, ownerAgent, dependencies: [],
+    expectedOutputs: [], validationCommands: [], approvalRequired: false, sourceLines: [],
+  });
+
+  const manifest: ExecutionManifest = {
+    version: "1.0", sourceLayout: "features", generatedAt: new Date().toISOString(),
+    repoRoot: root, harnessRoot: ".agents",
+    prdPath: join(root, "docs", "PRD.md"), progressPath: join(root, "docs", "PROGRESS.md"),
+    auditPath: join(root, "docs", "EXECUTION-AUDIT.jsonl"),
+    validationCommands: [], approvalGates: { preflight: false, betweenPhases: false },
+    phases: [
+      { id: "1", title: "One", description: "", ownerAgents: ["worker", "api"], dependencies: [], approvalRequired: false,
+        tasks: [makeTask("1.1", "worker"), makeTask("1.2", "api")] },
+      { id: "2", title: "Two", description: "", ownerAgents: ["worker"], dependencies: ["1"], approvalRequired: false,
+        tasks: [makeTask("2.1", "worker")] },
+    ],
+    warnings: [],
+  };
+  const manifestPath = join(root, "docs", "EXECUTION-MANIFEST.json");
+  writeFileSync(manifestPath, JSON.stringify(manifest), "utf8");
+
+  const harness = new PhaseRecordingHarness();
+  const state = await runEngine(engineOptionsFor({ root, manifestPath }, harness, 1000, { sessionScope: "phase" }));
+
+  assert.equal(state.status, "complete");
+  assert.equal(harness.seen.length, 3);
+  assert.ok(harness.seen[0]!.sessionId, "first task must carry a generated session id");
+  // Same phase → same conversation; a new phase → a new conversation.
+  assert.equal(harness.seen[0]!.sessionId, harness.seen[1]!.sessionId);
+  assert.notEqual(harness.seen[1]!.sessionId, harness.seen[2]!.sessionId);
+  // Every task runs under the stable phase lead, not its owner.
+  assert.ok(harness.seen.every((entry) => entry.agent === "project-orchestrator"), JSON.stringify(harness.seen));
+  // Both phase session ids are persisted in state.
+  assert.equal(Object.keys(state.sessions ?? {}).length, 2);
 });
 
 test("human review pauses without dispatch and resumes only with task-bound evidence", async () => {

@@ -104,6 +104,7 @@ npx forge-launcher@beta bootstrap [TARGET_DIR] ... [--init-git]
                               [--runner <copilot|opencode|claude|inherit>]
 npx forge-launcher@beta engine-run [--repo <path>] [--harness <h>] [--concurrency <n>]
                               [--task-timeout-ms <ms>] [--yes] [--dry-run]
+                              [--session-scope <task|phase>]
                                [--allow-noop] [--run-validation]
                               [--log-harness-activity|--no-log-harness-activity]
                               [--auto-commit|--no-auto-commit] [--commit-message-template <tmpl>]
@@ -650,6 +651,13 @@ combined with concurrency), and **keep-alive is downgraded to a cold start per
 task** when a run is parallel. See
 [ADR-056](adr/056-parallel-execution-task-sandboxes.md) and
 [ADR-021](adr/021-parallel-task-dispatch.md).
+
+The launcher also passes `--session-scope <task|phase>` through to the engine
+(`FORGE_ENGINE_SESSION_SCOPE` works too). `phase` reuses one harness conversation
+across each phase and requires `--concurrency 1`, a `project-orchestrator` lead
+agent, and a resume-capable harness (opencode, copilot, or claude). See
+[phase-scoped session reuse](workflow-engine.md#phase-scoped-session-reuse) and
+[ADR-067](adr/067-phase-scoped-session-reuse.md).
 
 **Auto-commit is on by default.** Each completed task is committed to git (one
 commit per task, including the engine-owned `docs/*` files). Disable with

@@ -1,9 +1,10 @@
 import { existsSync, readFileSync } from "node:fs";
 import { resolve } from "node:path";
+import { randomUUID } from "node:crypto";
 
 import { runCommand, extractModelFlags, canSelectAgentNatively } from "./run.ts";
 import { harnessInvocationContext } from "./invocation-log.ts";
-import type { AgentDescriptor, HarnessAdapter, TaskAttemptRequest, TaskResult } from "../types.ts";
+import type { AgentDescriptor, HarnessAdapter, SessionResumeStrategy, TaskAttemptRequest, TaskResult } from "../types.ts";
 import { inlinePersona } from "../request.ts";
 import { executionPrompt } from "../task-execution.ts";
 
@@ -52,6 +53,12 @@ export class OpenCodeAdapter implements HarnessAdapter {
   readonly supportsConcurrency = true;
   readonly capabilities = ["text", "repository-tools"] as const;
   readonly defaultModel?: string;
+  /** `opencode run --session <id>` continues the session, or creates it if absent. */
+  readonly sessionStrategy: SessionResumeStrategy = {
+    kind: "deterministic",
+    resumeFlags: (sessionId) => ["--session", sessionId],
+    newSessionId: () => randomUUID(),
+  };
 
   private readonly bin: string;
   private readonly extraFlags: string[];
@@ -72,9 +79,10 @@ export class OpenCodeAdapter implements HarnessAdapter {
     // `github-copilot/gpt-5.6-luna`); unlike Copilot, do not strip the prefix.
     const modelFlag = request.effectiveModel ? ["--model", request.effectiveModel] : [];
     const agentFlag = this.canSelectAgent(request) ? ["--agent", agent.name] : [];
+    const sessionFlag = request.sessionId ? this.sessionStrategy.resumeFlags(request.sessionId) : [];
 
     const prompt = executionPrompt(request, agentFlag.length === 0 ? inlinePersona(request) : "");
-    const args = ["run", ...modelFlag, ...agentFlag, ...this.extraFlags, prompt];
+    const args = ["run", ...modelFlag, ...agentFlag, ...sessionFlag, ...this.extraFlags, prompt];
 
     const result = await runCommand(this.bin, args, {
       // `opencode run` resolves its project from `process.env.PWD ??

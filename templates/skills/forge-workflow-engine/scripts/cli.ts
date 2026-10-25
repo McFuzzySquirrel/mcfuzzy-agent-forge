@@ -29,6 +29,7 @@ function usage(): never {
 Usage:
   npm run workflow-engine -- run     [--repo <path>] [--harness opencode|copilot|claude|openai|stub]
                                      [--max-retries <n>] [--retry-delay-ms <ms>] [--heartbeat-ms <ms>] [--concurrency <n>] [--task-timeout-ms <ms>] [--yes]
+                                     [--session-scope <task|phase>]
                                      [--allow-noop] [--run-validation]
                                      [--log-harness-activity|--no-log-harness-activity]
                                      [--auto-commit|--no-auto-commit] [--commit-message-template <tmpl>]
@@ -48,6 +49,10 @@ Environment variables:
                              supportsConcurrency and a clean working tree: each task runs in its own git worktree under
                              .forge-sandboxes/, so output attribution and per-task commits stay exact.
   FORGE_ENGINE_TASK_TIMEOUT_MS   Per-task timeout in ms (default: 600000 / 10 min; per-task manifest timeoutMs overrides)
+  FORGE_ENGINE_SESSION_SCOPE   "phase" to reuse one harness conversation across each phase (a new session
+                               begins at each phase boundary), or "task" for a fresh session per task (default).
+                               Phase sessions require --concurrency 1 and a project-orchestrator agent; the lead
+                               agent delegates each task to its owner specialist as a sub-agent.
   FORGE_ENGINE_ALLOW_NOOP        "1" to allow tasks that produce no expected outputs, no file changes, and only
                                  trivial agent output to count as complete (bypasses the no-op output gate)
   FORGE_ENGINE_RUN_VALIDATION    "1" to execute each task's manifest validationCommands and require them to pass
@@ -198,6 +203,20 @@ function rejectRetiredRunFlags(args: string[]): void {
   }
 }
 
+/**
+ * Resolve `--session-scope task|phase` (also `FORGE_ENGINE_SESSION_SCOPE`).
+ * Defaults to `task`: one fresh, isolated session per task (ADR-058).
+ */
+function resolveSessionScope(args: string[]): "task" | "phase" {
+  const explicit = flag(args, "--session-scope") ?? process.env["FORGE_ENGINE_SESSION_SCOPE"];
+  if (explicit === "phase") return "phase";
+  if (explicit === "task") return "task";
+  if (explicit !== undefined && explicit.trim() !== "") {
+    throw new Error(`Unknown --session-scope '${explicit}'. Choose task or phase.`);
+  }
+  return "task";
+}
+
 function buildOptions(
   args: string[],
   repoRoot: string,
@@ -211,6 +230,18 @@ function buildOptions(
     process.exit(1);
   }
 
+  const harness = resolveHarness(harnessName ?? flag(args, "--harness"));
+  const sessionScope = resolveSessionScope(args);
+  if (sessionScope === "phase") {
+    if (!harness.sessionStrategy) {
+      throw new Error(`--session-scope phase is not supported by harness '${harness.name}'. It requires a harness that can resume a conversation (opencode, copilot, claude).`);
+    }
+    const requestedConcurrency = Number(flag(args, "--concurrency") ?? process.env["FORGE_ENGINE_CONCURRENCY"] ?? "1");
+    if (Number.isFinite(requestedConcurrency) && requestedConcurrency > 1) {
+      throw new Error(`--session-scope phase requires --concurrency 1: a phase session cannot span per-task git worktrees.`);
+    }
+  }
+
   return {
     repoRoot,
     manifestPath,
@@ -220,11 +251,12 @@ function buildOptions(
     artifactsPath: join(repoRoot, "docs", "artifacts"),
     controlPath: controlPath(repoRoot),
     pidPath: pidPath(repoRoot),
-    harness: resolveHarness(harnessName ?? flag(args, "--harness")),
+    harness,
     maxRetries: Number(flag(args, "--max-retries") ?? "2"),
     retryDelayMs: Number(flag(args, "--retry-delay-ms") ?? "5000"),
     heartbeatMs: Number(flag(args, "--heartbeat-ms") ?? process.env["FORGE_ENGINE_HEARTBEAT_MS"] ?? String(DEFAULT_HEARTBEAT_MS)),
     maxConcurrency: Number(flag(args, "--concurrency") ?? process.env["FORGE_ENGINE_CONCURRENCY"] ?? "1"),
+    sessionScope,
     taskTimeoutMs: Number(flag(args, "--task-timeout-ms") ?? process.env["FORGE_ENGINE_TASK_TIMEOUT_MS"] ?? String(DEFAULT_TASK_TIMEOUT_MS)),
     allowNoop: hasFlag(args, "--allow-noop") || process.env["FORGE_ENGINE_ALLOW_NOOP"] === "1",
     runValidation: hasFlag(args, "--run-validation") || process.env["FORGE_ENGINE_RUN_VALIDATION"] === "1",
@@ -275,6 +307,7 @@ async function confirmPreRun(opts: EngineOptions, args: string[]): Promise<void>
   console.log(`  Retries : ${opts.maxRetries} max, ${opts.retryDelayMs}ms between attempts (--max-retries / --retry-delay-ms)`);
   console.log(`  Concurrency: ${concurrencyLabel}`);
   if (concurrency.notice) console.log(`  Concurrency warning: ${concurrency.notice}`);
+  console.log(`  Session scope: ${opts.sessionScope === "phase" ? "phase (one conversation per phase, lead delegates to owner sub-agents)" : "task (fresh session per task)"}`);
   console.log(`  Output gate: ${opts.allowNoop ? "relaxed (--allow-noop: no-op tasks allowed)" : "strict (missing outputs / no-op tasks are retried then failed)"}`);
   if (opts.runValidation) console.log("  Validation: running manifest validationCommands per task (--run-validation)");
   const autoCommitLabel = opts.autoCommit === false

@@ -180,3 +180,27 @@ test("model flags are defaults and conflicting model defaults fail explicitly", 
   assert.throws(() => extractModelFlags(["--model"]), /requires a model ID/);
   assert.throws(() => extractModelFlags(["--model", "a", "-m", "b"]), /Conflicting/);
 });
+
+test("prepareTaskRequest carries sessionId through and injects a delegation block for a phase lead", () => {
+  const root = mkdtempSync(join(tmpdir(), "forge-request-delegate-"));
+  try {
+    const lead: AgentDescriptor = { ...agent, name: "project-orchestrator", rawBody: "Orchestrate the phase." };
+    const request = prepareTaskRequest({ agent: lead, task, repoRoot: root, sessionId: "forge-run-phase-1", delegateTo: { owner: agent } });
+
+    assert.equal(request.sessionId, "forge-run-phase-1");
+    assert.equal(request.agent.name, "project-orchestrator");
+    assert.ok(request.instructions.includes("Delegate this task to the 'worker' sub-agent"), request.instructions);
+    assert.ok(request.instructions.includes("Unique persona content"), request.instructions);
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test("prepareTaskRequest omits sessionId when none is provided", () => {
+  const root = mkdtempSync(join(tmpdir(), "forge-request-nosession-"));
+  try {
+    assert.equal(prepareTaskRequest({ agent, task, repoRoot: root }).sessionId, undefined);
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});

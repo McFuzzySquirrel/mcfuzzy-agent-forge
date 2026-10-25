@@ -72,6 +72,12 @@ export interface WorkflowState {
   blockers: string[];
   auditLog: AuditEvent[];
   selection?: TaskSelection;
+  /**
+   * Native harness session IDs keyed by phase id, populated when
+   * `--session-scope phase` reuses one conversation per phase. Absent from
+   * state files written before session reuse existed; readers must default.
+   */
+  sessions?: Record<string, string>;
 }
 
 // ─── Harness adapter interface ────────────────────────────────────────────────
@@ -84,6 +90,8 @@ export interface TaskResult {
   durationMs: number;
   errorMessage?: string;
   failureKind?: TaskFailureKind;
+  /** Native harness session ID a capture-strategy adapter assigns to the conversation. */
+  sessionId?: string;
 }
 
 export type TaskFailureKind = "retryable" | "configuration" | "exception" | "timeout" | "cancelled";
@@ -108,6 +116,12 @@ export interface TaskAttemptRequest {
   readonly instructions: string;
   readonly signal?: AbortSignal;
   /**
+   * Native harness session ID to resume/continue. When set, the adapter threads
+   * it through its session-resume flags so tasks in the same phase share one
+   * conversation. See `HarnessAdapter.sessionStrategy`.
+   */
+  readonly sessionId?: string;
+  /**
    * When true, CLI harness adapters stream stdout/stderr activity into the
    * engine log as it arrives. Command invocation logging is always on.
    */
@@ -120,6 +134,28 @@ export interface HarnessRunContext {
   readonly signal?: AbortSignal;
 }
 
+/**
+ * How a harness reuses one conversation across tasks when `--session-scope
+ * phase` is enabled.
+ *
+ * - `deterministic`: the harness accepts a caller-chosen session ID and creates
+ *   the conversation on first use. The engine generates an ID once per phase.
+ * - `capture`: the harness assigns its own ID on the first task; the engine
+ *   reads it back from the result and reuses it for the rest of the phase.
+ *
+ * Adapters without a strategy run one fresh, isolated session per task (the
+ * default behavior; see ADR-058).
+ */
+export interface SessionResumeStrategy {
+  readonly kind: "deterministic" | "capture";
+  /** CLI flags that resume (or create, for deterministic) the session `sessionId`. */
+  readonly resumeFlags: (sessionId: string) => string[];
+  /** Generate a fresh native ID for a new phase session (deterministic only). */
+  readonly newSessionId?: () => string;
+  /** Extract the native ID a capture harness assigned (capture only). */
+  readonly captureSessionId?: (result: TaskResult) => string | undefined;
+}
+
 export interface HarnessAdapter {
   readonly name: string;
   /**
@@ -130,6 +166,8 @@ export interface HarnessAdapter {
   readonly supportsConcurrency: boolean;
   readonly capabilities: readonly TaskCapability[];
   readonly defaultModel?: string;
+  /** Session-reuse support; absent means one fresh session per task. */
+  readonly sessionStrategy?: SessionResumeStrategy;
   prepare?(context: HarnessRunContext): Promise<void>;
   cleanup?(): Promise<void>;
   invoke(request: TaskAttemptRequest): Promise<TaskResult>;
@@ -162,6 +200,14 @@ export interface EngineOptions {
    * exact. See ADR-056.
    */
   maxConcurrency: number;
+  /**
+   * Session granularity for the run. `"phase"` reuses one harness conversation
+   * across all tasks in a phase (a new conversation begins at each phase
+   * boundary), while `"task"` (the default) runs a fresh session per task.
+   * Phase sessions require `--concurrency 1` and a harness that declares a
+   * `sessionStrategy`; the engine refuses loudly otherwise.
+   */
+  sessionScope: "task" | "phase";
   /**
    * Default per-task timeout in milliseconds, used when a task does not declare
    * its own `timeoutMs`. Defaults to `DEFAULT_TASK_TIMEOUT_MS`.

@@ -4,6 +4,24 @@ Detailed release and change notes for MyForge.
 
 ---
 
+## October 2026 - v3.100
+
+### Phase-scoped session reuse
+
+- The workflow engine can now reuse one harness conversation across an entire
+  phase (`--session-scope phase` / `FORGE_ENGINE_SESSION_SCOPE=phase`), so tasks
+  in a phase inherit each other's context instead of paying a fresh-session
+  cold start each task. A new conversation begins at each phase boundary.
+- Supported by the OpenCode (`--session`), Copilot (`--session-id`), and Claude
+  (`--resume` + captured `session_id`) harnesses; the OpenAI and stub adapters
+  are unchanged.
+- Phase sessions run every task under a stable `project-orchestrator` lead
+  agent, which delegates each task to its owner specialist as a sub-agent.
+- Requires `--concurrency 1` (a phase session cannot span per-task git
+  worktrees); the CLI and engine refuse the combination loudly.
+- Per-task commits, validation, retries, replay, and audit are unchanged.
+  Session IDs are persisted in `docs/WORKFLOW-STATE.json` under `sessions`.
+
 ## October 2026 - v3.99
 
 ### Agents declare relevant project skills

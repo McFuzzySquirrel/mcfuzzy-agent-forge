@@ -222,3 +222,29 @@ test("streams harness activity when logHarnessActivity is enabled", async (t) =>
   assert.ok(lines.some((line) => line.includes("harness activity stderr") && line.includes("activity-line")), lines.join("\n"));
   assert.ok(lines.some((line) => line.includes("harness completed")), lines.join("\n"));
 });
+
+test("passes --session-id when the request carries a sessionId, and omits it otherwise", async (t) => {
+  const root = tempDir(t, "forge-copilot-session-repo-");
+  const agent = makeAgent(join(root, ".github", "agents", "discovery-engineer.md"));
+
+  const runWith = async (sessionId?: string): Promise<string[]> => {
+    const shim = makeShim(t);
+    const original = process.env.COPILOT_BIN;
+    process.env.COPILOT_BIN = shim.bin;
+    try {
+      const adapter = new CopilotAdapter();
+      await adapter.invoke(prepareTaskRequest({ agent, task: makeTask(), repoRoot: root, ...(sessionId ? { sessionId } : {}) }));
+    } finally {
+      if (original === undefined) delete process.env.COPILOT_BIN;
+      else process.env.COPILOT_BIN = original;
+    }
+    return JSON.parse(readFileSync(shim.argsFile, "utf8")) as string[];
+  };
+
+  const without = await runWith();
+  assert.ok(!without.includes("--session-id"), `expected no --session-id: ${without.join(" ")}`);
+
+  const withSession = await runWith("forge-run-phase-1");
+  assert.ok(withSession.includes("--session-id"));
+  assert.equal(withSession[withSession.indexOf("--session-id") + 1], "forge-run-phase-1");
+});
