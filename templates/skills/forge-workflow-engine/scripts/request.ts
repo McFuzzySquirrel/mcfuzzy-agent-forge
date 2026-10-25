@@ -17,6 +17,21 @@ export function assertTaskCapabilities(task: ManifestTask, harness: HarnessAdapt
   }
 }
 
+function skillContext(agent: AgentDescriptor): string {
+  const references = agent.skillReferences ?? [];
+  if (references.length === 0) return "";
+  const render = (required: boolean) => references
+    .filter((reference) => reference.required === required)
+    .map((reference) => `- ${reference.name}${reference.available === false ? " (unavailable)" : ""}${reference.description ? ` — ${reference.description}` : ""}`);
+  const required = render(true);
+  const recommended = render(false);
+  return [
+    "Relevant project skills (advisory; use required skills when applicable):",
+    required.length ? `Required:\n${required.join("\n")}` : "",
+    recommended.length ? `Recommended:\n${recommended.join("\n")}` : "",
+  ].filter(Boolean).join("\n");
+}
+
 export function prepareTaskRequest(options: {
   agent: AgentDescriptor;
   task: ManifestTask;
@@ -43,8 +58,10 @@ export function prepareTaskRequest(options: {
   if (effectiveModel !== undefined && !effectiveModel.trim()) throw new Error(`Task '${task.id}' has an empty model selection.`);
   if (!Number.isFinite(timeoutMs) || timeoutMs <= 0) throw new Error(`Task '${task.id}' requires a positive timeout.`);
   if (!Number.isInteger(maxRetries) || maxRetries < 0) throw new Error(`Task '${task.id}' requires a nonnegative integer retry budget.`);
+  const skills = skillContext(agent);
   const instructions = [
     options.contextBlock ?? "",
+    skills,
     `Task: ${task.title}`,
     task.description,
     task.contract ? `Requirements:\n${task.contract.requirements.join("\n")}\n\nAcceptance criteria:\n${task.contract.acceptanceCriteria.join("\n")}\n\nConstraints:\n${task.contract.constraints.join("\n")}` : "",

@@ -16,7 +16,11 @@ import { makeNodeShim } from "./test-support.ts";
 const agent: AgentDescriptor = {
   name: "worker", path: "worker.md", description: "Worker", rawBody: "Unique persona content",
   model: "provider/agent-model", modelFallback: "never-auto-fallback", constraints: ["Unique constraint"],
-  collaboration: [], expertise: [],
+  collaboration: [], expertise: [], skillReferences: [
+    { name: "required-skill", required: true, description: "Required procedure", available: true },
+    { name: "recommended-skill", required: false, description: "Recommended procedure", available: true },
+    { name: "missing-skill", required: false, available: false },
+  ],
 };
 const task: ManifestTask = {
   id: "1", title: "Unique task title", description: "Unique task description", model: "provider/task-model",
@@ -32,6 +36,13 @@ test("prepareTaskRequest defaults harness activity logging off and carries it wh
   } finally {
     rmSync(root, { recursive: true, force: true });
   }
+});
+
+test("prepareTaskRequest includes concise relevant skill guidance", () => {
+  const request = prepareTaskRequest({ agent, task, repoRoot: "." });
+  assert.match(request.instructions, /Relevant project skills \(advisory/);
+  assert.match(request.instructions, /Required:\n- required-skill — Required procedure/);
+  assert.match(request.instructions, /Recommended:\n- recommended-skill — Recommended procedure\n- missing-skill \(unavailable\)/);
 });
 
 for (const transport of ["copilot", "opencode", "claude", "openai", "stub"] as const) {

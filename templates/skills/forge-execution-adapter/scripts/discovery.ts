@@ -2,7 +2,7 @@ import { existsSync, readdirSync, readFileSync, statSync } from "node:fs";
 import { dirname, join, relative, resolve } from "node:path";
 import matter from "gray-matter";
 
-import type { AgentDescriptor, ForgeRepo, HarnessRoot, SkillDescriptor } from "./types.ts";
+import type { AgentDescriptor, AgentSkillReference, ForgeRepo, HarnessRoot, SkillDescriptor } from "./types.ts";
 import { HARNESS_ROOTS, parseMetadata, selectHarnessRoot } from "./repo-metadata.mjs";
 
 
@@ -49,6 +49,11 @@ function sectionBullets(body: string, heading: string): string[] {
   return bullets;
 }
 
+function skillNames(value: unknown): string[] {
+  if (!Array.isArray(value)) return [];
+  return [...new Set(value.filter((entry): entry is string => typeof entry === "string" && Boolean(entry.trim())).map((entry) => entry.trim()))];
+}
+
 function parseAgent(path: string, repoRoot: string): AgentDescriptor {
   const parsed = parseMetadata(readFileSync(path, "utf8"), matter, path);
   const data = parsed.data;
@@ -61,6 +66,10 @@ function parseAgent(path: string, repoRoot: string): AgentDescriptor {
     // Overrides are optional; frontmatter remains the source of defaults.
   }
 
+  const skillData = data.skills && typeof data.skills === "object" ? data.skills as Record<string, unknown> : {};
+  const requiredSkills = skillNames(data.skillsRequired ?? skillData.required);
+  const recommendedSkills = skillNames(data.skillsRecommended ?? skillData.recommended);
+
   return {
     name: typeof data.name === "string" ? data.name : relative(repoRoot, path),
     description: typeof data.description === "string" ? data.description.replace(/\s+/g, " ").trim() : "",
@@ -70,6 +79,7 @@ function parseAgent(path: string, repoRoot: string): AgentDescriptor {
     expertise: sectionBullets(parsed.content, "Expertise"),
     collaboration: sectionBullets(parsed.content, "Collaboration"),
     constraints: sectionBullets(parsed.content, "Constraints"),
+    skillReferences: [...requiredSkills.map((name) => ({ name, required: true })), ...recommendedSkills.filter((name) => !requiredSkills.includes(name)).map((name) => ({ name, required: false }))],
     rawBody: parsed.content,
   };
 }
@@ -143,8 +153,20 @@ export function discoverForgeRepo(start = process.cwd(), preferredHarness?: Harn
 
   const warnings = [...harness.warnings];
 
-  const agents = walk(agentRoot, (entry) => entry.endsWith(".md") && !entry.endsWith("SKILL.md")).map((path) => parseAgent(path, repoRoot));
   const skills = walk(skillRoot, (entry) => entry === "SKILL.md").map((path) => parseSkill(path, repoRoot));
+  const skillsByName = new Map(skills.map((skill) => [skill.name, skill]));
+  const agents = walk(agentRoot, (entry) => entry.endsWith(".md") && !entry.endsWith("SKILL.md")).map((path) => {
+    const agent = parseAgent(path, repoRoot);
+    const skillReferences: AgentSkillReference[] = (agent.skillReferences ?? []).map((reference) => {
+      const skill = skillsByName.get(reference.name);
+      return {
+        ...reference,
+        description: skill?.description,
+        available: skill !== undefined,
+      };
+    });
+    return { ...agent, skillReferences };
+  });
 
   if (agents.length === 0) {
     warnings.push(`No .md agent files found under ${agentRoot}.`);

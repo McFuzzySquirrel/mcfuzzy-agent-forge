@@ -7,7 +7,7 @@
 
 > MyForge turns an idea into a reviewed PRD, a specialist agent team, and an autonomous build.
 
-**Latest: v3.98** — see [docs/updates.md](docs/updates.md) for release notes.
+**Latest: v3.99** — see [docs/updates.md](docs/updates.md) for release notes.
 
 MyForge is a PRD-first workflow for turning product requirements into working software. It combines structured planning, agent-based implementation, and execution orchestration in one path so a project can move from concept to build without losing the review checkpoints that matter.
 
@@ -15,6 +15,11 @@ Every solution uses a PRD and one or more canonical feature documents.
 Requirements and tasks have one owning location; compact task contracts resolve
 shared IDs into complete execution instructions. Legacy source documents must be
 converted before building. See [Canonical Features](docs/canonical-features.md).
+
+Generated agents can declare relevant project procedures with
+[agent-to-skill associations](docs/agent-skill-associations.md). The same
+design is documented as a [portable pattern](docs/patterns/agent-skill-associations.md)
+for projects that do not use MyForge.
 
 ## Highlights
 

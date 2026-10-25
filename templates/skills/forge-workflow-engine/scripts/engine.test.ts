@@ -1797,6 +1797,46 @@ test("sandbox mode refuses a dirty working tree with the exact paths", async () 
   assert.equal(state.tasks["1.2"]?.status, "pending");
 });
 
+test("sandbox preflight blockers clear after the working tree is fixed", async () => {
+  const fixture = makeParallelFixture();
+  mkdirSync(join(fixture.root, "src"), { recursive: true });
+  writeFileSync(join(fixture.root, "src", "wip.ts"), "uncommitted work\n", "utf8");
+
+  const firstRun = await runEngine(engineOptionsFor(fixture, new SandboxedWriterHarness(), 1_000, { maxConcurrency: 2 }));
+  assert.equal(firstRun.status, "failed");
+  assert.match(firstRun.blockers.join(" "), /src\/wip\.ts/);
+
+  execFileSync("git", ["add", "src/wip.ts"], { cwd: fixture.root });
+  execFileSync("git", ["commit", "-qm", "resolve sandbox preflight"], { cwd: fixture.root });
+
+  const resumed = await runEngine(engineOptionsFor(fixture, new SandboxedWriterHarness(), 1_000, { maxConcurrency: 2 }));
+  assert.equal(resumed.status, "complete");
+  assert.deepEqual(resumed.blockers, []);
+  assert.match(readFileSync(join(fixture.root, "docs", "PROGRESS.md"), "utf8"), /## Blockers\n- None/);
+});
+
+test("a new run clears stale blockers but keeps its manifest reconciliation notices", async () => {
+  const fixture = makeEngineFixture();
+  const options = engineOptionsFor(fixture, new RecordingHarness(), 1_000);
+  const initial = await runEngine(options);
+  const statePath = join(fixture.root, "docs", "WORKFLOW-STATE.json");
+  saveState(statePath, { ...initial, status: "failed", blockers: ["stale blocker"] });
+
+  const manifest = JSON.parse(readFileSync(fixture.manifestPath, "utf8")) as ExecutionManifest;
+  manifest.phases[0]!.tasks.push({
+    ...manifest.phases[0]!.tasks[0]!,
+    id: "1.2",
+    title: "Build another thing",
+    description: "Build another thing",
+    sourceLines: ["- Task 1.2: Build another thing"],
+  });
+  writeFileSync(fixture.manifestPath, JSON.stringify(manifest), "utf8");
+
+  const resumed = await runEngine(options);
+  assert.deepEqual(resumed.blockers, ["Manifest reconciliation added 1 pending task(s): 1.2"]);
+  assert.match(readFileSync(join(fixture.root, "docs", "PROGRESS.md"), "utf8"), /Manifest reconciliation added 1 pending task\(s\): 1\.2/);
+});
+
 test("sandbox mode refuses a repository with no commits", async () => {
   const fixture = makeEngineFixture();
   execFileSync("git", ["init", "-q"], { cwd: fixture.root });

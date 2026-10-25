@@ -23,6 +23,8 @@ function createFixture(harness = ".agents") {
 name: api-engineer
 description: Builds API endpoints and backend integrations.
 model: gpt-5-mini
+skillsRequired: [api-contracts]
+skillsRecommended: [missing-local-skill]
 ---
 
 ## Expertise
@@ -70,6 +72,10 @@ test("discoverForgeRepo resolves canonical harness root", () => {
   assert.equal(repo.harnessRoot, ".agents");
   assert.equal(repo.agents.length, 2);
   assert.equal(repo.skills.length, 1);
+  assert.deepEqual(repo.agents.find((agent) => agent.name === "api-engineer")?.skillReferences, [
+    { name: "api-contracts", required: true, description: "Keep API contracts aligned between backend and frontend.", available: true },
+    { name: "missing-local-skill", required: false, description: undefined, available: false },
+  ]);
 });
 
 test("legacy version numbers and explicit source references are not outputs", () => {
