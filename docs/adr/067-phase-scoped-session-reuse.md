@@ -57,11 +57,15 @@ combination loudly.
 ## Consequences
 
 - Tasks in a phase inherit one another's context, removing the dominant
-  per-task cold-start cost within a phase. Cross-phase continuity is bounded by
-  the phase boundary (a phase is a coherent chunk, so context stays bounded).
+  per-task cold-start cost within a phase.
+- The first task of a new phase also receives a **phase-boundary handoff**: a
+  digest of earlier phases' completed work (each task's `forge-result` summary
+  and changed files). This keeps cross-phase continuity without an unbounded
+  session, so the fresh conversation at a phase boundary still knows what was
+  built before it.
 - The engine keeps per-task dispatch, per-task commits, validation gates,
-  retries, replay, and audit unchanged. Only the session and the running agent
-  differ.
+  retries, replay, and audit unchanged. Only the session, the running agent, and
+  the phase-boundary handoff differ.
 - `project-orchestrator` becomes a required agent for phase-scoped runs; a
   missing one fails preflight with migration guidance.
 - Session IDs are persisted in `WORKFLOW-STATE.json` under `sessions` (phase id
@@ -81,7 +85,8 @@ combination loudly.
 3. **Whole-run single session**: maximal continuity but unbounded context growth
    and no natural reset point; the phase boundary is the correct unit.
 4. **Inject a repo map / decisions digest only** (no session reuse): lower risk
-   but a strict ceiling — it cannot match real conversation continuity.
+   but a strict ceiling — it cannot match real conversation continuity. Adopted
+   as a *complement* (the phase-boundary handoff) rather than a replacement.
 
 ## References
 

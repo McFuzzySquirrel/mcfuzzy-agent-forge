@@ -4,6 +4,15 @@ Detailed release and change notes for MyForge.
 
 ---
 
+## October 2026 - v3.101
+
+### Phase-boundary handoff
+
+- The first task of a new phase session now receives a digest of the earlier
+  phases' completed work — each task's `forge-result` summary and its changed
+  files — so a fresh phase conversation keeps cross-phase context without an
+  unbounded session.
+
 ## October 2026 - v3.100
 
 ### Phase-scoped session reuse

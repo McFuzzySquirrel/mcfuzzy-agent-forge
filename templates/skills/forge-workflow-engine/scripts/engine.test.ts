@@ -445,7 +445,7 @@ test("effective task timeout prefers the per-task manifest timeoutMs over the en
   assert.deepEqual(harness.timeouts, [25_000]);
 });
 
-/** Harness that records the session id and running agent of every task it runs. */
+/** Harness that records the session id, running agent, and instructions of every task it runs. */
 class PhaseRecordingHarness implements HarnessAdapter {
   readonly name = "phase-recording";
   readonly supportsConcurrency = false;
@@ -456,11 +456,11 @@ class PhaseRecordingHarness implements HarnessAdapter {
     newSessionId: () => `sess-${this.seq++}`,
   };
   private seq = 0;
-  seen: Array<{ taskId: string; sessionId?: string; agent: string }> = [];
+  seen: Array<{ taskId: string; sessionId?: string; agent: string; instructions: string }> = [];
 
   async invoke(request: Parameters<HarnessAdapter["invoke"]>[0]): Promise<TaskResult> {
-    this.seen.push({ taskId: request.task.id, sessionId: request.sessionId, agent: request.agent.name });
-    return { success: true, outputFiles: [], stdout: "[phase-recording] ok", stderr: "", durationMs: 1 };
+    this.seen.push({ taskId: request.task.id, sessionId: request.sessionId, agent: request.agent.name, instructions: request.instructions });
+    return { success: true, outputFiles: [], stdout: `\`\`\`forge-result\n{"summary":"Built ${request.task.id}","unresolved":[]}\n\`\`\``, stderr: "", durationMs: 1 };
   }
 }
 
@@ -513,6 +513,16 @@ description: ${name}
   assert.ok(harness.seen.every((entry) => entry.agent === "project-orchestrator"), JSON.stringify(harness.seen));
   // Both phase session ids are persisted in state.
   assert.equal(Object.keys(state.sessions ?? {}).length, 2);
+
+  // Phase 1 tasks get no handoff (nothing precedes the first phase); the first
+  // task of phase 2 receives a digest of phase 1's completed work.
+  assert.ok(!harness.seen[0]!.instructions.includes("Work completed in earlier phases"));
+  assert.ok(!harness.seen[1]!.instructions.includes("Work completed in earlier phases"));
+  const phaseTwoFirst = harness.seen[2]!.instructions;
+  assert.ok(phaseTwoFirst.includes("Work completed in earlier phases"), phaseTwoFirst);
+  assert.ok(phaseTwoFirst.includes("Phase 1: One"), phaseTwoFirst);
+  assert.ok(phaseTwoFirst.includes("Built 1.1"), phaseTwoFirst);
+  assert.ok(phaseTwoFirst.includes("Built 1.2"), phaseTwoFirst);
 });
 
 test("human review pauses without dispatch and resumes only with task-bound evidence", async () => {

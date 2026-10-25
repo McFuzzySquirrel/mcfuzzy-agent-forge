@@ -254,9 +254,13 @@ How it works:
   every task under `project-orchestrator`, which delegates each task to its owner
   specialist as a sub-agent (the owner's persona travels inline in the task
   instructions).
+- **Phase-boundary handoff.** The first task of a new phase receives a digest of
+  the earlier phases' completed work — each task's `forge-result` summary and its
+  changed files — so a fresh phase conversation still knows what was built before
+  it. Within a phase, the shared session carries the context instead.
 - **Per-task semantics are unchanged.** Each task is still dispatched, verified,
-  retried, committed, and audited individually; only the session and the running
-  agent differ.
+  retried, committed, and audited individually; only the session, the running
+  agent, and the phase-boundary handoff differ.
 
 Phase scope is constrained:
 

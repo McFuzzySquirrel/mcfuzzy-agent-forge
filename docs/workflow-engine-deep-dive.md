@@ -478,7 +478,10 @@ via a `SessionResumeStrategy`:
 Phase scope runs every task under a stable `project-orchestrator` lead (the
 `--agent` cannot change mid-session), which delegates to the task's owner as a
 sub-agent. It requires `--concurrency 1` because session lookup is project-scoped
-and parallel sandboxes are distinct projects. See
+and parallel sandboxes are distinct projects. The first task of a new phase also
+receives a **phase-boundary handoff** — a digest of the earlier phases' completed
+work (per-task `forge-result` summaries and changed files) — so the fresh
+conversation at a phase boundary does not lose cross-phase context. See
 [ADR-067](adr/067-phase-scoped-session-reuse.md).
 
 The engine is intentionally native to the supported harness adapters. The

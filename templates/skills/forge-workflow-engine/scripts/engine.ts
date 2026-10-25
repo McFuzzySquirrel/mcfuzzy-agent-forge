@@ -43,7 +43,7 @@ import { captureWorktree, diffWorktree, runTaskValidation, verifyTaskResult } fr
 import { clearControl, readControl } from "./control.ts";
 import { assertTaskCapabilities, prepareTaskRequest } from "./request.ts";
 import { humanTaskApproved, taskReferenceContext } from "./task-context.ts";
-import { readTaskHandoff } from "./task-result.ts";
+import { readTaskHandoff, parseTaskHandoff } from "./task-result.ts";
 // The task graph is the shared definition of readiness; re-exported so the engine
 // keeps one public surface and the Console can import it without the harness.
 export { isTaskDone, unmetPrerequisites } from "./task-graph.ts";
@@ -329,6 +329,39 @@ function hasFailed(state: WorkflowState): boolean {
   return Object.values(state.tasks).some((t) => t.status === "failed" && (!selected || selected.has(t.taskId)));
 }
 
+const PHASE_HANDOFF_SUMMARY_CHARS = 300;
+
+/**
+ * Digest of completed work in the phases that precede `phaseId`, injected into
+ * the first task of a phase-scoped session so its fresh conversation doesn't
+ * lose cross-phase context. Each completed task contributes its `forge-result`
+ * summary (or a fallback) and its changed files. Manifest order approximates
+ * dependency order (the compiler emits feature-tagged phases in dependency-graph
+ * order), so earlier phases are the ones a new phase can already depend on.
+ */
+function buildPhaseHandoff(manifest: ExecutionManifest, state: WorkflowState, phaseId: string): string {
+  const phaseIndex = manifest.phases.findIndex((phase) => phase.id === phaseId);
+  if (phaseIndex <= 0) return "";
+  const blocks: string[] = [];
+  for (const phase of manifest.phases.slice(0, phaseIndex)) {
+    const done = phase.tasks.filter((task) => isTaskDone(state.tasks[task.id]?.status));
+    if (done.length === 0) continue;
+    const lines: string[] = [];
+    for (const task of done) {
+      const record = state.tasks[task.id]!;
+      const summary = parseTaskHandoff(record.agentOutput ?? "")?.summary;
+      const text = summary
+        ? (summary.length > PHASE_HANDOFF_SUMMARY_CHARS ? `${summary.slice(0, PHASE_HANDOFF_SUMMARY_CHARS)}…` : summary)
+        : "Completed.";
+      const files = record.outputFiles.length > 0 ? ` — ${record.outputFiles.join(", ")}` : "";
+      lines.push(`- ${task.id} ${task.title}: ${text}${files}`);
+    }
+    blocks.push(`### Phase ${phase.id}: ${phase.title}\n${lines.join("\n")}`);
+  }
+  if (blocks.length === 0) return "";
+  return `## Work completed in earlier phases\n\n${blocks.join("\n\n")}`;
+}
+
 // ─── Single-task executor ─────────────────────────────────────────────────────
 // ─── Single-task executor ─────────────────────────────────────────────────────
 
@@ -376,6 +409,8 @@ interface TaskEnvironment {
   sessionScope: "task" | "phase";
   /** Native harness session ID for this task's phase, when sessionScope is "phase". */
   phaseSessionId?: string;
+  /** Digest of earlier phases' completed work, injected into the first task of a phase. */
+  phaseHandoff?: string;
   /** Phase lead agent; when set, tasks delegate to their owner instead of running as it. */
   phaseLead?: AgentDescriptor;
   /** Persist a native harness session ID captured for a phase (capture harnesses). */
@@ -554,7 +589,8 @@ async function executeTask(
     let result: TaskResult;
     try {
       result = await opts.harness.invoke(prepareTaskRequest({
-        agent, task, repoRoot: workspace, contextBlock,
+        agent, task, repoRoot: workspace,
+        contextBlock: [env.phaseHandoff, contextBlock].filter(Boolean).join("\n\n"),
         defaultModel: opts.harness.defaultModel, timeoutMs: opts.taskTimeoutMs,
         maxRetries: opts.maxRetries, attempt: current.attempt,
         previousFailure, previousResultPath,
@@ -1016,15 +1052,20 @@ async function runEngineSession(opts: EngineOptions): Promise<WorkflowState> {
 
     // Resolve (and, for deterministic harnesses, generate once) the phase's
     // session ID. A capture harness leaves this undefined on the first task and
-    // records its own ID via `captureSession` after the invoke.
+    // records its own ID via `captureSession` after the invoke. The first task of
+    // a phase also receives a digest of the earlier phases' completed work, so a
+    // fresh phase session doesn't lose cross-phase context.
     let phaseSessionId: string | undefined;
+    let phaseHandoff: string | undefined;
     if (opts.sessionScope === "phase") {
+      const firstInPhase = !state.sessions?.[entry.phaseId];
       phaseSessionId = state.sessions?.[entry.phaseId];
       if (!phaseSessionId && opts.harness.sessionStrategy?.kind === "deterministic" && opts.harness.sessionStrategy.newSessionId) {
         phaseSessionId = opts.harness.sessionStrategy.newSessionId();
         state = { ...state, sessions: { ...(state.sessions ?? {}), [entry.phaseId]: phaseSessionId } };
         saveState(opts.statePath, state);
       }
+      if (firstInPhase) phaseHandoff = buildPhaseHandoff(manifest, state, entry.phaseId);
     }
 
     const humanReview = entry.task.contract?.kind === "human-review";
@@ -1048,6 +1089,7 @@ async function runEngineSession(opts: EngineOptions): Promise<WorkflowState> {
         checkpoint,
         sessionScope: opts.sessionScope,
         phaseSessionId,
+        phaseHandoff,
         phaseLead,
         captureSession,
       });

@@ -160,6 +160,9 @@ npm run workflow-engine -- run --harness opencode --session-scope phase --yes
   `project-orchestrator` (the `--agent` cannot change mid-session), which
   delegates each task to its owner specialist as a sub-agent; the owner's persona
   travels inline in the task instructions.
+- **Phase-boundary handoff.** The first task of a new phase receives a digest of
+  the earlier phases' completed work (`forge-result` summaries + changed files),
+  so the fresh conversation still knows what was built before it.
 - **Per-task semantics are unchanged** — dispatch, verification, retries,
   commits, and audit all stay per-task.
 
