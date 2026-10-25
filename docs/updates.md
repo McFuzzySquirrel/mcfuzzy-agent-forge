@@ -4,6 +4,17 @@ Detailed release and change notes for MyForge.
 
 ---
 
+## October 2026 - v3.103
+
+### Install-script allowlist covers esbuild and node-pty
+
+- The `allowScripts` entries no longer pin an exact esbuild version: `tsx`
+  depends on `esbuild@~0.28.0`, so an exact pin re-triggered the
+  `install-scripts` warning on every patch bump. `esbuild` is now allowed
+  unpinned, and `node-pty` (the Console terminal's native module) is covered in
+  the launcher and root packages. `tools/console-screenshots` also declares
+  `allowScripts` now.
+
 ## October 2026 - v3.102
 
 ### Interactive harness sessions in the Forge Console
