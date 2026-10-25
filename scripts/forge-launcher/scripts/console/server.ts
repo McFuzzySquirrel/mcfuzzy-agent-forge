@@ -12,6 +12,7 @@ import { resolveResources } from "../resources.ts";
 import { resolveInputFile } from "../paths.ts";
 import { launchCliInTerminal } from "../terminal.ts";
 import { RunController, type ControlDeps } from "./control.ts";
+import { attachTerminalSession, type TerminalStartRequest } from "./terminal-session.ts";
 import { IncrementalLineReader } from "./incremental-reader.ts";
 import { consoleAuthoringInventory, selectedAuthoringRunner } from "./authoring.ts";
 import { isRunnerChoice, loadAuthoringConfig, saveAuthoringConfig, validateAuthoringConfig } from "../authoring-config.ts";
@@ -27,7 +28,7 @@ import {
   repoPaths,
   upsertProject,
 } from "./paths.ts";
-import { harnessCliForHarness } from "./dashboard/harness-rules.ts";
+import { harnessCliForHarness, type HarnessCliName } from "./dashboard/harness-rules.ts";
 import * as repo from "./repo.ts";
 import { removeProjects, sameProjectPath } from "./remove-projects.ts";
 import type { ControlAction, CreateProjectRequest, ManifestTask } from "./types.ts";
@@ -236,7 +237,7 @@ function openPath(filePath: string): void {
 }
 
 /** Chooses the harness CLI + launch args for a forge repo (github → copilot, claude → claude, else opencode). */
-function harnessCli(repoRoot: string): { cli: string; args: string[] } {
+function harnessCli(repoRoot: string): { cli: HarnessCliName; args: string[] } {
   return harnessCliForHarness(detectHarnessRoot(repoRoot));
 }
 
@@ -273,6 +274,17 @@ const AUTHORING_SESSIONS: Record<AuthoringSessionTarget, AuthoringSessionSpec> =
     message: (prompt) => `/forge-build-feature-prd I want to add ${prompt} to this project. Analyze the existing PRD, features, codebase and team, interview me for any gaps, then author the new canonical feature under docs/features/ and register it in the PRD feature table. Run validate-prd and commit. Do not generate agents or skills, compile a manifest, or start the engine.`,
   },
 };
+
+async function terminalCommand(request: TerminalStartRequest, repoRoot: string): Promise<{ cli: HarnessCliName; args: string[] }> {
+  if (request.mode === "harness") return harnessCli(repoRoot);
+  const spec = AUTHORING_SESSIONS[request.target];
+  const runner = selectedAuthoringRunner(repoRoot);
+  if (runner === "stub") throw new Error("Interactive sessions are unavailable for the stub runner.");
+  const model = (await resolveAuthoringModel(repoRoot, spec.stage, runner)).effectiveModel;
+  const args = interactiveAuthoringArgv(runner, spec.message(request.prompt ?? ""), model);
+  if (request.target === "feature-prd") recordFeatureIncrementHandoff(repoRoot);
+  return { cli: runner, args };
+}
 
 /** Staging dir for browser-uploaded PRD/research files (needed before the new repo exists). */
 function uploadStagingDir(): string {
@@ -940,6 +952,14 @@ export async function startConsoleServer(options: ConsoleServerOptions = {}): Pr
     }
   });
 
+  const terminalSessions = attachTerminalSession(server, {
+    token,
+    origin: url,
+    enabled: options.allowExternalOpen === true,
+    currentRepo: () => currentRepo,
+    resolveCommand: terminalCommand,
+  });
+
   await new Promise<void>((resolve) => server.listen(port, "127.0.0.1", resolve));
 
   onLog(`  forge console: ${url}`);
@@ -955,6 +975,7 @@ export async function startConsoleServer(options: ConsoleServerOptions = {}): Pr
     port,
     token,
     selectRepo(repoRoot: string) {
+      terminalSessions.closeActive();
       currentRepo = path.resolve(repoRoot);
       controller.repoRoot = currentRepo;
       resetOffsets();
@@ -964,8 +985,10 @@ export async function startConsoleServer(options: ConsoleServerOptions = {}): Pr
     stop() {
       return new Promise<void>((resolve) => {
         clearInterval(poller);
-        server.close(() => resolve());
-        server.closeAllConnections?.();
+        void terminalSessions.stop().finally(() => {
+          server.close(() => resolve());
+          server.closeAllConnections?.();
+        });
       });
     },
   };

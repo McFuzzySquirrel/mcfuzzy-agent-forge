@@ -14,6 +14,7 @@ import { renderTimeline, unmountTimeline } from "./views/timeline.js";
 import { refreshProjectList, renderProjects, unmountProjects } from "./views/projects.js";
 import { renderNew, unmountNew } from "./views/new.js";
 import { openHelp } from "./views/help.js";
+import { renderTerminal, unmountTerminal } from "./views/terminal.js";
 
 interface View {
   id: string;
@@ -26,6 +27,7 @@ interface View {
 const views: View[] = [
   { id: "home", label: "Home", render: renderHome, unmount: unmountHome },
   { id: "overview", label: "Overview", render: renderOverview, unmount: unmountOverview, refresh: refreshOverview },
+  { id: "terminal", label: "Terminal", render: renderTerminal, unmount: unmountTerminal },
   { id: "board", label: "Board", render: renderBoard, unmount: unmountBoard },
   { id: "tasks", label: "Tasks", render: renderTasks, unmount: unmountTasks },
   { id: "logs", label: "Logs", render: renderLogs, unmount: unmountLogs },

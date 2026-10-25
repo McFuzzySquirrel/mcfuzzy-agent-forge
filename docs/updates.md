@@ -4,6 +4,17 @@ Detailed release and change notes for MyForge.
 
 ---
 
+## October 2026 - v3.102
+
+### Interactive harness sessions in the Forge Console
+
+- Added an in-browser terminal for OpenCode, GitHub Copilot, and Claude sessions,
+  including interactive authoring and terminal resize support.
+- Sessions run in a project-scoped PTY over an authenticated, same-origin
+  WebSocket; the Console permits one session at a time and stops it when the
+  project changes, the view disconnects, or the server shuts down.
+- Existing external-terminal launch remains available as a fallback.
+
 ## October 2026 - v3.101
 
 ### Phase-boundary handoff
