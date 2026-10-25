@@ -84,12 +84,19 @@ The Overview is the main control center for a project. It shows:
 When a project is still at an earlier stage, the pipeline card advances the workflow one step at a time. The same actions are available from the terminal launcher, but the console lets you review the generated artifacts before moving on.
 
 The PRD and Feature PRD steps use the **interactive** path on the Overview
-pipeline card: the button opens your authoring runner in a new terminal with the
-skill queued, so the skill interviews you before drafting. There is no headless
-PRD alternative. Interactive sessions run outside the Console, so use
-**Refresh** on the pipeline card (or reopen the view) once the terminal
-finishes. Once a PRD exists, the pipeline card also offers **Validate PRD**,
-which runs the read-only validation for documents authored outside the Console.
+pipeline card: the button starts an authoring session with the skill queued, so
+the skill interviews you before drafting. There is no headless PRD alternative.
+Use the **Terminal** view to run the session in the browser, or click **Open in
+external terminal** there to use a desktop terminal. The Console refreshes the
+pipeline after the authored files change. Once a PRD exists, the pipeline card
+also offers **Validate PRD**, which runs the read-only validation.
+
+The **Terminal** view supports the selected project harness, PRD/idea/feature
+authoring sessions, keyboard input, and terminal resizing. It runs only a
+supported harness CLI—there is no general-purpose shell. One session can run at
+a time; changing projects, leaving the view, or stopping the Console ends the
+session. Use the external-terminal button if an in-browser session is unavailable
+or you prefer a separate window.
 
 Typical progression:
 
@@ -186,7 +193,7 @@ The Overview controls panel offers the same actions you would otherwise issue fr
 - **Log harness activity**: streams harness CLI stdout/stderr into `docs/engine-run.log`, where the Logs view shows it live while the run is active. Off by default; the saved choice is applied to subsequently started runs and restored after a reload. Activity logs can contain sensitive repository content and increase log volume, and command invocation logging is always on regardless. Turning it off stops activity capture for later runs without disabling command logging.
 - **Concurrency preference**: stores the engine concurrency value in `docs/engine-config.json`. Enter a positive integer (e.g. `3`) and click **Set**; enter `0` to return to the engine default. The value is shown in later Run/Resume summaries. Above `1` the engine runs up to that many ready tasks at once, each in its own git worktree under `.forge-sandboxes/`, so each task's reported files and commit stay its own. Two things to know before setting it above `1`: **the working tree must be clean** (the run stops and lists any uncommitted path otherwise, so commit or stash first). Each task selects its own project through the spawn working directory, with the child's `PWD` set to match, since OpenCode v2 resolves the project from `process.env.PWD ?? process.cwd()` and no longer accepts `--dir` (see [ADR-058](adr/058-opencode-v2-project-resolution.md) and [ADR-059](adr/059-pwd-aligned-spawn-environment.md)). See [ADR-056](adr/056-parallel-execution-task-sandboxes.md).
 - **Reset changed tasks for review**: after feature reconciliation, resets completed or skipped tasks whose contracts changed back to pending. Review the changed task IDs before using this action.
-- **Launch \<harness\> CLI**: opens the project's harness CLI (opencode/copilot/claude) in a new terminal from the project folder, so you can watch the live run and take over manually. Also available on the Tasks header.
+- **Launch \<harness\> CLI**: opens the project's harness CLI (opencode/copilot/claude) in a new terminal from the project folder, so you can watch the live run and take over manually. Also available on the Tasks header. The **Terminal** view provides an in-browser session as well.
 
 ### Human review: when it pauses and how to prove approval
 
@@ -334,8 +341,8 @@ the runner supplies one)
 ```
 
 The **Model planning terminal** control in the Agents section opens a new
-interactive terminal in the repository. Choose OpenCode, Copilot, or Claude
-Code, enter a message, and launch it using one of these commands:
+interactive session in the repository. Choose OpenCode, Copilot, or Claude
+Code, enter a message, and launch it in an external terminal using one of these commands:
 
 ```bash
 opencode mini --prompt "<message>"

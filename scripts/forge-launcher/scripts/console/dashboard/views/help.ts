@@ -89,11 +89,11 @@ function tabButton(label: string): HTMLElement {
 function quickHelp(): HTMLElement {
   return el("div", null, [
     helpSection("What is this?", [
-      "Forge Console is a local web UI that fronts forge-launcher and the workflow engine. It lets you create a project, start interactive PRD authoring, generate the agent team, run the build, and monitor/control it - all from your browser, without remembering terminal commands. It is served on 127.0.0.1 and reads the same files the terminal tools write.",
+      "Forge Console is a local web UI that fronts forge-launcher and the workflow engine. It lets you create a project, start interactive PRD authoring, generate the agent team, run the build, and monitor/control it - all from your browser, without remembering terminal commands. The Terminal view runs OpenCode, Copilot, Claude, or an interactive authoring session inside the browser; external-terminal launch remains available as a fallback. It is served on 127.0.0.1 and reads the same files the terminal tools write.",
     ]),
     helpSection("The pipeline", [
       "Projects flow through four stages: Idea → PRD → Agent team → Build.",
-      "The Continue button on the Overview page advances one stage at a time. PRD and feature requirements open an interactive terminal session; downstream team, skills, manifest, and build stages can run from the Console after you review the requirements. Nothing runs until you click it.",
+      "The Continue button on the Overview page advances one stage at a time. PRD and feature requirements open an interactive authoring session; use the Terminal view to keep it in the browser, or choose the external-terminal fallback. Downstream team, skills, manifest, and build stages can run from the Console after you review the requirements. Nothing runs until you click it.",
       dl([
         ["Idea", "your project description in docs/IDEA.md."],
         ["Requirements", "reviewed docs/PRD.md plus docs/features/*.md, required for every solution."],
