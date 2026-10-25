@@ -4,6 +4,17 @@ Detailed release and change notes for MyForge.
 
 ---
 
+## October 2026 - v3.104
+
+### Interactive authoring opens the Console terminal
+
+- The Overview and Documents authoring actions ("Author PRD (interactive)",
+  "Grill the idea first (interactive)", "Author feature PRD (interactive)", and
+  the Documents PRD stage) now open the Terminal view pre-seeded with the
+  requested authoring target, so the session can be started in the Console
+  ("Start in Console") or in an external terminal. Previously they launched the
+  external terminal directly and offered no in-Console option.
+
 ## October 2026 - v3.103
 
 ### Install-script allowlist covers esbuild and node-pty

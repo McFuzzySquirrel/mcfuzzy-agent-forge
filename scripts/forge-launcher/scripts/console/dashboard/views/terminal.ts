@@ -80,8 +80,20 @@ export function renderTerminal(container: HTMLElement): void {
   target.addEventListener("change", () => {
     prompt.hidden = target.value !== "feature-prd" || mode.value !== "authoring";
   });
-  prompt.hidden = true;
-  authoringFields.hidden = true;
+
+  // Pre-select an authoring target when arriving from an authoring entry point
+  // (e.g. #/terminal?authoring=idea&prompt=…), so the user can start it in the
+  // Console or an external terminal without re-selecting it.
+  const preselection = new URLSearchParams(location.hash.split("?")[1] ?? "");
+  const preselectedTarget = preselection.get("authoring");
+  if (preselectedTarget === "idea" || preselectedTarget === "prd" || preselectedTarget === "feature-prd") {
+    mode.value = "authoring";
+    target.value = preselectedTarget;
+    const preselectedPrompt = preselection.get("prompt");
+    if (preselectedPrompt) prompt.value = preselectedPrompt;
+  }
+  authoringFields.hidden = mode.value !== "authoring";
+  prompt.hidden = target.value !== "feature-prd" || mode.value !== "authoring";
 
   view = { terminal, socket: null, resizeObserver, status, startButton, stopButton };
 
