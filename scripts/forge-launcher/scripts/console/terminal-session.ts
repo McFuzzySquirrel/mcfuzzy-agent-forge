@@ -1,4 +1,5 @@
 import type { Server } from "node:http";
+import path from "node:path";
 import { spawn as spawnPty, type IPty } from "node-pty";
 import { WebSocket, WebSocketServer } from "ws";
 
@@ -132,11 +133,12 @@ export function attachTerminalSession(server: Server, options: TerminalSessionOp
           send(socket, { type: "error", message: "A terminal session is already running." });
           return;
         }
-        const repoRoot = options.currentRepo();
-        if (!repoRoot) {
+        const selectedRepo = options.currentRepo();
+        if (!selectedRepo) {
           send(socket, { type: "error", message: "Select a project before starting a terminal session." });
           return;
         }
+        const repoRoot = path.resolve(selectedRepo);
         started = true;
         const session: Session = { socket, repoRoot };
         active = session;
@@ -148,7 +150,7 @@ export function attachTerminalSession(server: Server, options: TerminalSessionOp
             cols: 80,
             rows: 24,
             cwd: repoRoot,
-            env: { ...process.env, TERM: "xterm-256color", FORCE_COLOR: "1" },
+            env: { ...process.env, PWD: repoRoot, TERM: "xterm-256color", FORCE_COLOR: "1" },
           });
           session.process = ptyProcess;
           ptyProcess.onData((text) => send(socket, { type: "output", data: text }));

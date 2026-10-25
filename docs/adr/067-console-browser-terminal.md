@@ -2,7 +2,7 @@
 
 **Date:** 2026-10-25
 **Status:** Accepted
-**Relates to:** ADR-034 (Forge Console), ADR-051 (interactive authoring), ADR-060 (interactive requirements authoring)
+**Relates to:** ADR-034 (Forge Console), ADR-051 (interactive authoring), ADR-059 (PWD-aligned spawn environment), ADR-060 (interactive requirements authoring)
 
 ## Context
 

@@ -53,7 +53,7 @@ async function setup(t: import("node:test").TestContext) {
   const address = server.address();
   assert.ok(address && typeof address === "object");
   const origin = `http://127.0.0.1:${address.port}`;
-  const spawned: Array<{ cli: string; args: string[]; cwd?: string }> = [];
+  const spawned: Array<{ cli: string; args: string[]; cwd?: string; pwd?: string }> = [];
   const fake = fakePty();
   const resolveCommand = async (request: TerminalStartRequest, repoRoot: string): Promise<TerminalCommand> => {
     assert.equal(repoRoot, "/fixture/project");
@@ -65,8 +65,8 @@ async function setup(t: import("node:test").TestContext) {
     origin,
     currentRepo: () => "/fixture/project",
     resolveCommand,
-    ptySpawn: ((cli: string, args: string[], options: { cwd?: string }) => {
-      spawned.push({ cli, args, cwd: options.cwd });
+    ptySpawn: ((cli: string, args: string[], options: { cwd?: string; env?: NodeJS.ProcessEnv }) => {
+      spawned.push({ cli, args, cwd: options.cwd, pwd: options.env?.PWD });
       return fake.pty;
     }) as typeof spawnPty,
   });
@@ -110,7 +110,7 @@ test("terminal sessions launch a fixed harness in the selected project and bridg
   const started = receive(client, "started");
   client.send(JSON.stringify({ type: "start", mode: "harness", command: "sh" }));
   assert.equal((await started).cli, "opencode");
-  assert.deepEqual(spawned, [{ cli: "opencode", args: ["mini"], cwd: "/fixture/project" }]);
+  assert.deepEqual(spawned, [{ cli: "opencode", args: ["mini"], cwd: "/fixture/project", pwd: "/fixture/project" }]);
 
   const output = receive(client, "output");
   fake.output("\u001b[32mhello\u001b[0m");
