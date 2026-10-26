@@ -328,7 +328,7 @@ test("addresses a fresh session when none is supplied, and reuses a supplied ses
   const without = await runWith();
   assert.ok(without.includes("--session"), `expected a fresh --session: ${without.join(" ")}`);
   const generated = without[without.indexOf("--session") + 1]!;
-  assert.match(generated, /^[0-9a-f-]{36}$/i);
+  assert.match(generated, /^ses_[0-9A-Za-z]{26}$/);
 
   const withSession = await runWith("forge-run-phase-1");
   assert.ok(withSession.includes("--session"));
@@ -357,4 +357,11 @@ test("reads per-session usage from opencode session export", async (t) => {
     if (original === undefined) delete process.env.OPENCODE_BIN;
     else process.env.OPENCODE_BIN = original;
   }
+});
+
+test("generates canonical OpenCode session IDs for phase scope", () => {
+  const adapter = new OpenCodeAdapter();
+  const id = adapter.sessionStrategy?.newSessionId?.();
+  assert.ok(id, "a deterministic harness must provide newSessionId");
+  assert.match(id, /^ses_[0-9A-Za-z]{26}$/);
 });

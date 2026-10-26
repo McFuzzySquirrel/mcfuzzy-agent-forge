@@ -1,12 +1,26 @@
 import { existsSync, readFileSync } from "node:fs";
 import { resolve } from "node:path";
-import { randomUUID } from "node:crypto";
+import { randomInt } from "node:crypto";
 
 import { runCommand, extractModelFlags, canSelectAgentNatively } from "./run.ts";
 import { harnessInvocationContext } from "./invocation-log.ts";
 import type { AgentDescriptor, HarnessAdapter, SessionResumeStrategy, TaskAttemptRequest, TaskResult, TaskUsage } from "../types.ts";
 import { inlinePersona } from "../request.ts";
 import { executionPrompt } from "../task-execution.ts";
+
+const SESSION_ALPHABET = "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz";
+
+/**
+ * OpenCode v2 session IDs must match `^ses_[0-9A-Za-z]{26}$` (the CLI schema
+ * rejects anything not starting with "ses"). A bare UUID fails immediately with
+ * `Expected a string starting with "ses"`, so caller-generated session IDs must
+ * use this shape.
+ */
+function openCodeSessionId(): string {
+  let id = "ses_";
+  for (let i = 0; i < 26; i += 1) id += SESSION_ALPHABET[randomInt(SESSION_ALPHABET.length)];
+  return id;
+}
 
 /**
  * OpenCode CLI harness adapter.
@@ -57,7 +71,7 @@ export class OpenCodeAdapter implements HarnessAdapter {
   readonly sessionStrategy: SessionResumeStrategy = {
     kind: "deterministic",
     resumeFlags: (sessionId) => ["--session", sessionId],
-    newSessionId: () => randomUUID(),
+    newSessionId: () => openCodeSessionId(),
   };
 
   private readonly bin: string;
@@ -83,7 +97,7 @@ export class OpenCodeAdapter implements HarnessAdapter {
     // task scope this creates a fresh, caller-chosen session; under phase scope
     // it continues the phase session the engine generated.
     const sessionOwned = !request.sessionId;
-    const sessionId = request.sessionId ?? randomUUID();
+    const sessionId = request.sessionId ?? openCodeSessionId();
     const sessionFlag = this.sessionStrategy.resumeFlags(sessionId);
 
     const prompt = executionPrompt(request, agentFlag.length === 0 ? inlinePersona(request) : "");
