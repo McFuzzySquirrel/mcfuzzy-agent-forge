@@ -476,3 +476,39 @@ test("omits --resume and reports no session when the request has no sessionId", 
   // back from the result even though no resume flag was passed on the first task.
   assert.equal(result.sessionId, "00000000-0000-4000-8000-000000000000");
 });
+
+test("reads token usage and cost from the result envelope", async (t) => {
+  const root = makeRepo(t);
+  const shim = makeShim(t);
+  stubEnvelope({
+    type: "result",
+    subtype: "success",
+    is_error: false,
+    result: "done",
+    session_id: "00000000-0000-4000-8000-000000000000",
+    usage: { input_tokens: 1200, output_tokens: 340, cache_read_input_tokens: 500, cache_creation_input_tokens: 60 },
+    total_cost_usd: 0.0123,
+  });
+
+  const result = await invoke(shim, agentIn(root, ".claude"), root);
+
+  assert.deepEqual(result.usage, {
+    inputTokens: 1200,
+    outputTokens: 340,
+    cacheReadTokens: 500,
+    cacheWriteTokens: 60,
+    costUsd: 0.0123,
+    source: "harness",
+  });
+});
+
+test("reports usage unavailable when the envelope omits it", async (t) => {
+  const root = makeRepo(t);
+  const shim = makeShim(t);
+
+  // SUCCESS_ENVELOPE carries no usage fields.
+  const result = await invoke(shim, agentIn(root, ".claude"), root);
+
+  assert.equal(result.usage?.source, "unavailable");
+  assert.match(result.usage?.note ?? "", /no token usage/);
+});

@@ -2,7 +2,7 @@ import { appendFileSync, existsSync, mkdirSync, readFileSync, writeFileSync, ren
 import { dirname, join } from "node:path";
 import { randomUUID } from "node:crypto";
 
-import type { AuditEvent, TaskRecord, WorkflowState } from "./types.ts";
+import type { AuditEvent, TaskRecord, TaskUsage, WorkflowState } from "./types.ts";
 import type { ExecutionManifest, TaskSelection } from "./types.ts";
 import { broadcastAudit } from "./viz/bus.ts";
 
@@ -127,6 +127,31 @@ export function completeRecord(
 
 export function failRecord(record: TaskRecord, errorMessage: string): TaskRecord {
   return { ...record, status: "failed", completedAt: new Date().toISOString(), errorMessage };
+}
+
+/**
+ * Sums two usage reports into one cumulative record.
+ *
+ * A retried task may consume tokens on every attempt, so the task record keeps
+ * the total. `source` stays "harness" while any attempt reported real numbers;
+ * a later "unavailable" attempt never erases the earlier counts.
+ */
+export function mergeUsage(previous: TaskUsage | undefined, next: TaskUsage | undefined): TaskUsage | undefined {
+  if (!previous && !next) return undefined;
+  if (!next) return previous;
+  if (!previous) return next;
+  const add = (a?: number, b?: number): number | undefined => (a === undefined && b === undefined ? undefined : (a ?? 0) + (b ?? 0));
+  return {
+    inputTokens: add(previous.inputTokens, next.inputTokens),
+    outputTokens: add(previous.outputTokens, next.outputTokens),
+    cacheReadTokens: add(previous.cacheReadTokens, next.cacheReadTokens),
+    cacheWriteTokens: add(previous.cacheWriteTokens, next.cacheWriteTokens),
+    reasoningTokens: add(previous.reasoningTokens, next.reasoningTokens),
+    costUsd: add(previous.costUsd, next.costUsd),
+    credits: add(previous.credits, next.credits),
+    source: previous.source === "harness" || next.source === "harness" ? "harness" : "unavailable",
+    note: next.note ?? previous.note,
+  };
 }
 
 export function withTaskRecord(state: WorkflowState, record: TaskRecord): WorkflowState {

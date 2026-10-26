@@ -493,6 +493,17 @@ Storage and precedence (same as the CLI):
 > explicitly set - which regenerates `timeoutMs`. The engine-config default is
 > always preserved.
 
+### Token and cost usage
+
+Each task records the token/cost usage its harness reported, on the state record
+(`usage`) and on the `task.attempt.finished` / `task.complete` / `task.failed`
+audit events. OpenCode usage is read from `opencode session export` for the
+task's session; Claude from its JSON result envelope; Copilot from its stderr
+stats block (tokens and AI credits). A harness that reports nothing is recorded
+as `unavailable`, not zero. The Overview shows run totals (tokens, cost, credits)
+and the Tasks view shows a Tokens column plus a per-task breakdown in the detail
+drawer. See [ADR-074](adr/074-token-and-cost-usage-capture.md).
+
 ### Background job tracking
 
 Detached console actions now share one background-job model:

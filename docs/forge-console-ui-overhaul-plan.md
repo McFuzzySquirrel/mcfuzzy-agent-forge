@@ -239,7 +239,14 @@ tagged project vs global.
 
 ---
 
-### Phase 5 — Token & cost usage (engine-side, "Tier 2")
+### Phase 5 — Token & cost usage (✅ shipped 2026-10-26)
+
+**Status:** Tier 2 (engine task usage) shipped in v3.110 with ADR-074. Tier 1
+(authoring-session usage) is deferred: interactive PRD/idea authoring runs no
+single result envelope and assigns no session ID the Console can map, so it
+needs a harness session-file reader or the same session-export plumbing added
+to the headless authoring path. The data model and Console aggregation already
+accept authoring usage, so that is a follow-up rather than a redesign.
 
 **Objective:** Capture per-task/per-run token + cost and display on Board/Overview.
 
@@ -330,4 +337,5 @@ Phase 5 (token usage) ──────── independent, largest, last
    execution prefs; each project can override.
 2. **Nav style:** **left sidebar** with Start/Pipeline/Monitor/Review groups.
 3. **Token display:** **tokens always; estimated cost when the harness reports it.**
-4. **Phase 5 scope:** **bundle** authoring-session ("Tier 1") capture into Phase 5.
+4. **Phase 5 scope:** engine-run capture shipped; authoring-session ("Tier 1")
+   capture is deferred (interactive sessions expose no usage surface).

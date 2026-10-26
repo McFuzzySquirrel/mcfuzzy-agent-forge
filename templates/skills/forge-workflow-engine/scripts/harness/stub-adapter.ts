@@ -1,7 +1,7 @@
 import { existsSync } from "node:fs";
 import { resolve } from "node:path";
 
-import type { HarnessAdapter, TaskAttemptRequest, TaskResult } from "../types.ts";
+import type { HarnessAdapter, TaskAttemptRequest, TaskResult, TaskUsage } from "../types.ts";
 
 /**
  * Stub harness adapter for dry-run, testing, and CI scenarios.
@@ -22,11 +22,21 @@ export class StubAdapter implements HarnessAdapter {
 
   private readonly failIds: Set<string>;
   private readonly delayMs: number;
+  /** Optional synthetic usage for tests; set STUB_USAGE to a JSON object. */
+  private readonly usage: TaskUsage | undefined;
 
   constructor() {
     const raw = process.env["STUB_FAIL_TASK_IDS"] ?? "";
     this.failIds = new Set(raw.split(",").map((s) => s.trim()).filter(Boolean));
     this.delayMs = Number(process.env["STUB_DELAY_MS"] ?? "0");
+    const rawUsage = process.env["STUB_USAGE"];
+    if (rawUsage) {
+      try {
+        this.usage = { ...(JSON.parse(rawUsage) as Omit<TaskUsage, "source">), source: "harness" };
+      } catch {
+        this.usage = undefined;
+      }
+    }
   }
 
   async invoke(request: TaskAttemptRequest): Promise<TaskResult> {
@@ -47,6 +57,7 @@ export class StubAdapter implements HarnessAdapter {
         durationMs: Date.now() - start,
         errorMessage: `[stub] synthetic failure for task ${task.id}`,
         failureKind: "retryable",
+        usage: this.usage,
       };
     }
 
@@ -62,6 +73,7 @@ export class StubAdapter implements HarnessAdapter {
       stdout: `[stub] ${agentLabel} completed task ${task.id}: ${task.title}`,
       stderr: "",
       durationMs: Date.now() - start,
+      usage: this.usage,
     };
   }
 }

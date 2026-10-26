@@ -2,7 +2,7 @@
 
 import { api } from "../api.js";
 import { Epoch, store } from "../state.js";
-import { el, fmtAgo, fmtDuration, fmtTime, statusBadge, toast } from "../render/dom.js";
+import { el, fmtAgo, fmtDuration, fmtTime, fmtTokens, fmtUsd, statusBadge, toast } from "../render/dom.js";
 import type {
   Actions,
   AuthoringSessionTarget,
@@ -441,6 +441,13 @@ function renderRun(run: RunSummary | null): HTMLElement {
     stat("Started", fmtTime(run.startedAt)),
     stat("Elapsed", elapsed),
     stat("Phase", run.currentPhaseTitle ?? run.currentPhase ?? "—"),
+    ...(run.usage.tasksWithUsage > 0
+      ? [
+          stat("Tokens", `in ${fmtTokens(run.usage.inputTokens)} · out ${fmtTokens(run.usage.outputTokens)}`),
+          ...(run.usage.costUsd > 0 ? [stat("Cost", fmtUsd(run.usage.costUsd))] : []),
+          ...(run.usage.credits > 0 ? [stat("Credits", run.usage.credits.toFixed(2))] : []),
+        ]
+      : [stat("Tokens", "not reported")]),
   ]);
 
   const blockers = run.blockers.length > 0

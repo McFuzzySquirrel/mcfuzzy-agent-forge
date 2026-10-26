@@ -4,6 +4,27 @@ Detailed release and change notes for MyForge.
 
 ---
 
+## October 2026 - v3.110
+
+### Token and cost usage in the Console
+
+- Each task's harness invocation now records token/cost usage where the harness
+  reports it, persisted to `WORKFLOW-STATE.json` and the
+  `task.attempt.finished` / `task.complete` / `task.failed` audit events. A
+  retried task reports the total across its attempts.
+- **OpenCode** usage is read authoritatively from
+  `opencode session export <id>` for the task's session; **Claude** usage comes
+  from the JSON result envelope (`usage`, `total_cost_usd`) when present; and
+  **Copilot** usage is parsed from its stderr stats block (tokens and AI
+  credits). A harness that reports nothing is recorded as `unavailable`, never
+  as zero.
+- The Console **Overview** run stats show tokens (in/out), cost, and credits;
+  the **Tasks** table gains a Tokens column and the detail drawer shows the full
+  breakdown, including an explicit "not reported" note.
+- Copilot **AI credits** are shown separately and are never presented as USD.
+- Interactive authoring sessions do not expose usage, so authoring-stage usage
+  remains a follow-up (see [ADR-074](adr/074-token-and-cost-usage-capture.md)).
+
 ## October 2026 - v3.109
 
 ### Global-defaults editor and background-job badge

@@ -24,8 +24,10 @@ import type {
   SkillInfo,
   Summary,
   TaskRow,
+  TaskUsage,
   TeamIndex,
   TimeoutUpdateResult,
+  UsageTotals,
   WorkflowState,
   ModelInventory,
 } from "./types.ts";
@@ -341,7 +343,28 @@ function runSummary(p: RepoPaths, state: WorkflowState | null, manifest: Executi
     counts,
     total: tasks.length,
     blockers: state.blockers ?? [],
+    usage: aggregateUsage(tasks.map((t) => t.usage)),
   };
+}
+
+/** Sums per-task usage into run-level totals; tasks without usage are counted, not zeroed. */
+function aggregateUsage(usages: Array<TaskUsage | undefined>): UsageTotals {
+  const totals: UsageTotals = {
+    inputTokens: 0, outputTokens: 0, cacheReadTokens: 0, cacheWriteTokens: 0,
+    reasoningTokens: 0, costUsd: 0, credits: 0, tasksWithUsage: 0, tasksTotal: usages.length,
+  };
+  for (const usage of usages) {
+    if (!usage || usage.source !== "harness") continue;
+    totals.tasksWithUsage += 1;
+    totals.inputTokens += usage.inputTokens ?? 0;
+    totals.outputTokens += usage.outputTokens ?? 0;
+    totals.cacheReadTokens += usage.cacheReadTokens ?? 0;
+    totals.cacheWriteTokens += usage.cacheWriteTokens ?? 0;
+    totals.reasoningTokens += usage.reasoningTokens ?? 0;
+    totals.costUsd += usage.costUsd ?? 0;
+    totals.credits += usage.credits ?? 0;
+  }
+  return totals;
 }
 
 export function summary(p: RepoPaths): Summary {
@@ -498,6 +521,7 @@ export function tasks(p: RepoPaths): TaskRow[] {
         validationCommands: task.validationCommands ?? [],
         timeoutMs: task.timeoutMs ?? null,
         approvalRequired: task.approvalRequired ?? false,
+        usage: rec?.usage ?? null,
         contractKind: task.contract?.kind,
         requirements: task.contract?.requirements ?? [],
         acceptanceCriteria: task.contract?.acceptanceCriteria ?? [],

@@ -15,6 +15,38 @@ export interface AuditEvent {
   artifactId?: string;
   reductionPercent?: number;
   outputFiles?: string[];
+  usage?: TaskUsage;
+}
+
+/**
+ * Token/cost usage a harness reported for one invocation. Mirrors the engine's
+ * `TaskUsage`; `source: "unavailable"` means the harness reported none (never
+ * zero counts, which would misrepresent usage as free).
+ */
+export interface TaskUsage {
+  inputTokens?: number;
+  outputTokens?: number;
+  cacheReadTokens?: number;
+  cacheWriteTokens?: number;
+  reasoningTokens?: number;
+  costUsd?: number;
+  credits?: number;
+  source: "harness" | "unavailable";
+  note?: string;
+}
+
+/** Run-level usage, summed from each task's cumulative usage. */
+export interface UsageTotals {
+  inputTokens: number;
+  outputTokens: number;
+  cacheReadTokens: number;
+  cacheWriteTokens: number;
+  reasoningTokens: number;
+  costUsd: number;
+  credits: number;
+  /** Tasks that reported harness usage, and tasks in scope. */
+  tasksWithUsage: number;
+  tasksTotal: number;
 }
 
 export interface TaskAttemptSummary {
@@ -22,6 +54,7 @@ export interface TaskAttemptSummary {
   outcome: "passed" | "failed" | "cancelled";
   resultPath: string;
   reason?: string;
+  usage?: TaskUsage;
 }
 
 export interface TaskRecord {
@@ -43,6 +76,8 @@ export interface TaskRecord {
    * current run has not measured it yet.
    */
   attemptHistory?: TaskAttemptSummary[];
+  /** Cumulative token/cost usage across every attempt of this task. */
+  usage?: TaskUsage;
 }
 
 export interface WorkflowState {
@@ -130,6 +165,8 @@ export interface RunSummary {
   counts: RunCounts;
   total: number;
   blockers: string[];
+  /** Run-level token/cost usage, summed from completed/failed task records. */
+  usage: UsageTotals;
 }
 
 export interface ManifestSummary {
@@ -216,6 +253,8 @@ export interface TaskRow {
   validationCommands: string[];
   timeoutMs: number | null;
   approvalRequired: boolean;
+  /** Cumulative token/cost usage for this task, when the harness reported it. */
+  usage: TaskUsage | null;
   contractKind?: "implementation" | "human-review";
   requirements: string[];
   acceptanceCriteria: string[];

@@ -155,6 +155,9 @@ Once the build starts, switch between the views to follow the work:
   - Failed tasks stay listed at the lower left with a link into Tasks.
   - The mode and filters are remembered per project.
 - **Tasks**: a sortable, filterable task table with a detail drawer for each task.
+  The **Tokens** column and the detail drawer show the harness-reported token and
+  cost usage (or an explicit "not reported"); the Overview run stats show the run
+  totals.
 - **Logs**: the engine and authoring log tail plus the live audit event stream.
 - **Plan & Team**: the project documents as a table (kind, title, path, status)
   and the generated agent/skill files. Selecting a document opens it in a wide
