@@ -3,7 +3,7 @@ import { resolve } from "node:path";
 
 import { runCommand, extractModelFlags, stripProviderPrefix, canSelectAgentNatively } from "./run.ts";
 import { harnessInvocationContext } from "./invocation-log.ts";
-import type { HarnessAdapter, TaskAttemptRequest, TaskFailureKind, TaskResult } from "../types.ts";
+import type { HarnessAdapter, SessionResumeStrategy, TaskAttemptRequest, TaskFailureKind, TaskResult } from "../types.ts";
 import { inlinePersona } from "../request.ts";
 import { executionPrompt } from "../task-execution.ts";
 
@@ -49,6 +49,16 @@ export class ClaudeAdapter implements HarnessAdapter {
   readonly supportsConcurrency = true;
   readonly capabilities = ["text", "repository-tools"] as const;
   readonly defaultModel?: string;
+  /**
+   * Claude Code assigns its own session UUID on the first `-p` run and reports
+   * it in the JSON envelope's `session_id`; subsequent tasks resume it with
+   * `--resume <id>`. The engine captures the ID from the first result.
+   */
+  readonly sessionStrategy: SessionResumeStrategy = {
+    kind: "capture",
+    resumeFlags: (sessionId) => ["--resume", sessionId],
+    captureSessionId: (result) => result.sessionId,
+  };
 
   private readonly bin: string;
   private readonly extraFlags: string[];
@@ -68,7 +78,8 @@ export class ClaudeAdapter implements HarnessAdapter {
     const prompt = executionPrompt(request, native ? "" : inlinePersona(request));
     const agentFlag = native ? ["--agent", agent.name] : [];
     const modelFlag = request.effectiveModel ? ["--model", stripProviderPrefix(request.effectiveModel)] : [];
-    const args = ["-p", prompt, "--output-format", "json", ...agentFlag, ...modelFlag, ...this.extraFlags];
+    const sessionFlag = request.sessionId ? this.sessionStrategy.resumeFlags(request.sessionId) : [];
+    const args = ["-p", prompt, "--output-format", "json", ...agentFlag, ...modelFlag, ...sessionFlag, ...this.extraFlags];
 
     const result = await runCommand(this.bin, args, {
       cwd: repoRoot,
@@ -81,6 +92,7 @@ export class ClaudeAdapter implements HarnessAdapter {
 
     const stdout = result.stdout;
     const stderr = result.stderr;
+    let sessionId: string | undefined;
     const failure = (errorMessage: string, failureKind: TaskFailureKind | undefined): TaskResult => ({
       success: false,
       outputFiles: [],
@@ -89,12 +101,14 @@ export class ClaudeAdapter implements HarnessAdapter {
       durationMs: Date.now() - start,
       errorMessage,
       failureKind,
+      sessionId,
     });
 
     if (result.error) return failure(result.error, result.failureKind);
 
     const envelope = parseResultEnvelope(stdout);
-    if (envelope?.session_id) console.log(`[engine] claude session ${envelope.session_id} (task ${task.id})`);
+    sessionId = envelope?.session_id;
+    if (sessionId) console.log(`[engine] claude session ${sessionId} (task ${task.id})`);
 
     if (!envelope) {
       if (result.status !== 0) {
@@ -130,6 +144,7 @@ export class ClaudeAdapter implements HarnessAdapter {
       stdout: envelope.result ?? "",
       stderr: "",
       durationMs: Date.now() - start,
+      sessionId,
     };
   }
 

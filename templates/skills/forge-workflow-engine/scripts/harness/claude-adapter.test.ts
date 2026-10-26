@@ -447,3 +447,32 @@ test("is_error wins over a success subtype", async (t) => {
   assert.equal(result.failureKind, "retryable");
   assert.equal(result.errorMessage, "Something went wrong.");
 });
+
+// ─── Phase-scoped session reuse ───────────────────────────────────────────────
+
+test("passes --resume when the request carries a sessionId and reports the envelope session_id", async (t) => {
+  const root = makeRepo(t);
+  const shim = makeShim(t);
+  const sessionId = "00000000-0000-4000-8000-000000000000";
+
+  const result = await makeAdapter(shim).invoke(prepareTaskRequest({
+    agent: agentIn(root, ".claude"), task: makeTask(), repoRoot: root, sessionId,
+  }));
+
+  const args = recordedArgs(shim);
+  assert.ok(args.includes("--resume"), args.join(" "));
+  assert.equal(args[args.indexOf("--resume") + 1], sessionId);
+  assert.equal(result.sessionId, sessionId);
+});
+
+test("omits --resume and reports no session when the request has no sessionId", async (t) => {
+  const root = makeRepo(t);
+  const shim = makeShim(t);
+
+  const result = await invoke(shim, agentIn(root, ".claude"), root);
+
+  assert.ok(!recordedArgs(shim).includes("--resume"));
+  // The success envelope still carries a session_id; capture harnesses read it
+  // back from the result even though no resume flag was passed on the first task.
+  assert.equal(result.sessionId, "00000000-0000-4000-8000-000000000000");
+});

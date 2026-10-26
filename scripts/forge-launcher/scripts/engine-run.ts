@@ -16,6 +16,7 @@ export interface EngineRunOptions {
   maxRetries?: string;
   retryDelayMs?: string;
   heartbeatMs?: string;
+  sessionScope?: string;
   yes?: boolean;
   dryRun?: boolean;
   viz?: boolean;
@@ -50,6 +51,7 @@ export async function engineRun(opts: EngineRunOptions = {}): Promise<number> {
   const maxRetries = opts.maxRetries ?? process.env.FORGE_ENGINE_MAX_RETRIES ?? "";
   const retryDelayMs = opts.retryDelayMs ?? process.env.FORGE_ENGINE_RETRY_DELAY_MS ?? "";
   const heartbeatMs = opts.heartbeatMs ?? process.env.FORGE_ENGINE_HEARTBEAT_MS ?? "";
+  const sessionScope = opts.sessionScope ?? process.env.FORGE_ENGINE_SESSION_SCOPE ?? "";
   const yes = opts.yes ?? process.env.FORGE_ENGINE_YES === "1";
   const dryRun = opts.dryRun ?? false;
   const viz = opts.viz ?? process.env.FORGE_ENGINE_VIZ === "1";
@@ -78,6 +80,9 @@ export async function engineRun(opts: EngineRunOptions = {}): Promise<number> {
   }
   if (executionMode !== "auto" && executionMode !== "manual") {
     throw new Error(`Invalid --execution-mode '${executionMode}'. Choose 'auto' or 'manual'.`);
+  }
+  if (sessionScope && sessionScope !== "task" && sessionScope !== "phase") {
+    throw new Error(`Invalid --session-scope '${sessionScope}'. Choose 'task' or 'phase'.`);
   }
 
   const repo = opts.repo
@@ -136,7 +141,7 @@ export async function engineRun(opts: EngineRunOptions = {}): Promise<number> {
 
   const manifest = path.join(repo, "docs", "EXECUTION-MANIFEST.json");
 
-  out(`forge-engine-run: repo=${repo} harness=${harness}${granularity ? ` granularity=${granularity}` : ""}${concurrency ? ` concurrency=${concurrency}` : ""}${taskTimeoutMs ? ` task-timeout=${taskTimeoutMs}` : ""}${maxRetries ? ` max-retries=${maxRetries}` : ""}${viz ? ` viz=${vizPort || "default"}` : ""}${autoCommit === false ? " no-auto-commit" : ""}${commitMessageTemplate ? " commit-message-template=<custom>" : ""}${logHarnessActivity ? " log-harness-activity" : " no-log-harness-activity"}`);
+  out(`forge-engine-run: repo=${repo} harness=${harness}${granularity ? ` granularity=${granularity}` : ""}${concurrency ? ` concurrency=${concurrency}` : ""}${taskTimeoutMs ? ` task-timeout=${taskTimeoutMs}` : ""}${maxRetries ? ` max-retries=${maxRetries}` : ""}${sessionScope ? ` session-scope=${sessionScope}` : ""}${viz ? ` viz=${vizPort || "default"}` : ""}${autoCommit === false ? " no-auto-commit" : ""}${commitMessageTemplate ? " commit-message-template=<custom>" : ""}${logHarnessActivity ? " log-harness-activity" : " no-log-harness-activity"}`);
   out(`  engine : ${engineDir}`);
   out(`  adapter: ${adapterDir || "<not bootstrapped; manifest must already exist>"}`);
 
@@ -186,6 +191,7 @@ export async function engineRun(opts: EngineRunOptions = {}): Promise<number> {
   if (maxRetries) engineFlags.push("--max-retries", maxRetries);
   if (retryDelayMs) engineFlags.push("--retry-delay-ms", retryDelayMs);
   if (heartbeatMs) engineFlags.push("--heartbeat-ms", heartbeatMs);
+  if (sessionScope) engineFlags.push("--session-scope", sessionScope);
   if (yes) engineFlags.push("--yes");
   if (viz) engineFlags.push(vizPort ? `--viz=${vizPort}` : "--viz");
   if (noOpen) engineFlags.push("--no-open");
@@ -224,6 +230,7 @@ export function engineRunCli(args: string[]): Promise<number> {
       case "--max-retries": opts.maxRetries = args[++i]; break;
       case "--retry-delay-ms": opts.retryDelayMs = args[++i]; break;
       case "--heartbeat-ms": opts.heartbeatMs = args[++i]; break;
+      case "--session-scope": opts.sessionScope = args[++i]; break;
       case "--yes": opts.yes = true; break;
       case "--dry-run": opts.dryRun = true; break;
       case "--viz": opts.viz = true; break;

@@ -1,6 +1,6 @@
 # Forge Console
 
-> A local web UI that fronts `forge-launcher` (authoring) and `forge-launcher engine-run` → `workflow-engine` (build). Create a project, author a reviewed PRD interactively, generate the agent team, generate project skills, compile the manifest, and monitor/control the build - all from your browser.
+> A local web UI that fronts `forge-launcher` (authoring) and `forge-launcher engine-run` → `workflow-engine` (build). Create a project, author a reviewed PRD interactively, run supported harness CLIs in a browser terminal, generate the agent team, generate project skills, compile the manifest, and monitor/control the build.
 
 > [!WARNING]
 > The Visual Tour uses current-browser captures from a deterministic local
@@ -157,7 +157,7 @@ so you can review each result and come back later:
 
 | Stage | Continue does | Produces |
 |---|---|---|
-| Idea (no PRD) | **Author PRD (interactive)** opens `forge-auto-build-prd` in a terminal; there is no headless alternative (ADR-060). **Grill the idea first** runs `forge-grill-idea` the same way | `docs/PRD.md` + `docs/features/*.md` |
+| Idea (no PRD) | **Author PRD (interactive)** opens `forge-auto-build-prd` in the Console Terminal view or an external terminal; there is no headless alternative (ADR-060). **Grill the idea first** runs `forge-grill-idea` the same way | `docs/PRD.md` + `docs/features/*.md` |
 | PRD (no team) | **Generate team** (headless `forge-build-agent-team`) | agent files and ownership metadata |
 | Team (skills incomplete) | **Generate project skills** | project skill candidates and review result |
 | Skills ready (no manifest) | **Compile manifest** (`forge-execution-adapter`) | `docs/EXECUTION-MANIFEST.json` |
@@ -174,9 +174,9 @@ or failed. Nothing runs until you click it, and the generated team and skills ar
 your editor.
 
 Requirements stages are different: the PRD and feature documents are authored in
-an interactive terminal session, not a background job. The Console therefore
-cannot pause, cancel, or report on them, and completion is observed from the
-repository after the skill commits.
+an interactive session, not a background job. The Console can stop a browser PTY
+session, but cannot pause or report on the authoring operation; completion is
+observed from the repository after the skill commits.
 
 Completed projects remain extensible. Use **Add a feature** on Overview to run
 `forge-build-feature-prd`. The skill inspects the existing codebase, PRD, and
@@ -189,14 +189,14 @@ agents and recompile the manifest; review the resulting tasks before running the
 ### Interactive authoring
 
 The **Overview** pipeline card leads with the interactive interview that the
-pre-Console workflow was built around; these actions live only there. The primary
-PRD and Feature PRD actions open your configured authoring runner in a new
-terminal with the skill already queued, so the skill asks its clarifying
-questions before drafting. Backed by `POST /api/authoring/session`, which
-resolves the authoring runner and the PRD-stage model and falls back to printing
-the manual command when no desktop terminal is available. This is the only way to
-author requirements: the `draft-prd`, `draft-existing-prd`, and `feature-prd`
-control actions report this handoff instead of starting a job.
+pre-Console workflow was built around; these actions live only there. Use the
+**Terminal** view to run the project harness or start a PRD, idea, or Feature PRD
+session in the browser. It resolves the configured authoring runner and PRD-stage
+model, queues the approved skill prompt, and supports terminal input, output, and
+resizing. The **Open in external terminal** button remains available as a
+fallback. These interactive actions do not become headless jobs: the
+`draft-prd`, `draft-existing-prd`, and `feature-prd` control actions continue to
+report the interactive handoff.
 
 - **Grill the idea first (interactive)** runs the `forge-grill-idea` skill,
   which interviews you in rounds to sharpen `docs/IDEA.md` before PRD authoring,
@@ -207,10 +207,17 @@ control actions report this handoff instead of starting a job.
   result, for documents authored outside the Console. It appears on the pipeline
   card once a PRD exists.
 
-Interactive sessions run outside the Console, so they are not tracked background
-jobs: the skill validates and commits its own output, and the Console picks the
-result up from the repository. Use **Refresh** on the pipeline card, or reopen
-the view, to see newly authored documents.
+Browser PTY sessions run in the Console process and are stopped when the session
+is stopped, the project changes, the browser disconnects, or the Console shuts
+down. The external-terminal fallback runs outside the Console. In either case,
+the skill validates and commits its own output, and the Console picks the result
+up from the repository. Use **Refresh** on the pipeline card, or reopen the view,
+to see newly authored documents.
+
+The Terminal view only starts the selected supported CLI; it does not accept
+arbitrary shell commands or working directories. The WebSocket requires the
+Console token and local origin, and the Console allows one active PTY session.
+See [ADR-068](adr/068-console-browser-terminal.md).
 
 Each runner is opened on an interactive surface that accepts the queued prompt
 *and* the resolved stage model:
@@ -365,10 +372,11 @@ alongside the other project documents.
 A **Launch \<harness\> CLI** button on the **Tasks** view header and the
 **Overview** header opens the project's harness CLI in a new terminal window,
 working from the project folder — so you can watch the live run and take over
-at any point. The CLI is chosen from the repo's harness root (`github` →
-`copilot`, `claude` → `claude`, otherwise `opencode`). Backed by
-`POST /api/launch-cli`; when no desktop terminal emulator is available, the
-button shows the exact command to run manually.
+at any point. The **Terminal** view also offers the same harness session in the
+browser. The CLI is chosen from the repo's harness root (`github` → `copilot`,
+`claude` → `claude`, otherwise `opencode`). The external button is backed by
+`POST /api/launch-cli`; when no desktop terminal emulator is available, it shows
+the exact command to run manually.
 
 ---
 
@@ -378,6 +386,7 @@ button shows the exact command to run manually.
 |---|---|
 | **Home** | create a new project or open an existing one (landing), including live status labels for detached work. |
 | **Overview** | run status, progress + counts, blockers, the pipeline next-step card with a **Manual build** checkbox, background-job status, run controls, an **auto-commit** toggle, a **Log harness activity** toggle, and a **Launch \<harness\> CLI** button. Also the **Re-derive team & skills** panel when authoring is stale, and manifest reconciliation with a confirmed **Reset changed tasks for review**. |
+| **Terminal** | interactive browser session for the selected harness or an existing authoring target, with PTY input/output, resize, stop, and external-terminal fallback. |
 | **Board** | the PixiJS Forge Board in **Kanban** or **Gantt** mode, with status filters and a **Table** view of the same data. |
 | **Tasks** | every task in a filterable/sortable table with a detail drawer, editable per-task timeout, explicit/range selection controls for manual mode, and a **Launch \<harness\> CLI** button. |
 | **Logs** | `docs/engine-run.log` tail + the audit event stream (live via SSE). |
