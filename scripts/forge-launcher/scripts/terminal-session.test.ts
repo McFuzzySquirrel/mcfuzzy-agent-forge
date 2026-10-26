@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import http from "node:http";
 import { once } from "node:events";
+import path from "node:path";
 import { test } from "node:test";
 import { spawn as spawnPty, type IPty } from "node-pty";
 import WebSocket from "ws";
@@ -9,6 +10,11 @@ import { attachTerminalSession, type TerminalCommand, type TerminalStartRequest 
 
 const token = "test-token";
 const protocol = "forge-console-terminal";
+// The server normalizes the selected repo ("/fixture/project") with
+// path.resolve(), which adds a drive letter on Windows, so the expected root
+// must be resolved the same way.
+const fixtureRepo = path.resolve("/fixture/project");
+const receiveTimeoutMs = 10_000;
 
 interface FakePty {
   writes: string[];
@@ -56,7 +62,7 @@ async function setup(t: import("node:test").TestContext) {
   const spawned: Array<{ cli: string; args: string[]; cwd?: string; pwd?: string }> = [];
   const fake = fakePty();
   const resolveCommand = async (request: TerminalStartRequest, repoRoot: string): Promise<TerminalCommand> => {
-    assert.equal(repoRoot, "/fixture/project");
+    assert.equal(repoRoot, fixtureRepo);
     if (request.mode === "harness") return { cli: "opencode", args: ["mini"] };
     return { cli: "copilot", args: ["-i", request.prompt ?? ""] };
   };
@@ -81,15 +87,33 @@ async function setup(t: import("node:test").TestContext) {
 
 function receive(socket: WebSocket, type: string): Promise<Record<string, unknown>> {
   return new Promise((resolve, reject) => {
-    const timeout = setTimeout(() => reject(new Error(`timed out waiting for ${type}`)), 2_000);
-    const onMessage = (data: WebSocket.RawData) => {
-      const message = JSON.parse(data.toString()) as Record<string, unknown>;
-      if (message.type !== type) return;
+    const cleanup = () => {
       clearTimeout(timeout);
       socket.off("message", onMessage);
-      resolve(message);
+      socket.off("close", onClose);
+      socket.off("error", onError);
     };
+    const fail = (error: Error) => {
+      cleanup();
+      reject(error);
+    };
+    const timeout = setTimeout(() => fail(new Error(`timed out waiting for ${type}`)), receiveTimeoutMs);
+    const onMessage = (data: WebSocket.RawData) => {
+      const message = JSON.parse(data.toString()) as Record<string, unknown>;
+      if (message.type === type) {
+        cleanup();
+        resolve(message);
+      } else if (message.type === "error") {
+        fail(new Error(`terminal error while waiting for ${type}: ${String(message.message)}`));
+      }
+    };
+    const onClose = (code: number, reason: Buffer) => {
+      fail(new Error(`socket closed (${code} ${reason.toString()}) while waiting for ${type}`));
+    };
+    const onError = (error: Error) => fail(new Error(`socket error while waiting for ${type}: ${error.message}`));
     socket.on("message", onMessage);
+    socket.on("close", onClose);
+    socket.on("error", onError);
   });
 }
 
@@ -110,7 +134,7 @@ test("terminal sessions launch a fixed harness in the selected project and bridg
   const started = receive(client, "started");
   client.send(JSON.stringify({ type: "start", mode: "harness", command: "sh" }));
   assert.equal((await started).cli, "opencode");
-  assert.deepEqual(spawned, [{ cli: "opencode", args: ["mini"], cwd: "/fixture/project", pwd: "/fixture/project" }]);
+  assert.deepEqual(spawned, [{ cli: "opencode", args: ["mini"], cwd: fixtureRepo, pwd: fixtureRepo }]);
 
   const output = receive(client, "output");
   fake.output("\u001b[32mhello\u001b[0m");
