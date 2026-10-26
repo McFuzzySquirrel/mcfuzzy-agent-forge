@@ -3,6 +3,7 @@ import { createRequire } from "node:module";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { bootstrap, repositoryLogFile } from "./bootstrap.ts";
+import { resolveCliPath } from "./cli-resolve.ts";
 import { upsertProject } from "./console/paths.ts";
 import { engineHarnessForHarness, harnessCliForHarness } from "./console/dashboard/harness-rules.ts";
 import { command, fail, header, info, link, ok, out, printLogTail, runCommand, runLogged, runWithHeartbeat, spawnDetached, step, warn } from "./format.ts";
@@ -1352,21 +1353,7 @@ async function preflightCheck(): Promise<void> {
 }
 
 function commandExists(cmd: string): boolean {
-  const pathVar = state.env.PATH ?? state.env.Path ?? "";
-  const isWin = process.platform === "win32";
-  const exts = isWin ? ["", ".exe", ".cmd", ".bat"] : [""];
-  for (const dir of pathVar.split(path.delimiter)) {
-    if (!dir) continue;
-    for (const ext of exts) {
-      try {
-        fs.accessSync(path.join(dir, cmd + ext));
-        return true;
-      } catch {
-        // continue
-      }
-    }
-  }
-  return false;
+  return resolveCliPath(cmd, { env: state.env }) !== null;
 }
 
 // --- Step 2: Select harness ------------------------------------------------

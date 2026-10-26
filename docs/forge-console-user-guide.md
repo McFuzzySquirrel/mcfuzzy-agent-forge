@@ -94,9 +94,10 @@ also offers **Validate PRD**, which runs the read-only validation.
 The **Terminal** view supports the selected project harness, PRD/idea/feature
 authoring sessions, keyboard input, and terminal resizing. It runs only a
 supported harness CLI—there is no general-purpose shell. One session can run at
-a time; changing projects, leaving the view, or stopping the Console ends the
-session. Use the external-terminal button if an in-browser session is unavailable
-or you prefer a separate window.
+a time. The session keeps running in the background when you navigate to another
+view (the Terminal nav link shows a dot); it ends when you press **Stop**, change
+projects, reload the page, or stop the Console. Use the external-terminal button
+if an in-browser session is unavailable or you prefer a separate window.
 
 Typical progression:
 

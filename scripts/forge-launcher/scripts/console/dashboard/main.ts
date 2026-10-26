@@ -14,7 +14,7 @@ import { renderTimeline, unmountTimeline } from "./views/timeline.js";
 import { refreshProjectList, renderProjects, unmountProjects } from "./views/projects.js";
 import { renderNew, unmountNew } from "./views/new.js";
 import { openHelp } from "./views/help.js";
-import { renderTerminal, unmountTerminal } from "./views/terminal.js";
+import { isTerminalSessionActive, onTerminalSessionChange, renderTerminal, unmountTerminal } from "./views/terminal.js";
 
 interface View {
   id: string;
@@ -58,7 +58,9 @@ function renderNav(activeId: string): void {
   for (const view of views.filter((v) => v.id !== "new")) {
     const link = document.createElement("a");
     link.href = `#/${view.id}`;
-    link.textContent = view.label;
+    const running = view.id === "terminal" && isTerminalSessionActive();
+    link.textContent = running ? `${view.label} ●` : view.label;
+    if (running) link.title = "A terminal session is running in the background.";
     link.className = view.id === activeId ? "nav-link active" : "nav-link";
     nav.appendChild(link);
   }
@@ -137,6 +139,10 @@ async function init(): Promise<void> {
   }
 
   connectEvents();
+
+  // Keep the "Terminal ●" nav marker in sync as a background session starts,
+  // exits, or stops without a route change.
+  onTerminalSessionChange(() => renderNav(currentRouteId()));
 
   // Help button (top-right of the top bar).
   const topbar = document.querySelector<HTMLElement>("#topbar");

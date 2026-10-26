@@ -4,6 +4,23 @@ Detailed release and change notes for MyForge.
 
 ---
 
+## October 2026 - v3.106
+
+### Windows harness launch and background terminal sessions
+
+- The in-Console terminal now resolves the harness CLI to an absolute executable
+  before starting it. node-pty's Windows backend does not apply `PATHEXT`, so a
+  bare `opencode`/`claude`/`copilot` never matched the installed `.exe` and the
+  session failed with a not-found error even though the CLI works in a shell.
+- CLI resolution is shared by the Console PTY, the external-terminal launcher,
+  and the `forge-launcher` availability checks, and honors `OPENCODE_BIN`,
+  `CLAUDE_CODE_BIN`/`CLAUDE_BIN`, and `COPILOT_BIN` overrides. A missing CLI now
+  reports a clear message naming the install/override instead of a dead PTY.
+- Terminal sessions survive navigating to another Console view: the WebSocket
+  and PTY stay alive, output is buffered and replayed on return, and the
+  Terminal nav link shows a running-session dot. A session still ends on Stop,
+  project change, page reload, or Console shutdown.
+
 ## October 2026 - v3.105
 
 ### Skill set consolidated and namespaced

@@ -201,14 +201,16 @@ report the interactive handoff.
 - **Grill the idea first (interactive)** runs the `forge-grill-idea` skill,
   which interviews you in rounds to sharpen `docs/IDEA.md` before PRD authoring,
   then rewrites and commits it.
-- **Author PRD (interactive)** runs `forge-build-prd` (or
-  `forge-build-prd` for an existing repository) with the interview enabled.
+- **Author PRD (interactive)** runs `forge-build-prd` (inspecting the existing
+  repository when one is present) with the interview enabled.
 - **Validate PRD** runs the read-only `validate-prd` check and reports the
   result, for documents authored outside the Console. It appears on the pipeline
   card once a PRD exists.
 
-Browser PTY sessions run in the Console process and are stopped when the session
-is stopped, the project changes, the browser disconnects, or the Console shuts
+Browser PTY sessions run in the Console process and **keep running in the
+background** when you navigate to another Console view; the Terminal nav link
+shows a dot while a session is live. A session stops when you press **Stop**, the
+project changes, the browser page is reloaded or closed, or the Console shuts
 down. The external-terminal fallback runs outside the Console. In either case,
 the skill validates and commits its own output, and the Console picks the result
 up from the repository. Use **Refresh** on the pipeline card, or reopen the view,
