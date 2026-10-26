@@ -56,7 +56,7 @@ directories dynamically):
   `options.allowExternalOpen`. Targets map to a skill invocation and an
   authoring stage used to resolve the runner and model:
   - `idea` -> `/forge-grill-idea …` (stage `prd`)
-  - `prd` -> `/forge-auto-build-prd …` explicitly interactive (stage `prd`)
+  - `prd` -> `/forge-build-prd …` explicitly interactive (stage `prd`)
   - `feature-prd` -> `/forge-build-feature-prd I want to add <prompt> …`
     (stage `prd`)
 - Resolve the runner with `selectedAuthoringRunner` and the model with

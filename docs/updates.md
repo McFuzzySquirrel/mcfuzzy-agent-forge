@@ -22,6 +22,8 @@ Detailed release and change notes for MyForge.
 - The launcher no longer bootstraps the maintainer-only
   `forge-skill-review-updater` into target repositories; it remains in the
   package resources.
+- Re-bootstrapping an existing project now prunes the retired/renamed forge
+  skills it copied earlier, while leaving project-authored skills untouched.
 - The template set is now 14 skills. The build/execution split is unchanged:
   `forge-auto-build` is the headless conductor, `@project-orchestrator` →
   `forge-orchestrate-build` is interactive, and `@workflow-orchestrator` →

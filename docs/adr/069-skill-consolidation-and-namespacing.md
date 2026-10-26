@@ -54,6 +54,9 @@ terminal/headless full-pipeline conductor, `project-orchestrator` →
 - The `forge-*` namespace is consistent, so the meta-skill exclusion rule is
   accurate and project audits no longer accidentally score Forge tooling.
 - Target repositories no longer carry a rubric-maintenance skill they never use.
+- Re-bootstrapping an existing project removes the retired/renamed forge skill
+  directories it previously copied, so upgrades do not leave orphaned tooling.
+  Only known retired names are pruned; project-authored skills are untouched.
 - Every reference to the removed or renamed skills had to be migrated in one
   change: skill `SKILL.md` files and references, agent personas, launcher
   commands and tests, the Console authoring targets, the prompt playbook,

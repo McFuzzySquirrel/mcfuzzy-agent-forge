@@ -47,6 +47,27 @@ test("bootstrap copies agents, skills, prompt-playbook, and excludes artifacts",
   assert.ok(!fs.existsSync(path.join(target, ".agents", "skills", "forge-skill-review-updater")));
 });
 
+test("bootstrap prunes retired forge skills but keeps project-authored ones", async () => {
+  const target = tmpDir();
+  fs.mkdirSync(path.join(target, ".git"));
+
+  // Simulate a repository bootstrapped by an older version that still has
+  // retired / renamed forge skills.
+  const retired = path.join(target, ".agents", "skills", "forge-auto-build-prd");
+  fs.mkdirSync(retired, { recursive: true });
+  fs.writeFileSync(path.join(retired, "SKILL.md"), "retired\n");
+
+  // A project-authored skill must survive the prune.
+  const projectSkill = path.join(target, ".agents", "skills", "my-project-skill");
+  fs.mkdirSync(projectSkill, { recursive: true });
+  fs.writeFileSync(path.join(projectSkill, "SKILL.md"), "mine\n");
+
+  await bootstrap({ targetDir: target, harness: "agents", force: true, nonInteractive: true });
+
+  assert.ok(!fs.existsSync(retired));
+  assert.ok(fs.existsSync(path.join(projectSkill, "SKILL.md")));
+});
+
 test("bootstrap rewrites .agents/ paths for a non-default harness", async () => {
   const target = tmpDir();
   fs.mkdirSync(path.join(target, ".git"));
