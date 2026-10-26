@@ -56,6 +56,7 @@ export function initState(
     tasks,
     blockers: [],
     auditLog: [],
+    sessions: {},
   };
 }
 

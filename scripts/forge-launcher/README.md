@@ -52,6 +52,7 @@ forge-launcher engine-run --harness opencode --yes                 # per-task: o
 forge-launcher engine-run --harness copilot --yes                  # per-task: copilot -p --yolo
 forge-launcher engine-run --harness opencode --concurrency 3 --yes # parallel dispatch
 forge-launcher engine-run --harness opencode --task-timeout-ms 900000 --yes  # 15-min task budget
+forge-launcher engine-run --harness opencode --session-scope phase --yes      # one conversation per phase
 forge-launcher engine-run --harness opencode --viz --yes           # live Forge Board dashboard
 forge-launcher engine-run --harness opencode --log-harness-activity # stream harness output to the engine log
 forge-launcher engine-run --stop    # stop a detached run after the current task

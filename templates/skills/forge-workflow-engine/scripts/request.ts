@@ -32,6 +32,23 @@ function skillContext(agent: AgentDescriptor): string {
   ].filter(Boolean).join("\n");
 }
 
+/**
+ * Instructions a phase lead (the stable `--agent` of a phase-scoped session)
+ * receives to hand a task to its owner specialist as a sub-agent. The owner's
+ * persona travels inline because the lead — not the owner — is the running
+ * agent, so native `--agent` selection cannot reach the owner.
+ */
+function delegationBlock(owner: AgentDescriptor): string {
+  return [
+    `Delegate this task to the '${owner.name}' sub-agent, wait for it to complete, then return the sub-agent's result report as your own.`,
+    `## Sub-agent specialist: ${owner.name}`,
+    owner.description ? `Description: ${owner.description}` : "",
+    `Specialist instructions:\n${owner.rawBody}`,
+    owner.constraints.length ? `Constraints:\n${owner.constraints.map((constraint) => `- ${constraint}`).join("\n")}` : "",
+    skillContext(owner),
+  ].filter(Boolean).join("\n\n");
+}
+
 export function prepareTaskRequest(options: {
   agent: AgentDescriptor;
   task: ManifestTask;
@@ -46,6 +63,9 @@ export function prepareTaskRequest(options: {
   previousResultPath?: string;
   signal?: AbortSignal;
   logHarnessActivity?: boolean;
+  sessionId?: string;
+  /** When set, the request runs as the lead agent and delegates to this owner. */
+  delegateTo?: { owner: AgentDescriptor };
 }): TaskAttemptRequest {
   const task = structuredClone(options.task);
   if (task.contract?.kind === "human-review") throw new Error(`Human review '${task.id}' must not be sent to a model.`);
@@ -59,7 +79,9 @@ export function prepareTaskRequest(options: {
   if (!Number.isFinite(timeoutMs) || timeoutMs <= 0) throw new Error(`Task '${task.id}' requires a positive timeout.`);
   if (!Number.isInteger(maxRetries) || maxRetries < 0) throw new Error(`Task '${task.id}' requires a nonnegative integer retry budget.`);
   const skills = skillContext(agent);
+  const delegation = options.delegateTo ? delegationBlock(options.delegateTo.owner) : "";
   const instructions = [
+    delegation,
     options.contextBlock ?? "",
     skills,
     `Task: ${task.title}`,
@@ -90,6 +112,7 @@ export function prepareTaskRequest(options: {
     attempt: Object.freeze({ number: options.attempt ?? 1, maxRetries, runId: options.runId ?? "" }),
     budget: Object.freeze({ timeoutMs }), instructions, signal: options.signal,
     logHarnessActivity: options.logHarnessActivity === true,
+    ...(options.sessionId !== undefined ? { sessionId: options.sessionId } : {}),
   });
 }
 

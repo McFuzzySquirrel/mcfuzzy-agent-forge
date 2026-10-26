@@ -1,9 +1,10 @@
 import { existsSync } from "node:fs";
 import { resolve } from "node:path";
+import { randomUUID } from "node:crypto";
 
 import { runCommand, extractModelFlags, stripProviderPrefix, canSelectAgentNatively } from "./run.ts";
 import { harnessInvocationContext } from "./invocation-log.ts";
-import type { HarnessAdapter, TaskAttemptRequest, TaskResult } from "../types.ts";
+import type { HarnessAdapter, SessionResumeStrategy, TaskAttemptRequest, TaskResult } from "../types.ts";
 import { inlinePersona } from "../request.ts";
 import { executionPrompt } from "../task-execution.ts";
 
@@ -33,6 +34,12 @@ export class CopilotAdapter implements HarnessAdapter {
   readonly supportsConcurrency = true;
   readonly capabilities = ["text", "repository-tools"] as const;
   readonly defaultModel?: string;
+  /** `copilot -p --session-id <uuid>` resumes the session, or sets the UUID for a new one. */
+  readonly sessionStrategy: SessionResumeStrategy = {
+    kind: "deterministic",
+    resumeFlags: (sessionId) => ["--session-id", sessionId],
+    newSessionId: () => randomUUID(),
+  };
 
   private readonly bin: string;
   private readonly extraFlags: string[];
@@ -52,7 +59,8 @@ export class CopilotAdapter implements HarnessAdapter {
     const prompt = executionPrompt(request, native ? "" : inlinePersona(request));
     const agentFlag = native ? ["--agent", agent.name] : [];
     const modelFlag = request.effectiveModel ? ["--model", stripProviderPrefix(request.effectiveModel)] : [];
-    const args = ["-p", prompt, ...agentFlag, ...modelFlag, ...this.extraFlags];
+    const sessionFlag = request.sessionId ? this.sessionStrategy.resumeFlags(request.sessionId) : [];
+    const args = ["-p", prompt, ...agentFlag, ...modelFlag, ...sessionFlag, ...this.extraFlags];
 
     const result = await runCommand(this.bin, args, {
       cwd: repoRoot,

@@ -4,6 +4,66 @@ Detailed release and change notes for MyForge.
 
 ---
 
+## October 2026 - v3.104
+
+### Interactive authoring opens the Console terminal
+
+- The Overview and Documents authoring actions ("Author PRD (interactive)",
+  "Grill the idea first (interactive)", "Author feature PRD (interactive)", and
+  the Documents PRD stage) now open the Terminal view pre-seeded with the
+  requested authoring target, so the session can be started in the Console
+  ("Start in Console") or in an external terminal. Previously they launched the
+  external terminal directly and offered no in-Console option.
+
+## October 2026 - v3.103
+
+### Install-script allowlist covers esbuild and node-pty
+
+- The `allowScripts` entries no longer pin an exact esbuild version: `tsx`
+  depends on `esbuild@~0.28.0`, so an exact pin re-triggered the
+  `install-scripts` warning on every patch bump. `esbuild` is now allowed
+  unpinned, and `node-pty` (the Console terminal's native module) is covered in
+  the launcher and root packages. `tools/console-screenshots` also declares
+  `allowScripts` now.
+
+## October 2026 - v3.102
+
+### Interactive harness sessions in the Forge Console
+
+- Added an in-browser terminal for OpenCode, GitHub Copilot, and Claude sessions,
+  including interactive authoring and terminal resize support.
+- Sessions run in a project-scoped PTY over an authenticated, same-origin
+  WebSocket; the Console permits one session at a time and stops it when the
+  project changes, the view disconnects, or the server shuts down.
+- Existing external-terminal launch remains available as a fallback.
+
+## October 2026 - v3.101
+
+### Phase-boundary handoff
+
+- The first task of a new phase session now receives a digest of the earlier
+  phases' completed work — each task's `forge-result` summary and its changed
+  files — so a fresh phase conversation keeps cross-phase context without an
+  unbounded session.
+
+## October 2026 - v3.100
+
+### Phase-scoped session reuse
+
+- The workflow engine can now reuse one harness conversation across an entire
+  phase (`--session-scope phase` / `FORGE_ENGINE_SESSION_SCOPE=phase`), so tasks
+  in a phase inherit each other's context instead of paying a fresh-session
+  cold start each task. A new conversation begins at each phase boundary.
+- Supported by the OpenCode (`--session`), Copilot (`--session-id`), and Claude
+  (`--resume` + captured `session_id`) harnesses; the OpenAI and stub adapters
+  are unchanged.
+- Phase sessions run every task under a stable `project-orchestrator` lead
+  agent, which delegates each task to its owner specialist as a sub-agent.
+- Requires `--concurrency 1` (a phase session cannot span per-task git
+  worktrees); the CLI and engine refuse the combination loudly.
+- Per-task commits, validation, retries, replay, and audit are unchanged.
+  Session IDs are persisted in `docs/WORKFLOW-STATE.json` under `sessions`.
+
 ## October 2026 - v3.99
 
 ### Agents declare relevant project skills

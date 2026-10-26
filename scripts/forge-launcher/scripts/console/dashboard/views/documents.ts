@@ -405,11 +405,9 @@ function buildAuthoringSettings(panel: HTMLElement, initial: AuthoringConfig, in
         return;
       }
       if (prdStage) {
-        // Fire-and-forget: the session runs in an external terminal, so the
-        // Overview is what observes the committed result.
-        void api.startAuthoringSession("prd")
-          .then((res) => toast(res.message || "interactive PRD session requested"))
-          .catch((error) => toast(error instanceof Error ? error.message : "could not open the PRD session"));
+        // Hand off to the authoring terminal view, where the user can start the
+        // PRD session in the Console or an external terminal.
+        location.hash = "#/terminal?authoring=prd";
         return;
       }
       actionButton.disabled = true;

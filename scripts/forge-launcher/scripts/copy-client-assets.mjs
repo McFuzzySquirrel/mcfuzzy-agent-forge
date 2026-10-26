@@ -18,6 +18,18 @@ for (const file of ["index.html", "style.css"]) {
   copyFileSync(path.join(src, file), path.join(dest, file));
 }
 
+const vendor = path.join(dest, "vendor");
+mkdirSync(vendor, { recursive: true });
+for (const [source, output] of [
+  ["@xterm/xterm/lib/xterm.js", "xterm.js"],
+  ["@xterm/xterm/css/xterm.css", "xterm.css"],
+  ["@xterm/xterm/LICENSE", "xterm.LICENSE"],
+  ["@xterm/addon-fit/lib/addon-fit.js", "addon-fit.js"],
+  ["@xterm/addon-fit/LICENSE", "addon-fit.LICENSE"],
+]) {
+  copyFileSync(path.join(pkgDir, "node_modules", source), path.join(vendor, output));
+}
+
 // The console user guide is served to the client as /guide.md so the Help
 // modal can render it. Source of truth lives in the repo's docs/ directory.
 copyFileSync(

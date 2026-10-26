@@ -58,6 +58,30 @@ a:hover { text-decoration: underline; }
   border-radius: 8px;
   transition: color .15s, background .15s;
 }
+
+.console-terminal {
+  height: min(65vh, 720px);
+  min-height: 320px;
+  margin-top: 14px;
+  padding: 8px;
+  overflow: hidden;
+  border: 1px solid var(--panel-border);
+  border-radius: var(--radius);
+  background: #070b16;
+}
+
+.console-terminal .xterm {
+  height: 100%;
+}
+
+.terminal-controls select,
+.terminal-controls input {
+  min-height: 36px;
+}
+
+.terminal-controls input {
+  min-width: min(320px, 70vw);
+}
 .nav-link:hover { color: var(--text); background: rgba(140, 170, 255, 0.08); text-decoration: none; }
 .nav-link.active { color: var(--text); background: rgba(140, 170, 255, 0.16); font-weight: 600; }
 

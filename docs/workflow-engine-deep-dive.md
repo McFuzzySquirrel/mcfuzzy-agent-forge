@@ -462,6 +462,28 @@ by the engine.
 
 Returns a synthetic success for every task without making any real call. The environment variable `STUB_FAIL_TASK_IDS` can be set to a comma-separated list of task IDs that should fail - useful for testing the retry and failure handling logic without a real backend.
 
+### Session reuse across a phase
+
+By default each adapter spawns a **fresh session per task** (ADR-058), so every
+task re-derives the repository from scratch. `--session-scope phase` reuses one
+conversation per phase instead. The adapter expresses how it resumes a session
+via a `SessionResumeStrategy`:
+
+- **deterministic** (OpenCode `--session <id>`, Copilot `--session-id <id>`) — the
+  engine generates a UUID once per phase and the adapter threads it into argv.
+- **capture** (Claude `--resume <id>`) — the adapter returns the harness-assigned
+  `session_id` on the `TaskResult`, and the engine stores it in state for the
+  rest of the phase.
+
+Phase scope runs every task under a stable `project-orchestrator` lead (the
+`--agent` cannot change mid-session), which delegates to the task's owner as a
+sub-agent. It requires `--concurrency 1` because session lookup is project-scoped
+and parallel sandboxes are distinct projects. The first task of a new phase also
+receives a **phase-boundary handoff** — a digest of the earlier phases' completed
+work (per-task `forge-result` summaries and changed files) — so the fresh
+conversation at a phase boundary does not lose cross-phase context. See
+[ADR-067](adr/067-phase-scoped-session-reuse.md).
+
 The engine is intentionally native to the supported harness adapters. The
 execution adapter compiles the manifest before the run; the workflow engine
 then owns dispatch, output verification, retries, timeouts, and durable state.
