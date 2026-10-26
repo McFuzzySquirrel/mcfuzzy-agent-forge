@@ -4,6 +4,21 @@ Detailed release and change notes for MyForge.
 
 ---
 
+## October 2026 - v3.111
+
+### Console screenshots refreshed; Settings sections load reliably
+
+- The Forge Console visual tour ([forge-console-screenshots.md](forge-console-screenshots.md))
+  and the committed capture set were regenerated for the grouped sidebar,
+  project context bar, job badge, token usage, and the new Settings view. A
+  Settings capture and 320/390/720/1024/1440 responsive variants were added.
+- Fixed the Settings view's **Global defaults** and **Authoring** sections
+  staying on "Loading…": each async section now has its own generation counter
+  instead of sharing one that the next section invalidated.
+- The screenshot fixture now seeds token/cost usage, a global `settings.json`,
+  per-agent model overrides, and a failed background job so the new surfaces are
+  represented.
+
 ## October 2026 - v3.110
 
 ### Token and cost usage in the Console

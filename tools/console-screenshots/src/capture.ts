@@ -19,7 +19,7 @@ const TABLET: Viewport = { width: 720, height: 1100 };
 const MOBILE_L: Viewport = { width: 390, height: 900 };
 const MOBILE_S: Viewport = { width: 320, height: 900 };
 
-const ROUTES = ["home", "overview", "board", "tasks", "logs", "documents", "artifacts", "timeline", "projects", "new"] as const;
+const ROUTES = ["home", "overview", "board", "tasks", "logs", "documents", "artifacts", "timeline", "projects", "new", "settings"] as const;
 const VIEWPORTS: Array<[label: string, viewport: Viewport]> = [
   ["1440", WIDE],
   ["1024", MEDIUM],
@@ -32,7 +32,7 @@ function routeTargets(): CaptureTarget[] {
   const targets: CaptureTarget[] = [];
   for (const route of ROUTES) {
     for (const [label, viewport] of VIEWPORTS) {
-      targets.push({ name: `${route}-${label}`, route, viewport, fullPage: route === "overview" });
+      targets.push({ name: `${route}-${label}`, route, viewport, fullPage: route === "overview" || route === "settings" });
     }
   }
   return targets;
@@ -187,6 +187,7 @@ export async function captureGifFrames(browser: Browser, baseUrl: string, frames
     { route: "board" },
     { route: "tasks" },
     { route: "logs" },
+    { route: "settings" },
     { route: "artifacts" },
   ];
 

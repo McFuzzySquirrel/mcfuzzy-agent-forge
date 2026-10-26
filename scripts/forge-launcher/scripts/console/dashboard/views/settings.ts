@@ -23,7 +23,11 @@ import type {
 } from "../types.js";
 
 let unsub: Array<() => void> = [];
+// One counter per async section. A shared counter made the first two sections
+// discard their own results as soon as the next section incremented it.
+let globalGeneration = 0;
 let authoringGeneration = 0;
+let modelsGeneration = 0;
 // Execution controls that reflect store.summary and are updated in place so a
 // background snapshot never clobbers the user mid-edit.
 let autoCommitCb: HTMLInputElement | null = null;
@@ -33,7 +37,9 @@ let concurrencyInput: HTMLInputElement | null = null;
 export function unmountSettings(): void {
   for (const u of unsub) u();
   unsub = [];
+  globalGeneration += 1;
   authoringGeneration += 1;
+  modelsGeneration += 1;
   autoCommitCb = null;
   logActivityCb = null;
   concurrencyInput = null;
@@ -66,7 +72,7 @@ function globalDefaultsSection(): HTMLElement {
     el("p", { className: "dim small" }, "System-level defaults shared across all projects (stored in your Forge settings). Projects inherit these where they have not chosen their own value."),
     el("div", { className: "spinner-row", role: "status" }, [el("span", { className: "spinner", "aria-hidden": "true" }), "Loading global defaults…"]),
   ]);
-  const generation = ++authoringGeneration;
+  const generation = ++globalGeneration;
   void loadGlobalDefaults(panel, generation);
   return panel;
 }
@@ -74,10 +80,10 @@ function globalDefaultsSection(): HTMLElement {
 async function loadGlobalDefaults(panel: HTMLElement, generation: number): Promise<void> {
   try {
     const settings = await api.settings();
-    if (generation !== authoringGeneration) return;
+    if (generation !== globalGeneration) return;
     panel.replaceChildren(el("h2", null, "Global defaults"), buildGlobalDefaults(settings));
   } catch (error) {
-    if (generation !== authoringGeneration) return;
+    if (generation !== globalGeneration) return;
     panel.replaceChildren(
       el("h2", null, "Global defaults"),
       el("p", { className: "error-text", role: "alert" }, error instanceof Error ? `Unable to load global defaults: ${error.message}` : "Unable to load global defaults."),
@@ -527,29 +533,29 @@ function renderTimeoutControls(): HTMLElement {
 
 function modelsSection(): HTMLElement {
   const panel = el("div", { className: "panel" });
-  const generation = ++authoringGeneration;
+  const generation = ++modelsGeneration;
 
   const render = (): void => {
     panel.replaceChildren(el("h2", null, "Models"), el("div", { className: "spinner-row", role: "status" }, [el("span", { className: "spinner", "aria-hidden": "true" }), "Loading agents…"]));
     void api.team()
       .then((team) => {
-        if (generation !== authoringGeneration) return;
+        if (generation !== modelsGeneration) return;
         if (team.agents.length === 0) {
           panel.replaceChildren(el("h2", null, "Models"), el("p", { className: "dim" }, "No agent team generated yet. Generate the team first, then return to assign model overrides."));
           return;
         }
         void api.modelInventory()
           .then((inventory) => {
-            if (generation !== authoringGeneration) return;
+            if (generation !== modelsGeneration) return;
             panel.replaceChildren(el("h2", null, "Models"), modelTerminalPanel(), modelOverrides(team.agents, inventory.models, render));
           })
           .catch(() => {
-            if (generation !== authoringGeneration) return;
+            if (generation !== modelsGeneration) return;
             panel.replaceChildren(el("h2", null, "Models"), modelTerminalPanel(), modelOverrides(team.agents, [], render));
           });
       })
       .catch(() => {
-        if (generation !== authoringGeneration) return;
+        if (generation !== modelsGeneration) return;
         panel.replaceChildren(el("h2", null, "Models"), el("p", { className: "error-text", role: "alert" }, "Failed to load team."));
       });
   };
