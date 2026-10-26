@@ -18,6 +18,8 @@ Detailed release and change notes for MyForge.
 - The screenshot fixture now seeds token/cost usage, a global `settings.json`,
   per-agent model overrides, and a failed background job so the new surfaces are
   represented.
+- Sidebar navigation now separates section labels from links by contrast, with
+  an amber left edge marking the active view.
 
 ## October 2026 - v3.110
 

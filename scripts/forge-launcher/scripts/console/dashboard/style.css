@@ -141,10 +141,11 @@ a:hover { text-decoration: underline; }
 
 .nav-link {
   display: block;
-  color: var(--text-dim);
+  /* Brighter than the muted group title, so actionable items read as clickable. */
+  color: rgba(219, 228, 255, 0.82);
   padding: 6px 12px;
   border-radius: 8px;
-  transition: color .15s, background .15s;
+  transition: color .15s, background .15s, box-shadow .15s;
 }
 
 .console-terminal {
@@ -171,7 +172,7 @@ a:hover { text-decoration: underline; }
   min-width: min(320px, 70vw);
 }
 .nav-link:hover { color: var(--text); background: rgba(140, 170, 255, 0.08); text-decoration: none; }
-.nav-link.active { color: var(--text); background: rgba(140, 170, 255, 0.16); font-weight: 600; }
+.nav-link.active { color: var(--text); background: rgba(140, 170, 255, 0.16); font-weight: 600; box-shadow: inset 2px 0 0 var(--accent); }
 
 #view {
   flex: 1;
