@@ -385,10 +385,12 @@ the exact command to run manually.
 
 ## Views
 
-The views are grouped in a left sidebar (**Start / Pipeline / Monitor / Review /
-Settings**) with a persistent project context bar across the top that shows the
-current project name, harness, Live/Idle state, a project switcher, and the Help
-button + connection status.
+The views are grouped under top categories (**Start / Pipeline / Monitor /
+Review / Settings**); hovering a category opens its list, and selecting it pins
+the list open (for touch). A persistent project context bar below the menu shows
+the current project name, harness, Live/Idle state, a project switcher, and the
+Help button + connection status. Content uses the full browser width, with only
+long-form prose capped for readability.
 
 | View | What it shows |
 |---|---|

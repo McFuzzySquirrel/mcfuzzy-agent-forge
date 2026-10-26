@@ -67,21 +67,123 @@ function renderNav(activeId: string): void {
   const nav = document.querySelector<HTMLElement>("#nav");
   if (!nav) return;
   nav.textContent = "";
+  const terminalRunning = isTerminalSessionActive();
+
   for (const [group, ids] of NAV_GROUPS) {
-    const groupEl = el("div", { className: "nav-group" }, [el("div", { className: "nav-group-title" }, group)]);
-    for (const id of ids) {
-      const view = views.find((v) => v.id === id);
-      if (!view) continue;
+    const groupViews = ids
+      .map((id) => views.find((view) => view.id === id))
+      .filter((view): view is View => Boolean(view));
+    if (groupViews.length === 0) continue;
+    const active = groupViews.some((view) => view.id === activeId);
+    const dot = terminalRunning && groupViews.some((view) => view.id === "terminal");
+
+    // A single-item category (Settings) is a direct link, not a dropdown.
+    if (groupViews.length === 1) {
+      const view = groupViews[0]!;
       const link = document.createElement("a");
       link.href = `#/${view.id}`;
-      const running = view.id === "terminal" && isTerminalSessionActive();
-      link.textContent = running ? `${view.label} ●` : view.label;
-      if (running) link.title = "A terminal session is running in the background.";
-      link.className = view.id === activeId ? "nav-link active" : "nav-link";
-      groupEl.appendChild(link);
+      link.textContent = dot ? `${group} ●` : group;
+      if (dot) link.title = "A terminal session is running in the background.";
+      link.className = `nav-category-btn nav-direct${active ? " active" : ""}`;
+      nav.appendChild(link);
+      continue;
     }
-    nav.appendChild(groupEl);
+
+    const category = el("div", { className: "nav-category" });
+    const button = el("button", {
+      type: "button",
+      className: `nav-category-btn${active ? " active" : ""}`,
+      "aria-haspopup": "true",
+      "aria-expanded": "false",
+    }, [dot ? `${group} ●` : group, el("span", { className: "nav-caret", "aria-hidden": "true" }, "▾")]);
+    const menu = el("div", { className: "nav-menu", role: "menu" });
+    for (const view of groupViews) {
+      const link = document.createElement("a");
+      link.href = `#/${view.id}`;
+      link.textContent = view.id === "terminal" && terminalRunning ? `${view.label} ●` : view.label;
+      link.setAttribute("role", "menuitem");
+      if (view.id === activeId) link.setAttribute("aria-current", "page");
+      menu.appendChild(link);
+    }
+    category.append(button, menu);
+    nav.appendChild(category);
   }
+}
+
+/** Closes any category flyouts that were pinned open by a click. */
+function closeNavMenus(): void {
+  const nav = document.querySelector<HTMLElement>("#nav");
+  if (!nav) return;
+  for (const category of nav.querySelectorAll<HTMLElement>(".nav-category.open")) {
+    category.classList.remove("open");
+    category.querySelector<HTMLElement>(".nav-category-btn")?.setAttribute("aria-expanded", "false");
+  }
+}
+
+function setNavExpanded(category: HTMLElement, expanded: boolean): void {
+  category.querySelector<HTMLElement>(".nav-category-btn")?.setAttribute("aria-expanded", expanded ? "true" : "false");
+}
+
+/** On narrow screens the flyout is fixed; anchor it under its category button. */
+function positionNavMenu(category: HTMLElement): void {
+  const button = category.querySelector<HTMLElement>(".nav-category-btn");
+  if (!button) return;
+  const rect = button.getBoundingClientRect();
+  document.documentElement.style.setProperty("--nav-menu-top", `${Math.round(rect.bottom + 6)}px`);
+}
+
+/**
+ * Wires the category navigation once. The bar is rebuilt on every route change,
+ * so the handlers are delegated from the persistent `#nav` element: hover and
+ * focus reveal a menu via CSS, while a click pins it open for touch.
+ */
+function wireNav(): void {
+  const nav = document.querySelector<HTMLElement>("#nav");
+  if (!nav || nav.dataset.wired === "true") return;
+  nav.dataset.wired = "true";
+
+  nav.addEventListener("click", (event) => {
+    const button = (event.target as HTMLElement).closest<HTMLElement>(".nav-category-btn");
+    if (!button || button.classList.contains("nav-direct")) return;
+    event.preventDefault();
+    const category = button.closest<HTMLElement>(".nav-category");
+    if (!category) return;
+    const willOpen = !category.classList.contains("open");
+    closeNavMenus();
+    if (willOpen) {
+      category.classList.add("open");
+      setNavExpanded(category, true);
+      positionNavMenu(category);
+    }
+  });
+
+  nav.addEventListener("pointerover", (event) => {
+    const category = (event.target as HTMLElement).closest<HTMLElement>(".nav-category");
+    if (!category) return;
+    positionNavMenu(category);
+    setNavExpanded(category, true);
+  });
+  nav.addEventListener("pointerout", (event) => {
+    const category = (event.target as HTMLElement).closest<HTMLElement>(".nav-category");
+    if (!category || category.contains(event.relatedTarget as Node)) return;
+    if (!category.classList.contains("open")) setNavExpanded(category, false);
+  });
+  nav.addEventListener("focusin", (event) => {
+    const category = (event.target as HTMLElement).closest<HTMLElement>(".nav-category");
+    if (category) setNavExpanded(category, true);
+  });
+  nav.addEventListener("focusout", (event) => {
+    const category = (event.target as HTMLElement).closest<HTMLElement>(".nav-category");
+    if (!category || category.contains(event.relatedTarget as Node)) return;
+    if (!category.classList.contains("open")) setNavExpanded(category, false);
+  });
+
+  document.addEventListener("click", (event) => {
+    if (!nav.contains(event.target as Node)) closeNavMenus();
+  });
+  document.addEventListener("keydown", (event) => {
+    if (event.key === "Escape") closeNavMenus();
+  });
 }
 
 // ─── Project context bar ──────────────────────────────────────────────────────
@@ -293,6 +395,9 @@ async function init(): Promise<void> {
   }
 
   connectEvents();
+
+  // Category flyouts: wire once; the bar itself is rebuilt per route.
+  wireNav();
 
   // Keep the "Terminal ●" nav marker in sync as a background session starts,
   // exits, or stops without a route change.

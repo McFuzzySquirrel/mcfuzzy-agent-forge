@@ -132,10 +132,11 @@ out for review.
 
 ## 4. Monitor a build in the main views
 
-Navigation is a grouped sidebar (**Start / Pipeline / Monitor / Review /
-Settings**) with a persistent project context bar across the top. The context
-bar shows the current project name, harness, and Live/Idle state, and its
-switcher changes projects from any view.
+Navigation is grouped under top categories (**Start / Pipeline / Monitor /
+Review / Settings**); hovering a category opens its list, and selecting it pins
+the list open. A persistent project context bar below the menu shows the current
+project name, harness, and Live/Idle state, and its switcher changes projects
+from any view.
 
 Once the build starts, switch between the views to follow the work:
 

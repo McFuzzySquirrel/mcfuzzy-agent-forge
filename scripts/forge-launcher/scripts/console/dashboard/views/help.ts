@@ -117,7 +117,7 @@ function quickHelp(): HTMLElement {
       "Review preserved, new, changed, and removed task IDs in Manifest. Reset changed tasks for review only when changed completed tasks should run again.",
     ]),
     helpSection("Views", [
-      "Navigation is grouped in the left sidebar (Start / Pipeline / Monitor / Review / Settings); a persistent project context bar across the top shows the current project and a switcher.",
+      "Navigation is grouped into top categories (Start / Pipeline / Monitor / Review / Settings); hover a category, or select it to pin its list open. A persistent project context bar below the menu shows the current project and a switcher.",
       dl([
         ["Home", "create a new project or open an existing one."],
         ["Projects", "switch to a different project or add a folder."],

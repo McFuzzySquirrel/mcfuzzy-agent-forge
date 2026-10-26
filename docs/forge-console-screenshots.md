@@ -9,11 +9,10 @@ set is archived under `images/forge-console/current/`. Start with
 
 > See [forge-console.md](forge-console.md) for the full reference.
 >
-> **Capture note (v3.110):** these captures show the grouped left sidebar and
-> persistent project context bar (project switcher, harness badge, Live/Idle,
-> and the background-job badge). Overview shows run-level token/cost stats,
-> Tasks has a **Tokens** column, and the new **Settings** view consolidates
-> authoring, execution, and model configuration.
+> **Capture note (v3.112):** these captures show the top category navigation
+> (hover or select a category for its dropdown), the persistent project context
+> bar, full-width content, run-level token/cost stats, the Tasks **Tokens**
+> column, and the consolidated **Settings** view.
 
 ---
 
@@ -160,6 +159,14 @@ A single view for project configuration plus system-level defaults:
   terminal.
 
 ![Settings - global defaults, authoring, execution, and models](images/forge-console/15-settings.png)
+
+## 16. Navigation menu
+
+Navigation is a top bar of categories. Hovering a category opens its views, and
+selecting it pins the list open for touch; the category that owns the current
+view keeps the amber underline. The page content uses the full browser width.
+
+![Navigation - category dropdown](images/forge-console/16-nav-menu.png)
 
 ## Responsive current captures
 

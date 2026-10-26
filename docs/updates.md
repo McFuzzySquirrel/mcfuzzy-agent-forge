@@ -4,6 +4,24 @@ Detailed release and change notes for MyForge.
 
 ---
 
+## October 2026 - v3.112
+
+### Top category navigation and fluid layout
+
+- The Console navigation is back at the top: **Start / Pipeline / Monitor /
+  Review / Settings** are categories. Hovering one opens its views; selecting it
+  pins the list open for touch. The active category keeps the amber underline,
+  and the Terminal **●** indicator still appears while a session runs.
+- Page content now uses the full browser width; only long-form prose is capped
+  for readability. Panels, tables, the board, and the authoring/model grids
+  reflow to the available space, while Overview stays a vertical stack.
+- On narrow screens the category row scrolls horizontally and an open menu
+  becomes a full-width panel beneath the top bar.
+- The OpenCode adapter now generates canonical `ses_…` session IDs. The usage
+  capture added in v3.110 passed a bare UUID to `--session`, which OpenCode v2
+  rejects with `Expected a string starting with "ses"`; every task failed
+  immediately. The fix also repairs phase-scoped OpenCode session reuse.
+
 ## October 2026 - v3.111
 
 ### Console screenshots refreshed; Settings sections load reliably

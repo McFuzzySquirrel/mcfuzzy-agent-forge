@@ -21,6 +21,7 @@ export const NUMBERED: Array<{ numbered: string; from: string }> = [
   { numbered: "13-new-project", from: "new-1440" },
   { numbered: "14-help", from: "help-1440" },
   { numbered: "15-settings", from: "settings-1440" },
+  { numbered: "16-nav-menu", from: "nav-menu-1440" },
 ];
 
 function run(bin: string, args: string[]): void {

@@ -88,7 +88,23 @@ function detailTargets(): CaptureTarget[] {
       viewport: WIDE,
       prepare: async (page) => { await openBoardTable(page); },
     },
+    {
+      name: "nav-menu-1440",
+      route: "overview",
+      viewport: WIDE,
+      prepare: async (page) => { await openNavMenu(page, "Monitor"); },
+    },
   ];
+}
+
+/** Opens a top-nav category flyout by clicking its button. */
+async function openNavMenu(page: Awaited<ReturnType<Browser["newPage"]>>, label: string): Promise<void> {
+  await page.evaluate((name) => {
+    const button = Array.from(document.querySelectorAll<HTMLElement>(".nav-category-btn"))
+      .find((node) => (node.textContent ?? "").includes(name));
+    button?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+  }, label);
+  await new Promise((resolve) => setTimeout(resolve, 150));
 }
 
 /**
@@ -188,6 +204,7 @@ export async function captureGifFrames(browser: Browser, baseUrl: string, frames
     { route: "tasks" },
     { route: "logs" },
     { route: "settings" },
+    { route: "overview", prepare: async (page) => { await openNavMenu(page, "Monitor"); } },
     { route: "artifacts" },
   ];
 
