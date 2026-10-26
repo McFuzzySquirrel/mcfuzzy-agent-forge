@@ -2,7 +2,7 @@
 
 import { api } from "../api.js";
 import { Epoch, store } from "../state.js";
-import { el, fmtAgo, fmtDuration, fmtTime, minutesToTimeoutMs, statusBadge, toast } from "../render/dom.js";
+import { el, fmtAgo, fmtDuration, fmtTime, statusBadge, toast } from "../render/dom.js";
 import type {
   Actions,
   AuthoringSessionTarget,
@@ -333,7 +333,7 @@ function renderAuthoringStatus(summary: Summary): HTMLElement {
   return el("div", { className: "panel authoring-status" }, [
     el("div", { className: "row between wrap" }, [
       el("h3", null, "Authoring stages"),
-      el("a", { href: "#/documents", className: "btn btn-sm" }, "Configure models"),
+      el("a", { href: "#/settings", className: "btn btn-sm" }, "Configure models"),
     ]),
     el("div", { className: "authoring-stage-list" }, stages.map(([stage, label]) => {
       const state = summary.authoring?.stages[stage];
@@ -800,11 +800,7 @@ function renderActions(container: HTMLElement, summary: Summary, actions: Action
     replay = el("div", { className: "row gap" }, [select, replayBtn]);
   }
 
-  const timeouts = renderTimeoutControls(container, tasks);
   const mode = renderBuildModeControl(container, summary.executionMode, summary.selectedTaskCount);
-  const commit = renderAutoCommitToggle(container, store.summary?.autoCommit ?? true);
-  const activity = renderLogHarnessActivityToggle(container, store.summary?.logHarnessActivity ?? false);
-  const concurrency = renderConcurrencyControl(container, store.summary?.concurrency ?? 0);
   // Reset lives with the reconciliation data it acts on, in the Manifest panel
   // directly above this one, so this is a pointer rather than a second control.
   const completedTaskIds = new Set(
@@ -820,13 +816,10 @@ function renderActions(container: HTMLElement, summary: Summary, actions: Action
       ? el("p", { className: "dim small" }, ["Manual mode needs at least one selected task. ", el("a", { href: "#/tasks" }, "Choose tasks")])
       : null,
     authoringBlocked
-      ? el("p", { className: "error-text small", role: "alert" }, [summary.authoringBlocker || "Authoring stages are incomplete.", " ", el("a", { href: "#/documents" }, "Review authoring settings and stages")])
+      ? el("p", { className: "error-text small", role: "alert" }, [summary.authoringBlocker || "Authoring stages are incomplete.", " ", el("a", { href: "#/documents" }, "Review authoring stages")])
       : null,
     replay,
-    timeouts,
-    commit,
-    activity,
-    concurrency,
+    el("p", { className: "dim small" }, ["Execution settings (timeouts, concurrency, auto-commit, harness logging) now live in ", el("a", { href: "#/settings" }, "Settings"), "."]),
     changedCompleted.length > 0
       ? el("p", { className: "dim small" }, `${changedCompleted.length} changed task${changedCompleted.length === 1 ? " has" : "s have"} already completed; reset them in the Manifest panel above to run them again.`)
       : null,
@@ -868,162 +861,6 @@ function renderBuildModeControl(container: HTMLElement, mode: ExecutionMode, sel
       select,
       el("span", { className: "dim small" }, mode === "manual" ? `${selectedCount} task(s) selected` : "full workflow"),
       el("a", { href: "#/tasks", className: "btn btn-sm" }, "Choose tasks"),
-    ]),
-  ]);
-}
-
-function renderAutoCommitToggle(container: HTMLElement, enabled: boolean): HTMLElement {
-  const cb = el("input", { type: "checkbox", checked: enabled ? true : null });
-  const label = el("label", { className: "checkbox-row" }, [
-    cb,
-    el("span", null, "Auto-commit after each task (one commit per completed task)"),
-  ]);
-  cb.addEventListener("change", () => {
-    const value = (cb as HTMLInputElement).checked;
-    void (async () => {
-      try {
-        const res = await api.setAutoCommit(value);
-        toast(res.message || (res.ok ? "updated" : "update failed"));
-      } catch (err) {
-        toast(err instanceof Error ? err.message : "update failed");
-      }
-      void renderOverview(container);
-    })();
-  });
-  return el("div", { style: "margin-top:10px" }, [label]);
-}
-
-function renderLogHarnessActivityToggle(container: HTMLElement, enabled: boolean): HTMLElement {
-  const cb = el("input", { type: "checkbox", checked: enabled ? true : null });
-  const label = el("label", { className: "checkbox-row" }, [
-    cb,
-    el("span", null, "Log harness activity (stream harness CLI output into the engine log)"),
-  ]);
-  cb.addEventListener("change", () => {
-    const value = (cb as HTMLInputElement).checked;
-    void (async () => {
-      try {
-        const res = await api.setLogHarnessActivity(value);
-        toast(res.message || (res.ok ? "updated" : "update failed"));
-      } catch (err) {
-        toast(err instanceof Error ? err.message : "update failed");
-      }
-      void renderOverview(container);
-    })();
-  });
-  return el("div", { style: "margin-top:10px" }, [
-    label,
-    el("p", { className: "dim small", role: "note" }, "Off by default. Applies to subsequently started runs; the current run is unchanged. Activity logs can contain sensitive repository content and increase log volume. Command logging is always on."),
-  ]);
-}
-
-function renderConcurrencyControl(container: HTMLElement, current: number): HTMLElement {
-  const input = el("input", {
-    type: "number",
-    placeholder: "1",
-    min: "0",
-    className: "timeout-input",
-    value: current > 0 ? String(current) : "",
-  });
-  const btn = el("button", { className: "btn btn-sm" }, "Set");
-  btn.addEventListener("click", () => {
-    const raw = Number((input as HTMLInputElement).value);
-    if (!Number.isInteger(raw) || raw < 0) {
-      toast("Enter a positive integer (or 0 for engine default).");
-      return;
-    }
-    void (async () => {
-      try {
-        const res = await api.setConcurrency(raw);
-        toast(res.message || (res.ok ? "updated" : "update failed"));
-      } catch (err) {
-        toast(err instanceof Error ? err.message : "update failed");
-      }
-      void renderOverview(container);
-    })();
-  });
-  const hint = el("span", { className: "dim small" }, current > 0 ? `current: ${current}` : "current: engine default");
-  return el("div", { style: "margin-top:10px" }, [
-    el("div", { className: "row gap" }, [
-      el("span", { className: "dim small" }, "Concurrency (parallel tasks)"),
-      input,
-      btn,
-      hint,
-    ]),
-  ]);
-}
-
-function renderTimeoutControls(container: HTMLElement, tasks: TaskRow[]): HTMLElement {
-  const reload = (): void => {
-    void renderOverview(container);
-  };
-
-  const sorted = [...tasks].sort((a, b) => {
-    const af = a.status === "failed" ? 0 : 1;
-    const bf = b.status === "failed" ? 0 : 1;
-    return af - bf || a.id.localeCompare(b.id);
-  });
-
-  const taskSelect = el("select", { className: "replay-select" });
-  for (const t of sorted) {
-    taskSelect.appendChild(el("option", { value: t.id }, `${t.id} — ${t.title}`));
-  }
-
-  const taskInput = el("input", { type: "number", placeholder: "min", className: "timeout-input" });
-  const setTask = el("button", { className: "btn btn-sm" }, "Set");
-  setTask.addEventListener("click", () => {
-    const minutes = Number((taskInput as HTMLInputElement).value);
-    if (!Number.isFinite(minutes) || minutes <= 0) {
-      toast("Enter a positive timeout in minutes.");
-      return;
-    }
-    const id = (taskSelect as HTMLSelectElement).value;
-    if (!id) {
-      toast("Select a task.");
-      return;
-    }
-    void (async () => {
-      try {
-        const res = await api.setTaskTimeout(id, minutesToTimeoutMs(minutes));
-        toast(res.message || (res.ok ? "ok" : "failed"));
-        reload();
-      } catch (err) {
-        toast(err instanceof Error ? err.message : "update failed");
-      }
-    })();
-  });
-
-  const allInput = el("input", { type: "number", placeholder: "min", className: "timeout-input" });
-  const setAll = el("button", { className: "btn btn-sm" }, "Set all");
-  setAll.addEventListener("click", () => {
-    const minutes = Number((allInput as HTMLInputElement).value);
-    if (!Number.isFinite(minutes) || minutes <= 0) {
-      toast("Enter a positive timeout in minutes.");
-      return;
-    }
-    void (async () => {
-      try {
-        const res = await api.setAllTaskTimeouts(minutesToTimeoutMs(minutes));
-        toast(res.message || (res.ok ? "ok" : "failed"));
-        reload();
-      } catch (err) {
-        toast(err instanceof Error ? err.message : "update failed");
-      }
-    })();
-  });
-
-  return el("div", { className: "timeout-controls" }, [
-    el("h4", null, "Timeouts"),
-    el("div", { className: "row gap", style: "margin:6px 0" }, [
-      el("span", { className: "dim small" }, "Task"),
-      taskSelect,
-      taskInput,
-      setTask,
-    ]),
-    el("div", { className: "row gap" }, [
-      el("span", { className: "dim small" }, "All tasks"),
-      allInput,
-      setAll,
     ]),
   ]);
 }

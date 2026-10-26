@@ -4,6 +4,69 @@ Detailed release and change notes for MyForge.
 
 ---
 
+## October 2026 - v3.109
+
+### Global-defaults editor and background-job badge
+
+- The Settings view now includes a **Global defaults** section that edits the
+  system-level `settings.json` directly (default harness, default authoring
+  runner, and default concurrency / auto-commit / harness-activity logging).
+  Projects inherit these where they have not chosen their own value.
+- A **background-job badge** in the context bar shows running and failed
+  background jobs across all registered projects (e.g. a `create-project` or
+  re-derivation running for a repo that is not currently selected) and links to
+  the Projects view.
+- The Console server exposes a `GET /api/jobs` summary
+  (`{ jobs, active, failed }`) and broadcasts a `jobs` SSE event whenever the
+  background-job state changes, so the badge updates without polling.
+
+## October 2026 - v3.108
+
+### Console navigation and a consolidated Settings view
+
+- The Console's flat top navigation is now a **grouped left sidebar**
+  (**Start / Pipeline / Monitor / Review / Settings**), with a persistent
+  **project context bar** across the top of every view.
+- The context bar shows the current project name and repo root, a harness
+  badge, a Live/Idle indicator, the Help button, and the connection status. A
+  **project switcher** dropdown lets you change projects from any view without
+  leaving the Console.
+- A new **Settings** view consolidates the configuration that used to be spread
+  across Overview and Plan & Team into three sections: **Authoring** (runner +
+  stage models), **Execution** (build mode, concurrency, auto-commit,
+  harness-activity logging, task timeouts), and **Models** (per-agent
+  primary/fallback overrides, the model planning terminal, and inventory
+  refresh).
+- Overview's Controls panel is slimmed to run controls only (Run/Resume/Pause/
+  Stop, Replay, build mode, and the manual-task pointer); execution preferences
+  now live in Settings, linked from the Controls panel.
+- Plan & Team keeps the project documents, agent/skill cards, and the authoring
+  stage cards + re-derivation footer; the authoring model selectors and
+  per-agent model overrides moved to Settings.
+
+---
+
+## October 2026 - v3.107
+
+### System-level console defaults
+
+- The Console now reads a global `settings.json` from the Forge registry
+  directory (`FORGE_HOME`, or `~/.myforge` by default), so authoring and
+  execution defaults can be set once and shared across projects.
+- The effective authoring ladder is now: explicit override → environment →
+  saved project recommendation → **system default** → runner default. A new
+  `system` provenance value records when a global default supplied the model or
+  runner.
+- Global execution defaults (concurrency, auto-commit, harness-activity logging)
+  are inherited by any project that has not set its own value in
+  `docs/engine-config.json`; the project value always wins.
+- A default harness can be set globally and pre-fills the New Project wizard
+  alongside the default authoring runner and concurrency.
+- Added token-gated `GET`/`PUT /api/settings` endpoints (the same loopback
+  surface as the existing authoring/engine config endpoints). A corrupt
+  `settings.json` falls back to defaults and is never clobbered on read; writes
+  are atomic and validated.
+
 ## October 2026 - v3.106
 
 ### Windows harness launch and background terminal sessions

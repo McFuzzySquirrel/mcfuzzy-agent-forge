@@ -16,9 +16,10 @@ import { attachTerminalSession, type TerminalStartRequest } from "./terminal-ses
 import { IncrementalLineReader } from "./incremental-reader.ts";
 import { consoleAuthoringInventory, selectedAuthoringRunner } from "./authoring.ts";
 import { isRunnerChoice, loadAuthoringConfig, saveAuthoringConfig, validateAuthoringConfig } from "../authoring-config.ts";
+import { loadSettings, saveSettings, validateSettings } from "../settings.ts";
 import { interactiveAuthoringArgv, resolveAuthoringModel, type InventoryProbe } from "../authoring-inventory.ts";
 import { validateAuthoredPrd } from "../prd-validation.ts";
-import { loadEngineConfig } from "../engine-config.ts";
+import { effectiveExecution } from "../engine-config.ts";
 import { featureIncrementHandoffHasChange, recordAuthoringStageSuccess, recordFeatureIncrementHandoff } from "../authoring-state.ts";
 import { REDERIVE_STEPS, rederiveProgress, type RederiveStepId } from "../rederive-state.ts";
 import {
@@ -30,8 +31,9 @@ import {
 } from "./paths.ts";
 import { harnessCliForHarness, type HarnessCliName } from "./dashboard/harness-rules.ts";
 import * as repo from "./repo.ts";
+import { loadJobs } from "./jobs.ts";
 import { removeProjects, sameProjectPath } from "./remove-projects.ts";
-import type { ControlAction, CreateProjectRequest, ManifestTask } from "./types.ts";
+import type { BackgroundJob, ControlAction, CreateProjectRequest, ManifestTask } from "./types.ts";
 
 const CLIENT_DIR = fileURLToPath(new URL("../../resources/console/client", import.meta.url));
 
@@ -130,7 +132,7 @@ async function buildLayout(repoRoot: string, engineScriptsDir?: string): Promise
   if (!manifest) return null;
   const state = repo.loadState(p);
   const { layoutManifest, layoutGantt } = await loadLayoutModules(engineScriptsDir);
-  const concurrency = Math.max(0, Number(loadEngineConfig(repoRoot)?.concurrency) || 0);
+  const concurrency = effectiveExecution(repoRoot).concurrency;
   return {
     kanban: layoutManifest(manifest, {}),
     gantt: layoutGantt(manifest, state, {
@@ -318,6 +320,25 @@ function sendText(res: http.ServerResponse, code: number, body: string): void {
   res.end(body);
 }
 
+/**
+ * Summary of every background job, across all registered projects (not just
+ * the selected repo). `active` counts jobs still running or paused; `failed`
+ * counts jobs that failed. Reaps dead running jobs first so a stale `jobs.json`
+ * is corrected before the summary is read. Shared by `/api/jobs` and the
+ * poller's `jobs` SSE broadcast so the two cannot drift.
+ */
+function jobsSummary(): { jobs: BackgroundJob[]; active: number; failed: number } {
+  repo.refreshJobs();
+  const jobs = loadJobs();
+  let active = 0;
+  let failed = 0;
+  for (const job of jobs) {
+    if (job.status === "running" || job.status === "paused") active += 1;
+    else if (job.status === "failed") failed += 1;
+  }
+  return { jobs, active, failed };
+}
+
 /** Reads a file from disk, resolved and confined within baseDir (no traversal). */
 function readStatic(baseDir: string, urlPath: string): { body: Buffer; type: string } | null {
   const relative = decodeURIComponent(urlPath).replace(/^\/+/, "");
@@ -452,7 +473,10 @@ export async function startConsoleServer(options: ConsoleServerOptions = {}): Pr
           onLog(`  console: failed to read engine log: ${error instanceof Error ? error.message : String(error)}`);
         }
       }
-      if (jobsChanged) broadcast("snapshot", snapshotEvent());
+      if (jobsChanged) {
+        broadcast("snapshot", snapshotEvent());
+        broadcast("jobs", jobsSummary());
+      }
     } catch (error) {
       onLog(`  console: poller error: ${error instanceof Error ? error.message : String(error)}`);
     }
@@ -520,6 +544,10 @@ export async function startConsoleServer(options: ConsoleServerOptions = {}): Pr
             return p ? sendJson(res, 200, repo.modelInventory(p)) : sendJson(res, 200, { models: [] });
           case "/api/authoring-config":
             return sendJson(res, 200, p ? loadAuthoringConfig(p.repoRoot) : { version: 1, models: {} });
+          case "/api/settings":
+            return sendJson(res, 200, loadSettings());
+          case "/api/jobs":
+            return sendJson(res, 200, jobsSummary());
           case "/api/authoring-inventory": {
             const query = new URLSearchParams(rawUrl.split("?")[1] ?? "");
             return sendJson(res, 200, await consoleAuthoringInventory(p?.repoRoot, query.get("runner") ?? undefined));
@@ -590,6 +618,17 @@ export async function startConsoleServer(options: ConsoleServerOptions = {}): Pr
           const saved = saveAuthoringConfig(currentRepo, config);
           broadcast("snapshot", snapshotEvent());
           return sendJson(res, 200, { ok: true, config: saved, message: "Authoring models saved. Omitted stages inherit the runner default." });
+        }
+        if (urlPath === "/api/settings") {
+          let settings;
+          try {
+            settings = validateSettings(body);
+          } catch (error) {
+            return sendJson(res, 400, { ok: false, message: error instanceof Error ? error.message : String(error) });
+          }
+          const saved = saveSettings(settings);
+          broadcast("snapshot", snapshotEvent());
+          return sendJson(res, 200, { ok: true, settings: saved, message: "Global settings saved." });
         }
         if (urlPath === "/api/authoring-inventory/refresh") {
           return sendJson(res, 200, await consoleAuthoringInventory(currentRepo ?? undefined, body.runner, true, options.inventoryProbe));

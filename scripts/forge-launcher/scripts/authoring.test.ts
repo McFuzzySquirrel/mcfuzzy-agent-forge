@@ -13,6 +13,14 @@ import { createSessionScope } from "./launcher-session.ts";
 import { prompts, withPromptSession } from "./prompts.ts";
 import { writeFeatureFixture } from "./feature-fixture.ts";
 
+// Global settings live under FORGE_HOME (the registry dir). Isolate them so the
+// system-default ladder never reads a developer's real ~/.myforge/settings.json.
+const FORGE_HOME_DIR = fs.mkdtempSync(path.join(os.tmpdir(), "forge-global-settings-"));
+process.env.FORGE_HOME = FORGE_HOME_DIR;
+process.on("exit", () => {
+  try { fs.rmSync(FORGE_HOME_DIR, { recursive: true, force: true }); } catch { /* ignore */ }
+});
+
 function fixture(t: { after: (fn: () => void) => void }, harnessRoot = ".github"): string {
   const repo = fs.mkdtempSync(path.join(os.tmpdir(), "forge-authoring-"));
   t.after(() => fs.rmSync(repo, { recursive: true, force: true }));

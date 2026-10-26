@@ -320,6 +320,27 @@ export interface AuthoringInventory {
   diagnostics?: string[];
 }
 
+export type GlobalRunner = "copilot" | "opencode" | "claude";
+
+/** System-level defaults shared across projects (settings.json in FORGE_HOME). */
+export interface GlobalSettings {
+  version: 1;
+  authoring?: {
+    runner?: GlobalRunner;
+    models?: Partial<Record<AuthoringStage, string>>;
+  };
+  execution?: {
+    concurrency?: number;
+    autoCommit?: boolean;
+    logHarnessActivity?: boolean;
+  };
+  harness?: "opencode" | "github" | "claude" | "agents";
+  ui?: {
+    theme?: "light" | "dark" | "auto";
+    boardMode?: "kanban" | "gantt" | "table";
+  };
+}
+
 export interface AuthoringStageState {
   status: "pending" | "running" | "complete" | "failed";
   inputFingerprint: string;
@@ -334,7 +355,7 @@ export interface AuthoringStageState {
     runner: string;
     requestedModel?: string;
     effectiveModel?: string;
-    source: "invocation" | "environment" | "project" | "inherit";
+    source: "invocation" | "environment" | "project" | "system" | "inherit";
     inventoryVerifiedAt?: string;
   };
 }
@@ -445,6 +466,13 @@ export interface BackgroundJob {
   status: BackgroundJobStatus;
   message: string;
   run?: boolean;
+}
+
+/** Summary of background jobs across all registered projects (`GET /api/jobs`). */
+export interface JobsSummary {
+  jobs: BackgroundJob[];
+  active: number;
+  failed: number;
 }
 
 export interface ControlResult {

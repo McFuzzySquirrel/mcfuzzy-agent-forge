@@ -2,6 +2,7 @@ import fs from "node:fs";
 import path from "node:path";
 import { randomUUID } from "node:crypto";
 import { authoringRunnerForHarness, harnessCliForHarness, type AuthoringRunnerName } from "./console/dashboard/harness-rules.ts";
+import { loadSettings, type GlobalSettings } from "./settings.ts";
 
 export const AUTHORING_STAGES = ["prd", "team", "skills"] as const;
 export type AuthoringStage = typeof AUTHORING_STAGES[number];
@@ -11,7 +12,7 @@ export const AUTHORING_RUNNER_CHOICES = ["copilot", "opencode", "claude"] as con
 export type AuthoringRunnerChoice = AuthoringRunnerName;
 export interface AuthoringConfig { version: 1; models: AuthoringModels; runner?: AuthoringRunnerChoice }
 export interface AuthoringOptions { models?: AuthoringModels; runner?: string }
-export type ModelSource = "invocation" | "environment" | "project" | "inherit";
+export type ModelSource = "invocation" | "environment" | "project" | "system" | "inherit";
 export type RunnerSource = ModelSource;
 export interface AuthoringModelSelection { requestedModel?: string; source: ModelSource }
 /** `stub` is the test-only offline runner; it is reachable from FORGE_RUN_WITH alone. */
@@ -78,12 +79,14 @@ export function saveAuthoringConfig(repo: string, config: AuthoringConfig): Auth
 
 export function selectAuthoringModel(
   repo: string, stage: AuthoringStage, overrides: AuthoringModels = {}, env: NodeJS.ProcessEnv = process.env,
+  global: GlobalSettings = loadSettings(),
 ): AuthoringModelSelection {
   const saved = loadAuthoringConfig(repo);
   const candidates: Array<[string | undefined, ModelSource]> = [
     [overrides[stage], "invocation"],
     [env[`FORGE_${stage.toUpperCase()}_MODEL`], "environment"],
     [saved.models[stage], "project"],
+    [global.authoring?.models?.[stage], "system"],
   ];
   for (const [value, source] of candidates) {
     if (value === undefined) continue;
@@ -96,9 +99,10 @@ export function selectAuthoringModel(
 
 /**
  * Authoring runner for a repo, first defined wins: the invocation override, then
- * FORGE_RUN_WITH, then the persisted project choice, then the harness rule. An
- * empty or "inherit" value at any level falls straight through to the harness
- * rule, exactly as `selectAuthoringModel` does for a stage model.
+ * FORGE_RUN_WITH, then the persisted project choice, then the system default,
+ * then the harness rule. An empty or "inherit" value at any level falls straight
+ * through to the next source, exactly as `selectAuthoringModel` does for a stage
+ * model.
  *
  * FORGE_RUN_WITH=stub is the one exception: it is an offline lock, not a
  * preference, so no other source may override it and spawn a real runner.
@@ -131,6 +135,7 @@ export function selectAuthoringRunner(
   harness: string | null | undefined,
   overrides: AuthoringOptions = {},
   env: NodeJS.ProcessEnv = process.env,
+  global: GlobalSettings = loadSettings(),
 ): AuthoringRunnerSelection {
   if (env.FORGE_RUN_WITH?.trim() === "stub") return { runner: "stub", source: "environment" };
   const saved = repo ? loadAuthoringConfig(repo) : { version: 1 as const, models: {} };
@@ -138,6 +143,7 @@ export function selectAuthoringRunner(
     [overrides.runner, "invocation"],
     [env.FORGE_RUN_WITH, "environment"],
     [saved.runner, "project"],
+    [global.authoring?.runner, "system"],
   ];
   for (const [value, source] of candidates) {
     if (value === undefined) continue;

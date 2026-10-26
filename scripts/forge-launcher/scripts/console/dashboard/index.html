@@ -9,12 +9,20 @@
   <link rel="stylesheet" href="/vendor/xterm.css" />
 </head>
 <body>
-  <header id="topbar">
-    <div class="brand">Forge Console</div>
-    <nav id="nav" aria-label="Main"></nav>
-  </header>
-  <div id="live-announcements" class="sr-only" aria-live="polite" aria-atomic="true"></div>
-  <main id="view" aria-live="polite"></main>
+  <div id="app">
+    <aside id="sidebar">
+      <div class="brand">Forge Console</div>
+      <nav id="nav" aria-label="Main"></nav>
+    </aside>
+    <div id="main">
+      <header id="contextbar" aria-label="Project context">
+        <div id="contextbar-project"></div>
+        <div id="contextbar-actions"></div>
+      </header>
+      <div id="live-announcements" class="sr-only" aria-live="polite" aria-atomic="true"></div>
+      <main id="view" aria-live="polite"></main>
+    </div>
+  </div>
   <script src="/vendor/xterm.js"></script>
   <script src="/vendor/addon-fit.js"></script>
   <script type="module" src="/main.js"></script>

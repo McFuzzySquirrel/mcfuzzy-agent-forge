@@ -29,6 +29,8 @@ import type {
   AuthoringConfig,
   AuthoringInventory,
   AuthoringSessionTarget,
+  GlobalSettings,
+  JobsSummary,
   TimeoutUpdateResult,
   UploadResult,
   WorkflowState,
@@ -104,6 +106,15 @@ export const api = {
   },
   saveAuthoringConfig(config: AuthoringConfig): Promise<{ ok: boolean; config: AuthoringConfig; message: string }> {
     return post("/api/authoring-config", config);
+  },
+  settings(): Promise<GlobalSettings> {
+    return request<GlobalSettings>("/api/settings");
+  },
+  saveSettings(settings: GlobalSettings): Promise<{ ok: boolean; settings: GlobalSettings; message: string }> {
+    return post("/api/settings", settings);
+  },
+  jobs(): Promise<JobsSummary> {
+    return request<JobsSummary>("/api/jobs");
   },
   authoringInventory(runner?: string): Promise<AuthoringInventory> {
     const query = runner ? `?runner=${encodeURIComponent(runner)}` : "";

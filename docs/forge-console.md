@@ -251,10 +251,11 @@ the interactive handoff (ADR-060).
 
 They honor the `--runner` flag (`opencode`/`copilot`/`claude`/`inherit`) first,
 then `FORGE_RUN_WITH` (the same values plus `stub`), then the `runner` saved in
-`docs/authoring-config.json`, and otherwise derive the runner from the project's
-harness (`github` → copilot, otherwise opencode). The one exception to that
-order is `FORGE_RUN_WITH=stub`: it is an offline lock, so `--runner` cannot
-override it and an offline run never spawns a real runner.
+`docs/authoring-config.json`, then the system-level default in `settings.json`
+(see [ADR-071](adr/071-system-level-console-defaults.md)), and otherwise derive
+the runner from the project's harness (`github` → copilot, otherwise opencode).
+The one exception to that order is `FORGE_RUN_WITH=stub`: it is an offline lock,
+so `--runner` cannot override it and an offline run never spawns a real runner.
 
 ---
 
@@ -384,21 +385,27 @@ the exact command to run manually.
 
 ## Views
 
+The views are grouped in a left sidebar (**Start / Pipeline / Monitor / Review /
+Settings**) with a persistent project context bar across the top that shows the
+current project name, harness, Live/Idle state, a project switcher, and the Help
+button + connection status.
+
 | View | What it shows |
 |---|---|
 | **Home** | create a new project or open an existing one (landing), including live status labels for detached work. |
-| **Overview** | run status, progress + counts, blockers, the pipeline next-step card with a **Manual build** checkbox, background-job status, run controls, an **auto-commit** toggle, a **Log harness activity** toggle, and a **Launch \<harness\> CLI** button. Also the **Re-derive team & skills** panel when authoring is stale, and manifest reconciliation with a confirmed **Reset changed tasks for review**. |
+| **Projects** | switch projects, add a folder, or remove one or more projects from Forge. |
+| **Overview** | run status, progress + counts, blockers, the pipeline next-step card with a **Manual build** checkbox, background-job status, run controls (Run/Resume/Pause/Stop, Replay, build mode), and a **Launch \<harness\> CLI** button. Also the **Re-derive team & skills** panel when authoring is stale, and manifest reconciliation with a confirmed **Reset changed tasks for review**. |
 | **Terminal** | interactive browser session for the selected harness or an existing authoring target, with PTY input/output, resize, stop, and external-terminal fallback. |
 | **Board** | the PixiJS Forge Board in **Kanban** or **Gantt** mode, with status filters and a **Table** view of the same data. |
 | **Tasks** | every task in a filterable/sortable table with a detail drawer, editable per-task timeout, explicit/range selection controls for manual mode, and a **Launch \<harness\> CLI** button. |
 | **Logs** | `docs/engine-run.log` tail + the audit event stream (live via SSE). |
-| **Plan & Team** | authoring settings and stage cards — always actionable, each stating why it is stale — plus the project documents (IDEA, PRD, features, progress, model plan) as a table that opens a document in a wide popup, and agents and skills in collapsible card sections. Requirement and task blocks render as tables. |
+| **Plan & Team** | authoring stage cards — always actionable, each stating why it is stale — plus the re-derivation footer, the project documents (IDEA, PRD, features, progress, model plan) as a table that opens a document in a wide popup, and agents and skills in collapsible card sections. Requirement and task blocks render as tables. |
 | **Artifacts** | the structured outputs tasks produced (`docs/artifacts/`), browsable by type/task with previews. |
 | **Timeline** | chronological audit events, failures highlighted. |
-| **Projects** | switch projects, add a folder, or remove one or more projects from Forge. |
+| **Settings** | authoring models (runner + stage models), execution preferences (build mode, concurrency, auto-commit, harness logging, task timeouts), and per-agent model overrides + the model planning terminal. |
 
-A **Help** button (top-right) explains the UI, the pipeline, each view, and key
-terms.
+A **Help** button (in the context bar) explains the UI, the pipeline, each view,
+and key terms.
 
 For human-review tasks, **Complete human review** lists unverified checks from
 all upstream task and prerequisite-phase dependencies, including transitive
@@ -446,14 +453,14 @@ selection scope (`single`, `range`, or `list`), and the selected task IDs. The
 engine expands dependencies automatically when a selected task needs them, so
 targeted runs still obey the DAG and phase ordering.
 
-The **Auto-commit after each task** checkbox (Controls panel) toggles
+The **Auto-commit after each task** checkbox (Settings → Execution) toggles
 `autoCommit` in `docs/engine-config.json`, which the console's run/resume
 command passes to the engine. It defaults to **on** (see
 [ADR-035](adr/035-auto-commit-after-task.md)); the engine commits one commit per
 completed task. Disable it if the working tree is dirty and you don't want agent
 output mixed with your uncommitted changes.
 
-The **Log harness activity** checkbox (Controls panel) toggles
+The **Log harness activity** checkbox (Settings → Execution) toggles
 `logHarnessActivity` in `docs/engine-config.json`. It defaults to **off** and
 applies to subsequently started runs; the Console's run/resume command passes it
 to the engine as `--log-harness-activity` or `--no-log-harness-activity`, so it
@@ -470,9 +477,9 @@ The Console can edit timeouts without leaving the browser, so a task that
 outruns its budget (a slow build or test) can be retried with a larger one:
 
 - **Per task** - open a task's detail drawer in **Tasks** (or use the task picker
-  in the Overview **Controls** panel) and set its timeout, then **Replay** it.
-- **All tasks** - the Tasks view header and the Overview Controls panel both have
-  a "set all" control that gives every task the same timeout.
+  in **Settings → Execution**) and set its timeout, then **Replay** it.
+- **All tasks** - the Tasks view header and **Settings → Execution** both have a
+  "set all" control that gives every task the same timeout.
 
 Storage and precedence (same as the CLI):
 

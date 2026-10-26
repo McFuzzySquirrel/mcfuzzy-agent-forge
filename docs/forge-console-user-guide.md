@@ -58,7 +58,7 @@ auto-draft a PRD. After the repository is ready, open Overview and start the
 interactive PRD authoring session.
 - **Concurrency preference** (optional): a stored engine setting carried into
   `docs/engine-config.json` and later runs. Leave blank to use the engine
-  default or adjust it later from the Overview Controls panel.
+  default or adjust it later from the Settings view.
 
 Once it finishes, the console opens that project's Overview view, where the
 interactive PRD authoring action lives. If creation continues in the background,
@@ -132,6 +132,11 @@ out for review.
 
 ## 4. Monitor a build in the main views
 
+Navigation is a grouped sidebar (**Start / Pipeline / Monitor / Review /
+Settings**) with a persistent project context bar across the top. The context
+bar shows the current project name, harness, and Live/Idle state, and its
+switcher changes projects from any view.
+
 Once the build starts, switch between the views to follow the work:
 
 - **Board**: the live build, in **Kanban** or **Gantt** mode.
@@ -155,8 +160,11 @@ Once the build starts, switch between the views to follow the work:
   and the generated agent/skill files. Selecting a document opens it in a wide
   popup with an **Open externally** button; `forge-requirement` and `forge-task`
   blocks render as tables instead of code. Skills are shown as cards grouped
-  into **Forge skills** and **Project skills**. Agent cards also expose primary
-  and fallback model selectors when a model inventory has been discovered.
+  into **Forge skills** and **Project skills**; the authoring stage cards and
+  re-derivation footer live here too.
+- **Settings**: authoring models, execution preferences (build mode,
+  concurrency, auto-commit, harness logging, task timeouts), and per-agent
+  model overrides in one place.
 
 The Console uses the selected harness root for team, report, and model-override
 operations. It does not merge agents with the same identity from other harness
@@ -190,11 +198,17 @@ The Overview controls panel offers the same actions you would otherwise issue fr
 - **Build mode**: after the manifest exists, choose **auto** to run the full
   workflow, or **manual** to run only the saved task selection from the Tasks
   view. Manual mode requires at least one selected task.
-- **Auto-commit after each task**: toggles one-commit-per-task git history (on by default).
-- **Log harness activity**: streams harness CLI stdout/stderr into `docs/engine-run.log`, where the Logs view shows it live while the run is active. Off by default; the saved choice is applied to subsequently started runs and restored after a reload. Activity logs can contain sensitive repository content and increase log volume, and command invocation logging is always on regardless. Turning it off stops activity capture for later runs without disabling command logging.
-- **Concurrency preference**: stores the engine concurrency value in `docs/engine-config.json`. Enter a positive integer (e.g. `3`) and click **Set**; enter `0` to return to the engine default. The value is shown in later Run/Resume summaries. Above `1` the engine runs up to that many ready tasks at once, each in its own git worktree under `.forge-sandboxes/`, so each task's reported files and commit stay its own. Two things to know before setting it above `1`: **the working tree must be clean** (the run stops and lists any uncommitted path otherwise, so commit or stash first). Each task selects its own project through the spawn working directory, with the child's `PWD` set to match, since OpenCode v2 resolves the project from `process.env.PWD ?? process.cwd()` and no longer accepts `--dir` (see [ADR-058](adr/058-opencode-v2-project-resolution.md) and [ADR-059](adr/059-pwd-aligned-spawn-environment.md)). See [ADR-056](adr/056-parallel-execution-task-sandboxes.md).
 - **Reset changed tasks for review**: after feature reconciliation, resets completed or skipped tasks whose contracts changed back to pending. Review the changed task IDs before using this action.
 - **Launch \<harness\> CLI**: opens the project's harness CLI (opencode/copilot/claude) in a new terminal from the project folder, so you can watch the live run and take over manually. Also available on the Tasks header. The **Terminal** view provides an in-browser session as well.
+
+Execution preferences — **auto-commit after each task**, **log harness
+activity**, **concurrency**, and **task timeouts** — are set in the
+**Settings** view rather than the Overview Controls panel. They are stored in
+`docs/engine-config.json` (and the manifest for timeouts) and applied to
+subsequently started runs. For concurrency above `1`, the working tree must be
+clean (see [ADR-056](adr/056-parallel-execution-task-sandboxes.md),
+[ADR-058](adr/058-opencode-v2-project-resolution.md), and
+[ADR-059](adr/059-pwd-aligned-spawn-environment.md)).
 
 ### Human review: when it pauses and how to prove approval
 
@@ -298,7 +312,7 @@ Console should project those states rather than infer readiness from whether a
 skill directory happens to exist.
 
 An **Authoring runner** select sits above the stage model selects in both the
-New Project wizard and a project's authoring settings panel. It offers
+New Project wizard and the **Settings → Authoring** section. It offers
 **Inherit from harness**, **OpenCode**, **Copilot**, and **Claude Code**.
 Inherit means Copilot for a GitHub repository and OpenCode for every other
 harness, including a Claude one. The stage model dropdowns follow the selected
@@ -306,6 +320,31 @@ runner: changing it reloads that runner's saved inventory without probing, and
 **Refresh** probes the effective runner. **Save** persists the choice as
 `runner` in `docs/authoring-config.json`, and the wizard passes it to the
 launcher that creates the project, so the new repository starts with it saved.
+
+### System-level defaults
+
+Authoring and execution defaults can be set once for all projects in a
+`settings.json` file in the Forge registry directory (`FORGE_HOME`, or
+`~/.myforge` by default), and are served by the Console's `/api/settings`
+endpoint. The effective authoring ladder becomes:
+
+```text
+explicit override → environment → saved project recommendation → system
+default → runner default
+```
+
+A `system` provenance value records when a global default supplied the model or
+runner. Execution defaults (concurrency, auto-commit, harness-activity logging)
+and a default harness are inherited by any project that has not set its own
+value in `docs/engine-config.json`; the project value always wins. A corrupt
+`settings.json` falls back to the defaults and is never overwritten by a read.
+Edit these defaults from the Console in **Settings → Global defaults** (default
+harness, default authoring runner, and default concurrency / auto-commit /
+harness-activity logging); the project-level sections below that override them
+per repository.
+
+A **background-job badge** in the context bar shows running and failed
+background jobs across all registered projects and links to the Projects view.
 
 ### Assign models to agents
 
@@ -327,7 +366,7 @@ output is retained only for diagnostics. BenchLM capability and evidence data
 may be attached to discovered models, but BenchLM does not make a model
 available by itself.
 
-Open **Plan & Team → Agents** to choose a primary and fallback model for an
+Open **Settings → Models** to choose a primary and fallback model for an
 agent. The selectors only accept models present in the discovered inventory.
 Saving an override writes `docs/model-overrides.json`; it does not rewrite the
 agent file. The override applies to every task owned by that agent and takes
@@ -341,8 +380,8 @@ explicit agent override → saved recommendation → runner default (only when
 the runner supplies one)
 ```
 
-The **Model planning terminal** control in the Agents section opens a new
-interactive session in the repository. Choose OpenCode, Copilot, or Claude
+The **Model planning terminal** control in the Settings → Models section opens
+a new interactive session in the repository. Choose OpenCode, Copilot, or Claude
 Code, enter a message, and launch it in an external terminal using one of these commands:
 
 ```bash
@@ -424,8 +463,9 @@ forge-launcher rederive --repo <path> --from skills      # retry from a step
 
 On **Plan & Team**, each authoring stage keeps its action button visible. When a
 stage cannot be run the button is disabled *and says why* — "already up to date
-with its inputs", "save authoring model changes first", "another authoring job is
-running" — rather than disappearing.
+with its inputs" or "another authoring job is running" — rather than
+disappearing. Unsaved authoring model changes are surfaced in **Settings →
+Authoring** (where the model selectors now live) rather than on these cards.
 
 ## 7. Tune task timeouts
 
@@ -435,13 +475,13 @@ The console can edit task timeouts without leaving the UI:
 - change the timeout value (entered in minutes, decimals allowed),
 - and replay the task.
 
-You can also set the same timeout for every task at once from the Tasks header or the Overview Controls panel. These values are stored in the manifest and engine config files so the run can be retried with a larger budget. Completed tasks show their timeout read-only; failed, pending, and running tasks stay editable.
+You can also set the same timeout for every task at once from the Tasks header or the Settings view (Execution section). These values are stored in the manifest and engine config files so the run can be retried with a larger budget. Completed tasks show their timeout read-only; failed, pending, and running tasks stay editable.
 
 ---
 
 ## 8. Switch between projects
 
-If you are working across several repos, use the **Projects** view or the project picker to switch contexts. This keeps the current workspace and run state separate while preserving your recent-project history.
+If you are working across several repos, use the **Projects** view or the project switcher in the top context bar to switch contexts. This keeps the current workspace and run state separate while preserving your recent-project history.
 
 The Projects list shows **project name**, **state**, and **last accessed**
 date/time, not filesystem paths. Click **Open** in the desired row.

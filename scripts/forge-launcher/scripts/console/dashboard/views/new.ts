@@ -110,12 +110,32 @@ function buildForm(): HTMLElement {
     });
   });
 
+  void prefillFromSettings(harness as HTMLSelectElement, concurrency as HTMLInputElement, authoring.runner);
+
   return el("div", { className: "panel" }, [form]);
+}
+
+/** Applies system-level defaults (harness, concurrency, authoring runner) to the wizard. */
+async function prefillFromSettings(harness: HTMLSelectElement, concurrency: HTMLInputElement, runner: HTMLSelectElement): Promise<void> {
+  try {
+    const settings = await api.settings();
+    if (settings.harness) harness.value = settings.harness;
+    if (settings.execution?.concurrency && !concurrency.value) {
+      concurrency.value = String(settings.execution.concurrency);
+    }
+    if (settings.authoring?.runner && (!runner.value || runner.value === "inherit")) {
+      runner.value = settings.authoring.runner;
+      runner.dispatchEvent(new Event("change"));
+    }
+  } catch {
+    // Global settings are best-effort; keep the form defaults on failure.
+  }
 }
 
 interface AuthoringControls {
   root: HTMLElement;
   getConfig: () => AuthoringConfig;
+  runner: HTMLSelectElement;
 }
 
 function buildAuthoringControls(harness: HTMLSelectElement): AuthoringControls {
@@ -178,6 +198,7 @@ function buildAuthoringControls(harness: HTMLSelectElement): AuthoringControls {
   }
   void load(false);
   return {
+    runner: runnerSelect,
     root: el("div", { className: "doc-section authoring-config" }, [
       el("h4", null, "Authoring models"),
       el("p", { className: "dim small" }, "Optional per-stage models for PRD, team, and project-skill authoring. Empty selections inherit the selected runner default."),

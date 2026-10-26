@@ -30,6 +30,7 @@ import type {
   ModelInventory,
 } from "./types.ts";
 import {
+  effectiveExecution,
   loadEngineConfig,
   normaliseExecutionMode,
   normaliseSelectedTaskIds,
@@ -371,6 +372,7 @@ export function summary(p: RepoPaths): Summary {
 
   const engineCfg = loadEngineConfig(p.repoRoot);
   const selection = activeSelection(state, engineCfg);
+  const effective = effectiveExecution(p.repoRoot);
   const job = currentJob(p.repoRoot);
   const readiness = authoringReadiness(p.repoRoot, harness ?? ".agents");
   const blocker = authoringBlocker(p, readiness);
@@ -397,9 +399,9 @@ export function summary(p: RepoPaths): Summary {
     control: readControl(p),
     logExists: fs.existsSync(p.logPath),
     defaultTimeoutMs,
-    autoCommit: engineCfg?.autoCommit !== false,
-    logHarnessActivity: engineCfg?.logHarnessActivity === true,
-    concurrency: Math.max(0, Number(engineCfg?.concurrency) || 0),
+    autoCommit: effective.autoCommit,
+    logHarnessActivity: effective.logHarnessActivity,
+    concurrency: effective.concurrency,
     executionMode: selection.executionMode,
     selectionScope: selection.selectionScope,
     selectedTaskIds: selection.selectedTaskIds,

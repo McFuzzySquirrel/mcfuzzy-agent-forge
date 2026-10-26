@@ -4,9 +4,8 @@ import { api } from "../api.js";
 import { store } from "../state.js";
 import { el, fmtAgo, toast } from "../render/dom.js";
 import { renderMarkdown } from "../render/md.js";
-import { AUTHORING_RUNNER_OPTIONS, effectiveRunner } from "../runners.js";
 import { AUTHORING_STAGES } from "../types.js";
-import type { AgentInfo, AuthoringConfig, AuthoringInventory, AuthoringStage, AuthoringStageDetail, AuthoringStageState, BackgroundJobType, DocEntry, DocsIndex, SkillInfo, TeamIndex } from "../types.js";
+import type { AgentInfo, AuthoringStage, AuthoringStageDetail, AuthoringStageState, BackgroundJobType, DocEntry, DocsIndex, SkillInfo, TeamIndex } from "../types.js";
 
 let unsub: Array<() => void> = [];
 let docsHost: HTMLElement | null = null;
@@ -31,7 +30,6 @@ export function unmountDocuments(): void {
   rederiveHost = null;
   focusStage = null;
   generation += 1;
-  authoringGeneration += 1;
 }
 
 /** Reads `#/documents?stage=team`, so Overview can link straight at a stage. */
@@ -60,7 +58,7 @@ export function renderDocuments(container: HTMLElement): void {
   container.textContent = "";
   focusStage = stageFromHash();
 
-  container.appendChild(renderAuthoringSettings());
+  container.appendChild(renderAuthoringStages());
 
   // ── Documents ─────────────────────────────────────────────────────────────
   const docsSection = section("Documents");
@@ -108,8 +106,7 @@ export function renderDocuments(container: HTMLElement): void {
   }));
 
   // `#/documents?stage=team` arrives from the Overview's staleness reasons, so
-  // bring the card into view once the settings panel has rendered it. Done after
-  // the async load above settles, since the panel replaces its own children.
+  // bring the card into view once the authoring stages panel has rendered it.
   if (focusStage) {
     void window.setTimeout(() => {
       const card = authoringStagesHost?.querySelector<HTMLElement>(`[data-authoring-stage="${focusStage}"]`);
@@ -208,7 +205,9 @@ export function refreshDocuments(): void {
     if (action && actionNote) {
       const actionState = stageActionState(stage, detail, state, {
         authoringBusy,
-        unsavedModels: card.dataset.dirty === "true",
+        // Model changes are made in Settings now, so a stage card here can
+        // never hold unsaved model edits itself.
+        unsavedModels: false,
       });
       action.textContent = actionState.label;
       action.disabled = !actionState.enabled;
@@ -219,19 +218,6 @@ export function refreshDocuments(): void {
   }
   if (rederiveHost) renderRederiveFooter(rederiveHost);
 }
-
-function renderAuthoringSettings(): HTMLElement {
-  const panel = el("div", { className: "panel authoring-settings" }, [
-    el("h3", null, "Authoring settings"),
-    el("p", { className: "dim small" }, "Configure independent PRD, team, and project-skill authoring models. Empty selections inherit the runner default; execution model overrides below remain separate."),
-    el("div", { className: "spinner-row", role: "status" }, [el("span", { className: "spinner", "aria-hidden": "true" }), "Loading authoring settings…"]),
-  ]);
-  const generation = ++authoringGeneration;
-  void loadAuthoringSettings(panel, generation);
-  return panel;
-}
-
-let authoringGeneration = 0;
 
 /** Job types that occupy the authoring pipeline, so a stage action must defer. */
 const AUTHORING_JOB_TYPES = new Set<BackgroundJobType>([
@@ -249,161 +235,35 @@ function stagePresentation(stage: AuthoringStage, state: AuthoringStageState | u
     : { label: "pending", className: "pending" };
 }
 
-async function loadAuthoringSettings(panel: HTMLElement, generation: number): Promise<void> {
-  try {
-    const [config, inventory] = await Promise.all([api.authoringConfig(), api.authoringInventory()]);
-    if (generation !== authoringGeneration) return;
-    panel.replaceChildren(buildAuthoringSettings(panel, config, inventory));
-    // A live snapshot can arrive while the settings panel is still loading, when
-    // there are no stage cards to update yet, and nothing else re-runs the
-    // refresh — so the fresh cards would keep their placeholder text.
-    refreshDocuments();
-  } catch (error) {
-    if (generation !== authoringGeneration) return;
-    panel.replaceChildren(
-      el("h3", null, "Authoring settings"),
-      el("p", { className: "error-text", role: "alert" }, error instanceof Error ? `Unable to load authoring settings: ${error.message}` : "Unable to load authoring settings."),
-      el("button", { className: "btn btn-sm" }, "Retry"),
-    );
-    panel.querySelector("button")?.addEventListener("click", () => void loadAuthoringSettings(panel, generation));
-  }
-}
-
-function buildAuthoringSettings(panel: HTMLElement, initial: AuthoringConfig, inventory: AuthoringInventory, initialDirty = false): HTMLElement {
-  let config: AuthoringConfig = { version: 1, models: { ...initial.models }, ...(initial.runner ? { runner: initial.runner } : {}) };
-  let dirty = initialDirty;
-  let saveInFlight = false;
-  // Refresh and the runner select both reload the inventory and rebuild this
-  // panel, so a slow response must not land after a newer one. Every reload
-  // takes a ticket from this counter and drops itself if the counter has moved
-  // on, the same guard the wizard's load() uses.
-  let inventoryRequestId = 0;
+/**
+ * Authoring stage cards (status + retry actions) and the re-derivation footer.
+ *
+ * The runner + stage-model selects moved to Settings (authoring configuration),
+ * but these cards stay in Plan & Team so `#/documents?stage=<id>` can still
+ * point at a specific stage and the retry actions stay next to the documents
+ * they produce. Configured models are read from the last invocation; the
+ * editable selects live under Settings.
+ */
+function renderAuthoringStages(): HTMLElement {
+  const summary = store.summary;
   const stages: Array<[AuthoringStage, string]> = [
-    ["prd", "PRD authoring model"],
-    ["team", "Team authoring model"],
-    ["skills", "Project skills authoring model"],
+    ["prd", "PRD"],
+    ["team", "Team"],
+    ["skills", "Project skills"],
   ];
-  const selects = new Map<AuthoringStage, HTMLSelectElement>();
-  const status = el("div", { className: "dim small", role: "status", "aria-live": "polite" }, inventory.models.length > 0 ? `${inventory.models.length} models available.` : (inventory.diagnostics?.join(" ") || "No models reported; empty selections inherit."));
-  const save = el("button", { className: "btn btn-primary", type: "button" }, "Save authoring settings") as HTMLButtonElement;
-  const refresh = el("button", { className: "btn btn-sm", type: "button" }, "Refresh inventory") as HTMLButtonElement;
-  const retryButtons: Array<{ button: HTMLButtonElement; stage: AuthoringStage }> = [];
-  const updateRetryState = (): void => {
-    for (const { button } of retryButtons) button.disabled = dirty || saveInFlight || button.hidden;
-  };
-  const runnerSelect = el("select", { id: "authoring-runner", "aria-label": "Authoring runner" }, AUTHORING_RUNNER_OPTIONS.map(([value, label]) => el("option", { value }, label))) as HTMLSelectElement;
-  runnerSelect.value = config.runner ?? "inherit";
-  const selectedRunner = (): string => runnerSelect.value || "inherit";
-  /** Copies the live select values back into `config` before a rebuild. */
-  const captureSelections = (): void => {
-    for (const [stage, select] of selects) {
-      if (select.value) config.models[stage] = select.value;
-      else delete config.models[stage];
-    }
-    if (selectedRunner() === "inherit") delete config.runner;
-    else config.runner = selectedRunner() as NonNullable<AuthoringConfig["runner"]>;
-  };
-  runnerSelect.addEventListener("change", () => {
-    dirty = true;
-    updateRetryState();
-    status.textContent = "Loading authoring models for the selected runner…";
-    captureSelections();
-    const id = ++inventoryRequestId;
-    void api.authoringInventory(effectiveRunner(selectedRunner(), store.summary?.harness ?? ""))
-      .then((next) => {
-        if (id !== inventoryRequestId) return;
-        panel.replaceChildren(buildAuthoringSettings(panel, config, next, dirty));
-      })
-      .catch((error) => {
-        if (id !== inventoryRequestId) return;
-        status.textContent = error instanceof Error ? error.message : "Unable to load authoring models for the selected runner.";
-      });
-  });
-
-  for (const [stage, label] of stages) {
-    const select = el("select", { id: `authoring-model-${stage}`, "aria-label": label }) as HTMLSelectElement;
-    select.appendChild(el("option", { value: "" }, "Inherit runner default"));
-    const selected = config.models[stage];
-    if (selected && !inventory.models.some((model) => model.id === selected)) {
-      select.appendChild(el("option", { value: selected }, `Unavailable: ${selected}`));
-    }
-    for (const model of inventory.models) {
-      select.appendChild(el("option", { value: model.id }, model.provider ? `${model.id} (${model.provider})` : model.id));
-    }
-    select.value = selected ?? "";
-    select.addEventListener("change", () => {
-      dirty = true;
-      updateRetryState();
-      status.textContent = "Unsaved authoring model changes.";
-    });
-    selects.set(stage, select);
-  }
-
-  save.addEventListener("click", () => {
-    const next: AuthoringConfig = { version: 1, models: {} };
-    for (const [stage, select] of selects) {
-      if (select.value) next.models[stage] = select.value;
-    }
-    if (selectedRunner() !== "inherit") next.runner = selectedRunner() as NonNullable<AuthoringConfig["runner"]>;
-    save.disabled = true;
-    saveInFlight = true;
-    updateRetryState();
-    status.textContent = "Saving authoring settings…";
-    void api.saveAuthoringConfig(next)
-      .then((result) => {
-        if (!result.ok) throw new Error(result.message || "save failed");
-        config = { version: 1, models: { ...result.config.models }, ...(result.config.runner ? { runner: result.config.runner } : {}) };
-        runnerSelect.value = result.config.runner ?? "inherit";
-        dirty = false;
-        status.textContent = result.message || "Authoring settings saved.";
-        toast(status.textContent);
-      })
-      .catch((error) => {
-        status.textContent = error instanceof Error ? error.message : "Unable to save authoring settings.";
-        toast(status.textContent);
-      })
-      .finally(() => {
-        saveInFlight = false;
-        save.disabled = false;
-        updateRetryState();
-      });
-  });
-
-  refresh.addEventListener("click", () => {
-    refresh.disabled = true;
-    const runner = effectiveRunner(selectedRunner(), store.summary?.harness ?? "");
-    captureSelections();
-    const id = ++inventoryRequestId;
-    void api.refreshAuthoringInventory(runner)
-      .then((next) => {
-        if (id !== inventoryRequestId) return;
-        panel.replaceChildren(buildAuthoringSettings(panel, config, next, dirty));
-      })
-      .catch((error) => {
-        if (id !== inventoryRequestId) return;
-        status.textContent = error instanceof Error ? error.message : "Unable to refresh inventory.";
-      })
-      .finally(() => { refresh.disabled = false; });
-  });
-
   const stageCards = stages.map(([stage, label]) => {
-    const state = store.summary?.authoring?.stages[stage];
-    const detail = store.summary?.authoringStages?.find((entry) => entry.stage === stage);
+    const state = summary?.authoring?.stages[stage];
+    const detail = summary?.authoringStages?.find((entry) => entry.stage === stage);
     const output = state?.outputs.length ? ` · ${state.outputs.length} output${state.outputs.length === 1 ? "" : "s"}` : "";
     const presentation = stagePresentation(stage, state);
     const actionButton = el("button", { className: "btn btn-sm", type: "button", "data-authoring-stage-action": "true" }) as HTMLButtonElement;
-    retryButtons.push({ button: actionButton, stage });
     // ADR-060: the PRD stage is a handoff to an interactive session; only the
     // derivation stages retry as headless background jobs.
     const prdStage = stage === "prd";
     actionButton.textContent = prdStage
-      ? `Author ${label.replace(" authoring model", "")} in a session (interactive)`
-      : stageActionState(stage, detail, state, { authoringBusy: false, unsavedModels: dirty }).label;
+      ? "Author PRD in a session (interactive)"
+      : stageActionState(stage, detail, state, { authoringBusy: false, unsavedModels: false }).label;
     actionButton.addEventListener("click", () => {
-      if (dirty || saveInFlight) {
-        toast("Save authoring model changes before retrying this stage.");
-        return;
-      }
       if (prdStage) {
         // Hand off to the authoring terminal view, where the user can start the
         // PRD session in the Console or an external terminal.
@@ -418,10 +278,10 @@ function buildAuthoringSettings(panel: HTMLElement, initial: AuthoringConfig, in
     });
     const card = el("div", { className: "authoring-stage", "data-authoring-stage": stage, tabindex: "-1" }, [
       el("div", { className: "row between wrap" }, [
-        el("strong", null, label.replace(" model", "")),
+        el("strong", null, label),
         el("span", { className: `badge badge-${detail?.stale ? "stale" : presentation.className}`, "data-authoring-stage-status": "true" }, detail?.stale ? "stale" : presentation.label),
       ]),
-      el("span", { className: "dim small", "data-authoring-stage-model": "true" }, `${state?.invocation?.effectiveModel ?? (presentation.className === "no-run" ? "existing project artifact" : config.models[stage] ?? "runner default")}${output}`),
+      el("span", { className: "dim small", "data-authoring-stage-model": "true" }, `${state?.invocation?.effectiveModel ?? (presentation.className === "no-run" ? "existing project artifact" : "runner default")}${output}`),
       el("span", { className: "dim small", "data-authoring-stage-outputs": "true", hidden: true }),
       el("span", { className: "error-text small", "data-authoring-stage-why": "true", hidden: true }),
       actionButton,
@@ -430,22 +290,17 @@ function buildAuthoringSettings(panel: HTMLElement, initial: AuthoringConfig, in
     if (stage === focusStage) card.classList.add("authoring-stage-focus");
     return card;
   });
-  updateRetryState();
   const stageHost = el("div", { className: "authoring-stages" }, stageCards);
   authoringStagesHost = stageHost;
-  // The footer lives inside the rebuilt panel: `panel.replaceChildren(...)`
-  // discards anything appended before the async load finished, so a footer
-  // mounted outside it silently disappears on the first refresh.
   rederiveHost = el("div", { className: "rederive-footer" });
   rederiveHost.replaceChildren(renderRederiveFooter(rederiveHost));
 
-  return el("div", null, [
-    el("div", { className: "field" }, [el("label", { for: "authoring-runner" }, "Authoring runner"), runnerSelect]),
-    el("div", { className: "form-row" }, stages.map(([stage, label]) => el("div", { className: "field" }, [el("label", { for: `authoring-model-${stage}` }, label), selects.get(stage)!]))),
-    el("div", { className: "row gap wrap" }, [save, refresh, status]),
+  return el("div", { className: "panel authoring-settings" }, [
+    el("h3", null, "Authoring stages"),
+    el("p", { className: "dim small" }, ["Configure authoring models (runner + stage models) in ", el("a", { href: "#/settings" }, "Settings"), "."]),
     stageHost,
     rederiveHost,
-    store.summary?.authoringReady === false
+    summary?.authoringReady === false
       ? el("p", { className: "error-text", role: "alert" }, "Authoring is incomplete; build controls remain unavailable until the active stages are ready.")
       : null,
   ]);
@@ -612,32 +467,9 @@ function renderAgents(host: HTMLElement, team: TeamIndex): void {
     return;
   }
   const grid = el("div", { className: "cards" });
-  void api.modelInventory().then((inventory) => {
-    const terminal = modelTerminalPanel();
-    host.appendChild(terminal);
-    for (const agent of team.agents) grid.appendChild(agentCard(agent, inventory.models));
-    host.appendChild(grid);
-  }).catch(() => {
-    for (const agent of team.agents) grid.appendChild(agentCard(agent, []));
-    host.appendChild(grid);
-  });
-}
-
-function modelTerminalPanel(): HTMLElement {
-  const provider = el("select", null, [el("option", { value: "opencode" }, "OpenCode"), el("option", { value: "copilot" }, "Copilot"), el("option", { value: "claude" }, "Claude Code")]);
-  const message = el("textarea", { rows: "3", placeholder: "Ask the model assistant to review or improve MODEL-PLAN.md" });
-  (message as HTMLTextAreaElement).value = "/forge-assign-models Discover the available models from OpenCode, Copilot, Ollama, and BYOK, normalize the model IDs, enrich capabilities with BenchLM, and update the model inventory and plan.";
-  const button = el("button", { className: "btn btn-sm btn-primary" }, "Launch model terminal");
-  button.addEventListener("click", () => {
-    const text = (message as HTMLTextAreaElement).value.trim();
-    if (!text) { toast("Enter a message first."); return; }
-    button.setAttribute("disabled", "true");
-    void api.launchModelTerminal((provider as HTMLSelectElement).value as "opencode" | "copilot" | "claude", text)
-      .then((result) => toast(result.message ?? "terminal launch requested"))
-      .catch((err) => toast(err instanceof Error ? err.message : "terminal launch failed"))
-      .finally(() => button.removeAttribute("disabled"));
-  });
-  return el("div", { className: "panel" }, [el("h4", null, "Model planning terminal"), el("p", { className: "dim small" }, "Launch an interactive assistant in this repository. Changes are not applied automatically."), el("div", { className: "row gap wrap" }, [provider, message, button])]);
+  for (const agent of team.agents) grid.appendChild(agentCard(agent));
+  host.appendChild(el("p", { className: "dim small" }, ["Per-agent primary/fallback model overrides and the model planning terminal live in ", el("a", { href: "#/settings" }, "Settings"), "."]));
+  host.appendChild(grid);
 }
 
 function renderSkills(host: HTMLElement, team: TeamIndex): void {
@@ -674,7 +506,7 @@ function skillCard(skill: SkillInfo): HTMLElement {
   return card;
 }
 
-function agentCard(agent: AgentInfo, models: Array<{ id: string; provider?: string }>): HTMLElement {
+function agentCard(agent: AgentInfo): HTMLElement {
   const collapse = (title: string, items: string[]): HTMLElement | null => {
     if (items.length === 0) return null;
     return el("details", { className: "collapsible" }, [
@@ -683,12 +515,6 @@ function agentCard(agent: AgentInfo, models: Array<{ id: string; provider?: stri
     ]);
   };
 
-  const primary = el("select", { className: "model-select" }, [el("option", { value: "" }, "Use recommendation"), ...models.map((model) => el("option", { value: model.id }, model.id))]);
-  const fallback = el("select", { className: "model-select" }, [el("option", { value: "" }, "Use recommendation"), ...models.map((model) => el("option", { value: model.id }, model.id))]);
-  if (agent.modelOverride) (primary as HTMLSelectElement).value = agent.modelOverride;
-  if (agent.modelFallbackOverride) (fallback as HTMLSelectElement).value = agent.modelFallbackOverride;
-  const save = el("button", { className: "btn btn-sm" }, "Save model override");
-  save.addEventListener("click", () => void api.setModelOverride(agent.name, (primary as HTMLSelectElement).value || undefined, (fallback as HTMLSelectElement).value || undefined).then((result) => toast(result.message)).catch((err) => toast(err instanceof Error ? err.message : "override failed")));
   const card = el("div", { className: "card" }, [
     el("div", { className: "card-title" }, [
       el("strong", null, agent.name),
@@ -696,7 +522,6 @@ function agentCard(agent: AgentInfo, models: Array<{ id: string; provider?: stri
       el("button", { className: "btn btn-sm" }, "Open"),
     ]),
     el("p", { className: "dim" }, agent.description),
-    el("div", { className: "row gap wrap" }, [el("label", { className: "small" }, ["Primary ", primary]), el("label", { className: "small" }, ["Fallback ", fallback]), save]),
     collapse("Expertise", agent.expertise),
     collapse("Collaboration", agent.collaboration),
     collapse("Constraints", agent.constraints),
