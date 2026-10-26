@@ -24,7 +24,7 @@ Every proposed check must include:
 - Rule title
 - Target rubric axis (one of six)
 - Evidence citation(s)
-- Gap statement versus current skill-review
+- Gap statement versus current forge-skill-review
 - Acceptance criteria (what makes the check pass/fail)
 - Confidence tier
 

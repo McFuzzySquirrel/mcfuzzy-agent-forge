@@ -1,6 +1,6 @@
 # Rubric Mapping
 
-> Load when: Comparing new evidence to existing skill-review checks in Step 3.
+> Load when: Comparing new evidence to existing forge-skill-review checks in Step 3.
 
 Use this table format to prevent silent mismatch between "new" proposals and existing rubric coverage.
 

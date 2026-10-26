@@ -43,6 +43,8 @@ test("bootstrap copies agents, skills, prompt-playbook, and excludes artifacts",
   assert.ok(fs.existsSync(path.join(target, "docs", "prompt-playbook.md")));
   assert.ok(!fs.existsSync(path.join(target, ".agents", "skills", "forge-workflow-engine", "node_modules")));
   assert.ok(!fs.existsSync(path.join(target, ".agents", "skills", "forge-workflow-engine", "dist")));
+  // Maintenance-only tooling stays in the package but is not bootstrapped.
+  assert.ok(!fs.existsSync(path.join(target, ".agents", "skills", "forge-skill-review-updater")));
 });
 
 test("bootstrap rewrites .agents/ paths for a non-default harness", async () => {

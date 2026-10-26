@@ -18,6 +18,13 @@ export const HARNESS_ROOTS: Record<Harness, string> = {
   opencode: ".opencode",
 };
 
+/**
+ * Forge-maintainer tooling that is not a per-project runtime need. It stays in
+ * the published resources (maintainers can still install it) but is not copied
+ * into a bootstrapped target repository.
+ */
+const MAINTENANCE_ONLY_SKILLS = new Set(["forge-skill-review-updater"]);
+
 export interface BootstrapOptions {
   targetDir: string;
   harness?: Harness;
@@ -151,7 +158,7 @@ export async function bootstrap(opts: BootstrapOptions): Promise<number> {
     log.out(`Skills (${skillsDir}):`);
     const skillDirs = fs.existsSync(path.join(templatesDir, "skills"))
       ? fs.readdirSync(path.join(templatesDir, "skills"), { withFileTypes: true })
-          .filter((d) => d.isDirectory())
+          .filter((d) => d.isDirectory() && !MAINTENANCE_ONLY_SKILLS.has(d.name))
           .map((d) => d.name)
           .sort()
       : [];

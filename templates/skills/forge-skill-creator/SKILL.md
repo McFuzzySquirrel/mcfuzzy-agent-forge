@@ -1,11 +1,11 @@
 ---
-name: skill-creator
-description: "Guide an agent through creating a new, well-structured Copilot skill from a rough idea. Runs a structured interview, applies the skill-review quality rubric during scaffolding, and validates the output with skill-review. Produces a ready-to-use skill package."
+name: forge-skill-creator
+description: "Guide an agent through creating a new, well-structured Copilot skill from a rough idea. Runs a structured interview, applies the forge-skill-review quality rubric during scaffolding, and validates the output with forge-skill-review. Produces a ready-to-use skill package."
 ---
 
 # Skill: Create a New Copilot Skill
 
-You are guiding the user (or yourself) through building a new Copilot skill from scratch. The goal is not just to scaffold files - it is to produce a skill that passes the skill-review quality bar from the start. The workflow runs in five numbered steps with explicit decision points.
+You are guiding the user (or yourself) through building a new Copilot skill from scratch. The goal is not just to scaffold files - it is to produce a skill that passes the forge-skill-review quality bar from the start. The workflow runs in five numbered steps with explicit decision points.
 
 Load `references/quality-axes.md` now. You will use the six quality axes throughout all five steps.
 
@@ -63,7 +63,7 @@ After generating, check: is `SKILL.md` under 500 lines? If not, move bulk conten
 
 ### Step 4: Pre-flight Check
 
-Before calling `skill-review`, run a self-check against the pre-flight list.
+Before calling `forge-skill-review`, run a self-check against the pre-flight list.
 
 Load `references/preflight-checklist.md` now.
 
@@ -76,22 +76,22 @@ Do not proceed to Step 5 until all blockers are cleared.
 
 ### Step 5: Validation
 
-Run the formal `skill-review` audit on the newly created skill.
+Run the formal `forge-skill-review` audit on the newly created skill.
 
-**Check if skill-review is available:**
+**Check if forge-skill-review is available:**
 
 ```bash
-ls .agents/skills/skill-review/SKILL.md 2>/dev/null || echo "skill-review not found"
+ls .agents/skills/forge-skill-review/SKILL.md 2>/dev/null || echo "forge-skill-review not found"
 ```
 
-If `skill-review` is not found, report the prerequisite clearly:
+If `forge-skill-review` is not found, report the prerequisite clearly:
 
-> ⚠️ **skill-review is required for validation.** Install it at `.agents/skills/skill-review/` before running this step. The skill has been scaffolded but not formally validated.
+> ⚠️ **forge-skill-review is required for validation.** Install it at `.agents/skills/forge-skill-review/` before running this step. The skill has been scaffolded but not formally validated.
 
 If available, invoke it:
 
 ```
-/skill-review Audit the skill at <path-to-new-skill>
+/forge-skill-review Audit the skill at <path-to-new-skill>
 ```
 
 **Validation loop:**
@@ -110,8 +110,8 @@ After passing, confirm the install path and remind the user to copy the skill to
 - **Load triggers must say *when*, not just *what*.** "Load `references/api-errors.md` if the API returns a non-200" is good. "See references/ for more" is useless and will score a 1 on progressive disclosure.
 - **Do not move the first ~100 lines of SKILL.md to references/.** That content defines the skill's purpose and trigger conditions - it must stay inline even if it is verbose.
 - **Gotchas must be concrete.** "Handle errors appropriately" scores a 1. "If the `users` table uses soft deletes, queries must include `WHERE deleted_at IS NULL`" scores a 3.
-- **skill-review will not run on a skill that has no SKILL.md.** Ensure the file exists and has valid YAML frontmatter before Step 5.
-- **Do not skip Step 4.** The pre-flight check catches issues that skill-review will flag. Fixing them before the audit saves a loop.
+- **forge-skill-review will not run on a skill that has no SKILL.md.** Ensure the file exists and has valid YAML frontmatter before Step 5.
+- **Do not skip Step 4.** The pre-flight check catches issues that forge-skill-review will flag. Fixing them before the audit saves a loop.
 
 ---
 
@@ -127,5 +127,5 @@ After completing the full workflow, verify:
 - [ ] YAML frontmatter parses cleanly: `python3 -c "import yaml; yaml.safe_load(open('<skill-dir>/SKILL.md').read())"` exits 0
 - [ ] If modular: `references/` exists with at least one file and all load triggers are specific
 - [ ] Pre-flight checklist passed with no open blockers
-- [ ] `skill-review` audit completed (or prerequisite absence documented); all axes ≥ 2.0
+- [ ] `forge-skill-review` audit completed (or prerequisite absence documented); all axes ≥ 2.0
 - [ ] User has been told where to install the skill (`.agents/skills/<name>/`)

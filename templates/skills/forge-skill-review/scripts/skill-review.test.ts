@@ -21,7 +21,7 @@ function run(file: string, args: string[]) {
 }
 
 function skill(text: string) {
-  const root = mkdtempSync(join(tmpdir(), "skill-review-"));
+  const root = mkdtempSync(join(tmpdir(), "forge-skill-review-"));
   const dir = join(root, "demo");
   const file = join(dir, "SKILL.md");
   mkdirSync(dir, { recursive: true });

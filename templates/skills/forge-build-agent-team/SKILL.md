@@ -76,8 +76,8 @@ project-specific steps. Choose `reuse`, `extend`, `create`, or `omit`; one-off
 work remains an agent responsibility. The team stage must not write
 `SKILL.md` packages.
 
-The independent `forge-build-project-skills` stage reuses `skill-creator` for
-interview/template/preflight work and `skill-review` for the six-axis review.
+The independent `forge-build-project-skills` stage reuses `forge-skill-creator` for
+interview/template/preflight work and `forge-skill-review` for the six-axis review.
 Record planned responsibilities and references, not generated package content.
 
 ### Step 5: Persist the handoff

@@ -95,12 +95,14 @@ export function getChangedSkillFiles(root: string): string[] {
 }
 
 /**
- * Filter out the skill-review skill itself from an audit list.
+ * Filter out the forge meta-skills (this audit tool and its siblings) from an
+ * audit list, so the tool does not score itself unless explicitly asked.
  */
 export function excludeSelf(files: string[]): string[] {
+  const META_SKILLS = new Set(["forge-skill-review", "forge-skill-creator", "forge-skill-review-updater"]);
   return files.filter((f) => {
     const dir = basename(resolve(f, ".."));
-    return dir !== "skill-review";
+    return !META_SKILLS.has(dir);
   });
 }
 

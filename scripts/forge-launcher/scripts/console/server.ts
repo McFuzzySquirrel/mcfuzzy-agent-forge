@@ -265,8 +265,8 @@ const AUTHORING_SESSIONS: Record<AuthoringSessionTarget, AuthoringSessionSpec> =
   },
   prd: {
     stage: "prd",
-    skill: "forge-auto-build-prd",
-    message: () => "/forge-auto-build-prd Use docs/IDEA.md and any docs/requirements-source.md as source material when present; otherwise inspect the existing repository (code, docs, tests, git history). Interactive mode: do NOT skip the interview. Ask your clarifying questions in rounds and wait for my answers, then author docs/PRD.md plus docs/features/*.md. Run validate-prd and commit. Do not generate the team or project skills, compile a manifest, or start a build.",
+    skill: "forge-build-prd",
+    message: () => "/forge-build-prd Use docs/IDEA.md and any docs/requirements-source.md as source material when present; otherwise inspect the existing repository (code, docs, tests, git history). Interactive mode: do NOT skip the interview. Ask your clarifying questions in rounds and wait for my answers, then author docs/PRD.md plus docs/features/*.md. Run validate-prd and commit. Do not generate the team or project skills, compile a manifest, or start a build.",
   },
   "feature-prd": {
     stage: "prd",

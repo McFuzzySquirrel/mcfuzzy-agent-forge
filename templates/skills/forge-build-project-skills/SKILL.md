@@ -6,8 +6,8 @@ description: "Independently generate and review project skill packages from docs
 # Skill: Build Project Skills
 
 Coordinate the independent project-skill stage after `forge-build-agent-team`.
-This stage consumes `docs/SKILL-CANDIDATES.json`, reuses `skill-creator` for
-scaffolding and `skill-review` for review, and writes only the packages
+This stage consumes `docs/SKILL-CANDIDATES.json`, reuses `forge-skill-creator` for
+scaffolding and `forge-skill-review` for review, and writes only the packages
 selected by the handoff. It never regenerates the team or creates an execution
 manifest.
 
@@ -54,7 +54,7 @@ Choose the handoff action deterministically:
 4. `omit` when the team responsibility is no longer justified; preserve the
    package unless reconciliation explicitly marks it retired.
 
-Use `skill-creator`'s interview/template/preflight flow for `create` and
+Use `forge-skill-creator`'s interview/template/preflight flow for `create` and
 substantial `extend` work. Do not copy a generated package over an unaffected
 file.
 
@@ -73,12 +73,12 @@ exactly matches the parent directory.
 
 ### Step 3: Review and enforce quality
 
-Run `skill-review` against the changed package set with structural and per-axis
+Run `forge-skill-review` against the changed package set with structural and per-axis
 blocking enabled:
 
 ```bash
-cd <skill-review-package>
-npm run skill-review -- --files <affected-skill>/SKILL.md --provider stdout \
+cd <forge-skill-review-package>
+npm run forge-skill-review -- --files <affected-skill>/SKILL.md --provider stdout \
   --min-score 2 --fail-below --min-axis 2 \
   --fail-axis-below --fail-structural
 ```
@@ -94,7 +94,7 @@ affected handoff candidate files.
 
 Leave `docs/SKILL-CANDIDATES.json` unchanged; it is immutable team-owned input
 and participates in backend fingerprints. Write review evidence to separate
-skill-review artifacts and report stage status through the launcher-owned
+forge-skill-review artifacts and report stage status through the launcher-owned
 `docs/authoring-state.json`. A failed candidate is retryable without
 regenerating a valid team. Changed team inputs invalidate readiness only for
 affected candidates.
@@ -107,7 +107,7 @@ diagnostic metadata rather than requiring a project-local copy.
 ## Required outputs
 
 - Validated packages under the active harness skills directory.
-- Separate skill-review evidence artifacts.
+- Separate forge-skill-review evidence artifacts.
 - Launcher-owned `docs/authoring-state.json` skills-stage status.
 - No `docs/EXECUTION-MANIFEST.json` creation or replacement.
 
@@ -139,5 +139,5 @@ diagnostic metadata rather than requiring a project-local copy.
 - [ ] Each frontmatter `name` parses to the exact parent directory name with no
       embedded wrapping quote characters.
 - [ ] Unaffected packages and manifest IDs are byte-for-byte unchanged.
-- [ ] `skill-review` passes with `--fail-axis-below --fail-structural`.
+- [ ] `forge-skill-review` passes with `--fail-axis-below --fail-structural`.
 - [ ] No execution manifest was created or modified.

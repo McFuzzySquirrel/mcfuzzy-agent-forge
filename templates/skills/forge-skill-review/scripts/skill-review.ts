@@ -53,7 +53,7 @@ interface CliOptions {
 const program = new Command();
 
 program
-  .name("skill-review")
+  .name("forge-skill-review")
   .description("Audit skill files against agentskills.io best practices")
   .option(
     "-p, --provider <provider>",

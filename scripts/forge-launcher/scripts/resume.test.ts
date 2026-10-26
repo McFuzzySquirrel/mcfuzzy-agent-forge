@@ -72,7 +72,7 @@ test("resume with an idea queues PRD drafting", async () => {
   const { code, out } = await runCli(["resume", "--repo", repo, "--non-interactive"]);
   assert.equal(code, 0, out);
   assert.ok(out.includes("No PRD yet"), out);
-  assert.ok(out.includes("forge-auto-build-prd"), out);
+  assert.ok(out.includes("forge-build-prd"), out);
   assert.match(out, /opencode "mini" "--prompt"/);
   assert.doesNotMatch(out, /opencode run --auto/);
   assert.ok(!out.includes("--dir"), out);
@@ -84,7 +84,7 @@ test("resume with only an imported source hands off to interactive feature autho
   write(repo, "docs/requirements-source.md", "# Supplied requirements\nBuild a thing.\n");
   const { code, out } = await runCli(["resume", "--repo", repo, "--non-interactive"]);
   assert.equal(code, 0, out);
-  assert.match(out, /forge-auto-build-prd/);
+  assert.match(out, /forge-build-prd/);
   assert.match(out, /docs\/requirements-source\.md/);
   assert.doesNotMatch(out, /No idea or PRD captured yet/);
   // ADR-060: a non-interactive resume hands the requirements stage off rather

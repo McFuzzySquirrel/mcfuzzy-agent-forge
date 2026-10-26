@@ -1,11 +1,11 @@
 ---
-name: skill-review-updater
-description: "Check for updates in agentskills.io for skill-review by comparing latest best practices against the skill-review rubric, then produce a prioritized plan for new checks that keep skill-review relevant and accurate."
+name: forge-skill-review-updater
+description: "Check for updates in agentskills.io for forge-skill-review by comparing latest best practices against the forge-skill-review rubric, then produce a prioritized plan for new checks that keep forge-skill-review relevant and accurate."
 ---
 
 # Skill: Skill Review Updater
 
-Use this skill when asked to check for updates in agentskills.io for skill-review and produce a concrete update plan. It gathers evidence from current best-practice guidance, compares it to the current skill-review rubric, and outputs prioritized, confidence-scored additions without editing skill-review directly unless explicitly requested.
+Use this skill when asked to check for updates in agentskills.io for forge-skill-review and produce a concrete update plan. It gathers evidence from current best-practice guidance, compares it to the current forge-skill-review rubric, and outputs prioritized, confidence-scored additions without editing forge-skill-review directly unless explicitly requested.
 
 Load [quality baseline](references/quality-baseline.md) now. It defines the evidence standard, confidence thresholds, and output contract used across all steps.
 
@@ -13,12 +13,12 @@ Load [quality baseline](references/quality-baseline.md) now. It defines the evid
 
 ## Process
 
-### Step 1: Capture the current skill-review baseline
+### Step 1: Capture the current forge-skill-review baseline
 
-Start from local ground truth before collecting external guidance. Read the current `skill-review` skill files and extract the checks that are already enforced today. Use an explicit baseline scan command such as `rg -n "Context Economy|Gotchas Coverage|Procedural Clarity|Progressive Disclosure|Calibration|Validation" .agents/skills/skill-review` and then normalize the findings into rule labels with one primary axis each.
+Start from local ground truth before collecting external guidance. Read the current `forge-skill-review` skill files and extract the checks that are already enforced today. Use an explicit baseline scan command such as `rg -n "Context Economy|Gotchas Coverage|Procedural Clarity|Progressive Disclosure|Calibration|Validation" .agents/skills/forge-skill-review` and then normalize the findings into rule labels with one primary axis each.
 
 **Inputs needed:**
-- Path to the current `skill-review` skill (`.agents/skills/skill-review/`)
+- Path to the current `forge-skill-review` skill (`.agents/skills/forge-skill-review/`)
 - Current rubric/check logic from that skill
 
 **Output:**
@@ -55,7 +55,7 @@ Classify each proposed check using evidence confidence and expected review impac
 
 ### Step 5: Produce the update plan
 
-Convert prioritized proposals into a concrete implementation plan for maintaining skill-review relevance. For each recommended check, include rationale, exact rubric location to update, acceptance criteria, and an estimate of review noise risk.
+Convert prioritized proposals into a concrete implementation plan for maintaining forge-skill-review relevance. For each recommended check, include rationale, exact rubric location to update, acceptance criteria, and an estimate of review noise risk.
 
 For variable choices (ranking and rollout), use this default: sort by impact first, then confidence. If two items tie, prefer the one with lower reviewer ambiguity.
 
@@ -89,7 +89,7 @@ After completing the process, verify:
 - [ ] The output includes three sections: recommended checks, conditional candidates, and watchlist.
 - [ ] Every proposed check has: source citation, mapped rubric axis, gap statement, and acceptance criteria.
 - [ ] No proposed check is marked "new" without a baseline comparison row.
-- [ ] At least one command-backed sanity check was run against local skill-review content, such as `rg -n "Context Economy|Gotchas Coverage|Procedural Clarity|Progressive Disclosure|Calibration|Validation" .agents/skills/skill-review`.
+- [ ] At least one command-backed sanity check was run against local forge-skill-review content, such as `rg -n "Context Economy|Gotchas Coverage|Procedural Clarity|Progressive Disclosure|Calibration|Validation" .agents/skills/forge-skill-review`.
 - [ ] The final plan clearly states whether it is **plan-only** or includes direct edit instructions.
 
 If any item fails: fix traceability first (citation and baseline mapping), then rerun the checklist before handoff.

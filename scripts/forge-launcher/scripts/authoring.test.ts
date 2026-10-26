@@ -18,7 +18,7 @@ function fixture(t: { after: (fn: () => void) => void }, harnessRoot = ".github"
   t.after(() => fs.rmSync(repo, { recursive: true, force: true }));
   fs.mkdirSync(path.join(repo, "docs"), { recursive: true });
   fs.mkdirSync(path.join(repo, harnessRoot, "agents"), { recursive: true });
-  for (const skill of ["forge-auto-build-prd", "forge-build-prd", "forge-build-feature-prd", "forge-build-agent-team", "forge-build-project-skills"]) {
+  for (const skill of ["forge-build-prd", "forge-build-feature-prd", "forge-build-agent-team", "forge-build-project-skills"]) {
     write(repo, `${harnessRoot}/skills/${skill}/SKILL.md`, `---\nname: ${skill}\ndescription: "Fixture"\n---\n# Fixture\n`);
   }
   execFileSync("git", ["init", "-q", repo]);

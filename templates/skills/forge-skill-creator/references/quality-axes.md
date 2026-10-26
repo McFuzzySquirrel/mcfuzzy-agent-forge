@@ -1,6 +1,6 @@
 # Quality Axes for Skill Creation
 
-These are the six axes from the skill-review rubric, reframed as **creation guidance** rather than audit criteria. Use them throughout Steps 1–4 to build each section of the new skill intentionally.
+These are the six axes from the forge-skill-review rubric, reframed as **creation guidance** rather than audit criteria. Use them throughout Steps 1–4 to build each section of the new skill intentionally.
 
 Scoring reference: 1 = missing, 2 = partial, 3 = strong.
 

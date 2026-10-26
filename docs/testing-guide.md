@@ -54,7 +54,7 @@ To run the same package checks locally from the repository root:
 npm ci --prefix templates/skills/forge-execution-adapter
 npm ci --prefix scripts/forge-launcher
 npm ci --prefix templates/skills/forge-workflow-engine
-npm ci --prefix templates/skills/skill-review
+npm ci --prefix templates/skills/forge-skill-review
 
 npm run typecheck --prefix scripts/forge-launcher
 npm test --prefix scripts/forge-launcher
@@ -62,8 +62,8 @@ npm run typecheck --prefix templates/skills/forge-execution-adapter
 npm test --prefix templates/skills/forge-execution-adapter
 npm run typecheck --prefix templates/skills/forge-workflow-engine
 npm test --prefix templates/skills/forge-workflow-engine
-npm run typecheck --prefix templates/skills/skill-review
-npm test --prefix templates/skills/skill-review
+npm run typecheck --prefix templates/skills/forge-skill-review
+npm test --prefix templates/skills/forge-skill-review
 node --test templates/skills/forge-build-agent-team/scripts/validate-team.test.mjs
 npm run build --prefix scripts/forge-launcher
 npm run check:version --prefix scripts/forge-launcher

@@ -1,10 +1,10 @@
 {
-  "name": "mcfuzzy-skills",
+  "name": "forge-skill-review",
   "version": "1.0.0",
   "type": "module",
   "description": "Skill review - audit skills against best practices and post PR guidance",
   "scripts": {
-    "skill-review": "tsx scripts/skill-review.ts",
+    "forge-skill-review": "tsx scripts/skill-review.ts",
     "test": "node --import tsx --test scripts/*.test.ts",
     "typecheck": "tsc --noEmit"
   },

@@ -4,6 +4,29 @@ Detailed release and change notes for MyForge.
 
 ---
 
+## October 2026 - v3.105
+
+### Skill set consolidated and namespaced
+
+- Removed `forge-optimize-skills`; `forge-skill-review` now covers both the
+  automated Node audit and the manual agent-driven pass, so there is one
+  six-axis skill audit instead of two.
+- Removed `forge-auto-build-prd`; the launcher, Console, agents, and docs queue
+  `/forge-build-prd` directly, which already stops after authoring the PRD.
+- Renamed the meta-skills to a consistent `forge-*` namespace:
+  `skill-review` → `forge-skill-review`, `skill-creator` →
+  `forge-skill-creator`, and `skill-review-updater` →
+  `forge-skill-review-updater`.
+- The meta-skill exclusion rule now names the Forge tooling explicitly instead
+  of guessing from the prefix.
+- The launcher no longer bootstraps the maintainer-only
+  `forge-skill-review-updater` into target repositories; it remains in the
+  package resources.
+- The template set is now 14 skills. The build/execution split is unchanged:
+  `forge-auto-build` is the headless conductor, `@project-orchestrator` →
+  `forge-orchestrate-build` is interactive, and `@workflow-orchestrator` →
+  `forge-workflow-engine` is autonomous.
+
 ## October 2026 - v3.104
 
 ### Interactive authoring opens the Console terminal

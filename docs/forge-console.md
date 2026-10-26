@@ -157,7 +157,7 @@ so you can review each result and come back later:
 
 | Stage | Continue does | Produces |
 |---|---|---|
-| Idea (no PRD) | **Author PRD (interactive)** opens `forge-auto-build-prd` in the Console Terminal view or an external terminal; there is no headless alternative (ADR-060). **Grill the idea first** runs `forge-grill-idea` the same way | `docs/PRD.md` + `docs/features/*.md` |
+| Idea (no PRD) | **Author PRD (interactive)** opens `forge-build-prd` in the Console Terminal view or an external terminal; there is no headless alternative (ADR-060). **Grill the idea first** runs `forge-grill-idea` the same way | `docs/PRD.md` + `docs/features/*.md` |
 | PRD (no team) | **Generate team** (headless `forge-build-agent-team`) | agent files and ownership metadata |
 | Team (skills incomplete) | **Generate project skills** | project skill candidates and review result |
 | Skills ready (no manifest) | **Compile manifest** (`forge-execution-adapter`) | `docs/EXECUTION-MANIFEST.json` |
@@ -201,7 +201,7 @@ report the interactive handoff.
 - **Grill the idea first (interactive)** runs the `forge-grill-idea` skill,
   which interviews you in rounds to sharpen `docs/IDEA.md` before PRD authoring,
   then rewrites and commits it.
-- **Author PRD (interactive)** runs `forge-auto-build-prd` (or
+- **Author PRD (interactive)** runs `forge-build-prd` (or
   `forge-build-prd` for an existing repository) with the interview enabled.
 - **Validate PRD** runs the read-only `validate-prd` check and reports the
   result, for documents authored outside the Console. It appears on the pipeline
@@ -357,7 +357,7 @@ path** (comma-separated for multiple research docs):
 - **Existing PRD** → copied to `docs/PRD.md` and used as-is, instead of the
   pipeline drafting one from the idea.
 - **Research / seed documents** → copied to `docs/research/`, where the later
-  PRD build (`forge-auto-build-prd`) reads them as extra context.
+  PRD build (`forge-build-prd`) reads them as extra context.
 
 Picked files are uploaded to the server (`POST /api/uploads`, staged under the
 OS temp dir) and the launcher is handed the paths via `FORGE_PRD_FILE` /

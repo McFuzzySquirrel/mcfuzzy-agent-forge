@@ -38,7 +38,7 @@ function makeRepo(harnessRoot = ".agents"): string {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), "fl-draft-"));
   execFileSync("git", ["-C", dir, "init", "-q"], { env: { ...process.env, ...GIT_ENV } });
   fs.mkdirSync(path.join(dir, harnessRoot, "agents"), { recursive: true });
-  for (const skill of ["forge-auto-build-prd", "forge-build-prd", "forge-build-agent-team"]) {
+  for (const skill of ["forge-build-prd", "forge-build-agent-team"]) {
     const skillDir = path.join(dir, harnessRoot, "skills", skill);
     fs.mkdirSync(skillDir, { recursive: true });
     fs.writeFileSync(path.join(skillDir, "SKILL.md"), `---\nname: ${skill}\ndescription: stub\n---\n# stub\n`);

@@ -587,7 +587,7 @@ export function formatAuditReport(audits: SkillAudit[]): string {
     "# Skill Audit Report",
     "",
     `**Generated:** ${date}`,
-    `**Audited by:** \`skill-review\``,
+    `**Audited by:** \`forge-skill-review\``,
     `**Skills audited:** ${audits.length}`,
     "",
     "---",

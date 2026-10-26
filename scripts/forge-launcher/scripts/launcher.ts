@@ -491,15 +491,15 @@ const TASK_AUTHORING_CHECK = " Author bounded executable tasks inside Phase N he
  * "in the harness = project-orchestrator" rule when possible:
  *   - team exists    → /forge-orchestrate-build (project-orchestrator)
  *   - PRD, no team   → /forge-build-agent-team (team and candidate handoff only)
- *   - no PRD         → /forge-auto-build-prd (idea → PRD)
+ *   - no PRD         → /forge-build-prd (idea → PRD)
  */
 function autobuildCommand(): string {
-  if (!hasPrd()) return `/forge-auto-build-prd Use docs/IDEA.md as the project idea. ${PRD_INTERACTIVE_MSG} Author the PRD only; continue separate team and skills stages with forge-launcher resume.`;
+  if (!hasPrd()) return `/forge-build-prd Use docs/IDEA.md as the project idea. ${PRD_INTERACTIVE_MSG} Author the PRD only; continue separate team and skills stages with forge-launcher resume.`;
   if (hasGeneratedTeam()) {
     const readiness = authoringReadiness(state.repoDir, harnessRootDir());
     if (readiness.nextStage === "skills") return buildSkillsPrompt();
     if (readiness.nextStage === "team") return buildTeamPrompt(prdSourceForTeam(), state.harness);
-    if (readiness.nextStage === "prd") return "/forge-auto-build-prd Retry PRD authoring only; do not continue into team or skills.";
+    if (readiness.nextStage === "prd") return "/forge-build-prd Retry PRD authoring only; do not continue into team or skills.";
     return "/forge-orchestrate-build Use docs/PRD.md and docs/features/*.md as canonical requirements";
   }
   return buildTeamPrompt(prdSourceForTeam(), state.harness);
@@ -527,7 +527,7 @@ function headlessSkillMsgForSession(): string {
   }
   // No PRD: a headless session cannot author requirements (ADR-060). The team
   // prompt is still correct, and authoring the PRD is a separate interactive step.
-  return `/forge-auto-build-prd Use docs/IDEA.md as the project idea. ${PRD_INTERACTIVE_MSG}`;
+  return `/forge-build-prd Use docs/IDEA.md as the project idea. ${PRD_INTERACTIVE_MSG}`;
 }
 
 function headlessRunnerSelection(): AuthoringRunnerSelection {
@@ -568,7 +568,7 @@ function skillNameFromMsg(msg: string): string {
 }
 
 function authoringStageForSkill(skill: string): AuthoringStage | undefined {
-  if (["forge-auto-build-prd", "forge-build-prd", "forge-build-feature-prd"].includes(skill)) return "prd";
+  if (["forge-build-prd", "forge-build-feature-prd"].includes(skill)) return "prd";
   if (skill === "forge-build-agent-team") return "team";
   if (skill === "forge-build-project-skills") return "skills";
   return undefined;
@@ -781,7 +781,7 @@ async function runStubSkill(msg: string, opts: LauncherOptions): Promise<boolean
 
   const stubTask = (id: string, reference = "docs/PRD.md") => ["```forge-task", JSON.stringify({ id, title: `Implement ${id} behavior`, description: `Write a ${id} result for the test harness`, ownerAgent: "stub-project-agent", dependencies: [], expectedOutputs: ["src/stub.txt"], validationCommands: ['node -e "process.exit(0)"'], contract: { version: 1, kind: "implementation", requirements: ["FR-1: Stub behavior"], acceptanceCriteria: ["Stub result exists"], constraints: [], references: [reference] } }), "```"].join("\n");
 
-  if (skillName.includes("forge-auto-build-prd") || skillName.includes("forge-build-prd")) {
+  if (skillName.includes("forge-build-prd")) {
     const prd = path.join(state.repoDir, "docs", "features", "stub.md");
     fs.mkdirSync(path.dirname(prd), { recursive: true });
     fs.writeFileSync(path.join(state.repoDir, "docs", "PRD.md"), "# PRD\n\n## 14. Features\n| # | Feature | File | Dependencies |\n| 1 | Stub | features/stub.md | None |\n");
@@ -1016,7 +1016,7 @@ async function confirmPrdStep(opts: LauncherOptions): Promise<boolean> {
  * author vision + features; only the prompt differs. */
 function prdAuthoringInvocation(): string {
   return hasIdeaOrSource()
-    ? `/forge-auto-build-prd Use docs/IDEA.md and any docs/requirements-source.md as source material. ${PRD_INTERACTIVE_MSG}`
+    ? `/forge-build-prd Use docs/IDEA.md and any docs/requirements-source.md as source material. ${PRD_INTERACTIVE_MSG}`
     : EXISTING_PROJECT_PRD_INVOCATION;
 }
 
@@ -1179,7 +1179,7 @@ async function runEngineDetached(opts: LauncherOptions): Promise<void> {
     warn("The engine compiles the manifest from the PRD, so the detached run will");
     warn("fail at the compile step until a PRD exists.");
     warn("Requirements are always authored interactively (ADR-060):");
-    command(`    /forge-auto-build-prd Use docs/IDEA.md as the project idea. ${PRD_INTERACTIVE_MSG}`);
+    command(`    /forge-build-prd Use docs/IDEA.md as the project idea. ${PRD_INTERACTIVE_MSG}`);
     out("");
     return;
   }
@@ -1517,7 +1517,7 @@ async function captureIdea(opts: LauncherOptions): Promise<void> {
   out("  Describe your project idea below.");
   out("  This will be saved to docs/IDEA.md (and mirrored to IDEA.md)");
   out("  and used as the starting prompt");
-  out("  for forge-auto-build-prd (which turns it into docs/PRD.md).");
+  out("  for forge-build-prd (which turns it into docs/PRD.md).");
   out("");
 
   let ideaText: string;
@@ -1533,7 +1533,7 @@ async function captureIdea(opts: LauncherOptions): Promise<void> {
 
   if (!ideaText.trim()) {
     warn("No idea text entered. docs/IDEA.md will be created as a placeholder.");
-    ideaText = "*(Replace this with your project idea before running forge-auto-build-prd.)*";
+    ideaText = "*(Replace this with your project idea before running forge-build-prd.)*";
   }
 
   fs.mkdirSync(path.join(state.repoDir, "docs"), { recursive: true });
@@ -1545,7 +1545,7 @@ async function captureIdea(opts: LauncherOptions): Promise<void> {
     "---",
     "",
     `> Generated by forge-launcher on ${new Date().toISOString().replace(/\.\d{3}Z$/, "Z")}`,
-    "> Use this file as input for: `@workspace /forge-auto-build-prd Use docs/IDEA.md as the project idea`",
+    "> Use this file as input for: `@workspace /forge-build-prd Use docs/IDEA.md as the project idea`",
     "",
   ].join("\n");
   fs.writeFileSync(ideaFileDocs, content);
@@ -1620,7 +1620,7 @@ async function addPrdAndResearch(opts: LauncherOptions): Promise<void> {
         warn("No content entered -skipping PRD.");
       }
     } else {
-      info("Skipping PRD -the pipeline will build a PRD from docs/IDEA.md first (via forge-auto-build-prd).");
+      info("Skipping PRD -the pipeline will build a PRD from docs/IDEA.md first (via forge-build-prd).");
     }
   }
 
@@ -1725,7 +1725,7 @@ async function launchAutobuild(opts: LauncherOptions): Promise<void> {
       // stops with a handoff rather than authoring a PRD nobody reviewed.
       fail("No canonical requirements. A headless run cannot author the PRD (ADR-060).");
       info("Author the PRD in an interactive session first, then re-run:");
-      command(`/forge-auto-build-prd ${PRD_INTERACTIVE_MSG}`);
+      command(`/forge-build-prd ${PRD_INTERACTIVE_MSG}`);
       out("");
       info("Then: forge-launcher resume   (or add --headless to run the rest unattended)");
       return;
@@ -1948,12 +1948,12 @@ async function resumeIdeaStep(opts: ResumeOptions): Promise<boolean> {
   out("");
   const choice = await promptSelect("What would you like to do?", [
     { value: "capture", label: "Capture your project idea now", hint: "writes docs/IDEA.md" },
-    { value: "cli", label: "Open the harness CLI to run /forge-auto-build-prd manually" },
+    { value: "cli", label: "Open the harness CLI to run /forge-build-prd manually" },
     { value: "stop", label: "Stop here" },
   ], { initial: "capture" });
   if (choice === "stop") return false;
   if (choice === "cli") {
-    await openCliFor("/forge-auto-build-prd Use docs/IDEA.md as the project idea");
+    await openCliFor("/forge-build-prd Use docs/IDEA.md as the project idea");
     return false;
   }
   if (opts.dryRun) {
@@ -1974,7 +1974,7 @@ async function resumeIdeaStep(opts: ResumeOptions): Promise<boolean> {
     "---",
     "",
     `> Generated by forge-launcher (resume) on ${new Date().toISOString().replace(/\.\d{3}Z$/, "Z")}`,
-    "> Use this file as input for: `@workspace /forge-auto-build-prd Use docs/IDEA.md as the project idea`",
+    "> Use this file as input for: `@workspace /forge-build-prd Use docs/IDEA.md as the project idea`",
     "",
   ].join("\n");
   fs.writeFileSync(ideaPath, content);
@@ -2069,7 +2069,7 @@ async function resumeTeamStep(opts: ResumeOptions): Promise<boolean> {
  * points at the interactive session instead; the caller (a headless job) then
  * fails rather than writing an unreviewed PRD.
  */
-function interactivePrdHandoff(repoDir: string, skill: "forge-auto-build-prd" | "forge-build-prd"): number {
+function interactivePrdHandoff(repoDir: string, skill: "forge-build-prd"): number {
   out("");
   fail("Requirements authoring is interactive (ADR-060); it is not run as a background job.");
   info("Open an interactive session and answer the interview:");
@@ -2089,7 +2089,7 @@ async function runDraftPrdInternal(repoDir: string): Promise<number> {
     out("PRD already exists.");
     return 0;
   }
-  if (!requirementsAuthoringAllowed(headlessRunner(), state.options.dependencies?.allowNonInteractiveRequirements)) return interactivePrdHandoff(repoDir, "forge-auto-build-prd");
+  if (!requirementsAuthoringAllowed(headlessRunner(), state.options.dependencies?.allowNonInteractiveRequirements)) return interactivePrdHandoff(repoDir, "forge-build-prd");
   out("Auto-drafting the PRD (offline stub runner) …");
   if (!await runSkillHeadless(prdAuthoringInvocation(), { nonInteractive: true })) return 1;
   if (state.options.dryRun) return 0;
@@ -2099,7 +2099,7 @@ async function runDraftPrdInternal(repoDir: string): Promise<number> {
     out(`    - ${link(path.join(repoDir, "docs", "PRD.md"))}`);
     return 0;
   }
-  await diagnoseAutoDraftFail("forge-auto-build-prd");
+  await diagnoseAutoDraftFail("forge-build-prd");
   return 1;
 }
 
@@ -2725,7 +2725,7 @@ function completionSummary(): void {
   out(`  Harness     : ${state.harnessLabel} (--harness ${state.harness})`);
   out(`  Remote      : ${state.remoteCreated ? "yes" : "none configured"}`);
   out(`  Idea file   : ${path.join(state.repoDir, "docs", "IDEA.md")}`);
-  out(`  PRD         : ${state.prdAdded ? path.join(state.repoDir, "docs", "PRD.md") : "none (will be built from docs/IDEA.md by forge-auto-build-prd)"}`);
+  out(`  PRD         : ${state.prdAdded ? path.join(state.repoDir, "docs", "PRD.md") : "none (will be built from docs/IDEA.md by forge-build-prd)"}`);
   out(`  Research    : ${state.researchAdded ? path.join(state.repoDir, "docs", "research") + "/" : "none"}`);
   out("");
   out("  Next steps:");
@@ -2768,7 +2768,7 @@ function completionSummary(): void {
   const skillsRoot = state.harness === "github" ? ".github" : state.harness === "claude" ? ".claude" : state.harness === "opencode" ? ".opencode" : ".agents";
   out(`   • project-orchestrator   : ${path.join(state.repoDir, skillsRoot, "skills", "forge-orchestrate-build", "SKILL.md")}`);
   out(`   • workflow-engine        : ${path.join(state.repoDir, skillsRoot, "skills", "forge-workflow-engine", "SKILL.md")}`);
-  out(`   • forge-auto-build-prd   : ${path.join(state.repoDir, skillsRoot, "skills", "forge-auto-build-prd", "SKILL.md")}`);
+  out(`   • forge-build-prd   : ${path.join(state.repoDir, skillsRoot, "skills", "forge-build-prd", "SKILL.md")}`);
   out(`   • forge-auto-build       : ${path.join(state.repoDir, skillsRoot, "skills", "forge-auto-build", "SKILL.md")} (terminal/headless fast-path)`);
   out("       (paths may vary by harness)");
   out("");

@@ -1,6 +1,6 @@
 # Pre-flight Checklist
 
-> Load during Step 4, before running the formal `skill-review` audit.
+> Load during Step 4, before running the formal `forge-skill-review` audit.
 
 Work through every item. For each failure: state what is wrong, fix it immediately, mark it resolved. Do not proceed to Step 5 until all **[BLOCKER]** items are cleared.
 
@@ -90,7 +90,7 @@ After working through all sections, summarize:
 ```
 [BLOCKERS resolved]: {count}
 [Warnings remaining]: {count}
-[Ready for skill-review]: yes / no
+[Ready for forge-skill-review]: yes / no
 ```
 
 If "no": state which items remain open and why. Do not proceed to Step 5 until all blockers are cleared.
