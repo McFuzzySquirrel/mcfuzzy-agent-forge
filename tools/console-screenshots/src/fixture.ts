@@ -71,8 +71,11 @@ export async function buildFixture(repoRoot: string, homeDir: string): Promise<F
   writeDocs(repoRoot);
   writeArtifacts(repoRoot);
   writeConfig(repoRoot);
+  writeModelOverrides(repoRoot);
   await writeAuthoringState(repoRoot);
   writeRegistry(homeDir, repoRoot);
+  writeSettings(homeDir);
+  writeJobs(homeDir);
 
   return {
     root,
@@ -411,6 +414,9 @@ function writeState(repoRoot: string): void {
     outputFiles: [],
     ...overrides,
   });
+  const usage = (inputTokens: number, outputTokens: number, cacheReadTokens: number, costUsd: number) => ({
+    inputTokens, outputTokens, cacheReadTokens, costUsd, source: "harness" as const,
+  });
   json(repoRoot, "docs/WORKFLOW-STATE.json", {
     runId: RUN_ID,
     startedAt: "2026-09-22T12:05:00.000Z",
@@ -421,12 +427,12 @@ function writeState(repoRoot: string): void {
     status: "running",
     currentPhase: "2",
     tasks: {
-      "1.1": task("1.1", "complete", { ownerAgent: "api-engineer", startedAt: "2026-09-22T12:05:10.000Z", completedAt: "2026-09-22T12:11:42.000Z", outputFiles: ["package.json", "src/index.ts"], artifactId: "solution-001" }),
-      "1.2": task("1.2", "complete", { ownerAgent: "api-engineer", startedAt: "2026-09-22T12:12:00.000Z", completedAt: "2026-09-22T12:24:18.000Z", outputFiles: ["src/auth/magic-link.ts"], artifactId: "solution-001" }),
-      "1.3": task("1.3", "complete", { ownerAgent: "api-engineer", startedAt: "2026-09-22T12:25:00.000Z", completedAt: "2026-09-22T12:39:51.000Z", outputFiles: ["src/auth/session.ts"], artifactId: "decision-001" }),
-      "2.1": task("2.1", "complete", { ownerAgent: "ui-engineer", startedAt: "2026-09-22T13:05:00.000Z", completedAt: "2026-09-22T13:31:07.000Z", outputFiles: ["src/expenses/capture.tsx"], artifactId: "solution-002" }),
+      "1.1": task("1.1", "complete", { ownerAgent: "api-engineer", startedAt: "2026-09-22T12:05:10.000Z", completedAt: "2026-09-22T12:11:42.000Z", outputFiles: ["package.json", "src/index.ts"], artifactId: "solution-001", usage: usage(182400, 12800, 96000, 0.41) }),
+      "1.2": task("1.2", "complete", { ownerAgent: "api-engineer", startedAt: "2026-09-22T12:12:00.000Z", completedAt: "2026-09-22T12:24:18.000Z", outputFiles: ["src/auth/magic-link.ts"], artifactId: "solution-001", usage: usage(156200, 9400, 71000, 0.33) }),
+      "1.3": task("1.3", "complete", { ownerAgent: "api-engineer", startedAt: "2026-09-22T12:25:00.000Z", completedAt: "2026-09-22T12:39:51.000Z", outputFiles: ["src/auth/session.ts"], artifactId: "decision-001", usage: usage(98500, 7100, 40200, 0.22) }),
+      "2.1": task("2.1", "complete", { ownerAgent: "ui-engineer", startedAt: "2026-09-22T13:05:00.000Z", completedAt: "2026-09-22T13:31:07.000Z", outputFiles: ["src/expenses/capture.tsx"], artifactId: "solution-002", usage: usage(210900, 18300, 120400, 0.58) }),
       "2.2": task("2.2", "running", { ownerAgent: "api-engineer", startedAt: "2026-09-22T13:58:00.000Z" }),
-      "3.1": task("3.1", "failed", { attempt: 2, ownerAgent: "api-engineer", startedAt: "2026-09-22T13:40:00.000Z", completedAt: "2026-09-22T13:52:33.000Z", errorMessage: "Validation command failed: npm test -- reports (exit 1)", failureKind: "retryable" }),
+      "3.1": task("3.1", "failed", { attempt: 2, ownerAgent: "api-engineer", startedAt: "2026-09-22T13:40:00.000Z", completedAt: "2026-09-22T13:52:33.000Z", errorMessage: "Validation command failed: npm test -- reports (exit 1)", failureKind: "retryable", usage: usage(64300, 3200, 21000, 0.12) }),
       "3.2": task("3.2", "pending", { ownerAgent: "ui-engineer" }),
       "3.3": task("3.3", "pending", { ownerAgent: "qa-engineer" }),
     },
@@ -617,6 +623,47 @@ function writeConfig(repoRoot: string): void {
     { type: "authoring.complete", operation: "team", timestamp: "2026-09-22T10:27:00.000Z" },
     { type: "authoring.started", operation: "skills", timestamp: "2026-09-22T10:28:00.000Z" },
     { type: "authoring.complete", operation: "skills", timestamp: "2026-09-22T10:33:00.000Z" },
+  ]);
+}
+
+/** Per-agent execution model overrides, shown in Settings → Models. */
+function writeModelOverrides(repoRoot: string): void {
+  json(repoRoot, "docs/model-overrides.json", {
+    "api-engineer": { primary: "github-copilot/claude-sonnet-4.5", fallback: "opencode/qwen3-coder" },
+    "ui-engineer": { primary: "github-copilot/gpt-5.6-luna", fallback: "opencode/qwen3-coder" },
+  });
+}
+
+/** System-level defaults, shown in Settings → Global defaults. */
+function writeSettings(homeDir: string): void {
+  json(homeDir, "settings.json", {
+    version: 1,
+    authoring: {
+      runner: "opencode",
+      models: { prd: "opencode/qwen3-coder", team: "opencode/grok-code" },
+    },
+    execution: { concurrency: 3, autoCommit: true, logHarnessActivity: false },
+    harness: "agents",
+    ui: { boardMode: "kanban" },
+  });
+}
+
+/**
+ * One failed background job for a different registered project, so the
+ * context-bar job badge shows "1 failed" without disturbing the Ledgerly run.
+ */
+function writeJobs(homeDir: string): void {
+  json(homeDir, "jobs.json", [
+    {
+      id: "job-2026-09-12-acme-compile",
+      type: "compile-manifest",
+      repoPath: join(homeDir, "acme-portal"),
+      startedAt: "2026-09-12T16:18:00.000Z",
+      updatedAt: "2026-09-12T16:20:00.000Z",
+      finishedAt: "2026-09-12T16:20:00.000Z",
+      status: "failed",
+      message: "Manifest compile failed: validation command 'npm test' exited 1.",
+    },
   ]);
 }
 

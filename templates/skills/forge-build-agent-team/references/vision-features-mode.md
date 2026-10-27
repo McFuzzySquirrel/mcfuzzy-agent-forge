@@ -57,7 +57,7 @@ Follow Step 3 of the parent skill, with these additional considerations:
 
 Follow Step 4 of the parent skill. Look for patterns that
 repeat across features and record candidates in the exact
-`docs/SKILL-CANDIDATES.json` handoff. Do not invoke `skill-creator` or write
+`docs/SKILL-CANDIDATES.json` handoff. Do not invoke `forge-skill-creator` or write
 skill packages during team generation.
 
 ### Step 6v: Write Agents and the Candidate Handoff

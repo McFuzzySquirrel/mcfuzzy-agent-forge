@@ -3,6 +3,7 @@
 import { api } from "../api.js";
 import { store } from "../state.js";
 import { el, fmtDuration, fmtTime, minutesToTimeoutMs, statusBadge, timeoutToMinutes, toast } from "../render/dom.js";
+import { formatUsage, usageCell } from "../render/usage.js";
 import type { SelectionScope, TaskRow } from "../types.js";
 
 type SortKey = "status" | "phase" | "owner" | "duration" | "attempt";
@@ -295,6 +296,7 @@ function renderTable(): void {
        el("td", { className: "mono small" }, t.effectiveModel ?? "default"),
       el("td", null, String(t.attempt)),
       el("td", null, fmtDuration(t.durationMs)),
+      el("td", { className: "mono small" }, usageCell(t.usage)),
     ]);
     tr.addEventListener("click", () => {
       expandedId = expandedId === t.id ? null : t.id;
@@ -302,7 +304,7 @@ function renderTable(): void {
     });
     tbody.appendChild(tr);
     if (expandedId === t.id) {
-       tbody.appendChild(el("tr", { className: "detail-row" }, [el("td", { colspan: "9" }, detail(t))]));
+       tbody.appendChild(el("tr", { className: "detail-row" }, [el("td", { colspan: "10" }, detail(t))]));
     }
   }
 
@@ -319,6 +321,7 @@ function renderTable(): void {
           plainTh("Model"),
           th("Attempt", "attempt"),
           th("Duration", "duration"),
+          plainTh("Tokens"),
         ]),
       ]),
       tbody,
@@ -428,6 +431,7 @@ function detail(t: TaskRow): HTMLElement {
   const fields: Array<HTMLElement | null> = [
     el("div", null, [el("div", { className: "k" }, "Description"), el("div", null, t.description || "—")]),
     el("div", null, [el("div", { className: "k" }, "Effective model"), el("div", { className: "mono" }, t.effectiveModel ?? "Harness/default")]),
+    el("div", null, [el("div", { className: "k" }, "Token usage"), el("div", { className: "mono" }, formatUsage(t.usage))]),
     list("Expected outputs", t.expectedOutputs),
     list("Validation commands", t.validationCommands),
     list("Dependencies", t.dependencies),

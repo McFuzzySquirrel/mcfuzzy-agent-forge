@@ -9,17 +9,10 @@ set is archived under `images/forge-console/current/`. Start with
 
 > See [forge-console.md](forge-console.md) for the full reference.
 >
-> **Capture note (v3.81):** the Overview captures show the whole page, including
-> the **Controls** panel with the new **Log harness activity** toggle. Plan &
-> Team opens documents in a wide popup (introduced in v3.80); screenshots taken
-> before then show the earlier headless-first pipeline and split-pane document
-> view.
->
-> **Projects layout (v3.85):** the Projects captures below predate the selectable
-> project table. The current view shows name, state, and last accessed date/time,
-> aligned selection checkboxes with a header select-all checkbox, per-row **Remove from Forge**,
-> and **Remove selected (N)**. Removal requires confirmation and displays an
-> outcome for each project; see the [user guide](forge-console-user-guide.md#remove-one-or-more-projects-from-forge).
+> **Capture note (v3.112):** these captures show the top category navigation
+> (hover or select a category for its dropdown), the persistent project context
+> bar, full-width content, run-level token/cost stats, the Tasks **Tokens**
+> column, and the consolidated **Settings** view.
 
 ---
 
@@ -34,12 +27,12 @@ dropdown for one-click return to a prior project.
 ## 2. Overview
 
 The dashboard puts project identity, the next pipeline action, and blockers
-first. PRD, team, and project-skill authoring have separate status and model
-summaries. The **Controls** panel holds run controls, per-task timeouts, the
-**Auto-commit** and **Log harness activity** toggles, concurrency, and the
-feature-increment form. Authoring retries are distinct from native execution
-controls; legacy projects do not need to regenerate a team just to resume a
-build. (The Overview capture is full-page so the Controls are visible.)
+first. PRD, team, and project-skill authoring have separate status summaries.
+The run stats include the harness-reported **Tokens** (in/out) and **Cost**
+(plus credits where a harness reports them). The **Controls** panel keeps the
+run controls and build mode; timeouts, concurrency, auto-commit, and
+harness-activity logging now live in **Settings → Execution**. (The Overview
+capture is full-page so the Controls are visible.)
 
 ![Overview - run status + pipeline + controls](images/forge-console/current/overview-1024.png)
 
@@ -68,16 +61,19 @@ route for keyboard and screen-reader use.
 ## 4. Tasks
 
 Every task appears in a sortable, filterable table with status chips, search,
-and explicit manual selection. Selections and focused controls survive live
-updates. On narrow screens, the labelled table region scrolls horizontally
-instead of widening the whole page.
+and explicit manual selection. The **Tokens** column shows each task's
+harness-reported total token count (or "—" when the harness reported none).
+Selections and focused controls survive live updates. On narrow screens, the
+labelled table region scrolls horizontally instead of widening the whole page.
 
 ![Tasks - table](images/forge-console/04-tasks.png)
 
 ## 5. Task detail
 
-Clicking a row expands a detail drawer: description, expected outputs, validation
-commands, dependencies, inputs, output files, and error/artifact metadata.
+Clicking a row expands a detail drawer: description, effective model, token
+usage (in/out, cache, cost, or an explicit "not reported"), expected outputs,
+validation commands, dependencies, inputs, output files, and error/artifact
+metadata.
 
 ![Tasks - expanded detail](images/forge-console/05-tasks-detail.png)
 
@@ -97,13 +93,12 @@ The audit event stream (run/phase/task lifecycle), also live.
 
 ## 8. Plan & Team
 
-Independent PRD, team, and project-skill **Authoring models** are available
-before a team exists. Save a model or leave a stage on **Inherit runner default**.
-Inventory refresh and unavailable saved selections remain explicit. The
-**Documents**, **Agents**, and **Skills** sections keep execution-model
-overrides separate from authoring settings.
+The project documents, generated agents, and skills, plus the authoring stage
+cards and re-derivation footer. Selecting a document opens it in a wide popup
+(see §9). Authoring models and per-agent execution overrides are configured in
+**Settings**.
 
-![Plan & Team - authoring settings and project sections](images/forge-console/08-plan-team.png)
+![Plan & Team - project docs, agents, skills, stages](images/forge-console/08-plan-team.png)
 
 ## 9. Plan & Team - a document
 
@@ -149,6 +144,30 @@ keyboard focus into the dialog; Escape closes it and returns focus to Help.
 
 ![Help - modal](images/forge-console/14-help.png)
 
+## 15. Settings
+
+A single view for project configuration plus system-level defaults:
+
+- **Global defaults** - default harness, authoring runner, concurrency, and
+  auto-commit / harness-activity logging, stored in the Forge `settings.json`
+  and inherited by projects that have not set their own value.
+- **Authoring** - the runner and per-stage PRD/team/skills models for this
+  project.
+- **Execution** - build mode, concurrency, auto-commit, harness-activity
+  logging, and task timeouts for this project.
+- **Models** - per-agent primary/fallback overrides and the model planning
+  terminal.
+
+![Settings - global defaults, authoring, execution, and models](images/forge-console/15-settings.png)
+
+## 16. Navigation menu
+
+Navigation is a top bar of categories. Hovering a category opens its views, and
+selecting it pins the list open for touch; the category that owns the current
+view keeps the amber underline. The page content uses the full browser width.
+
+![Navigation - category dropdown](images/forge-console/16-nav-menu.png)
+
 ## Responsive current captures
 
 The current build was captured at 1440px, 1024px, 720px, 390px, and 320px for
@@ -167,6 +186,7 @@ feature, artifact detail, and audit log) are also included in
 | Timeline | [image](images/forge-console/current/timeline-1024.png) | [image](images/forge-console/current/timeline-720.png) | [image](images/forge-console/current/timeline-390.png) | [image](images/forge-console/current/timeline-320.png) |
 | Projects | [image](images/forge-console/current/projects-1024.png) | [image](images/forge-console/current/projects-720.png) | [image](images/forge-console/current/projects-390.png) | [image](images/forge-console/current/projects-320.png) |
 | New project | [image](images/forge-console/current/new-1024.png) | [image](images/forge-console/current/new-720.png) | [image](images/forge-console/current/new-390.png) | [image](images/forge-console/current/new-320.png) |
+| Settings | [image](images/forge-console/current/settings-1024.png) | [image](images/forge-console/current/settings-720.png) | [image](images/forge-console/current/settings-390.png) | [image](images/forge-console/current/settings-320.png) |
 
 ## Regenerating these captures
 

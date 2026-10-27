@@ -248,3 +248,45 @@ test("passes --session-id when the request carries a sessionId, and omits it oth
   assert.ok(withSession.includes("--session-id"));
   assert.equal(withSession[withSession.indexOf("--session-id") + 1], "forge-run-phase-1");
 });
+
+test("parses token and credit stats from the CLI stats block", async (t) => {
+  const root = tempDir(t, "forge-copilot-usage-repo-");
+  const agent = makeAgent(join(root, ".github", "agents", "discovery-engineer.md"));
+  const bin = makeNodeShim(tempDir(t, "forge-copilot-usage-"), "fake-copilot", `
+process.stdout.write("OK\\n");
+process.stderr.write("Changes    +0 -0\\nAI Credits 0.46 (8s)\\nTokens     \\u2191 18.6k (18.6k written) \\u2022 \\u2193 5\\n");
+process.exit(0);
+`);
+  const original = process.env.COPILOT_BIN;
+  process.env.COPILOT_BIN = bin;
+  try {
+    const adapter = new CopilotAdapter();
+    const result = await adapter.invoke(prepareTaskRequest({ agent, task: makeTask(), repoRoot: root }));
+    assert.deepEqual(result.usage, {
+      inputTokens: 18600,
+      outputTokens: 5,
+      cacheWriteTokens: 18600,
+      credits: 0.46,
+      source: "harness",
+    });
+  } finally {
+    if (original === undefined) delete process.env.COPILOT_BIN;
+    else process.env.COPILOT_BIN = original;
+  }
+});
+
+test("reports usage unavailable when Copilot prints no stats block", async (t) => {
+  const root = tempDir(t, "forge-copilot-nostats-repo-");
+  const agent = makeAgent(join(root, ".github", "agents", "discovery-engineer.md"));
+  const shim = makeShim(t);
+  const original = process.env.COPILOT_BIN;
+  process.env.COPILOT_BIN = shim.bin;
+  try {
+    const adapter = new CopilotAdapter();
+    const result = await adapter.invoke(prepareTaskRequest({ agent, task: makeTask(), repoRoot: root }));
+    assert.equal(result.usage?.source, "unavailable");
+  } finally {
+    if (original === undefined) delete process.env.COPILOT_BIN;
+    else process.env.COPILOT_BIN = original;
+  }
+});

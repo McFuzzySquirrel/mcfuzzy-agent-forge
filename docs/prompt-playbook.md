@@ -59,12 +59,12 @@ git commit -m "chore: bootstrap MyForge agent and skill templates"
 
 ## Fast Path - Build a Reviewed PRD in One Prompt (Optional)
 
-To go from a one-line idea to reviewed requirements, use `forge-auto-build-prd`.
+To go from a one-line idea to reviewed requirements, use `forge-build-prd`.
 It confirms the idea and invokes `forge-build-prd` to author PRD and
 features directly, including one-feature solutions. It stops before team generation.
 
 ```
-@workspace /forge-auto-build-prd I want to build [describe your idea in one sentence].
+@workspace /forge-build-prd I want to build [describe your idea in one sentence].
 ```
 
 `forge-build-prd` presents its PRD review checklist before the document is saved. Reply `revise: <notes>` to iterate on the PRD, or approve to finish. Once `docs/PRD.md` exists (plus `docs/PRD.md` + `docs/features/*.md` when decomposed), generate the team and build - `forge-launcher resume` from the terminal, or in the harness `/forge-build-agent-team` then `@project-orchestrator` / `@workflow-orchestrator`.
@@ -85,7 +85,7 @@ forge-launcher --headless
 opencode run --auto "/forge-auto-build Use docs/PRD.md as the project PRD. GO"
 ```
 
-> If no PRD exists yet, `forge-auto-build` stops at its pre-flight check and directs you to `forge-auto-build-prd` or `forge-build-prd` first. It will not interview you for a one-line idea.
+> If no PRD exists yet, `forge-auto-build` stops at its pre-flight check and directs you to `forge-build-prd` first. It will not interview you for a one-line idea.
 
 **How it works:**
 
@@ -453,7 +453,7 @@ After building a project, audit the generated skills against agentskills.io best
 ### 8a. Audit skills
 
 ```
-@workspace /forge-optimize-skills Audit all skills in .agents/skills/ against best practices.
+@workspace /forge-skill-review Audit all skills in .agents/skills/ against best practices.
 Score each skill and produce docs/SKILL-AUDIT.md. Do not modify any files yet.
 ```
 
@@ -462,7 +462,7 @@ Score each skill and produce docs/SKILL-AUDIT.md. Do not modify any files yet.
 After reviewing `docs/SKILL-AUDIT.md`:
 
 ```
-@workspace /forge-optimize-skills Apply the approved changes from docs/SKILL-AUDIT.md.
+@workspace /forge-skill-review Apply the approved changes from docs/SKILL-AUDIT.md.
 Only modify skills I've approved in the audit report.
 ```
 
@@ -472,8 +472,8 @@ Only modify skills I've approved in the audit report.
 
 | Step | Command / Prompt |
 |------|-----------------|
-| **Build reviewed PRD from idea** | `@workspace /forge-auto-build-prd I want to build [idea]` |
-| **Headless PRD from idea** | `opencode run --auto (cwd=<repo>) "/forge-auto-build-prd Use docs/IDEA.md as the project idea. Headless mode: auto-proceed with default assumptions and approve the PRD. After drafting, run a PRD gap check: every major component must have clear acceptance criteria, a defined tech stack, non-functional requirements (performance, security, privacy), and implementation phases; fill any gaps before approving."` |
+| **Build reviewed PRD from idea** | `@workspace /forge-build-prd I want to build [idea]` |
+| **Headless PRD from idea** | Not supported by design — requirements authoring is interactive only (ADR-060). A non-interactive `/forge-build-prd` run stops and reports the unanswered questions instead of inventing requirements. |
 | **Interactive build in the harness** | `@workspace @project-orchestrator Execute the full build` |
 | **Autonomous engine build** | `forge-launcher engine-run --harness opencode --yes` or `@workspace @workflow-orchestrator Run the workflow` |
 | **Pick up where you left off** | `forge-launcher resume` (or `--repo <path>`) |
@@ -501,8 +501,8 @@ Only modify skills I've approved in the audit report.
 | Resume from checkpoint | `@workspace @project-orchestrator Read docs/PROGRESS.md and resume...` |
 | New feature PRD | `@workspace /forge-build-feature-prd I want to add [feature]...` |
 | Execute feature phase | `@workspace @project-orchestrator Read docs/features/feature-XX.md, execute Phase F1 only...` |
-| Audit skills | `@workspace /forge-optimize-skills Audit all skills in .agents/skills/ against best practices...` |
-| Apply skill improvements | `@workspace /forge-optimize-skills Apply the approved changes from docs/SKILL-AUDIT.md` |
+| Audit skills | `@workspace /forge-skill-review Audit all skills in .agents/skills/ against best practices...` |
+| Apply skill improvements | `@workspace /forge-skill-review Apply the approved changes from docs/SKILL-AUDIT.md` |
 | Compile execution manifest | `cd .agents/skills/forge-execution-adapter && npm install && npm run forge-execution-adapter -- compile` |
 | Dark run (OpenCode harness) | `cd .agents/skills/forge-workflow-engine && npm install && npm run workflow-engine -- run --harness opencode` |
 | Dark run (GitHub Copilot harness) | `cd .agents/skills/forge-workflow-engine && npm run workflow-engine -- run --harness copilot` |
@@ -524,6 +524,6 @@ Only modify skills I've approved in the audit report.
 - **Commit after each phase** - the orchestrator will prompt you, but make a habit of it. `git add . && git commit -m "feat: complete Phase N"`.
 - **The PRD is the source of truth** - if something looks wrong, fix the PRD first, then re-run the affected steps.
 - **Re-bootstrap safely** - run `forge-launcher bootstrap . --force` any time you want to pull in updated MyForge templates without losing your generated agents.
-- **Optimize generated skills** - after the initial build, run `@workspace /forge-optimize-skills` to audit your skills against best practices. The audit surfaces specific improvements you can apply immediately.
-- **Full auto build** - use `forge-auto-build` when a reviewed PRD already exists (`docs/PRD.md`, or the decomposed layout) and you want a single command to take you from that PRD to committed, validated code. One pre-flight gate, then fully autonomous. If no PRD exists yet, run `forge-auto-build-prd` first. If the run is interrupted, just re-invoke it -it resumes from `docs/PROGRESS.md`.
+- **Optimize generated skills** - after the initial build, run `@workspace /forge-skill-review` to audit your skills against best practices. The audit surfaces specific improvements you can apply immediately.
+- **Full auto build** - use `forge-auto-build` when a reviewed PRD already exists (`docs/PRD.md`, or the decomposed layout) and you want a single command to take you from that PRD to committed, validated code. One pre-flight gate, then fully autonomous. If no PRD exists yet, run `forge-build-prd` first. If the run is interrupted, just re-invoke it -it resumes from `docs/PROGRESS.md`.
 - **Dark orchestration** - use `workflow-orchestrator` + the workflow engine for fully autonomous execution through a real harness (OpenCode or OpenAI API). Dry-run first with `--harness stub` to verify the engine setup before spending tokens.

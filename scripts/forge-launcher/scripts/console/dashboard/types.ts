@@ -15,6 +15,37 @@ export interface AuditEvent {
   artifactId?: string;
   reductionPercent?: number;
   outputFiles?: string[];
+  usage?: TaskUsage;
+}
+
+/**
+ * Token/cost usage a harness reported for one invocation. Mirrors the engine's
+ * `TaskUsage`; `source: "unavailable"` means the harness reported none (never
+ * zero counts, which would misrepresent usage as free).
+ */
+export interface TaskUsage {
+  inputTokens?: number;
+  outputTokens?: number;
+  cacheReadTokens?: number;
+  cacheWriteTokens?: number;
+  reasoningTokens?: number;
+  costUsd?: number;
+  credits?: number;
+  source: "harness" | "unavailable";
+  note?: string;
+}
+
+/** Run-level usage, summed from each task's cumulative usage. */
+export interface UsageTotals {
+  inputTokens: number;
+  outputTokens: number;
+  cacheReadTokens: number;
+  cacheWriteTokens: number;
+  reasoningTokens: number;
+  costUsd: number;
+  credits: number;
+  tasksWithUsage: number;
+  tasksTotal: number;
 }
 
 export interface TaskRecord {
@@ -30,6 +61,7 @@ export interface TaskRecord {
   artifactId?: string;
   inputArtifactIds?: string[];
   validationLimitations?: string[];
+  usage?: TaskUsage;
 }
 
 export interface WorkflowState {
@@ -112,6 +144,8 @@ export interface RunSummary {
   counts: RunCounts;
   total: number;
   blockers: string[];
+  /** Run-level token/cost usage, summed from completed/failed task records. */
+  usage: UsageTotals;
 }
 
 export interface ManifestSummary {
@@ -234,6 +268,8 @@ export interface TaskRow {
   validationCommands: string[];
   timeoutMs: number | null;
   approvalRequired: boolean;
+  /** Cumulative token/cost usage for this task, when the harness reported it. */
+  usage: TaskUsage | null;
   contractKind?: "implementation" | "human-review";
   requirements: string[];
   acceptanceCriteria: string[];
@@ -320,6 +356,27 @@ export interface AuthoringInventory {
   diagnostics?: string[];
 }
 
+export type GlobalRunner = "copilot" | "opencode" | "claude";
+
+/** System-level defaults shared across projects (settings.json in FORGE_HOME). */
+export interface GlobalSettings {
+  version: 1;
+  authoring?: {
+    runner?: GlobalRunner;
+    models?: Partial<Record<AuthoringStage, string>>;
+  };
+  execution?: {
+    concurrency?: number;
+    autoCommit?: boolean;
+    logHarnessActivity?: boolean;
+  };
+  harness?: "opencode" | "github" | "claude" | "agents";
+  ui?: {
+    theme?: "light" | "dark" | "auto";
+    boardMode?: "kanban" | "gantt" | "table";
+  };
+}
+
 export interface AuthoringStageState {
   status: "pending" | "running" | "complete" | "failed";
   inputFingerprint: string;
@@ -334,7 +391,7 @@ export interface AuthoringStageState {
     runner: string;
     requestedModel?: string;
     effectiveModel?: string;
-    source: "invocation" | "environment" | "project" | "inherit";
+    source: "invocation" | "environment" | "project" | "system" | "inherit";
     inventoryVerifiedAt?: string;
   };
 }
@@ -445,6 +502,13 @@ export interface BackgroundJob {
   status: BackgroundJobStatus;
   message: string;
   run?: boolean;
+}
+
+/** Summary of background jobs across all registered projects (`GET /api/jobs`). */
+export interface JobsSummary {
+  jobs: BackgroundJob[];
+  active: number;
+  failed: number;
 }
 
 export interface ControlResult {

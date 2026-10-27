@@ -4,6 +4,167 @@ Detailed release and change notes for MyForge.
 
 ---
 
+## October 2026 - v3.112
+
+### Top category navigation and fluid layout
+
+- The Console navigation is back at the top: **Start / Pipeline / Monitor /
+  Review / Settings** are categories. Hovering one opens its views; selecting it
+  pins the list open for touch. The active category keeps the amber underline,
+  and the Terminal **●** indicator still appears while a session runs.
+- Page content now uses the full browser width; only long-form prose is capped
+  for readability. Panels, tables, the board, and the authoring/model grids
+  reflow to the available space, while Overview stays a vertical stack.
+- On narrow screens the category row scrolls horizontally and an open menu
+  becomes a full-width panel beneath the top bar.
+- The OpenCode adapter now generates canonical `ses_…` session IDs. The usage
+  capture added in v3.110 passed a bare UUID to `--session`, which OpenCode v2
+  rejects with `Expected a string starting with "ses"`; every task failed
+  immediately. The fix also repairs phase-scoped OpenCode session reuse.
+
+## October 2026 - v3.111
+
+### Console screenshots refreshed; Settings sections load reliably
+
+- The Forge Console visual tour ([forge-console-screenshots.md](forge-console-screenshots.md))
+  and the committed capture set were regenerated for the grouped sidebar,
+  project context bar, job badge, token usage, and the new Settings view. A
+  Settings capture and 320/390/720/1024/1440 responsive variants were added.
+- Fixed the Settings view's **Global defaults** and **Authoring** sections
+  staying on "Loading…": each async section now has its own generation counter
+  instead of sharing one that the next section invalidated.
+- The screenshot fixture now seeds token/cost usage, a global `settings.json`,
+  per-agent model overrides, and a failed background job so the new surfaces are
+  represented.
+- Sidebar navigation now separates section labels from links by contrast, with
+  an amber left edge marking the active view.
+
+## October 2026 - v3.110
+
+### Token and cost usage in the Console
+
+- Each task's harness invocation now records token/cost usage where the harness
+  reports it, persisted to `WORKFLOW-STATE.json` and the
+  `task.attempt.finished` / `task.complete` / `task.failed` audit events. A
+  retried task reports the total across its attempts.
+- **OpenCode** usage is read authoritatively from
+  `opencode session export <id>` for the task's session; **Claude** usage comes
+  from the JSON result envelope (`usage`, `total_cost_usd`) when present; and
+  **Copilot** usage is parsed from its stderr stats block (tokens and AI
+  credits). A harness that reports nothing is recorded as `unavailable`, never
+  as zero.
+- The Console **Overview** run stats show tokens (in/out), cost, and credits;
+  the **Tasks** table gains a Tokens column and the detail drawer shows the full
+  breakdown, including an explicit "not reported" note.
+- Copilot **AI credits** are shown separately and are never presented as USD.
+- Interactive authoring sessions do not expose usage, so authoring-stage usage
+  remains a follow-up (see [ADR-074](adr/074-token-and-cost-usage-capture.md)).
+
+## October 2026 - v3.109
+
+### Global-defaults editor and background-job badge
+
+- The Settings view now includes a **Global defaults** section that edits the
+  system-level `settings.json` directly (default harness, default authoring
+  runner, and default concurrency / auto-commit / harness-activity logging).
+  Projects inherit these where they have not chosen their own value.
+- A **background-job badge** in the context bar shows running and failed
+  background jobs across all registered projects (e.g. a `create-project` or
+  re-derivation running for a repo that is not currently selected) and links to
+  the Projects view.
+- The Console server exposes a `GET /api/jobs` summary
+  (`{ jobs, active, failed }`) and broadcasts a `jobs` SSE event whenever the
+  background-job state changes, so the badge updates without polling.
+
+## October 2026 - v3.108
+
+### Console navigation and a consolidated Settings view
+
+- The Console's flat top navigation is now a **grouped left sidebar**
+  (**Start / Pipeline / Monitor / Review / Settings**), with a persistent
+  **project context bar** across the top of every view.
+- The context bar shows the current project name and repo root, a harness
+  badge, a Live/Idle indicator, the Help button, and the connection status. A
+  **project switcher** dropdown lets you change projects from any view without
+  leaving the Console.
+- A new **Settings** view consolidates the configuration that used to be spread
+  across Overview and Plan & Team into three sections: **Authoring** (runner +
+  stage models), **Execution** (build mode, concurrency, auto-commit,
+  harness-activity logging, task timeouts), and **Models** (per-agent
+  primary/fallback overrides, the model planning terminal, and inventory
+  refresh).
+- Overview's Controls panel is slimmed to run controls only (Run/Resume/Pause/
+  Stop, Replay, build mode, and the manual-task pointer); execution preferences
+  now live in Settings, linked from the Controls panel.
+- Plan & Team keeps the project documents, agent/skill cards, and the authoring
+  stage cards + re-derivation footer; the authoring model selectors and
+  per-agent model overrides moved to Settings.
+
+---
+
+## October 2026 - v3.107
+
+### System-level console defaults
+
+- The Console now reads a global `settings.json` from the Forge registry
+  directory (`FORGE_HOME`, or `~/.myforge` by default), so authoring and
+  execution defaults can be set once and shared across projects.
+- The effective authoring ladder is now: explicit override → environment →
+  saved project recommendation → **system default** → runner default. A new
+  `system` provenance value records when a global default supplied the model or
+  runner.
+- Global execution defaults (concurrency, auto-commit, harness-activity logging)
+  are inherited by any project that has not set its own value in
+  `docs/engine-config.json`; the project value always wins.
+- A default harness can be set globally and pre-fills the New Project wizard
+  alongside the default authoring runner and concurrency.
+- Added token-gated `GET`/`PUT /api/settings` endpoints (the same loopback
+  surface as the existing authoring/engine config endpoints). A corrupt
+  `settings.json` falls back to defaults and is never clobbered on read; writes
+  are atomic and validated.
+
+## October 2026 - v3.106
+
+### Windows harness launch and background terminal sessions
+
+- The in-Console terminal now resolves the harness CLI to an absolute executable
+  before starting it. node-pty's Windows backend does not apply `PATHEXT`, so a
+  bare `opencode`/`claude`/`copilot` never matched the installed `.exe` and the
+  session failed with a not-found error even though the CLI works in a shell.
+- CLI resolution is shared by the Console PTY, the external-terminal launcher,
+  and the `forge-launcher` availability checks, and honors `OPENCODE_BIN`,
+  `CLAUDE_CODE_BIN`/`CLAUDE_BIN`, and `COPILOT_BIN` overrides. A missing CLI now
+  reports a clear message naming the install/override instead of a dead PTY.
+- Terminal sessions survive navigating to another Console view: the WebSocket
+  and PTY stay alive, output is buffered and replayed on return, and the
+  Terminal nav link shows a running-session dot. A session still ends on Stop,
+  project change, page reload, or Console shutdown.
+
+## October 2026 - v3.105
+
+### Skill set consolidated and namespaced
+
+- Removed `forge-optimize-skills`; `forge-skill-review` now covers both the
+  automated Node audit and the manual agent-driven pass, so there is one
+  six-axis skill audit instead of two.
+- Removed `forge-auto-build-prd`; the launcher, Console, agents, and docs queue
+  `/forge-build-prd` directly, which already stops after authoring the PRD.
+- Renamed the meta-skills to a consistent `forge-*` namespace:
+  `skill-review` → `forge-skill-review`, `skill-creator` →
+  `forge-skill-creator`, and `skill-review-updater` →
+  `forge-skill-review-updater`.
+- The meta-skill exclusion rule now names the Forge tooling explicitly instead
+  of guessing from the prefix.
+- The launcher no longer bootstraps the maintainer-only
+  `forge-skill-review-updater` into target repositories; it remains in the
+  package resources.
+- Re-bootstrapping an existing project now prunes the retired/renamed forge
+  skills it copied earlier, while leaving project-authored skills untouched.
+- The template set is now 14 skills. The build/execution split is unchanged:
+  `forge-auto-build` is the headless conductor, `@project-orchestrator` →
+  `forge-orchestrate-build` is interactive, and `@workflow-orchestrator` →
+  `forge-workflow-engine` is autonomous.
+
 ## October 2026 - v3.104
 
 ### Interactive authoring opens the Console terminal

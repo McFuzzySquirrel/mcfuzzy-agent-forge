@@ -26,6 +26,7 @@ import {
   findTask,
   initState,
   loadState,
+  mergeUsage,
   reconcileState,
   saveState,
   setCurrentPhase,
@@ -625,14 +626,15 @@ async function executeTask(
       });
       current = {
         ...current,
-        attemptHistory: [...(current.attemptHistory ?? []), { attempt: current.attempt, outcome, reason, resultPath }],
+        usage: mergeUsage(current.usage, result.usage),
+        attemptHistory: [...(current.attemptHistory ?? []), { attempt: current.attempt, outcome, reason, resultPath, usage: result.usage }],
         errorMessage: reason,
       };
       await env.checkpoint(current);
       writeAuditEvent(opts.auditPath, {
         timestamp: new Date().toISOString(), action: "task.attempt.finished", runId: env.runId,
         taskId: task.id, phaseId: entry.phaseId, attempt: current.attempt, durationMs: result.durationMs,
-        note: reason ?? "All applicable completion gates passed", resultPath,
+        note: reason ?? "All applicable completion gates passed", resultPath, usage: result.usage,
       });
       previousFailure = reason;
       previousResultPath = resultPath;
@@ -653,6 +655,7 @@ async function executeTask(
         phaseId: entry.phaseId,
         durationMs: result.durationMs,
         note: msg,
+        usage: current.usage,
       });
       return { taskId: task.id, record: current };
     };
@@ -773,6 +776,7 @@ async function executeTask(
         phaseId: entry.phaseId,
         outputFiles: result.outputFiles,
         durationMs: result.durationMs,
+        usage: current.usage,
       });
       console.log(`[engine] Task ${task.id} complete (${result.durationMs}ms)`);
       return { taskId: task.id, record: current, changedPaths, artifactId };

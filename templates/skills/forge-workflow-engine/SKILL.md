@@ -298,6 +298,14 @@ For example, `WALK-1.md` and `WALK-1.result.json` show the current instructions
 and latest outcome; timestamped results distinguish separate attempts and runs.
 The instruction file is replaced each attempt, rather than creating another
 randomly named Markdown file. Unsafe or case-distinct IDs use a hashed safe name.
+
+Each settled invocation also records the harness-reported token/cost `usage` on
+the state task record and on `task.attempt.finished`; `task.complete` and
+`task.failed` carry the task's cumulative usage across attempts. A harness that
+reports nothing sets `usage.source: "unavailable"` rather than zero counts.
+OpenCode usage is read from `opencode session export`; Claude from its JSON
+result envelope; Copilot from its stderr stats block. See
+[ADR-074](../../../docs/adr/074-token-and-cost-usage-capture.md).
 Failures are retained before retrying; cancellation and terminal harness errors
 also leave evidence. Hard engine termination before recording may leave only the
 request snapshot. These local diagnostics are not authenticated proof.
@@ -475,6 +483,7 @@ fails.
 |---|---|---|
 | `STUB_FAIL_TASK_IDS` | *(empty)* | Comma-separated task IDs to fail synthetically |
 | `STUB_DELAY_MS` | `0` | Simulated latency per task in milliseconds |
+| `STUB_USAGE` | *(unset)* | JSON usage object (`inputTokens`, `outputTokens`, `costUsd`, …) to report for each task; test-only |
 
 ---
 

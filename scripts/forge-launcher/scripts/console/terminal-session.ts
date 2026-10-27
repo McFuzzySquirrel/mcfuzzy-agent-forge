@@ -2,6 +2,7 @@ import type { Server } from "node:http";
 import path from "node:path";
 import { spawn as spawnPty, type IPty } from "node-pty";
 import { WebSocket, WebSocketServer } from "ws";
+import { cliNotFoundMessage, resolveCliPath } from "../cli-resolve.ts";
 
 export type TerminalStartRequest =
   | { type: "start"; mode: "harness" }
@@ -18,6 +19,8 @@ export interface TerminalSessionOptions {
   enabled?: boolean;
   currentRepo: () => string | null;
   resolveCommand: (request: TerminalStartRequest, repoRoot: string) => Promise<TerminalCommand>;
+  /** Resolve a CLI name to an executable path (injectable for tests). */
+  resolveCli?: (name: string) => string | null;
   ptySpawn?: typeof spawnPty;
 }
 
@@ -82,6 +85,7 @@ export function attachTerminalSession(server: Server, options: TerminalSessionOp
 } {
   const wss = new WebSocketServer({ noServer: true, maxPayload: 16_384, perMessageDeflate: false });
   const spawn = options.ptySpawn ?? spawnPty;
+  const resolveCli = options.resolveCli ?? resolveCliPath;
   let active: Session | null = null;
 
   const onUpgrade = (request: import("node:http").IncomingMessage, socket: import("node:net").Socket, head: Buffer) => {
@@ -145,7 +149,16 @@ export function attachTerminalSession(server: Server, options: TerminalSessionOp
         try {
           const command = await options.resolveCommand(request, repoRoot);
           if (active !== session || socket.readyState !== WebSocket.OPEN) return;
-          const ptyProcess = spawn(command.cli, command.args, {
+          // node-pty on Windows does not apply PATHEXT, so resolve the CLI to an
+          // absolute executable before spawning (see cli-resolve.ts).
+          const executable = resolveCli(command.cli);
+          if (!executable) {
+            if (active === session) active = null;
+            send(socket, { type: "error", message: cliNotFoundMessage(command.cli) });
+            socket.close(1011, "cli not found");
+            return;
+          }
+          const ptyProcess = spawn(executable, command.args, {
             name: "xterm-256color",
             cols: 80,
             rows: 24,

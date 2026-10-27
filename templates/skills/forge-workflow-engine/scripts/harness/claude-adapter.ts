@@ -3,7 +3,7 @@ import { resolve } from "node:path";
 
 import { runCommand, extractModelFlags, stripProviderPrefix, canSelectAgentNatively } from "./run.ts";
 import { harnessInvocationContext } from "./invocation-log.ts";
-import type { HarnessAdapter, SessionResumeStrategy, TaskAttemptRequest, TaskFailureKind, TaskResult } from "../types.ts";
+import type { HarnessAdapter, SessionResumeStrategy, TaskAttemptRequest, TaskFailureKind, TaskResult, TaskUsage } from "../types.ts";
 import { inlinePersona } from "../request.ts";
 import { executionPrompt } from "../task-execution.ts";
 
@@ -17,6 +17,15 @@ interface ClaudeResultEnvelope {
   result?: string;
   permission_denials?: Array<{ tool_name?: string }>;
   session_id?: string;
+  /** Token counts, present on recent Claude Code versions. */
+  usage?: {
+    input_tokens?: number;
+    output_tokens?: number;
+    cache_read_input_tokens?: number;
+    cache_creation_input_tokens?: number;
+  };
+  /** Monetary cost in USD, present on recent Claude Code versions. */
+  total_cost_usd?: number;
 }
 
 const STDOUT_PREVIEW_CHARS = 500;
@@ -93,6 +102,7 @@ export class ClaudeAdapter implements HarnessAdapter {
     const stdout = result.stdout;
     const stderr = result.stderr;
     let sessionId: string | undefined;
+    let usage: TaskUsage = { source: "unavailable", note: "claude returned no result envelope" };
     const failure = (errorMessage: string, failureKind: TaskFailureKind | undefined): TaskResult => ({
       success: false,
       outputFiles: [],
@@ -102,12 +112,14 @@ export class ClaudeAdapter implements HarnessAdapter {
       errorMessage,
       failureKind,
       sessionId,
+      usage,
     });
 
     if (result.error) return failure(result.error, result.failureKind);
 
     const envelope = parseResultEnvelope(stdout);
     sessionId = envelope?.session_id;
+    if (envelope) usage = claudeUsage(envelope);
     if (sessionId) console.log(`[engine] claude session ${sessionId} (task ${task.id})`);
 
     if (!envelope) {
@@ -145,6 +157,7 @@ export class ClaudeAdapter implements HarnessAdapter {
       stderr: "",
       durationMs: Date.now() - start,
       sessionId,
+      usage,
     };
   }
 
@@ -181,6 +194,27 @@ function parseResultEnvelope(stdout: string): ClaudeResultEnvelope | undefined {
     return envelope;
   }
   return undefined;
+}
+
+/**
+ * Maps the result envelope's usage fields, or reports "unavailable" when the
+ * installed Claude Code version does not include them.
+ */
+function claudeUsage(envelope: ClaudeResultEnvelope): TaskUsage {
+  const usage = envelope.usage;
+  const hasTokens = usage && (typeof usage.input_tokens === "number" || typeof usage.output_tokens === "number");
+  const cost = typeof envelope.total_cost_usd === "number" ? envelope.total_cost_usd : undefined;
+  if (!hasTokens && cost === undefined) {
+    return { source: "unavailable", note: "claude envelope reported no token usage" };
+  }
+  return {
+    inputTokens: usage?.input_tokens,
+    outputTokens: usage?.output_tokens,
+    cacheReadTokens: usage?.cache_read_input_tokens,
+    cacheWriteTokens: usage?.cache_creation_input_tokens,
+    costUsd: cost,
+    source: "harness",
+  };
 }
 
 /**

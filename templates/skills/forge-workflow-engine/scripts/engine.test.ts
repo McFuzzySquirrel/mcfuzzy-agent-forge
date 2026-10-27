@@ -730,6 +730,28 @@ test("structured completion requires a report and projects engine-verified evide
   }
 });
 
+test("task usage is accumulated onto the record and audit events", async () => {
+  const fixture = makeEngineFixture({ expectedOutputs: ["result.txt"] });
+  const usage = { inputTokens: 120, outputTokens: 30, cacheReadTokens: 10, costUsd: 0.002, source: "harness" as const };
+  const harness: HarnessAdapter = {
+    name: "usage-test", supportsConcurrency: true, capabilities: ["repository-tools"],
+    async invoke() {
+      writeFileSync(join(fixture.root, "result.txt"), "result");
+      return { success: true, outputFiles: ["result.txt"], stderr: "", durationMs: 1, stdout: "done", usage };
+    },
+  };
+  const options = engineOptionsFor(fixture, harness, 10000, { autoCommit: false });
+  const state = await runEngine(options);
+  assert.equal(state.tasks["1.1"]!.status, "complete");
+  assert.deepEqual(state.tasks["1.1"]!.usage, usage);
+
+  const audit = readFileSync(options.auditPath, "utf8").trim().split("\n").map((line) => JSON.parse(line) as { action: string; taskId?: string; usage?: unknown });
+  const attempt = audit.find((event) => event.action === "task.attempt.finished" && event.taskId === "1.1");
+  const complete = audit.find((event) => event.action === "task.complete" && event.taskId === "1.1");
+  assert.deepEqual(attempt?.usage, usage);
+  assert.deepEqual(complete?.usage, usage);
+});
+
 test("structured caveats allow completion while blockers retain evidence and reach retry prompts", async () => {
   const fixture = makeEngineFixture({ produces: "work.result", expectedOutputs: ["result.txt"], validationCommands: ['node -e "process.exit(0)"'], contract: { version: 1, kind: "implementation", requirements: ["Build result"], acceptanceCriteria: ["Required guard verified"], constraints: [], references: ["docs/PRD.md"] } });
   const instructions: string[] = [];

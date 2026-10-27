@@ -157,7 +157,7 @@ so you can review each result and come back later:
 
 | Stage | Continue does | Produces |
 |---|---|---|
-| Idea (no PRD) | **Author PRD (interactive)** opens `forge-auto-build-prd` in the Console Terminal view or an external terminal; there is no headless alternative (ADR-060). **Grill the idea first** runs `forge-grill-idea` the same way | `docs/PRD.md` + `docs/features/*.md` |
+| Idea (no PRD) | **Author PRD (interactive)** opens `forge-build-prd` in the Console Terminal view or an external terminal; there is no headless alternative (ADR-060). **Grill the idea first** runs `forge-grill-idea` the same way | `docs/PRD.md` + `docs/features/*.md` |
 | PRD (no team) | **Generate team** (headless `forge-build-agent-team`) | agent files and ownership metadata |
 | Team (skills incomplete) | **Generate project skills** | project skill candidates and review result |
 | Skills ready (no manifest) | **Compile manifest** (`forge-execution-adapter`) | `docs/EXECUTION-MANIFEST.json` |
@@ -201,14 +201,16 @@ report the interactive handoff.
 - **Grill the idea first (interactive)** runs the `forge-grill-idea` skill,
   which interviews you in rounds to sharpen `docs/IDEA.md` before PRD authoring,
   then rewrites and commits it.
-- **Author PRD (interactive)** runs `forge-auto-build-prd` (or
-  `forge-build-prd` for an existing repository) with the interview enabled.
+- **Author PRD (interactive)** runs `forge-build-prd` (inspecting the existing
+  repository when one is present) with the interview enabled.
 - **Validate PRD** runs the read-only `validate-prd` check and reports the
   result, for documents authored outside the Console. It appears on the pipeline
   card once a PRD exists.
 
-Browser PTY sessions run in the Console process and are stopped when the session
-is stopped, the project changes, the browser disconnects, or the Console shuts
+Browser PTY sessions run in the Console process and **keep running in the
+background** when you navigate to another Console view; the Terminal nav link
+shows a dot while a session is live. A session stops when you press **Stop**, the
+project changes, the browser page is reloaded or closed, or the Console shuts
 down. The external-terminal fallback runs outside the Console. In either case,
 the skill validates and commits its own output, and the Console picks the result
 up from the repository. Use **Refresh** on the pipeline card, or reopen the view,
@@ -249,10 +251,11 @@ the interactive handoff (ADR-060).
 
 They honor the `--runner` flag (`opencode`/`copilot`/`claude`/`inherit`) first,
 then `FORGE_RUN_WITH` (the same values plus `stub`), then the `runner` saved in
-`docs/authoring-config.json`, and otherwise derive the runner from the project's
-harness (`github` → copilot, otherwise opencode). The one exception to that
-order is `FORGE_RUN_WITH=stub`: it is an offline lock, so `--runner` cannot
-override it and an offline run never spawns a real runner.
+`docs/authoring-config.json`, then the system-level default in `settings.json`
+(see [ADR-071](adr/071-system-level-console-defaults.md)), and otherwise derive
+the runner from the project's harness (`github` → copilot, otherwise opencode).
+The one exception to that order is `FORGE_RUN_WITH=stub`: it is an offline lock,
+so `--runner` cannot override it and an offline run never spawns a real runner.
 
 ---
 
@@ -357,7 +360,7 @@ path** (comma-separated for multiple research docs):
 - **Existing PRD** → copied to `docs/PRD.md` and used as-is, instead of the
   pipeline drafting one from the idea.
 - **Research / seed documents** → copied to `docs/research/`, where the later
-  PRD build (`forge-auto-build-prd`) reads them as extra context.
+  PRD build (`forge-build-prd`) reads them as extra context.
 
 Picked files are uploaded to the server (`POST /api/uploads`, staged under the
 OS temp dir) and the launcher is handed the paths via `FORGE_PRD_FILE` /
@@ -382,21 +385,29 @@ the exact command to run manually.
 
 ## Views
 
+The views are grouped under top categories (**Start / Pipeline / Monitor /
+Review / Settings**); hovering a category opens its list, and selecting it pins
+the list open (for touch). A persistent project context bar below the menu shows
+the current project name, harness, Live/Idle state, a project switcher, and the
+Help button + connection status. Content uses the full browser width, with only
+long-form prose capped for readability.
+
 | View | What it shows |
 |---|---|
 | **Home** | create a new project or open an existing one (landing), including live status labels for detached work. |
-| **Overview** | run status, progress + counts, blockers, the pipeline next-step card with a **Manual build** checkbox, background-job status, run controls, an **auto-commit** toggle, a **Log harness activity** toggle, and a **Launch \<harness\> CLI** button. Also the **Re-derive team & skills** panel when authoring is stale, and manifest reconciliation with a confirmed **Reset changed tasks for review**. |
+| **Projects** | switch projects, add a folder, or remove one or more projects from Forge. |
+| **Overview** | run status, progress + counts, blockers, the pipeline next-step card with a **Manual build** checkbox, background-job status, run controls (Run/Resume/Pause/Stop, Replay, build mode), and a **Launch \<harness\> CLI** button. Also the **Re-derive team & skills** panel when authoring is stale, and manifest reconciliation with a confirmed **Reset changed tasks for review**. |
 | **Terminal** | interactive browser session for the selected harness or an existing authoring target, with PTY input/output, resize, stop, and external-terminal fallback. |
 | **Board** | the PixiJS Forge Board in **Kanban** or **Gantt** mode, with status filters and a **Table** view of the same data. |
 | **Tasks** | every task in a filterable/sortable table with a detail drawer, editable per-task timeout, explicit/range selection controls for manual mode, and a **Launch \<harness\> CLI** button. |
 | **Logs** | `docs/engine-run.log` tail + the audit event stream (live via SSE). |
-| **Plan & Team** | authoring settings and stage cards — always actionable, each stating why it is stale — plus the project documents (IDEA, PRD, features, progress, model plan) as a table that opens a document in a wide popup, and agents and skills in collapsible card sections. Requirement and task blocks render as tables. |
+| **Plan & Team** | authoring stage cards — always actionable, each stating why it is stale — plus the re-derivation footer, the project documents (IDEA, PRD, features, progress, model plan) as a table that opens a document in a wide popup, and agents and skills in collapsible card sections. Requirement and task blocks render as tables. |
 | **Artifacts** | the structured outputs tasks produced (`docs/artifacts/`), browsable by type/task with previews. |
 | **Timeline** | chronological audit events, failures highlighted. |
-| **Projects** | switch projects, add a folder, or remove one or more projects from Forge. |
+| **Settings** | authoring models (runner + stage models), execution preferences (build mode, concurrency, auto-commit, harness logging, task timeouts), and per-agent model overrides + the model planning terminal. |
 
-A **Help** button (top-right) explains the UI, the pipeline, each view, and key
-terms.
+A **Help** button (in the context bar) explains the UI, the pipeline, each view,
+and key terms.
 
 For human-review tasks, **Complete human review** lists unverified checks from
 all upstream task and prerequisite-phase dependencies, including transitive
@@ -444,14 +455,14 @@ selection scope (`single`, `range`, or `list`), and the selected task IDs. The
 engine expands dependencies automatically when a selected task needs them, so
 targeted runs still obey the DAG and phase ordering.
 
-The **Auto-commit after each task** checkbox (Controls panel) toggles
+The **Auto-commit after each task** checkbox (Settings → Execution) toggles
 `autoCommit` in `docs/engine-config.json`, which the console's run/resume
 command passes to the engine. It defaults to **on** (see
 [ADR-035](adr/035-auto-commit-after-task.md)); the engine commits one commit per
 completed task. Disable it if the working tree is dirty and you don't want agent
 output mixed with your uncommitted changes.
 
-The **Log harness activity** checkbox (Controls panel) toggles
+The **Log harness activity** checkbox (Settings → Execution) toggles
 `logHarnessActivity` in `docs/engine-config.json`. It defaults to **off** and
 applies to subsequently started runs; the Console's run/resume command passes it
 to the engine as `--log-harness-activity` or `--no-log-harness-activity`, so it
@@ -468,9 +479,9 @@ The Console can edit timeouts without leaving the browser, so a task that
 outruns its budget (a slow build or test) can be retried with a larger one:
 
 - **Per task** - open a task's detail drawer in **Tasks** (or use the task picker
-  in the Overview **Controls** panel) and set its timeout, then **Replay** it.
-- **All tasks** - the Tasks view header and the Overview Controls panel both have
-  a "set all" control that gives every task the same timeout.
+  in **Settings → Execution**) and set its timeout, then **Replay** it.
+- **All tasks** - the Tasks view header and **Settings → Execution** both have a
+  "set all" control that gives every task the same timeout.
 
 Storage and precedence (same as the CLI):
 
@@ -483,6 +494,17 @@ Storage and precedence (same as the CLI):
 > `run`/`resume` recompiles the manifest from the PRD when a granularity is
 > explicitly set - which regenerates `timeoutMs`. The engine-config default is
 > always preserved.
+
+### Token and cost usage
+
+Each task records the token/cost usage its harness reported, on the state record
+(`usage`) and on the `task.attempt.finished` / `task.complete` / `task.failed`
+audit events. OpenCode usage is read from `opencode session export` for the
+task's session; Claude from its JSON result envelope; Copilot from its stderr
+stats block (tokens and AI credits). A harness that reports nothing is recorded
+as `unavailable`, not zero. The Overview shows run totals (tokens, cost, credits)
+and the Tasks view shows a Tokens column plus a per-task breakdown in the detail
+drawer. See [ADR-074](adr/074-token-and-cost-usage-capture.md).
 
 ### Background job tracking
 

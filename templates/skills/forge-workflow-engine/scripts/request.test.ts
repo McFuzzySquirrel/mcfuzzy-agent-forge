@@ -57,7 +57,7 @@ for (const transport of ["copilot", "opencode", "claude", "openai", "stub"] as c
         type: "result", subtype: "success", is_error: false,
         result: "Substantive completed text response.", permission_denials: [],
       });
-      const bin = makeNodeShim(root, "record", `require("fs").writeFileSync(${JSON.stringify(argsFile)}, JSON.stringify(process.argv.slice(2)));\nprocess.stdout.write(${JSON.stringify(successEnvelope)});`);
+      const bin = makeNodeShim(root, "record", `const args = process.argv.slice(2);\nif (args[0] === "session" && args[1] === "export") { process.stdout.write(JSON.stringify({ info: { tokens: { input: 1, output: 1 } } })); process.exit(0); }\nrequire("fs").writeFileSync(${JSON.stringify(argsFile)}, JSON.stringify(args));\nprocess.stdout.write(${JSON.stringify(successEnvelope)});`);
       process.env.COPILOT_BIN = bin;
       process.env.OPENCODE_BIN = bin;
       process.env.CLAUDE_BIN = bin;

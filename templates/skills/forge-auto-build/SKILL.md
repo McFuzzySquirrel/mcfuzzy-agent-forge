@@ -28,8 +28,7 @@ The underlying skills (`forge-build-agent-team`, `forge-assign-models`, `forge-o
 
 | Skill | Scope | Pauses |
 |---|---|---|
-| `forge-auto-build-prd` | idea to reviewed canonical vision and features (always interactive) | Review gate inside authoring flow |
-| `forge-build-prd` | idea/seed docs to vision and features directly (always interactive) | Review gate before save |
+| `forge-build-prd` | idea/seed docs to reviewed vision and features (always interactive) | Review gate before save |
 | `@project-orchestrator` | In-harness interactive build execution only (no PRD, no team) | Optional pause between each phase |
 | `@workflow-orchestrator` | In-harness build execution via the workflow engine only | One pre-run gate |
 | **`forge-auto-build`** | **Terminal/headless** fast-path: existing PRD → agent team → (optional models) → choose manual or engine build path → committed result | **One** pre-flight gate, then fully autonomous |
@@ -40,7 +39,7 @@ Use this skill when you want the build pipeline to run hands-free after a single
 
 ## Operating Principles
 
-- **The PRD is a quality gate, not an input to be manufactured here.** Before any work, verify a PRD representation exists. If it does not, stop and direct the user to `forge-auto-build-prd` or `forge-build-prd`. Never fall back to interviewing the user for a one-line idea.
+- **The PRD is a quality gate, not an input to be manufactured here.** Before any work, verify a PRD representation exists. If it does not, stop and direct the user to `forge-build-prd`. Never fall back to interviewing the user for a one-line idea.
 - **One gate, then fully autonomous.** The pre-flight confirmation (Step 0) is the only mandatory pause. Once the user types `GO`, every stage runs to completion without further interruption.
 - **Never skip a stage silently.** If a stage fails or produces an unexpected result, stop immediately, report what happened, and ask the user how to proceed. Do not guess or silently skip.
 - **Invoke, do not re-implement.** The work -designing the team, scaffolding, executing phases -belongs to the underlying skills. You sequence them. Never duplicate their logic.
@@ -92,7 +91,7 @@ When the user invokes this skill, perform the following before touching any file
 
 - Canonical vision and features exist: validate and use the feature graph.
 - Only legacy source documents exist: stop and direct to `forge-decompose-prd`.
-- No requirements exist: stop and direct to `forge-auto-build-prd` or `forge-build-prd`.
+- No requirements exist: stop and direct to `forge-build-prd`.
 
 **Do not proceed until the user types `GO` (or a clear equivalent such as `start`, `run it`, `proceed`).**
 
@@ -297,8 +296,7 @@ Next steps:
   - Review docs/PROGRESS.md for the full task history
   - Run your project's tests to verify the final state: <test command from PRD>
   - Add a new feature: @workspace /forge-build-feature-prd I want to add [feature]...
-  - Audit generated skills (automated): cd .agents/skills/skill-review && npm install && npm run skill-review -- --provider stdout --min-score 1.5
-  - Audit generated skills (manual): @workspace /forge-optimize-skills Audit all skills...
+  - Audit generated skills: cd .agents/skills/forge-skill-review && npm install && npm run forge-skill-review -- --provider stdout --min-score 1.5
    - Run the alternate build path later if desired: cd .agents/skills/forge-workflow-engine && npm run workflow-engine -- run --harness opencode --yes
 ```
 
@@ -323,7 +321,7 @@ If this skill is invoked in a repo that has an incomplete auto-build (detected b
 
 | Situation | Response |
 |---|---|
-| No PRD representation exists at pre-flight | Stop before Stage 1; direct the user to `forge-auto-build-prd` or `forge-build-prd` |
+| No PRD representation exists at pre-flight | Stop before Stage 1; direct the user to `forge-build-prd` |
 | Stage 1 produces no agent files | Stop and report; do not proceed to build |
 | Stage 2 model assignment fails | Log the failure, skip Stage 2, continue to Stage 3 -report at the end |
 | Stage 3 prompt-driven phase fails validation | Stop after the failing phase; report error, blocked phase, and responsible agent |
@@ -337,7 +335,7 @@ If this skill is invoked in a repo that has an incomplete auto-build (detected b
 ## Gotchas
 
 - **Do not skip the pre-flight gate.** Even if the user says "just run everything," you must present the pre-flight checklist and require a `GO` before starting. This is the only safeguard in a fully autonomous run.
-- **Never generate a PRD or interview for an idea.** This skill requires an existing PRD. If none exists, stop and point the user to `forge-auto-build-prd` / `forge-build-prd`. Manufacturing requirements inside the build pipeline is forbidden.
+- **Never generate a PRD or interview for an idea.** This skill requires an existing PRD. If none exists, stop and point the user to `forge-build-prd`. Manufacturing requirements inside the build pipeline is forbidden.
 - **Never auto-apply models without `--assign-models`.** Stage 2 is opt-in. Writing to agent YAML frontmatter without explicit intent is a violation of `forge-assign-models`'s safety constraint.
 - **Commit after every phase, not at the end.** Batching commits defeats the purpose of phase-level checkpoints and makes debugging harder.
 - **Choose exactly one build path per run.** `--workflow-engine` switches Stage 3 to the engine path; without it, use `forge-orchestrate-build`. Do not run one path and then replay the whole build through the other in the same invocation.

@@ -88,12 +88,12 @@ documents, logs, help, new, projects). Reads state via `repo.ts`, exposes JSON A
 consumed by `dashboard/api.ts`, and provides `control.ts` for pause/stop/resume and
 task selection.
 
-### `templates/skills` — 16 skill templates
+### `templates/skills` — 14 skill templates
 Authoring and generation: `forge-build-prd`, `forge-build-feature-prd`,
 `forge-decompose-prd`, `forge-build-agent-team`, `forge-build-project-skills`,
-`forge-assign-models`, `forge-auto-build`, `forge-auto-build-prd`,
-`forge-orchestrate-build`, `forge-grill-idea`, `forge-optimize-skills`,
-`skill-creator`, `skill-review`, plus the two executable packages above. Each is a
+`forge-assign-models`, `forge-auto-build`, `forge-orchestrate-build`,
+`forge-grill-idea`, `forge-skill-creator`, `forge-skill-review`,
+`forge-skill-review-updater`, plus the two executable packages above. Each is a
 small package with `SKILL.md`, `references/`, optional `scripts/`.
 
 ### `templates/agents` — 3 agent personas
@@ -169,10 +169,10 @@ active in both `tools/` and across the full span.
 **What is verified automatically.** `.github/workflows/validation.yml` runs on pull
 requests and pushes to `main`, and on manual dispatch. It builds a matrix of
 `ubuntu-latest` × `windows-latest` against four packages — `scripts/forge-launcher`,
-`forge-execution-adapter`, `forge-workflow-engine`, `skill-review` — running
+`forge-execution-adapter`, `forge-workflow-engine`, `forge-skill-review` — running
 `npm ci`, `npm run typecheck`, and `npm test` for each, plus a launcher build and
 `check:version`, and the agent-team gate tests
-(`validate-team.test.mjs`, `validate-frontmatter.test.mjs`) under the `skill-review`
+(`validate-team.test.mjs`, `validate-frontmatter.test.mjs`) under the `forge-skill-review`
 entry. Permissions are `contents: read`.
 
 Verified locally during this analysis (all four packages, Node 22-class runtime):
@@ -182,15 +182,15 @@ Verified locally during this analysis (all four packages, Node 22-class runtime)
 | `forge-launcher` | 272 | 272 | 0 | 0 |
 | `forge-workflow-engine` | 249 | 242 | 0 | 7 |
 | `forge-execution-adapter` | 49 | 49 | 0 | 0 |
-| `skill-review` | 7 | 7 | 0 | 0 |
+| `forge-skill-review` | 7 | 7 | 0 | 0 |
 | **Total** | **577** | **570** | **0** | **7** |
 
 `npm run typecheck` on `forge-launcher` (both `tsc` passes) is clean.
 
 **What is not verified.**
-- Only 4 of the 16 skill templates are in the CI matrix. The remaining 12 —
+- Only 4 of the 14 skill templates are in the CI matrix. The remaining 10 —
   including `forge-build-prd`, `forge-orchestrate-build`, and
-  `forge-auto-build-prd` — are prose and frontmatter with no automated gate beyond
+  `forge-auto-build` — are prose and frontmatter with no automated gate beyond
   the two agent-team validators.
 - `scripts/harness/openai-adapter.ts` and `scripts/harness/stub-adapter.ts` have no
   dedicated `.test.ts`; they are exercised only indirectly through `request.test.ts`

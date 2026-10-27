@@ -18,7 +18,12 @@ function makeShim(t: TestContext): Shim {
   const argsFile = join(dir, "args.json");
   const bin = makeNodeShim(dir, "fake-opencode", `
 const fs = require("fs");
-fs.writeFileSync(${JSON.stringify(argsFile)}, JSON.stringify(process.argv.slice(2)));
+const args = process.argv.slice(2);
+if (args[0] === "session" && args[1] === "export") {
+  fs.writeSync(1, JSON.stringify({ info: { cost: 0.001, tokens: { input: 100, output: 20, reasoning: 0, cache: { read: 5, write: 0 } } } }));
+  process.exit(0);
+}
+fs.writeFileSync(${JSON.stringify(argsFile)}, JSON.stringify(args));
 process.exit(0);
 `,
   );
@@ -202,8 +207,13 @@ function makeCwdShim(t: TestContext): { bin: string; recordFile: string } {
   const recordFile = join(dir, "record.json");
   const bin = makeNodeShim(dir, "fake-opencode", `
 const fs = require("fs");
+const args = process.argv.slice(2);
+if (args[0] === "session" && args[1] === "export") {
+  fs.writeSync(1, JSON.stringify({ info: { tokens: { input: 100, output: 20, cache: { read: 5, write: 0 } } } }));
+  process.exit(0);
+}
 fs.writeFileSync(${JSON.stringify(recordFile)}, JSON.stringify({
-  argv: process.argv.slice(2),
+  argv: args,
   cwd: process.cwd(),
   pwd: process.env.PWD ?? null,
 }));
@@ -295,7 +305,7 @@ test("a sandbox worktree is selected by cwd, keeping parallel tasks isolated", a
 
 // ─── Phase-scoped session reuse ───────────────────────────────────────────────
 
-test("passes --session when the request carries a sessionId, and omits it otherwise", async (t) => {
+test("addresses a fresh session when none is supplied, and reuses a supplied sessionId", async (t) => {
   const root = tempDir(t, "forge-opencode-session-repo-");
   const agent = makeAgent(join(root, ".opencode", "agents", "discovery-engineer.md"));
 
@@ -313,10 +323,45 @@ test("passes --session when the request carries a sessionId, and omits it otherw
     return JSON.parse(readFileSync(shim.argsFile, "utf8")) as string[];
   };
 
+  // A fresh, caller-chosen session ID is always supplied so its usage can be
+  // read back with `opencode session export`.
   const without = await runWith();
-  assert.ok(!without.includes("--session"), `expected no --session: ${without.join(" ")}`);
+  assert.ok(without.includes("--session"), `expected a fresh --session: ${without.join(" ")}`);
+  const generated = without[without.indexOf("--session") + 1]!;
+  assert.match(generated, /^ses_[0-9A-Za-z]{26}$/);
 
   const withSession = await runWith("forge-run-phase-1");
   assert.ok(withSession.includes("--session"));
   assert.equal(withSession[withSession.indexOf("--session") + 1], "forge-run-phase-1");
+});
+
+test("reads per-session usage from opencode session export", async (t) => {
+  const root = tempDir(t, "forge-opencode-usage-repo-");
+  const agent = makeAgent(join(root, ".opencode", "agents", "discovery-engineer.md"));
+  const shim = makeShim(t);
+  const original = process.env.OPENCODE_BIN;
+  process.env.OPENCODE_BIN = shim.bin;
+  try {
+    const adapter = new OpenCodeAdapter();
+    const result = await adapter.invoke(prepareTaskRequest({ agent, task: makeTask(), repoRoot: root }));
+    assert.deepEqual(result.usage, {
+      inputTokens: 100,
+      outputTokens: 20,
+      reasoningTokens: 0,
+      cacheReadTokens: 5,
+      cacheWriteTokens: 0,
+      costUsd: 0.001,
+      source: "harness",
+    });
+  } finally {
+    if (original === undefined) delete process.env.OPENCODE_BIN;
+    else process.env.OPENCODE_BIN = original;
+  }
+});
+
+test("generates canonical OpenCode session IDs for phase scope", () => {
+  const adapter = new OpenCodeAdapter();
+  const id = adapter.sessionStrategy?.newSessionId?.();
+  assert.ok(id, "a deterministic harness must provide newSessionId");
+  assert.match(id, /^ses_[0-9A-Za-z]{26}$/);
 });

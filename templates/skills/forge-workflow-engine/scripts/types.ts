@@ -39,6 +39,8 @@ export interface TaskRecord {
   inputArtifactIds?: string[];
   /** Nonblocking checks the agent reported as not run (from forge-result.validationLimitations) */
   validationLimitations?: string[];
+  /** Cumulative token/cost usage across every attempt of this task. */
+  usage?: TaskUsage;
 }
 
 export interface TaskAttemptSummary {
@@ -46,6 +48,30 @@ export interface TaskAttemptSummary {
   outcome: "passed" | "failed" | "cancelled";
   resultPath: string;
   reason?: string;
+  /** Usage reported for this attempt; accumulated onto the task record. */
+  usage?: TaskUsage;
+}
+
+/**
+ * Token/cost usage reported by a harness for one invocation.
+ *
+ * A harness that reports no usage yields `{ source: "unavailable", note }`
+ * rather than zero counts, so the Console can distinguish "not reported" from
+ * "used nothing". `credits` is a harness-specific unit (e.g. Copilot AI
+ * Credits) and is never presented as USD.
+ */
+export interface TaskUsage {
+  inputTokens?: number;
+  outputTokens?: number;
+  cacheReadTokens?: number;
+  cacheWriteTokens?: number;
+  reasoningTokens?: number;
+  /** Monetary cost in USD, when the harness reports it. */
+  costUsd?: number;
+  /** Harness-specific credits (e.g. Copilot AI Credits); not USD. */
+  credits?: number;
+  source: "harness" | "unavailable";
+  note?: string;
 }
 
 export interface TaskGateResult {
@@ -92,6 +118,8 @@ export interface TaskResult {
   failureKind?: TaskFailureKind;
   /** Native harness session ID a capture-strategy adapter assigns to the conversation. */
   sessionId?: string;
+  /** Token/cost usage this invocation reported, if any. */
+  usage?: TaskUsage;
 }
 
 export type TaskFailureKind = "retryable" | "configuration" | "exception" | "timeout" | "cancelled";
@@ -303,4 +331,6 @@ export interface AuditEvent {
   sourceTokenEstimate?: number;
   projectedTokenEstimate?: number;
   reductionPercent?: number;
+  /** Token/cost usage for the invocation this event describes, when reported. */
+  usage?: TaskUsage;
 }

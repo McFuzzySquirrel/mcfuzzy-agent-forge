@@ -1,6 +1,7 @@
 import type { Terminal as XtermTerminal } from "@xterm/xterm";
 import { api } from "../api.js";
 import { el } from "../render/dom.js";
+import { appendReplay } from "./terminal-replay.js";
 
 declare global {
   interface Window {
@@ -9,23 +10,72 @@ declare global {
   }
 }
 
-interface TerminalViewState {
+interface Surface {
   terminal: XtermTerminal;
-  socket: WebSocket | null;
   resizeObserver: ResizeObserver;
   status: HTMLElement;
   startButton: HTMLButtonElement;
   stopButton: HTMLButtonElement;
 }
 
-let view: TerminalViewState | null = null;
+interface SessionState {
+  socket: WebSocket | null;
+  /** Output held while the view is unmounted, replayed on remount. */
+  buffer: string;
+  exited: boolean;
+  exitLabel: string | null;
+  statusText: string;
+  /** The attached DOM surface, or null while the view is unmounted. */
+  surface: Surface | null;
+}
+
+function freshSession(): SessionState {
+  return { socket: null, buffer: "", exited: false, exitLabel: null, statusText: "No terminal session running.", surface: null };
+}
+
+// The session outlives the view: navigating to another page unmounts the view
+// but keeps the WebSocket (and therefore the server-side PTY) alive.
+let state: SessionState = freshSession();
+const listeners = new Set<() => void>();
+
+/** True while a terminal session is connected or connecting. */
+export function isTerminalSessionActive(): boolean {
+  const socket = state.socket;
+  return !!socket && (socket.readyState === WebSocket.OPEN || socket.readyState === WebSocket.CONNECTING);
+}
+
+/** Subscribe to session start/stop/exit changes (used for the nav indicator). */
+export function onTerminalSessionChange(listener: () => void): () => void {
+  listeners.add(listener);
+  return () => listeners.delete(listener);
+}
+
+function notify(): void {
+  for (const listener of listeners) listener();
+}
 
 function token(): string {
   return document.querySelector<HTMLMetaElement>('meta[name="forge-token"]')?.content ?? "";
 }
 
 function send(message: unknown): void {
-  if (view?.socket?.readyState === WebSocket.OPEN) view.socket.send(JSON.stringify(message));
+  if (state.socket?.readyState === WebSocket.OPEN) state.socket.send(JSON.stringify(message));
+}
+
+function write(text: string): void {
+  state.surface?.terminal.write(text);
+}
+
+function setStatus(text: string): void {
+  state.statusText = text;
+  if (state.surface) state.surface.status.textContent = text;
+}
+
+function syncControls(): void {
+  const active = isTerminalSessionActive();
+  if (!state.surface) return;
+  state.surface.startButton.disabled = active;
+  state.surface.stopButton.disabled = !active;
 }
 
 export function renderTerminal(container: HTMLElement): void {
@@ -47,7 +97,7 @@ export function renderTerminal(container: HTMLElement): void {
   const startButton = el("button", { className: "btn btn-primary", type: "button" }, "Start in Console") as HTMLButtonElement;
   const externalButton = el("button", { className: "btn", type: "button" }, "Open in external terminal") as HTMLButtonElement;
   const stopButton = el("button", { className: "btn", type: "button", disabled: true }, "Stop session") as HTMLButtonElement;
-  const status = el("span", { className: "dim small", role: "status" }, "No terminal session running.");
+  const status = el("span", { className: "dim small", role: "status" }, state.statusText);
   const terminalHost = el("div", { className: "console-terminal", "aria-label": "Interactive terminal" });
   const terminal = new window.Terminal({
     cursorBlink: true,
@@ -59,11 +109,15 @@ export function renderTerminal(container: HTMLElement): void {
   const fitAddon = new window.FitAddon.FitAddon();
   terminal.loadAddon(fitAddon);
   terminal.open(terminalHost);
-  terminal.writeln("Select a session type, then start. Input and terminal output stay in this page.");
+  if (!state.socket && !state.buffer && !state.exited) {
+    terminal.writeln("Select a session type, then start. Input and terminal output stay in this page.");
+  }
+  // Input always targets the live session, including one started before this
+  // view mounted (the session survives navigation).
   terminal.onData((data) => send({ type: "input", data }));
 
   const resizeObserver = new ResizeObserver(() => {
-    if (!view || view.terminal !== terminal) return;
+    if (state.surface?.terminal !== terminal) return;
     try {
       fitAddon.fit();
       send({ type: "resize", cols: terminal.cols, rows: terminal.rows });
@@ -72,6 +126,23 @@ export function renderTerminal(container: HTMLElement): void {
     }
   });
   resizeObserver.observe(terminalHost);
+
+  state.surface = { terminal, resizeObserver, status, startButton, stopButton };
+
+  // Replay output produced while this view was unmounted.
+  if (state.buffer) terminal.write(state.buffer);
+  if (state.exitLabel && !isTerminalSessionActive()) terminal.writeln(`\r\n[Console] ${state.exitLabel}`);
+  status.textContent = state.statusText;
+  syncControls();
+  if (isTerminalSessionActive()) {
+    try {
+      fitAddon.fit();
+      send({ type: "resize", cols: terminal.cols, rows: terminal.rows });
+    } catch {
+      // ignore zero-size fit
+    }
+    terminal.focus();
+  }
 
   mode.addEventListener("change", () => {
     authoringFields.hidden = mode.value !== "authoring";
@@ -95,21 +166,20 @@ export function renderTerminal(container: HTMLElement): void {
   authoringFields.hidden = mode.value !== "authoring";
   prompt.hidden = target.value !== "feature-prd" || mode.value !== "authoring";
 
-  view = { terminal, socket: null, resizeObserver, status, startButton, stopButton };
-
   startButton.addEventListener("click", () => {
-    if (view?.socket) return;
+    if (state.socket) return;
     if (mode.value === "authoring" && target.value === "feature-prd" && !prompt.value.trim()) {
-      status.textContent = "Describe the feature before starting its authoring session.";
+      setStatus("Describe the feature before starting its authoring session.");
       return;
     }
     terminal.clear();
+    state = { ...freshSession(), surface: state.surface };
+    setStatus("Connecting…");
     const scheme = location.protocol === "https:" ? "wss:" : "ws:";
     const socket = new WebSocket(`${scheme}//${location.host}/api/terminal`, ["forge-console-terminal", token()]);
-    view!.socket = socket;
-    startButton.disabled = true;
-    stopButton.disabled = false;
-    status.textContent = "Connecting…";
+    state.socket = socket;
+    syncControls();
+    notify();
     socket.addEventListener("open", () => {
       const request = mode.value === "harness"
         ? { type: "start", mode: "harness" }
@@ -117,44 +187,60 @@ export function renderTerminal(container: HTMLElement): void {
       socket.send(JSON.stringify(request));
     });
     socket.addEventListener("message", (event) => {
+      if (state.socket !== socket) return;
       let message: Record<string, unknown>;
       try {
         message = JSON.parse(String(event.data)) as Record<string, unknown>;
       } catch {
-        terminal.writeln("\r\n[Console] Received an invalid terminal response.");
+        write("\r\n[Console] Received an invalid terminal response.");
         return;
       }
       if (message.type === "output" && typeof message.data === "string") {
-        terminal.write(message.data);
+        state.buffer = appendReplay(state.buffer, message.data);
+        write(message.data);
       } else if (message.type === "started") {
-        status.textContent = `Connected to ${String(message.cli)} in ${String(message.cwd)}.`;
-        fitAddon.fit();
-        socket.send(JSON.stringify({ type: "resize", cols: terminal.cols, rows: terminal.rows }));
-        terminal.focus();
+        setStatus(`Connected to ${String(message.cli)} in ${String(message.cwd)}.`);
+        syncControls();
+        // Only touch the terminal if this view is still the attached surface;
+        // a remount replays the buffer and re-sends its own resize.
+        if (state.surface?.terminal === terminal) {
+          try {
+            fitAddon.fit();
+            send({ type: "resize", cols: terminal.cols, rows: terminal.rows });
+          } catch {
+            // ignore zero-size fit
+          }
+          terminal.focus();
+        }
       } else if (message.type === "error") {
         const detail = typeof message.message === "string" ? message.message : "Session failed.";
-        status.textContent = detail;
-        terminal.writeln(`\r\n[Console] ${detail}`);
+        state.exitLabel = detail;
+        setStatus(detail);
+        write(`\r\n[Console] ${detail}`);
       } else if (message.type === "exit") {
-        status.textContent = `Session ended (exit ${String(message.exitCode)}).`;
+        state.exited = true;
+        state.exitLabel = `Session ended (exit ${String(message.exitCode)}).`;
+        setStatus(state.exitLabel);
       }
     });
     socket.addEventListener("close", () => {
-      if (view?.socket === socket) {
-        view.socket = null;
-        startButton.disabled = false;
-        stopButton.disabled = true;
+      if (state.socket !== socket) return;
+      state.socket = null;
+      syncControls();
+      if (!state.exited) {
+        state.exitLabel = state.exitLabel ?? "Terminal connection closed.";
+        setStatus(state.exitLabel);
       }
-      if (status.textContent === "Connecting…") status.textContent = "Terminal connection closed.";
+      notify();
     });
     socket.addEventListener("error", () => {
-      status.textContent = "Could not connect to the Console terminal.";
+      setStatus("Could not connect to the Console terminal.");
     });
   });
 
   stopButton.addEventListener("click", () => {
     send({ type: "stop" });
-    status.textContent = "Stopping session…";
+    setStatus("Stopping session…");
   });
 
   externalButton.addEventListener("click", () => {
@@ -162,13 +248,13 @@ export function renderTerminal(container: HTMLElement): void {
       ? api.launchCli()
       : api.startAuthoringSession(target.value as "idea" | "prd" | "feature-prd", prompt.value.trim() || undefined);
     void fallback
-      .then((result) => { status.textContent = result.message ?? "External terminal requested."; })
-      .catch((error: unknown) => { status.textContent = error instanceof Error ? error.message : "Could not open external terminal."; });
+      .then((result) => { setStatus(result.message ?? "External terminal requested."); })
+      .catch((error: unknown) => { setStatus(error instanceof Error ? error.message : "Could not open external terminal."); });
   });
 
   container.appendChild(el("section", { className: "panel" }, [
     el("h1", null, "Interactive terminal"),
-    el("p", { className: "dim" }, "Run the selected harness or an authoring interview in this Console. Only the supported harness CLI is launched; no general-purpose shell is exposed."),
+    el("p", { className: "dim" }, "Run the selected harness or an authoring interview in this Console. The session keeps running if you navigate away. Only the supported harness CLI is launched; no general-purpose shell is exposed."),
     el("div", { className: "row gap wrap terminal-controls" }, [mode, authoringFields, startButton, stopButton, externalButton]),
     status,
     terminalHost,
@@ -176,9 +262,10 @@ export function renderTerminal(container: HTMLElement): void {
 }
 
 export function unmountTerminal(): void {
-  if (!view) return;
-  view.resizeObserver.disconnect();
-  if (view.socket?.readyState === WebSocket.OPEN || view.socket?.readyState === WebSocket.CONNECTING) view.socket.close();
-  view.terminal.dispose();
-  view = null;
+  const surface = state.surface;
+  if (!surface) return;
+  surface.resizeObserver.disconnect();
+  surface.terminal.dispose();
+  state.surface = null;
+  // Keep state.socket alive so the session continues in the background.
 }

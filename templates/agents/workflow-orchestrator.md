@@ -20,7 +20,7 @@ Use this agent when:
 - You are running in a CI/CD context or scheduled pipeline
 
 Do **not** use this agent if:
-- The PRD does not exist yet - use `forge-auto-build-prd` or `forge-build-prd` first
+- The PRD does not exist yet - use `forge-build-prd` first
 - The agent team does not exist yet - use `forge-build-agent-team` (or `forge-launcher resume`) first
 - You want per-phase review and approval - use `@project-orchestrator` instead
 - The manifest has not been compiled - run `forge-execution-adapter compile` first

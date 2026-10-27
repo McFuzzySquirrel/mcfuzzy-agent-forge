@@ -1,12 +1,26 @@
 import { existsSync, readFileSync } from "node:fs";
 import { resolve } from "node:path";
-import { randomUUID } from "node:crypto";
+import { randomInt } from "node:crypto";
 
 import { runCommand, extractModelFlags, canSelectAgentNatively } from "./run.ts";
 import { harnessInvocationContext } from "./invocation-log.ts";
-import type { AgentDescriptor, HarnessAdapter, SessionResumeStrategy, TaskAttemptRequest, TaskResult } from "../types.ts";
+import type { AgentDescriptor, HarnessAdapter, SessionResumeStrategy, TaskAttemptRequest, TaskResult, TaskUsage } from "../types.ts";
 import { inlinePersona } from "../request.ts";
 import { executionPrompt } from "../task-execution.ts";
+
+const SESSION_ALPHABET = "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz";
+
+/**
+ * OpenCode v2 session IDs must match `^ses_[0-9A-Za-z]{26}$` (the CLI schema
+ * rejects anything not starting with "ses"). A bare UUID fails immediately with
+ * `Expected a string starting with "ses"`, so caller-generated session IDs must
+ * use this shape.
+ */
+function openCodeSessionId(): string {
+  let id = "ses_";
+  for (let i = 0; i < 26; i += 1) id += SESSION_ALPHABET[randomInt(SESSION_ALPHABET.length)];
+  return id;
+}
 
 /**
  * OpenCode CLI harness adapter.
@@ -57,7 +71,7 @@ export class OpenCodeAdapter implements HarnessAdapter {
   readonly sessionStrategy: SessionResumeStrategy = {
     kind: "deterministic",
     resumeFlags: (sessionId) => ["--session", sessionId],
-    newSessionId: () => randomUUID(),
+    newSessionId: () => openCodeSessionId(),
   };
 
   private readonly bin: string;
@@ -79,7 +93,12 @@ export class OpenCodeAdapter implements HarnessAdapter {
     // `github-copilot/gpt-5.6-luna`); unlike Copilot, do not strip the prefix.
     const modelFlag = request.effectiveModel ? ["--model", request.effectiveModel] : [];
     const agentFlag = this.canSelectAgent(request) ? ["--agent", agent.name] : [];
-    const sessionFlag = request.sessionId ? this.sessionStrategy.resumeFlags(request.sessionId) : [];
+    // Always address the session so its usage can be read afterwards. Under
+    // task scope this creates a fresh, caller-chosen session; under phase scope
+    // it continues the phase session the engine generated.
+    const sessionOwned = !request.sessionId;
+    const sessionId = request.sessionId ?? openCodeSessionId();
+    const sessionFlag = this.sessionStrategy.resumeFlags(sessionId);
 
     const prompt = executionPrompt(request, agentFlag.length === 0 ? inlinePersona(request) : "");
     const args = ["run", ...modelFlag, ...agentFlag, ...sessionFlag, ...this.extraFlags, prompt];
@@ -101,6 +120,10 @@ export class OpenCodeAdapter implements HarnessAdapter {
     });
     const durationMs = Date.now() - start;
 
+    const usage = sessionOwned
+      ? await readOpenCodeUsage(this.bin, sessionId, repoRoot)
+      : { source: "unavailable" as const, note: "phase-scoped session: usage is cumulative across the phase" };
+
     const stdout = result.stdout;
     const stderr = result.stderr;
 
@@ -113,6 +136,7 @@ export class OpenCodeAdapter implements HarnessAdapter {
         durationMs,
         errorMessage: result.error,
         failureKind: result.failureKind,
+        usage,
       };
     }
 
@@ -125,6 +149,7 @@ export class OpenCodeAdapter implements HarnessAdapter {
         durationMs,
         errorMessage: stderr || `${this.bin} exited with status ${result.status}`,
         failureKind: "retryable",
+        usage,
       };
     }
 
@@ -138,12 +163,58 @@ export class OpenCodeAdapter implements HarnessAdapter {
       stdout,
       stderr: "",
       durationMs,
+      usage,
     };
   }
 
   /** True when opencode can select this agent natively; see `canSelectAgentNatively`. */
   private canSelectAgent(request: TaskAttemptRequest): boolean {
     return canSelectAgentNatively(request, ".opencode");
+  }
+}
+
+/**
+ * Reads a session's authoritative token/cost usage from OpenCode.
+ *
+ * `opencode session export <id>` prints the session with
+ * `info.tokens` (`{ input, output, reasoning, cache: { read, write } }`) and
+ * `info.cost`. A failed or empty export is reported as "unavailable", never as
+ * zeros, so the Console can tell "not reported" from "used nothing".
+ */
+async function readOpenCodeUsage(bin: string, sessionId: string, cwd: string): Promise<TaskUsage> {
+  try {
+    const result = await runCommand(bin, ["session", "export", sessionId], {
+      cwd,
+      timeoutMs: 15_000,
+      maxBufferBytes: 32 * 1024 * 1024,
+    });
+    if (result.error || result.status !== 0) {
+      return { source: "unavailable", note: "opencode session export failed" };
+    }
+    const parsed = JSON.parse(result.stdout) as {
+      info?: {
+        cost?: number;
+        tokens?: { input?: number; output?: number; reasoning?: number; cache?: { read?: number; write?: number } };
+      };
+    };
+    const tokens = parsed.info?.tokens;
+    if (!tokens || (typeof tokens.input !== "number" && typeof tokens.output !== "number")) {
+      return { source: "unavailable", note: "opencode session export reported no tokens" };
+    }
+    return {
+      inputTokens: tokens.input,
+      outputTokens: tokens.output,
+      reasoningTokens: tokens.reasoning,
+      cacheReadTokens: tokens.cache?.read,
+      cacheWriteTokens: tokens.cache?.write,
+      costUsd: typeof parsed.info?.cost === "number" ? parsed.info.cost : undefined,
+      source: "harness",
+    };
+  } catch (error) {
+    return {
+      source: "unavailable",
+      note: `opencode usage unavailable: ${error instanceof Error ? error.message : String(error)}`,
+    };
   }
 }
 

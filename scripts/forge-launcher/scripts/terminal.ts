@@ -1,7 +1,6 @@
 import spawn from "cross-spawn";
-import fs from "node:fs";
 import os from "node:os";
-import path from "node:path";
+import { resolveCliPath } from "./cli-resolve.ts";
 import { command, isInteractiveTty, warn } from "./format.ts";
 
 /**
@@ -36,7 +35,7 @@ function launchPosix(cliName: string, repoDir: string, args: string[]): Promise<
   // Desktop terminals may start a login shell with a different PATH from the
   // launcher process. Pin the resolved executable when it is discoverable so
   // npm-installed CLIs are found on macOS as well as Linux.
-  const cliExe = commandExists(cliName) ?? cliName;
+  const cliExe = resolveCliPath(cliName) ?? cliName;
   const argStr = args.map((a) => `'${a.replace(/'/g, "'\\''")}'`).join(" ");
   const launchScript = `cd '${repoDir.replace(/'/g, "'\\''")}' && '${cliExe.replace(/'/g, "'\\''")}' ${argStr}; exec bash`;
 
@@ -79,21 +78,21 @@ function launchPosix(cliName: string, repoDir: string, args: string[]): Promise<
 
 async function launchWindows(cliName: string, repoDir: string, args: string[]): Promise<boolean> {
   const escapedDir = repoDir.replace(/'/g, "''");
-  const cliExe = commandExists(cliName) ?? cliName;
+  const cliExe = resolveCliPath(cliName) ?? cliName;
   const escapedExe = cliExe.replace(/'/g, "''");
   const argStr = args.map((a) => `'${a.replace(/'/g, "''")}'`).join(" ");
   const invokeScript = `& '${escapedExe}' ${argStr}`;
   const launchScript = `Set-Location '${escapedDir}'; ${invokeScript}`;
 
-  const pwsh = commandExists("pwsh");
-  const ps5 = commandExists("powershell");
+  const pwsh = resolveCliPath("pwsh");
+  const ps5 = resolveCliPath("powershell");
   const powershell = pwsh ?? ps5;
   // Calling `wt` from a process already hosted by Windows Terminal can produce
   // an empty-command 0x80070002 error. Prefer detached PowerShell directly.
   if (powershell && await spawnDetached(powershell, ["-NoProfile", "-NoExit", "-Command", launchScript])) {
     return true;
   }
-  const wt = commandExists("wt");
+  const wt = resolveCliPath("wt");
   if (wt && powershell && await spawnDetached(wt, windowsTerminalArgs(powershell, repoDir, invokeScript))) {
     return true;
   }
@@ -104,32 +103,6 @@ async function launchWindows(cliName: string, repoDir: string, args: string[]): 
 
 export function windowsTerminalArgs(powershell: string, repoDir: string, invokeScript: string): string[] {
   return ["new-tab", "-d", repoDir, "--", powershell, "-NoProfile", "-NoExit", "-Command", invokeScript];
-}
-
-function commandExists(cmd: string): string | undefined {
-  const isWin = process.platform === "win32";
-  const exts = isWin ? [".com", ".exe", ".bat", ".cmd", ""] : [""];
-  const dirs = (process.env.PATH ?? process.env.Path ?? "").split(path.delimiter);
-  if (isWin) {
-    const systemRoot = process.env.SystemRoot ?? process.env.WINDIR;
-    const localAppData = process.env.LOCALAPPDATA;
-    if (systemRoot) dirs.push(path.join(systemRoot, "System32"));
-    if (systemRoot && cmd.toLowerCase() === "powershell") dirs.push(path.join(systemRoot, "System32", "WindowsPowerShell", "v1.0"));
-    if (localAppData) dirs.push(path.join(localAppData, "Microsoft", "WindowsApps"));
-  }
-  for (const dir of [...new Set(dirs)]) {
-    if (!dir) continue;
-    for (const ext of exts) {
-      const full = path.join(dir, cmd + ext);
-      try {
-        fs.accessSync(full);
-        return full;
-      } catch {
-        // continue
-      }
-    }
-  }
-  return undefined;
 }
 
 function spawnDetached(cmd: string, args: string[]): Promise<boolean> {

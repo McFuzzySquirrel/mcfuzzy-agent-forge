@@ -154,7 +154,7 @@ test("feature-increment filesystem guard ignores manifest key order when tasks a
   assert.deepEqual(changes.unrelatedFiles, []);
 });
 
-test("non-interactive run with no PRD bootstraps and queues forge-auto-build-prd", async () => {
+test("non-interactive run with no PRD bootstraps and queues forge-build-prd", async () => {
   const parent = tmpDir();
   const { code, out } = await runCli(["--non-interactive"], {
     FORGE_HARNESS_CHOICE: "4",
@@ -175,8 +175,8 @@ test("non-interactive run with no PRD bootstraps and queues forge-auto-build-prd
     fs.readFileSync(path.join(repo, "docs", "engine-config.json"), "utf8"),
   ) as { harness: string };
   assert.equal(config.harness, "opencode");
-  // CR-001 lifecycle: no PRD -> queue forge-auto-build-prd
-  assert.ok(out.includes("/forge-auto-build-prd Use docs/IDEA.md as the project idea"));
+  // CR-001 lifecycle: no PRD -> queue forge-build-prd
+  assert.ok(out.includes("/forge-build-prd Use docs/IDEA.md as the project idea"));
   assert.ok(!out.includes("/forge-auto-build Use docs/PRD.md as the project PRD"));
 });
 
@@ -244,7 +244,7 @@ test("GitHub projects default to the copilot engine harness", () => {
 
 test("the PRD authoring message requires an interview and still runs the gap check", () => {
   const msg = headlessSkillMsg();
-  assert.ok(msg.startsWith("/forge-auto-build-prd "), msg);
+  assert.ok(msg.startsWith("/forge-build-prd "), msg);
   assert.ok(msg.includes("Interview me to fill the gaps"), msg);
   assert.ok(msg.includes("acceptance criteria"), msg);
   assert.ok(msg.includes("security, privacy, accessibility"), msg);
@@ -462,7 +462,7 @@ test("non-interactive resume prints an interactive OpenCode requirements command
 
   assert.equal(code, 0, out);
   assert.match(out, /opencode "mini" "--prompt"/);
-  assert.match(out, /\/forge-auto-build-prd/);
+  assert.match(out, /\/forge-build-prd/);
   assert.doesNotMatch(out, /opencode run --auto/);
   assert.doesNotMatch(out, /--dir/);
 });
@@ -498,7 +498,7 @@ test("resume dry-run prints an interactive authoring command", async (t) => {
   assert.equal(code!, 0, out);
   assert.match(out, /Dry-run: not opening an interactive session/);
   assert.match(out, /opencode "mini" "--prompt"/);
-  assert.match(out, /\/forge-auto-build-prd/);
+  assert.match(out, /\/forge-build-prd/);
   assert.doesNotMatch(out, /opencode run --auto/);
 });
 
@@ -559,7 +559,7 @@ test("imported requirements remain source material and queue feature authoring",
   const repo = path.join(parent, "with-prd-app");
   assert.ok(fs.existsSync(path.join(repo, "docs", "requirements-source.md")));
   assert.ok(!fs.existsSync(path.join(repo, "docs", "PRD.md")));
-  assert.ok(out.includes("/forge-auto-build-prd"), out);
+  assert.ok(out.includes("/forge-build-prd"), out);
 });
 
 test("non-interactive run with a PRD and a generated team queues /forge-orchestrate-build", async () => {
@@ -688,7 +688,7 @@ test("a stubbed PRD stage that produces nothing fails validation with no commit"
   assert.ok(!fs.existsSync(path.join(repo, "docs", "PRD.md")), "no PRD should exist");
   assert.ok(out.includes("PRD authoring validation failed"), out);
   assert.ok(out.includes("Missing docs/PRD.md"), out);
-  assert.ok(out.includes("[stub] invoking forge-auto-build-prd"));
+  assert.ok(out.includes("[stub] invoking forge-build-prd"));
   // nothing was committed beyond the bootstrap commit
   const log = execFileSync("git", ["-C", repo, "log", "--oneline"], { encoding: "utf8" });
   assert.ok(!log.includes("docs: add auto-drafted PRD"));

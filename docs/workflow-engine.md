@@ -645,6 +645,12 @@ still block completion. Older state records without the field remain valid and
 are not backfilled from past artifacts. A human approval does not clear the
 original report. See [Task Contracts](task-contracts.md).
 
+Completed and failed task records also retain the harness-reported token/cost
+`usage` when the harness reports it; the same value appears on the
+`task.attempt.finished`, `task.complete`, and `task.failed` audit events.
+`usage.source` is `"unavailable"` when the harness reported nothing, never zero
+counts. See [ADR-074](adr/074-token-and-cost-usage-capture.md).
+
 ---
 
 ## Artifact pattern

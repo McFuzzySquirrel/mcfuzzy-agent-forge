@@ -1057,7 +1057,7 @@ test("authoring session endpoint launches an interactive grill session", async (
 
       const prd = await postJson(`${replacement.url}/api/authoring/session`, { target: "prd" }, { "X-Forge-Token": replacement.token });
       assert.equal((prd.body as { ok: boolean }).ok, true);
-      assert.match(calls[1]?.args[2] ?? "", /forge-auto-build-prd/);
+      assert.match(calls[1]?.args[2] ?? "", /forge-build-prd/);
 
       const missingPrompt = await postJson(`${replacement.url}/api/authoring/session`, { target: "feature-prd" }, { "X-Forge-Token": replacement.token });
       assert.equal(missingPrompt.status, 400);

@@ -4,7 +4,7 @@ import { randomUUID } from "node:crypto";
 
 import { runCommand, extractModelFlags, stripProviderPrefix, canSelectAgentNatively } from "./run.ts";
 import { harnessInvocationContext } from "./invocation-log.ts";
-import type { HarnessAdapter, SessionResumeStrategy, TaskAttemptRequest, TaskResult } from "../types.ts";
+import type { HarnessAdapter, SessionResumeStrategy, TaskAttemptRequest, TaskResult, TaskUsage } from "../types.ts";
 import { inlinePersona } from "../request.ts";
 import { executionPrompt } from "../task-execution.ts";
 
@@ -73,6 +73,8 @@ export class CopilotAdapter implements HarnessAdapter {
 
     const stdout = result.stdout;
     const stderr = result.stderr;
+    // Copilot prints its stats block to stderr; parse what it reports.
+    const usage = copilotUsage(stderr);
 
     if (result.error) {
       return {
@@ -83,6 +85,7 @@ export class CopilotAdapter implements HarnessAdapter {
         durationMs: Date.now() - start,
         errorMessage: result.error,
         failureKind: result.failureKind,
+        usage,
       };
     }
 
@@ -95,6 +98,7 @@ export class CopilotAdapter implements HarnessAdapter {
         durationMs: Date.now() - start,
         errorMessage: stderr || `${this.bin} exited with status ${result.status}`,
         failureKind: "retryable",
+        usage,
       };
     }
 
@@ -108,6 +112,7 @@ export class CopilotAdapter implements HarnessAdapter {
       stdout,
       stderr: "",
       durationMs: Date.now() - start,
+      usage,
     };
   }
 
@@ -115,4 +120,40 @@ export class CopilotAdapter implements HarnessAdapter {
   private canSelectAgent(request: TaskAttemptRequest): boolean {
     return canSelectAgentNatively(request, ".github");
   }
+}
+
+/**
+ * Parses Copilot's stats block from stderr, for example:
+ *
+ *   AI Credits 0.46 (8s)
+ *   Tokens     ↑ 18.6k (18.6k written) • ↓ 5
+ *
+ * "written" is the cache-write count. Credits are a harness-specific unit, not
+ * USD, so they are kept separate from `costUsd`.
+ */
+function copilotUsage(stderr: string): TaskUsage {
+  const tokens = /Tokens\s+[↑▲]\s*([\d.]+[kKmM]?)(?:\s*\(([\d.]+[kKmM]?)\s*written\))?\s*[•·]\s*[↓▼]\s*([\d.]+[kKmM]?)/.exec(stderr);
+  const credits = /AI Credits\s+([\d.,]+)/.exec(stderr);
+  if (!tokens && !credits) {
+    return { source: "unavailable", note: "copilot reported no token stats" };
+  }
+  return {
+    inputTokens: tokens ? parseCompactNumber(tokens[1]) : undefined,
+    cacheWriteTokens: tokens?.[2] ? parseCompactNumber(tokens[2]) : undefined,
+    outputTokens: tokens ? parseCompactNumber(tokens[3]) : undefined,
+    credits: credits ? Number(credits[1]!.replace(/,/g, "")) : undefined,
+    source: "harness",
+  };
+}
+
+/** Parses "18.6k" / "1.2m" / "5" into an integer. */
+function parseCompactNumber(raw: string | undefined): number | undefined {
+  if (!raw) return undefined;
+  const match = /^([\d.]+)([kKmM]?)$/.exec(raw.trim());
+  if (!match) return undefined;
+  const value = Number(match[1]);
+  if (!Number.isFinite(value)) return undefined;
+  const unit = match[2]!.toLowerCase();
+  const multiplier = unit === "k" ? 1_000 : unit === "m" ? 1_000_000 : 1;
+  return Math.round(value * multiplier);
 }

@@ -18,7 +18,7 @@ fast-path is driven by `forge-launcher`, not from inside a chat session).
 
 ## Expertise
 
-- Reading and interpreting PRDs, PRDs, and Feature PRDs
+- Reading and interpreting PRDs and Feature PRDs
 - Understanding dependencies between system components and development tasks
 - Building and validating feature dependency graphs
 - Identifying correct sequences for calling specialist agents

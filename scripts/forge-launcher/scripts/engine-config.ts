@@ -1,5 +1,6 @@
 import fs from "node:fs";
 import path from "node:path";
+import { loadSettings } from "./settings.ts";
 
 /**
  * Persisted engine-run configuration (docs/engine-config.json). The interactive
@@ -76,4 +77,29 @@ export function loadEngineConfig(repoDir: string): PersistedEngineConfig | null 
 export function saveEngineConfig(repoDir: string, cfg: PersistedEngineConfig): void {
   fs.mkdirSync(path.join(repoDir, "docs"), { recursive: true });
   fs.writeFileSync(engineConfigPath(repoDir), `${JSON.stringify(cfg, null, 2)}\n`, "utf8");
+}
+
+/**
+ * Effective execution preferences for a repo: the project's
+ * `docs/engine-config.json` wins, and each unset field falls back to the
+ * system-level default (`settings.json` → `execution`), then to the engine's own
+ * default (auto-commit on, activity logging off, concurrency 1).
+ *
+ * Selection and execution-mode are deliberately excluded: they describe the
+ * current run's chosen task set, which is inherently per-project and never
+ * inherited from a global default.
+ */
+export function effectiveExecution(repoDir: string): {
+  autoCommit: boolean;
+  logHarnessActivity: boolean;
+  concurrency: number;
+} {
+  const project = loadEngineConfig(repoDir);
+  const global = loadSettings().execution ?? {};
+  const concurrency = Math.max(0, Number(project?.concurrency ?? global.concurrency ?? 0) || 0);
+  return {
+    autoCommit: project?.autoCommit ?? global.autoCommit ?? true,
+    logHarnessActivity: project?.logHarnessActivity ?? global.logHarnessActivity ?? false,
+    concurrency,
+  };
 }

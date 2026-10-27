@@ -13,7 +13,7 @@
 3. **Repo creation** -creates a GitHub repository (via `gh`) or initialises a local `git init`.
 4. **Bootstrap** -runs the bundled bootstrap into the new repo.
 5. **Idea capture** -prompts for your project idea and saves it to `docs/IDEA.md`.
-6. **PRD & research** *(optional, recommended)* -add an existing PRD (`docs/PRD.md`) and/or research / seed documents (`docs/research/`). If skipped, the pipeline queues `forge-auto-build-prd` to build a reviewed PRD from the idea first.
+6. **PRD & research** *(optional, recommended)* -add an existing PRD (`docs/PRD.md`) and/or research / seed documents (`docs/research/`). If skipped, the pipeline queues `forge-build-prd` to build a reviewed PRD from the idea first.
 7. **Commit + push** -commits the bootstrapped forge, idea file, PRD, and any research docs.
 8. **Auto-build launch** - offers the optional **auto-draft** flow: generate the
    PRD, agent team, and project skills as separate reviewable stages, compile
@@ -484,8 +484,8 @@ It detects what's already drafted, prints where you are (with clickable review
 links to `docs/IDEA.md`, `docs/PRD.md`, the agent/skills dirs, and
 `docs/WORKFLOW-STATE.json` when a run exists), then offers the right next action:
 
-- Nothing captured yet → capture the idea / open the harness for `forge-auto-build-prd`.
-- Idea, no PRD → open an interactive session for `forge-auto-build-prd` (or grill the idea first). A non-interactive resume prints that command and stops.
+- Nothing captured yet → capture the idea / open the harness for `forge-build-prd`.
+- Idea, no PRD → open an interactive session for `forge-build-prd` (or grill the idea first). A non-interactive resume prints that command and stops.
 - PRD, no team → auto-draft the agent team headlessly, or open the harness for `forge-build-agent-team`.
 - Team, skills incomplete → run `draft-skills` or open the harness for `forge-build-project-skills`.
 - Skills ready, no manifest → compile the manifest with `forge-execution-adapter`.
@@ -550,7 +550,7 @@ The **auto-draft** option runs the derivation stages non-interactively and
 still keeps human review between stages. It never authors requirements.
 
 1. **Idea → PRD (always interactive).** With no PRD yet, Step 8 offers to open a
-   session for `forge-auto-build-prd`, or to run `forge-grill-idea` first to
+   session for `forge-build-prd`, or to run `forge-grill-idea` first to
    sharpen the idea. The skill interviews you and then produces
    `docs/PRD.md` + `docs/features/*.md`. There is no headless alternative: see
    [ADR-060](adr/060-interactive-requirements-authoring.md). Non-interactive and
@@ -838,7 +838,7 @@ readline fallback for piped input), plus `~`/`~/...` and `$VAR`/`${VAR}`
 (e.g. `$HOME/...`) expansion - so you can point at external PRD or seed
 documents with their usual shorthand instead of typing a full absolute path.
 
-If you skip this step, the pipeline queues `forge-auto-build-prd`, which builds a reviewed PRD from `docs/IDEA.md` (including the automatic decomposition check) before the build pipeline runs. For the best results, spend extra time on the PRD or spec first: you can run `/forge-build-prd` as a separate skill, then feed that PRD into the launcher or into `/forge-auto-build` as the initial spec. Adding research or seed documents in `docs/research/` also improves downstream quality.
+If you skip this step, the pipeline queues `forge-build-prd`, which builds a reviewed PRD from `docs/IDEA.md` (including the automatic decomposition check) before the build pipeline runs. For the best results, spend extra time on the PRD or spec first: you can run `/forge-build-prd` as a separate skill, then feed that PRD into the launcher or into `/forge-auto-build` as the initial spec. Adding research or seed documents in `docs/research/` also improves downstream quality.
 
 ### Step 7 -Commit bootstrapped forge and idea
 
@@ -865,7 +865,7 @@ now (detached), later (prints the command), or manually:
   build - runs headless from what you approve.
 Open a session to author the PRD interactively now? (requirements are never auto-drafted) [y/N]: y
   ✔  opencode launched in a separate terminal.
-    Then run only this stage: /forge-auto-build-prd Use docs/IDEA.md as the project idea
+    Then run only this stage: /forge-build-prd Use docs/IDEA.md as the project idea
     Continue with forge-launcher resume to select the next stage's model independently.
   ... author docs/PRD.md + docs/features/*.md in that terminal, then commit ...
 $ forge-launcher resume
@@ -920,7 +920,7 @@ Then, for harnesses with a spawnable CLI (`copilot`, `opencode`, `claude`):
 
 Launch claude in the new repository now? [y/N]: y
   Launching claude in: /home/user/projects/my-cool-app
-  ✔  claude launched. Use /forge-auto-build-prd in the Claude Code chat to build
+  ✔  claude launched. Use /forge-build-prd in the Claude Code chat to build
      the reviewed PRD, then the launcher/team step for the agent team and build.
 ```
 
@@ -929,7 +929,7 @@ For GitHub Copilot, the launcher now tries to open the GitHub Copilot CLI in a s
 ```
   Open the repository in GitHub Copilot Chat and run:
 
-    @workspace /forge-auto-build-prd Use docs/IDEA.md as the project idea
+    @workspace /forge-build-prd Use docs/IDEA.md as the project idea
 
   The skill will build a reviewed PRD from your idea (with automatic
   decomposition when it qualifies), then direct you to team generation and
@@ -1070,16 +1070,16 @@ The launcher creates `docs/IDEA.md` (and mirrors it to `IDEA.md`) with the follo
 ---
 
 > Generated by forge-launcher on 2026-08-05T19:00:00Z
-> Use this file as input for: `@workspace /forge-auto-build-prd Use docs/IDEA.md as the project idea`
+> Use this file as input for: `@workspace /forge-build-prd Use docs/IDEA.md as the project idea`
 ```
 
-Pass this file to `forge-auto-build-prd` by referencing it in the chat:
+Pass this file to `forge-build-prd` by referencing it in the chat:
 
 ```
-@workspace /forge-auto-build-prd Use docs/IDEA.md as the project idea
+@workspace /forge-build-prd Use docs/IDEA.md as the project idea
 ```
 
-`forge-auto-build-prd` builds a reviewed PRD from the idea (with automatic decomposition when it qualifies) and stops there. Once `docs/PRD.md` exists, generate the team and build - from the terminal, re-enter at the right stage:
+`forge-build-prd` builds a reviewed PRD from the idea (with automatic decomposition when it qualifies) and stops there. Once `docs/PRD.md` exists, generate the team and build - from the terminal, re-enter at the right stage:
 
 ```
 forge-launcher resume [--repo <path>]     # picks up at the team/build stage
@@ -1142,7 +1142,7 @@ cd /path/to/your/repo && opencode .
 cd /path/to/your/repo && claude .
 ```
 
-Then in the chat or terminal, run `/forge-auto-build-prd <your idea>` to build the reviewed PRD first, or `/forge-auto-build docs/PRD.md` once a PRD exists.
+Then in the chat or terminal, run `/forge-build-prd <your idea>` to build the reviewed PRD first, or `/forge-auto-build docs/PRD.md` once a PRD exists.
 
 ---
 
@@ -1170,7 +1170,7 @@ directory outputs, empty phases and invalid dependency graphs stop the stage.
 The recorded output fingerprint covers canonical vision and feature files, not
 historical source documents. Exit zero from the model alone does not mean success.
 
-Repair errors in an interactive session for `forge-auto-build-prd` (or
+Repair errors in an interactive session for `forge-build-prd` (or
 `forge-build-prd` for an existing repository); use `forge-build-feature-prd` for
 an additive feature retry. The `draft-prd`, `draft-existing-prd` and
 `feature-prd` subcommands report the handoff instead of authoring. Existing small

@@ -53,7 +53,10 @@ function fakePty(): { pty: IPty; state: FakePty } {
   return { pty, state };
 }
 
-async function setup(t: import("node:test").TestContext) {
+async function setup(
+  t: import("node:test").TestContext,
+  overrides: { resolveCli?: (name: string) => string | null } = {},
+) {
   const server = http.createServer();
   await new Promise<void>((resolve) => server.listen(0, "127.0.0.1", resolve));
   const address = server.address();
@@ -71,6 +74,7 @@ async function setup(t: import("node:test").TestContext) {
     origin,
     currentRepo: () => "/fixture/project",
     resolveCommand,
+    resolveCli: overrides.resolveCli ?? ((name: string) => name),
     ptySpawn: ((cli: string, args: string[], options: { cwd?: string; env?: NodeJS.ProcessEnv }) => {
       spawned.push({ cli, args, cwd: options.cwd, pwd: options.env?.PWD });
       return fake.pty;
@@ -151,6 +155,15 @@ test("terminal sessions launch a fixed harness in the selected project and bridg
   client.send(JSON.stringify({ type: "stop" }));
   assert.equal((await exit).exitCode, 143);
   assert.deepEqual(fake.kills, ["SIGTERM"]);
+});
+
+test("terminal sessions report a clear error when the harness CLI cannot be resolved", async (t) => {
+  const { socket: createSocket } = await setup(t, { resolveCli: () => null });
+  const client = createSocket();
+  await once(client, "open");
+  const error = receive(client, "error");
+  client.send(JSON.stringify({ type: "start", mode: "harness" }));
+  assert.match(String((await error).message), /not found on PATH/);
 });
 
 test("terminal disconnect cleans up the PTY and rejects shell-like session requests", async (t) => {
