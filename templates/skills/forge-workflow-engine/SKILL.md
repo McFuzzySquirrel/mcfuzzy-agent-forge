@@ -195,6 +195,9 @@ npm run workflow-engine -- run --harness opencode --subagents auto --yes
   line each, max 8), excluding the running agent and forge's meta-agents. OpenCode
   also exposes its own Task-tool roster; the named list makes the instruction
   concrete in every harness.
+- The one-line launch prompt also names the cap, so delegation is visible in the
+  session transcript; the full policy and roster stay in the execution file, and
+  the Console's task drawer reports what each snapshot actually instructed.
 - The audit records the policy, not the observed number of sub-agent invocations.
 
 See ADR-077.

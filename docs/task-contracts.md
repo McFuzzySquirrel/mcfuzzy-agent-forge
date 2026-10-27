@@ -129,6 +129,13 @@ first and execute only that task. It does not ask the agent to reconstruct a tas
 from the entire manifest or PRD. This is generated execution context, not a second
 hand-maintained specification.
 
+The launch prompt carries one inline clause beyond the pointer: when the engine
+resolved a sub-agent delegation cap for the task, it states that independent
+sub-work may be delegated to the teammates listed in the file (see
+[sub-agent delegation](workflow-engine.md#sub-agent-delegation)). Everything else
+— requirements, references, validation, the roster — stays in the file, so the
+argv prompt remains a single line.
+
 Copilot, OpenCode and Claude share this transport. Claude unwraps the CLI's JSON
 envelope before the engine validates its `forge-result`; a successful envelope
 alone does not complete a structured task.

@@ -302,6 +302,11 @@ bound. Making it explicit and capped is stricter than the alternative.
   guessing what the harness exposes. The running agent is never listed, and
   forge's meta-agents (`project-orchestrator`, `forge-team-builder`,
   `workflow-orchestrator`) are excluded: an orchestrator is not a specialist.
+- **Narrated, not just filed.** The one-line launch prompt names the cap, so the
+  policy is visible in the session transcript even if the agent skims the file.
+  The Console's task detail drawer reports what each task's execution snapshot
+  actually instructed (`up to N · teammate, teammate`), or says it was not
+  instructed when the snapshot predates delegation.
 - **Only where the harness can do it.** `HarnessAdapter.supportsSubagents`
   gates the instruction. OpenCode declares it; Copilot, Claude, and the OpenAI
   API do not (yet), so those runs simply omit the policy.
@@ -314,6 +319,13 @@ bound. Making it explicit and capped is stricter than the alternative.
   A task's own `timeoutMs` in the manifest still wins.
 - **One report.** The owner — not a sub-agent — is the sole author of the final
   `forge-result`. Sub-agents are input to it.
+- **Visible where it matters.** The launch prompt — the only text every adapter
+  puts in the session's first message — names the policy ("You may delegate
+  independent sub-work to the teammates listed under Sub-agent delegation (at
+  most N at a time)"), and the Tasks detail drawer reports what each task's
+  execution snapshot actually instructed, including the named roster. Neither is
+  a substitute for harness-level observation: the engine never counts real
+  fan-out.
 - **Shared tree, shared commit.** Sub-agents work in the task's working tree
   (including its worktree sandbox under `--concurrency > 1`), so their changes
   are attributed and committed as that task's work. Two sub-agents editing the

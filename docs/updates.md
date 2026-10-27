@@ -31,6 +31,10 @@ Detailed release and change notes for MyForge.
   defaults, persisted as `subagents` in `docs/engine-config.json` and passed by
   run/resume. The control is disabled with a reason for harnesses that cannot
   delegate.
+- The one-line launch prompt now names the cap, so delegation is visible in the
+  session transcript instead of only inside the execution file, and the Tasks
+  detail drawer reports what each task's snapshot actually instructed (including
+  the roster), or says it was not instructed.
 - Limits are documented rather than hidden: sub-agents share the task's working
   tree, so a same-file collision between them is a silent lost edit the engine
   cannot detect; and the audit records the delegation *policy*, not how many

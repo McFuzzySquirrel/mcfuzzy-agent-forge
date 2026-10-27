@@ -6,6 +6,7 @@ import { basename, join } from "node:path";
 import { get as httpGet, request as httpRequest } from "node:http";
 
 import { startConsoleServer, type ConsoleServer } from "./console/server.ts";
+import { parseDelegationInstruction } from "./console/repo.ts";
 import type { SpawnOptions } from "./console/control.ts";
 import { writeFeatureFixture } from "./feature-fixture.ts";
 import { featureIncrementHandoffHasChange, recordFeatureIncrementHandoff } from "./authoring-state.ts";
@@ -713,6 +714,74 @@ test("engine-config rejects a non-boolean harness activity value", async () => {
     const res = await postJson(`${server.url}/api/engine-config`, { logHarnessActivity: "yes" }, { "X-Forge-Token": server.token });
     assert.equal(res.status, 400);
     assert.match((res.body as { message: string }).message, /logHarnessActivity must be a boolean/);
+  });
+});
+
+test("delegation is reported from the task's execution file, not inferred from settings", () => {
+  const executionFile = [
+    "# Task Execution",
+    "",
+    '{"taskId":"CORE-04","runId":"run-1","attempt":1,"owner":"api-engineer","dependencies":[]}',
+    "",
+    "This is an engine-generated execution snapshot.",
+    "",
+    "## Specialist Instructions",
+    "",
+    "Build things.",
+    "",
+    "## Execution Instructions",
+    "",
+    "## Sub-agent delegation",
+    "You may delegate independent parts of this task to teammate sub-agents (at most 4 at a time).",
+    "Available teammates (address them by these agent names):",
+    "- `qa-engineer` — Writes and maintains automated test suites.",
+    "- `ui-engineer`",
+    "- Delegate only sub-work that is independent and touches a disjoint set of files.",
+    "",
+    "Task: Build things",
+  ].join("\n");
+
+  assert.deepEqual(parseDelegationInstruction(executionFile), {
+    instructionPresent: true,
+    cap: 4,
+    teammates: ["qa-engineer", "ui-engineer"],
+  });
+
+  // A snapshot from an engine that predates delegation has no section at all.
+  assert.deepEqual(parseDelegationInstruction("# Task Execution\n\n## Execution Instructions\n\nTask: x\n"), {
+    instructionPresent: false,
+    cap: null,
+    teammates: [],
+  });
+});
+
+test("the tasks API exposes delegation per task and null before dispatch", async () => {
+  await withServer(async (server, repo) => {
+    const before = await getJson(`${server.url}/api/tasks`) as Array<{ id: string; delegation: unknown }>;
+    assert.equal(before.find((task) => task.id === "1.1")?.delegation, null, "no execution file means nothing was instructed");
+
+    mkdirSync(join(repo, "docs", "artifacts"), { recursive: true });
+    writeFileSync(join(repo, "docs", "artifacts", "1.1.md"), [
+      "# Task Execution",
+      "",
+      '{"taskId":"1.1","runId":"run-1","attempt":1}',
+      "",
+      "## Execution Instructions",
+      "",
+      "## Sub-agent delegation",
+      "You may delegate independent parts of this task to teammate sub-agents (at most 2 at a time).",
+      "Available teammates (address them by these agent names):",
+      "- `api-engineer` — Builds HTTP endpoints.",
+    ].join("\n"));
+
+    const after = await getJson(`${server.url}/api/tasks`) as Array<{ id: string; delegation: { instructionPresent: boolean; cap: number | null; teammates: string[] } | null }>;
+    assert.deepEqual(after.find((task) => task.id === "1.1")?.delegation, {
+      instructionPresent: true,
+      cap: 2,
+      teammates: ["api-engineer"],
+    });
+    // A task with no snapshot stays null rather than inheriting the sibling's.
+    assert.equal(after.find((task) => task.id === "1.2")?.delegation, null);
   });
 });
 

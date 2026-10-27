@@ -71,6 +71,10 @@ task owner.
   task's work. Two sub-agents writing the same file is a **silent lost edit the
   engine cannot detect**; the instruction requires disjoint scopes, and this
   limitation is documented rather than papered over.
+- **Narrated, not just filed.** The one-line launch prompt names the cap, and the
+  Tasks detail drawer reports what each task's execution snapshot actually
+  instructed. Neither substitutes for harness-level observation: the engine never
+  counts real fan-out, so the Console reports policy only.
 - The audit records the delegation *policy* (cap, auto/explicit, degradations),
   not the observed number of sub-agent invocations: the engine never sees child
   sessions. The Console summary likewise shows the policy.

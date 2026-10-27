@@ -432,6 +432,7 @@ function detail(t: TaskRow): HTMLElement {
     el("div", null, [el("div", { className: "k" }, "Description"), el("div", null, t.description || "—")]),
     el("div", null, [el("div", { className: "k" }, "Effective model"), el("div", { className: "mono" }, t.effectiveModel ?? "Harness/default")]),
     el("div", null, [el("div", { className: "k" }, "Token usage"), el("div", { className: "mono" }, formatUsage(t.usage))]),
+    delegationField(t),
     list("Expected outputs", t.expectedOutputs),
     list("Validation commands", t.validationCommands),
     list("Dependencies", t.dependencies),
@@ -456,6 +457,28 @@ function detail(t: TaskRow): HTMLElement {
   ];
 
   return el("div", { className: "detail" }, fields.filter(Boolean) as HTMLElement[]);
+}
+
+/**
+ * Reports what this task attempt was actually instructed about delegation,
+ * read from the engine's execution snapshot — not from the project setting,
+ * which only says what *future* runs will do.
+ */
+function delegationField(t: TaskRow): HTMLElement {
+  const report = t.delegation;
+  let text: string;
+  if (!report) {
+    text = "— (no execution file on this machine; written when the task is dispatched)";
+  } else if (!report.instructionPresent) {
+    text = "not instructed (the engine that dispatched this task predates delegation, the cap resolved to 0, or the harness cannot run sub-agents)";
+  } else {
+    const cap = report.cap === null ? "unbounded" : `up to ${report.cap}`;
+    text = `${cap}${report.teammates.length > 0 ? ` · ${report.teammates.join(", ")}` : " · no teammates listed"}`;
+  }
+  return el("div", null, [
+    el("div", { className: "k" }, "Sub-agent delegation"),
+    el("div", { className: "mono" }, text),
+  ]);
 }
 
 export type HumanReviewGate =

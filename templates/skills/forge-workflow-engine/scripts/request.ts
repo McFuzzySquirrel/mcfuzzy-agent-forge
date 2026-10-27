@@ -128,7 +128,11 @@ export function prepareTaskRequest(options: {
   if (!Number.isInteger(maxRetries) || maxRetries < 0) throw new Error(`Task '${task.id}' requires a nonnegative integer retry budget.`);
   const skills = skillContext(agent);
   const delegation = options.delegateTo ? delegationBlock(options.delegateTo.owner) : "";
-  const subagentPolicy = subagentPolicyBlock(options.subagents ?? 0, options.teammates);
+  // A text-only task has no tools, so it has nothing to delegate with.
+  const subagents = Math.max(0, Math.floor(options.subagents ?? 0));
+  const subagentPolicy = subagents > 0 && capabilities.includes("repository-tools")
+    ? subagentPolicyBlock(subagents, options.teammates)
+    : "";
   const instructions = [
     delegation,
     subagentPolicy,
@@ -162,6 +166,7 @@ export function prepareTaskRequest(options: {
     attempt: Object.freeze({ number: options.attempt ?? 1, maxRetries, runId: options.runId ?? "" }),
     budget: Object.freeze({ timeoutMs }), instructions, signal: options.signal,
     logHarnessActivity: options.logHarnessActivity === true,
+    ...(subagents > 0 ? { subagents } : {}),
     ...(options.sessionId !== undefined ? { sessionId: options.sessionId } : {}),
   });
 }

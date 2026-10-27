@@ -277,6 +277,19 @@ export interface TaskRow {
    * view must not offer its approval action.
    */
   unmetPrerequisites: string[];
+  /**
+   * What this task's latest execution snapshot told its agent about sub-agent
+   * delegation; `null` when no execution file exists yet (the task has not been
+   * dispatched on this machine).
+   */
+  delegation: TaskDelegation | null;
+}
+
+/** Reported delegation policy parsed from a task's execution file. */
+export interface TaskDelegation {
+  instructionPresent: boolean;
+  cap: number | null;
+  teammates: string[];
 }
 
 export interface ArtifactMeta {

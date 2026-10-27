@@ -33,6 +33,18 @@ test("large requests reuse a task-ID execution file with current attempt instruc
   }
 });
 
+test("the launch prompt names the delegation policy the execution file expands", (context) => {
+  const root = mkdtempSync(join(tmpdir(), "forge delegation prompt "));
+  context.after(() => rmSync(root, { recursive: true, force: true }));
+  const capped = executionPrompt(prepareTaskRequest({ agent, task, repoRoot: root, subagents: 4 }));
+  assert.match(capped, /You may delegate independent sub-work to the teammates listed under Sub-agent delegation \(at most 4 at a time\)\./);
+  // Off (or a text-only task) leaves the original pointer intact.
+  const off = executionPrompt(prepareTaskRequest({ agent, task, repoRoot: root, subagents: 0 }));
+  assert.doesNotMatch(off, /delegate independent sub-work/);
+  const textOnly = executionPrompt(prepareTaskRequest({ agent, task: { ...task, requiredCapabilities: ["text"] }, repoRoot: root, subagents: 4 }));
+  assert.doesNotMatch(textOnly, /delegate independent sub-work/);
+});
+
 test("results share the task ID and retain timestamped archives even on timestamp collisions", (context) => {
   const root = mkdtempSync(join(tmpdir(), "forge results "));
   context.after(() => rmSync(root, { recursive: true, force: true }));

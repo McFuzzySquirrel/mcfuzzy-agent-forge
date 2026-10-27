@@ -467,6 +467,68 @@ function findPhaseFor(manifest: ExecutionManifest, taskId: string): { id: string
   return null;
 }
 
+// ─── Task delegation ─────────────────────────────────────────────────────────
+
+/**
+ * What a task attempt was actually told about sub-agent delegation, read back
+ * from its engine-generated execution file (`docs/artifacts/<task-id>.md`). The
+ * engine owns this text; the Console only reports it, so a task that ran under
+ * an older engine or a zero cap is visibly not instructed rather than inferred.
+ */
+export interface TaskDelegation {
+  instructionPresent: boolean;
+  cap: number | null;
+  teammates: string[];
+}
+
+/** Parses the `## Sub-agent delegation` block out of an execution-file snapshot. */
+export function parseDelegationInstruction(markdown: string): TaskDelegation {
+  const section = /^## Sub-agent delegation[ \t]*$/m.exec(markdown);
+  if (!section) return { instructionPresent: false, cap: null, teammates: [] };
+  const body = markdown.slice(section.index + section[0].length).split(/^## /m)[0] ?? "";
+  const cap = Number(/at most (\d+) at a time/.exec(body)?.[1]);
+  return {
+    instructionPresent: true,
+    cap: Number.isInteger(cap) ? cap : null,
+    teammates: [...body.matchAll(/^- `([^`]+)`/gm)].map((match) => match[1]!),
+  };
+}
+
+/**
+ * Maps each task id to what its latest execution file instructed. Files are
+ * matched by their embedded run metadata rather than the filename, so the
+ * engine's id-safety rules never have to be duplicated here.
+ */
+function executionDelegations(p: RepoPaths): Map<string, TaskDelegation> {
+  const found = new Map<string, TaskDelegation>();
+  if (!fs.existsSync(p.artifactsDir)) return found;
+  for (const entry of fs.readdirSync(p.artifactsDir)) {
+    if (!entry.endsWith(".md")) continue;
+    const full = path.join(p.artifactsDir, entry);
+    const stat = fs.statSync(full, { throwIfNoEntry: false });
+    if (!stat?.isFile() || stat.size > 256 * 1024) continue;
+    let markdown: string;
+    try {
+      markdown = fs.readFileSync(full, "utf8");
+    } catch {
+      continue;
+    }
+    // Line 1 of an execution file is the JSON metadata object.
+    const metaLine = markdown.split(/\r?\n/).find((line) => line.trim().startsWith("{"));
+    let taskId = entry.replace(/\.md$/, "");
+    if (metaLine) {
+      try {
+        const meta = JSON.parse(metaLine.trim()) as { taskId?: unknown };
+        if (typeof meta.taskId === "string" && meta.taskId) taskId = meta.taskId;
+      } catch {
+        // Not an execution file; fall back to the filename.
+      }
+    }
+    found.set(taskId, parseDelegationInstruction(markdown));
+  }
+  return found;
+}
+
 export function tasks(p: RepoPaths): TaskRow[] {
   const manifest = loadManifest(p);
   const state = loadState(p);
@@ -477,6 +539,7 @@ export function tasks(p: RepoPaths): TaskRow[] {
   }]));
 
   const rows: TaskRow[] = [];
+  const delegations = executionDelegations(p);
   const phasesById = new Map(manifest.phases.map((phase) => [phase.id, phase]));
   const dependenciesByTask = new Map(manifest.phases.flatMap((phase) => {
     const phaseDependencies = (phase.dependencies ?? []).flatMap((id) =>
@@ -555,6 +618,7 @@ export function tasks(p: RepoPaths): TaskRow[] {
         reviewFile: task.contract?.reviewFile,
         validationGaps: task.contract?.kind === "human-review" ? upstreamGaps(task.id) : ownGaps(task.id),
         unmetPrerequisites: unmetPrerequisites(task.id),
+        delegation: delegations.get(task.id) ?? null,
       });
     }
   }

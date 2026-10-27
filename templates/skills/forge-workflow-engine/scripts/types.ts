@@ -163,6 +163,12 @@ export interface TaskAttemptRequest {
    * engine log as it arrives. Command invocation logging is always on.
    */
   readonly logHarnessActivity?: boolean;
+  /**
+   * Delegation cap the engine resolved for this task (`0` disables delegation).
+   * Carried on the request so the launch prompt can name the policy that the
+   * execution file expands on, without re-deriving it inside an adapter.
+   */
+  readonly subagents?: number;
 }
 
 export interface HarnessRunContext {

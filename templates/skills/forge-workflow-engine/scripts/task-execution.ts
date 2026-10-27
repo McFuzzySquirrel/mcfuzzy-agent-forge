@@ -66,6 +66,12 @@ export function executionPrompt(request: TaskAttemptRequest, persona = ""): stri
   })) throw new Error("Task execution files are engine-owned, not task deliverables.");
 
   const root = executionRoot(request.repoRoot);
+  // The launch prompt is the only text every adapter puts in the session's first
+  // message. The execution file expands the delegation policy, but naming it
+  // here keeps an agent that reads the file shallowly from missing it entirely.
+  const delegationHint = request.subagents && request.subagents > 0
+    ? ` You may delegate independent sub-work to the teammates listed under Sub-agent delegation (at most ${request.subagents} at a time).`
+    : "";
   const content = [
     "# Task Execution",
     JSON.stringify({ taskId: request.task.id, runId: request.attempt.runId, attempt: request.attempt.number, owner: request.agent.name, model: request.effectiveModel, dependencies: request.task.dependencies }),
@@ -77,5 +83,5 @@ export function executionPrompt(request: TaskAttemptRequest, persona = ""): stri
   const file = `${TASK_EXECUTION_DIR}/${taskFileId(request.task.id)}.md`;
   writeLatest(join(root, file), content);
   console.log(`[engine] Task ${request.task.id} attempt ${request.attempt.number}: execution file ${file} (sha256 ${digest})`);
-  return `Perform the task now. Read the execution file "${file}" relative to the project root before doing any work. Follow its task scope, mandatory requirements, acceptance criteria, constraints and validation commands. Read referenced documentation as needed. Do not modify the execution file or commit ${TASK_EXECUTION_DIR}/. Return the required result report and list the files you created or changed.`;
+  return `Perform the task now. Read the execution file "${file}" relative to the project root before doing any work.${delegationHint} Follow its task scope, mandatory requirements, acceptance criteria, constraints and validation commands. Read referenced documentation as needed. Do not modify the execution file or commit ${TASK_EXECUTION_DIR}/. Return the required result report and list the files you created or changed.`;
 }

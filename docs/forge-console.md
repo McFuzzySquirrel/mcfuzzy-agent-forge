@@ -484,6 +484,16 @@ phase-scoped session, which already delegates through the project lead. See
 [sub-agent delegation](workflow-engine.md#sub-agent-delegation) and
 [ADR-077](adr/077-per-task-subagent-delegation.md).
 
+The setting is configuration, not evidence. To see what a task was **actually**
+told, open its row in **Tasks**: the detail drawer reports
+`Sub-agent delegation — up to 4 · api-engineer, qa-engineer` read from that
+task's `docs/artifacts/<task-id>.md` snapshot. It shows
+`not instructed (…)` when the snapshot predates delegation, the cap resolved to
+0, or the harness cannot delegate, and `—` when the task has not been dispatched
+on this machine (execution files are local diagnostics and are never committed).
+The engine still cannot count how many sub-agents really ran; that evidence lives
+only in the harness's own sessions.
+
 ### Task timeouts
 
 The Console can edit timeouts without leaving the browser, so a task that
