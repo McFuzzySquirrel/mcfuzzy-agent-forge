@@ -1,6 +1,6 @@
 import spawn from "cross-spawn";
 import { execFile, type ChildProcess } from "node:child_process";
-import { existsSync, readFileSync } from "node:fs";
+import { closeSync, existsSync, openSync, readFileSync } from "node:fs";
 import { dirname, relative, resolve as resolvePath } from "node:path";
 import readCmdShim from "read-cmd-shim";
 import which from "which";
@@ -28,6 +28,16 @@ export interface RunCommandOptions {
    */
   env?: NodeJS.ProcessEnv;
   signal?: AbortSignal;
+  /**
+   * Capture stdout into this file instead of a pipe, and read it afterwards.
+   *
+   * Some CLIs write a large payload to stdout and exit before an asynchronous
+   * pipe drains, so the reader gets a random prefix with exit code 0 — OpenCode's
+   * `session export` drops everything after ~256 KB-3 MB this way. A file
+   * descriptor is written synchronously by the OS, so the child cannot truncate
+   * it. `stdout` in the result stays empty when this is set.
+   */
+  stdoutFile?: string;
   /** When present, the invocation (and effective invocation) is logged before launch. */
   invocation?: HarnessInvocationContext;
   /** When true, mirror stdout/stderr into the log as it arrives. Off by default. */
@@ -111,8 +121,25 @@ export function runCommand(
       : undefined;
     // A dedicated POSIX process group lets cancellation include descendants
     // inheriting the output pipes. This remains attached: no unref during work.
+    let stdoutFd: number | undefined;
+    if (opts.stdoutFile !== undefined) {
+      try {
+        stdoutFd = openSync(opts.stdoutFile, "w");
+      } catch (error) {
+        const message = error instanceof Error ? error.message : String(error);
+        return resolve({ stdout: "", stderr: "", status: null, error: `cannot open stdout file: ${message}`, failureKind: "configuration" });
+      }
+    }
+    const closeStdoutFile = () => {
+      if (stdoutFd === undefined) return;
+      try { closeSync(stdoutFd); } catch { /* already closed by a killed child */ }
+      stdoutFd = undefined;
+    };
+    // cross-spawn reports launch failures through the child's `error` event (see
+    // the handler below), so this does not throw for a missing binary.
     const child = spawn(bin, args, {
-      cwd: opts.cwd, env: childEnv(opts.cwd, opts.env), stdio: ["ignore", "pipe", "pipe"],
+      cwd: opts.cwd, env: childEnv(opts.cwd, opts.env),
+      stdio: ["ignore", stdoutFd ?? "pipe", "pipe"],
       shell: opts.shell,
       detached: process.platform !== "win32", windowsHide: true,
     });
@@ -137,6 +164,9 @@ export function runCommand(
       opts.signal?.removeEventListener("abort", cancel);
       activity?.stdout.flush();
       activity?.stderr.flush();
+      // The child is done (or being killed); the descriptor's buffered writes
+      // belong to the caller's file now.
+      closeStdoutFile();
       const resolvedStatus = terminating ? null : status;
       if (ctx) {
         log(formatCompletionLine(ctx, {

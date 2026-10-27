@@ -523,7 +523,10 @@ Each task records the token/cost usage its harness reported, on the state record
 audit events. OpenCode usage is read from `opencode session export` for the
 task's session; Claude from its JSON result envelope; Copilot from its stderr
 stats block (tokens and AI credits). A harness that reports nothing is recorded
-as `unavailable`, not zero. The Overview shows run totals (tokens, cost, credits)
+as `unavailable`, not zero — and never as a parser error: the OpenCode export is
+captured to a temp file (a pipe truncates it because OpenCode exits before the
+drain) and only its `info` block is parsed, so a corrupt transcript cannot make
+usage unreadable. The Overview shows run totals (tokens, cost, credits)
 and the Tasks view shows a Tokens column plus a per-task breakdown in the detail
 drawer. See [ADR-074](adr/074-token-and-cost-usage-capture.md).
 

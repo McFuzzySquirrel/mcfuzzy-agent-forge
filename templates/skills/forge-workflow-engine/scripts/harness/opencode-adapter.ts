@@ -1,8 +1,10 @@
-import { existsSync, readFileSync } from "node:fs";
-import { resolve } from "node:path";
-import { randomInt } from "node:crypto";
+import { existsSync, readFileSync, rmSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join, resolve } from "node:path";
+import { randomInt, randomUUID } from "node:crypto";
 
 import { runCommand, extractModelFlags, canSelectAgentNatively } from "./run.ts";
+import { parseOpenCodeUsageExport } from "./opencode-usage.ts";
 import { harnessInvocationContext } from "./invocation-log.ts";
 import type { AgentDescriptor, HarnessAdapter, SessionResumeStrategy, TaskAttemptRequest, TaskResult, TaskUsage } from "../types.ts";
 import { inlinePersona } from "../request.ts";
@@ -183,46 +185,64 @@ export class OpenCodeAdapter implements HarnessAdapter {
 /**
  * Reads a session's authoritative token/cost usage from OpenCode.
  *
- * `opencode session export <id>` prints the session with
- * `info.tokens` (`{ input, output, reasoning, cache: { read, write } }`) and
- * `info.cost`. A failed or empty export is reported as "unavailable", never as
- * zeros, so the Console can tell "not reported" from "used nothing".
+ * `opencode session export <id>` prints `info.tokens` (`{ input, output,
+ * reasoning, cache: { read, write } }`) and `info.cost` at the head of the
+ * document, followed by the whole transcript. Two guards make this reliable:
+ *
+ * - stdout is captured to a **file**, not a pipe. OpenCode exits before an
+ *   asynchronous pipe drains, so a large export arrives truncated at a random
+ *   length with exit code 0 (~256 KB-3 MB of a 3-5 MB session).
+ * - only the `info` object is parsed (see `parseOpenCodeUsageExport`), so usage
+ *   never depends on the transcript being intact.
+ *
+ * A failed or empty export is reported as "unavailable", never as zeros, so the
+ * Console can tell "not reported" from "used nothing".
  */
 async function readOpenCodeUsage(bin: string, sessionId: string, cwd: string): Promise<TaskUsage> {
+  const capture = join(tmpdir(), `forge-opencode-usage-${process.pid}-${randomUUID()}.json`);
   try {
     const result = await runCommand(bin, ["session", "export", sessionId], {
       cwd,
-      timeoutMs: 15_000,
+      timeoutMs: 30_000,
       maxBufferBytes: 32 * 1024 * 1024,
+      stdoutFile: capture,
     });
     if (result.error || result.status !== 0) {
       return { source: "unavailable", note: "opencode session export failed" };
     }
-    const parsed = JSON.parse(result.stdout) as {
-      info?: {
-        cost?: number;
-        tokens?: { input?: number; output?: number; reasoning?: number; cache?: { read?: number; write?: number } };
-      };
-    };
-    const tokens = parsed.info?.tokens;
-    if (!tokens || (typeof tokens.input !== "number" && typeof tokens.output !== "number")) {
-      return { source: "unavailable", note: "opencode session export reported no tokens" };
+    let text = "";
+    try {
+      text = readFileSync(capture, "utf8");
+    } catch {
+      return { source: "unavailable", note: "opencode session export produced no output" };
     }
+    const usage = parseOpenCodeUsageExport(text);
+    if (usage) return usage;
+    // Keep the task record readable: the diagnostic belongs in the engine log,
+    // not in a note the Console and state file have to carry forever.
+    console.warn(`[engine] opencode usage export unreadable (${text.length} bytes): ${unexpectedShape(text)}`);
     return {
-      inputTokens: tokens.input,
-      outputTokens: tokens.output,
-      reasoningTokens: tokens.reasoning,
-      cacheReadTokens: tokens.cache?.read,
-      cacheWriteTokens: tokens.cache?.write,
-      costUsd: typeof parsed.info?.cost === "number" ? parsed.info.cost : undefined,
-      source: "harness",
+      source: "unavailable",
+      note: text.trim() === ""
+        ? "opencode session export reported no tokens"
+        : `opencode usage export unreadable (${text.length} bytes)`,
     };
   } catch (error) {
     return {
       source: "unavailable",
       note: `opencode usage unavailable: ${error instanceof Error ? error.message : String(error)}`,
     };
+  } finally {
+    rmSync(capture, { force: true });
   }
+}
+
+/** Bounded evidence for the engine log: never the multi-megabyte transcript. */
+function unexpectedShape(text: string): string {
+  const trimmed = text.trim();
+  if (trimmed === "") return "empty output";
+  const head = JSON.stringify(trimmed.slice(0, 80));
+  return `starts with ${head}; "info" present=${text.includes('"info"')}`;
 }
 
 export function resolveAgentForTask(

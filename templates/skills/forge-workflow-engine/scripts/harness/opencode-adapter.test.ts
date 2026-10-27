@@ -359,6 +359,43 @@ test("reads per-session usage from opencode session export", async (t) => {
   }
 });
 
+test("usage survives an export whose transcript is corrupt and truncated", async (t) => {
+  const root = tempDir(t, "forge-opencode-usage-corrupt-");
+  const agent = makeAgent(join(root, ".opencode", "agents", "discovery-engineer.md"));
+  const dir = tempDir(t, "forge-opencode-corrupt-shim-");
+  const bin = makeNodeShim(dir, "corrupt-opencode", `
+const fs = require("fs");
+const args = process.argv.slice(2);
+if (args[0] === "session" && args[1] === "export") {
+  const head = JSON.stringify({ info: { cost: 0.25, tokens: { input: 10, output: 5 } } }).slice(0, -1);
+  // A large transcript with a missing comma, written right before exit: exactly
+  // the shape that produced "Expected ',' or '}' after property value".
+  fs.writeSync(1, head + ',"messages":[{"text":"' + "x".repeat(2 * 1024 * 1024) + '"},{"broken" "no comma"}]}');
+  process.exit(0);
+}
+process.exit(0);
+`);
+  const original = process.env.OPENCODE_BIN;
+  process.env.OPENCODE_BIN = bin;
+  try {
+    const adapter = new OpenCodeAdapter();
+    const result = await adapter.invoke(prepareTaskRequest({ agent, task: makeTask(), repoRoot: root }));
+    assert.equal(result.success, true);
+    assert.deepEqual(result.usage, {
+      inputTokens: 10,
+      outputTokens: 5,
+      reasoningTokens: undefined,
+      cacheReadTokens: undefined,
+      cacheWriteTokens: undefined,
+      costUsd: 0.25,
+      source: "harness",
+    });
+  } finally {
+    if (original === undefined) delete process.env.OPENCODE_BIN;
+    else process.env.OPENCODE_BIN = original;
+  }
+});
+
 test("generates canonical OpenCode session IDs for phase scope", () => {
   const adapter = new OpenCodeAdapter();
   const id = adapter.sessionStrategy?.newSessionId?.();

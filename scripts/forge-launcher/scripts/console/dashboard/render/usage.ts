@@ -10,7 +10,7 @@ import { fmtTokens, fmtUsd } from "./dom.js";
 /** Human-readable per-task usage, or an explicit "not reported" note. */
 export function formatUsage(usage: TaskUsage | null | undefined): string {
   if (!usage || usage.source !== "harness") {
-    return usage?.note ?? "Not reported by the harness";
+    return clipNote(usage?.note ?? "Not reported by the harness");
   }
   const parts: string[] = [];
   if (usage.inputTokens !== undefined) parts.push(`in ${fmtTokens(usage.inputTokens)}`);
@@ -21,6 +21,12 @@ export function formatUsage(usage: TaskUsage | null | undefined): string {
   if (usage.costUsd) parts.push(fmtUsd(usage.costUsd));
   if (usage.credits) parts.push(`${usage.credits.toFixed(2)} credits`);
   return parts.length > 0 ? parts.join(" · ") : "Not reported by the harness";
+}
+
+/** Caps an unavailable-note at a readable length; task state may carry old, verbose notes. */
+function clipNote(note: string): string {
+  const limit = 160;
+  return note.length > limit ? `${note.slice(0, limit - 1)}…` : note;
 }
 
 /** Compact cell value: total tokens (input + output), or "—" when unreported. */

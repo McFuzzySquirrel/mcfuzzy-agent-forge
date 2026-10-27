@@ -35,6 +35,17 @@ Detailed release and change notes for MyForge.
   session transcript instead of only inside the execution file, and the Tasks
   detail drawer reports what each task's snapshot actually instructed (including
   the roster), or says it was not instructed.
+
+### Fixed
+
+- **OpenCode token usage on large sessions.** Usage was read from a piped
+  `opencode session export`, but OpenCode exits before the pipe drains, so a
+  multi-megabyte export arrived truncated and `JSON.parse` failed with
+  `Expected ',' or '}' after property value` in the task record. The export is
+  now captured to a temp file (synchronous writes, never truncated) and only its
+  `info` block is parsed, so a corrupt transcript cannot discard usage. Failure
+  notes are short and bounded; the diagnostic goes to `docs/engine-run.log`.
+  Existing task records keep their old note until replayed.
 - Limits are documented rather than hidden: sub-agents share the task's working
   tree, so a same-file collision between them is a silent lost edit the engine
   cannot detect; and the audit records the delegation *policy*, not how many

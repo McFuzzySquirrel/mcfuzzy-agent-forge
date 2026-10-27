@@ -8,6 +8,7 @@ import { EventEmitter } from "node:events";
 import { syncBuiltinESMExports } from "node:module";
 import { PassThrough } from "node:stream";
 import { canSelectAgentNatively, runCommand } from "./run.ts";
+import { makeNodeShim } from "../test-support.ts";
 import type { AgentDescriptor } from "../types.ts";
 
 const options = { cwd: process.cwd(), timeoutMs: 5000, maxBufferBytes: 1024 };
@@ -347,4 +348,40 @@ test("runCommand logs a cancellation completion with kind=cancelled", async () =
   }
   const completion = lines.find((line) => line.includes("harness completed"))!;
   assert.match(completion, /kind=cancelled/);
+});
+
+test("stdoutFile captures output that a pipe would truncate at process exit", async (t) => {
+  const dir = mkdtempSync(join(tmpdir(), "forge-stdout-file-"));
+  t.after(() => rmSync(dir, { recursive: true, force: true }));
+  // A large write followed by an immediate exit is the shape OpenCode's
+  // `session export` has: an async pipe loses the tail, a file descriptor cannot.
+  const payload = "x".repeat(2 * 1024 * 1024);
+  const shim = makeNodeShim(dir, "big-stdout", `process.stdout.write(${JSON.stringify(payload)}); process.exit(0);`);
+  const capture = join(dir, "captured.txt");
+
+  const result = await runCommand(shim, [], {
+    ...options,
+    // Deliberately far below the payload: the pipe cap must not apply.
+    maxBufferBytes: 1024,
+    stdoutFile: capture,
+  });
+
+  assert.equal(result.status, 0);
+  assert.equal(result.error, undefined);
+  assert.equal(result.stdout, "", "stdout is read from the file, not buffered");
+  assert.equal(readFileSync(capture, "utf8").length, payload.length);
+});
+
+test("stdoutFile reports an unusable target as a configuration error", async (t) => {
+  const dir = mkdtempSync(join(tmpdir(), "forge-stdout-file-missing-"));
+  t.after(() => rmSync(dir, { recursive: true, force: true }));
+
+  const result = await runCommand(process.execPath, ["-e", "0"], {
+    ...options,
+    stdoutFile: join(dir, "missing-directory", "captured.txt"),
+  });
+
+  assert.equal(result.status, null);
+  assert.match(result.error ?? "", /cannot open stdout file/);
+  assert.equal(result.failureKind, "configuration");
 });

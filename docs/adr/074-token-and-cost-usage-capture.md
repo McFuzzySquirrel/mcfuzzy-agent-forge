@@ -37,6 +37,17 @@ missing value as zero would misrepresent usage as free.
      phase scope it reuses the phase session and reports `unavailable` (the
      export is cumulative across the phase, so attributing it to one task would
      over-count).
+
+     **The export is captured to a temp file and only `info` is parsed.** Two
+     defects forced this (see *Amendment* below): OpenCode exits before an
+     asynchronous stdout pipe drains, so a large export arrives truncated at a
+     random length with exit code 0; and the document carries the whole
+     multi-megabyte transcript after `info`, so a full `JSON.parse` made usage
+     depend on transcript integrity. `runCommand({ stdoutFile })` gives the child
+     a file descriptor (synchronous writes, no truncation) and
+     `parseOpenCodeUsageExport` scans only the top-level `info` object with a
+     string-aware brace scan. A genuinely unreadable export still yields
+     `unavailable` with a short note; the diagnostic goes to the engine log.
    - **Claude:** the adapter reads `usage` / `total_cost_usd` from the existing
      JSON envelope when present.
    - **Copilot:** the adapter parses the stderr stats block. Credits are stored
@@ -76,3 +87,31 @@ missing value as zero would misrepresent usage as free.
 - Display: `scripts/forge-launcher/scripts/console/dashboard/render/usage.ts`,
   `views/overview.ts`, `views/tasks.ts`.
 - Changelog: [updates.md](../updates.md), v3.110.
+
+## Amendment: file capture and info-only parsing
+
+Operators saw task records reporting
+`opencode usage unavailable: Expected ',' or '}' after property value in JSON at
+position 474343 (line 2643 column 4)`. The export itself was fine; the transport
+was not.
+
+- `opencode session export` writes a multi-megabyte document to stdout and exits
+  without waiting for an asynchronous pipe to drain. Measured on the same
+  session: 262144 bytes, then 3178496 bytes, then the full 4822935 bytes — all
+  with exit status 0. Redirecting to a file always produced the complete
+  document. The engine therefore captures the export with
+  `runCommand({ stdoutFile })`; a file descriptor is written synchronously and
+  cannot be truncated by an early exit.
+- `info` is the first property and holds `cost` and `tokens`; the 3-5 MB
+  `messages` array held the rest. Parsing the whole document meant one corrupt
+  or missing byte anywhere in the transcript discarded usage.
+  `parseOpenCodeUsageExport` now finds the top-level `info` object with a
+  string-aware brace scan and parses only that.
+- Failure reporting is bounded: the note is `opencode usage export unreadable
+  (N bytes)` and the diagnostic (output shape, whether `"info"` appears) goes to
+  `docs/engine-run.log`. A multi-kilobyte parser message must never be persisted
+  in `WORKFLOW-STATE.json` or rendered in the Console; the Console additionally
+  clips any legacy long note to 160 characters.
+
+Task records written before this amendment keep their old note until the task is
+replayed or the run state is reset.
