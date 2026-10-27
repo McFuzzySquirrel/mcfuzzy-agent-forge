@@ -4,6 +4,40 @@ Detailed release and change notes for MyForge.
 
 ---
 
+## October 2026 - v3.114
+
+### Per-task sub-agent delegation
+
+- A task's owner may now delegate independent sub-work to teammate sub-agents
+  **inside its own task**, controlled by `--subagents off|auto|0-4` /
+  `FORGE_ENGINE_SUBAGENTS`. The default is `auto`, capped at 4. Delegation was
+  already possible — every forge agent is generated with `mode: all` — but it was
+  unbounded, unguided, and invisible; making it explicit is stricter than
+  leaving it implicit.
+- The instruction lives in the engine-generated execution file, so it is
+  harness-agnostic: delegate only independent, disjoint file scopes; prefer
+  read-only teammates for analysis; and the owner remains the sole author of the
+  `forge-result`. It names the teammates the engine discovered (the running agent
+  and forge's meta-agents are excluded, capped at 8 entries), so "use
+  sub-agents" points at real specialists.
+- `HarnessAdapter.supportsSubagents` gates it. OpenCode declares it; Copilot,
+  Claude, and the OpenAI API receive no policy and run unchanged (a notice, never
+  an error). It is always off under `--session-scope phase`, which already
+  delegates through the project lead.
+- The default per-task timeout widens to `base × (1 + cap)` (max 60 minutes)
+  because a fan-out task runs several invocations inside one attempt; a manifest
+  `timeoutMs` still wins.
+- The Console exposes it in **Settings → Execution** and in the system-level
+  defaults, persisted as `subagents` in `docs/engine-config.json` and passed by
+  run/resume. The control is disabled with a reason for harnesses that cannot
+  delegate.
+- Limits are documented rather than hidden: sub-agents share the task's working
+  tree, so a same-file collision between them is a silent lost edit the engine
+  cannot detect; and the audit records the delegation *policy*, not how many
+  sub-agents actually ran. See [ADR-077](adr/077-per-task-subagent-delegation.md).
+
+---
+
 ## October 2026 - v3.113
 
 ### Console light theme and Appearance settings

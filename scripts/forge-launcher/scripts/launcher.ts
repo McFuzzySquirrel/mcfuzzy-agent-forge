@@ -105,6 +105,8 @@ interface LauncherState {
     vizPort: string;
     autoCommit: boolean;
     logHarnessActivity: boolean;
+    /** Per-task sub-agent cap: "" = auto, "0" = off, "1"-"4" = cap. */
+    subagents: string;
     executionMode: "auto" | "manual";
     selectionScope?: "single" | "range" | "list";
     selectedTaskIds: string[];
@@ -139,6 +141,7 @@ function createLauncherState(options: LauncherOptions = {}): LauncherState {
       vizPort: env.FORGE_ENGINE_VIZ_PORT ?? "",
       autoCommit: env.FORGE_ENGINE_AUTO_COMMIT !== "0",
       logHarnessActivity: env.FORGE_ENGINE_LOG_HARNESS_ACTIVITY === "1",
+      subagents: env.FORGE_ENGINE_SUBAGENTS ?? "",
       executionMode: "auto",
       selectionScope: undefined,
       selectedTaskIds: [],
@@ -1053,6 +1056,7 @@ function engineRunArgs(): string[] {
     if (cfg.vizPort) args.push("--viz-port", cfg.vizPort);
   }
   if (cfg.autoCommit === false) args.push("--no-auto-commit");
+  if (cfg.subagents) args.push("--subagents", cfg.subagents);
   args.push(cfg.logHarnessActivity ? "--log-harness-activity" : "--no-log-harness-activity");
   if (cfg.executionMode === "manual") {
     args.push("--execution-mode", "manual");
@@ -1143,6 +1147,17 @@ async function configureEngineOptions(opts: LauncherOptions): Promise<void> {
       cfg.logHarnessActivity ? "y" : "n",
     );
     cfg.logHarnessActivity = activityAnswer === "y";
+
+    cfg.subagents = await promptSelect(
+      "Sub-agents per task (owner delegates independent work)",
+      [
+        { value: "", label: "auto", hint: "default: up to 4, only where the work splits" },
+        { value: "0", label: "off" },
+        { value: "2", label: "at most 2" },
+        { value: "4", label: "at most 4" },
+      ],
+      { initial: cfg.subagents || "" },
+    );
   } catch {
     info("Engine options cancelled; using the current defaults.");
   }
@@ -1871,6 +1886,7 @@ function setupStateForRepo(repoDir: string): void {
   state.engineConfig.vizPort = state.env.FORGE_ENGINE_VIZ_PORT ?? persisted?.vizPort ?? "";
   state.engineConfig.autoCommit = envFlagOrUndefined("FORGE_ENGINE_AUTO_COMMIT") ?? persisted?.autoCommit ?? true;
   state.engineConfig.logHarnessActivity = envFlagOrUndefined("FORGE_ENGINE_LOG_HARNESS_ACTIVITY") ?? persisted?.logHarnessActivity ?? false;
+  state.engineConfig.subagents = state.env.FORGE_ENGINE_SUBAGENTS ?? persisted?.subagents ?? "";
   state.engineConfig.executionMode = persisted?.executionMode === "manual" ? "manual" : "auto";
   state.engineConfig.selectionScope = persisted?.selectionScope === "single" || persisted?.selectionScope === "range" || persisted?.selectionScope === "list"
     ? persisted.selectionScope

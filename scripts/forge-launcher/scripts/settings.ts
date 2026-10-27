@@ -33,6 +33,8 @@ export interface GlobalSettings {
     autoCommit?: boolean;
     /** Absent means the engine default (off). */
     logHarnessActivity?: boolean;
+    /** Teammate sub-agents per task: 0 = off, 1-4 = cap, absent = auto. */
+    subagents?: number;
   };
   /** Default harness for newly created projects. */
   harness?: "opencode" | "github" | "claude" | "agents";
@@ -131,7 +133,14 @@ export function validateSettings(value: unknown): GlobalSettings {
       if (typeof execution.logHarnessActivity !== "boolean") throw new Error("Invalid settings: execution.logHarnessActivity must be a boolean.");
       out.logHarnessActivity = execution.logHarnessActivity;
     }
-    if (out.concurrency !== undefined || out.autoCommit !== undefined || out.logHarnessActivity !== undefined) {
+    if (execution.subagents !== undefined) {
+      if (typeof execution.subagents !== "number" || !Number.isInteger(execution.subagents) ||
+          execution.subagents < 0 || execution.subagents > 4) {
+        throw new Error("Invalid settings: execution.subagents must be an integer from 0 to 4 (0 disables delegation).");
+      }
+      out.subagents = execution.subagents;
+    }
+    if (out.concurrency !== undefined || out.autoCommit !== undefined || out.logHarnessActivity !== undefined || out.subagents !== undefined) {
       settings.execution = out;
     }
   }

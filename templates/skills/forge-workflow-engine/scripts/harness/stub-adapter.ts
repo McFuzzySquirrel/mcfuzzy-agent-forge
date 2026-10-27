@@ -18,6 +18,8 @@ import type { HarnessAdapter, TaskAttemptRequest, TaskResult, TaskUsage } from "
 export class StubAdapter implements HarnessAdapter {
   readonly name = "stub";
   readonly supportsConcurrency = true;
+  /** The stub models a fully capable harness so engine policy is exercised in tests. */
+  readonly supportsSubagents = true;
   readonly capabilities = ["text", "repository-tools"] as const;
 
   private readonly failIds: Set<string>;

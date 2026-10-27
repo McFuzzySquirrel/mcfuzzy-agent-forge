@@ -33,6 +33,7 @@ import type {
 } from "./types.ts";
 import {
   effectiveExecution,
+  harnessSupportsSubagents,
   loadEngineConfig,
   normaliseExecutionMode,
   normaliseSelectedTaskIds,
@@ -145,6 +146,24 @@ export function setLogHarnessActivity(p: RepoPaths, enabled: boolean): { ok: boo
     message: enabled
       ? "Harness activity logging enabled for subsequently started runs (may contain sensitive content and increase log volume)."
       : "Harness activity logging disabled for subsequently started runs. Command logging stays on.",
+  };
+}
+
+/**
+ * Persists the per-task sub-agent delegation setting. `null` stores auto (the
+ * engine's own cap); `0` disables delegation; `1`-`4` is an explicit cap.
+ */
+export function setSubagents(p: RepoPaths, value: number | null): { ok: boolean; message: string } {
+  const existing = loadEngineConfig(p.repoRoot);
+  const cfg = nextEngineConfig(p, existing, { subagents: value === null ? "" : String(value) });
+  saveEngineConfig(p.repoRoot, cfg);
+  return {
+    ok: true,
+    message: value === null
+      ? "Sub-agent delegation set to auto (the engine offers it up to its cap of 4 per task)."
+      : value === 0
+        ? "Sub-agent delegation disabled for subsequently started runs."
+        : `Sub-agent delegation capped at ${value} teammate(s) per task for subsequently started runs.`,
   };
 }
 
@@ -275,6 +294,7 @@ function nextEngineConfig(
     vizPort: existing?.vizPort ?? "",
     autoCommit: existing?.autoCommit,
     logHarnessActivity: existing?.logHarnessActivity,
+    subagents: existing?.subagents ?? "",
     executionMode: normaliseExecutionMode(existing?.executionMode),
     selectionScope: normaliseSelectionScope(existing?.selectionScope, normaliseSelectedTaskIds(existing?.selectedTaskIds)) ?? undefined,
     selectedTaskIds: normaliseSelectedTaskIds(existing?.selectedTaskIds),
@@ -396,6 +416,9 @@ export function summary(p: RepoPaths): Summary {
   const engineCfg = loadEngineConfig(p.repoRoot);
   const selection = activeSelection(state, engineCfg);
   const effective = effectiveExecution(p.repoRoot);
+  // The summary's `harness` field is the agents *root*; delegation depends on
+  // the engine harness, resolved the same way a launched run resolves it.
+  const engineHarness = process.env.FORGE_ENGINE_HARNESS ?? engineCfg?.harness ?? inferEngineHarness(p.repoRoot);
   const job = currentJob(p.repoRoot);
   const readiness = authoringReadiness(p.repoRoot, harness ?? ".agents");
   const blocker = authoringBlocker(p, readiness);
@@ -425,6 +448,8 @@ export function summary(p: RepoPaths): Summary {
     autoCommit: effective.autoCommit,
     logHarnessActivity: effective.logHarnessActivity,
     concurrency: effective.concurrency,
+    subagents: effective.subagents,
+    subagentsSupported: harnessSupportsSubagents(engineHarness),
     executionMode: selection.executionMode,
     selectionScope: selection.selectionScope,
     selectedTaskIds: selection.selectedTaskIds,

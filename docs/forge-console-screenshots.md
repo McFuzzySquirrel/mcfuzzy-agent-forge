@@ -148,13 +148,14 @@ keyboard focus into the dialog; Escape closes it and returns focus to Help.
 
 A single view for project configuration plus system-level defaults:
 
-- **Global defaults** - default harness, authoring runner, concurrency, and
-  auto-commit / harness-activity logging, stored in the Forge `settings.json`
-  and inherited by projects that have not set their own value.
+- **Global defaults** - default harness, authoring runner, concurrency,
+  auto-commit / harness-activity logging, and sub-agents per task, stored in the
+  Forge `settings.json` and inherited by projects that have not set their own
+  value.
 - **Authoring** - the runner and per-stage PRD/team/skills models for this
   project.
-- **Execution** - build mode, concurrency, auto-commit, harness-activity
-  logging, and task timeouts for this project.
+- **Execution** - build mode, concurrency, sub-agents per task, auto-commit,
+  harness-activity logging, and task timeouts for this project.
 - **Models** - per-agent primary/fallback overrides and the model planning
   terminal.
 

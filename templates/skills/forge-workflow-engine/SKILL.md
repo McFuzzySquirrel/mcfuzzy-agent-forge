@@ -171,6 +171,34 @@ Constraints: requires `--concurrency 1` (session lookup is project-scoped), a
 (opencode, copilot, or claude). The openai and stub adapters are unchanged. See
 ADR-067.
 
+### Sub-agent delegation
+
+A task's owner may delegate independent sub-work **inside its own task** to
+teammate sub-agents. This is the other answer to per-task latency, and the two do
+not combine: phase scope uses the delegation hop for its lead, so the engine
+forces delegation off there.
+
+```bash
+npm run workflow-engine -- run --harness opencode --subagents auto --yes
+```
+
+- `--subagents off|auto|0-4` / `FORGE_ENGINE_SUBAGENTS`; `auto` (default) caps at
+  4, `0` withholds the instruction, and higher values are clamped.
+- Only harnesses declaring `supportsSubagents` receive the policy (opencode
+  today). Others run unchanged, with no instruction and no warning at `auto`.
+- The default per-task timeout widens to `base × (1 + cap)`, max 60 min; a
+  manifest `timeoutMs` still wins.
+- The owner remains the sole author of the `forge-result`; sub-agents are input
+  to it. Sub-agents share the task's working tree, so their work is committed
+  with the task — instruct them to use disjoint file scopes.
+- The instruction names the teammates the run discovered (by agent name, one
+  line each, max 8), excluding the running agent and forge's meta-agents. OpenCode
+  also exposes its own Task-tool roster; the named list makes the instruction
+  concrete in every harness.
+- The audit records the policy, not the observed number of sub-agent invocations.
+
+See ADR-077.
+
 ### Live visualization (The Forge Board)
 
 Pass `--viz` (or `--viz=<port>`, default `4299`) to run to launch a live PixiJS
@@ -593,6 +621,7 @@ This gives the same project two mutually exclusive execution modes for a given r
 - **OpenCode must be in `$PATH`.** The `opencode` adapter shells out to the binary. If OpenCode is installed at a non-standard path, set `OPENCODE_BIN`.
 - **Per-task cold start is the main harness overhead.** Every fresh `opencode run` re-boots config, skills, and all MCP servers unless a warm server is already serving the project. The engine no longer manages this itself (ADR-058); each run connects to OpenCode's background service, so this cost is avoided whenever that service is up. Set `OPENCODE_EXTRA_FLAGS=--standalone` to give a run a private server.
 - **Phase-scoped session reuse cuts the per-task context rebuild.** `--session-scope phase` shares one conversation across a phase; it requires `--concurrency 1`, a `project-orchestrator` lead agent, and a resume-capable harness (opencode, copilot, claude). See ADR-067.
+- **Delegation is the other speed lever, and it is capped.** `--subagents` (default `auto`, hard cap `4`) tells a task's owner it may delegate independent sub-work to teammates. It only reaches harnesses that declare `supportsSubagents` (opencode), it is always off under `--session-scope phase`, and it widens the task's default timeout. Sub-agents share the task's working tree, so a same-file collision between them is a silent lost edit the engine cannot detect — keep their scopes disjoint. The audit records the policy, not how many sub-agents actually ran. See ADR-077.
 - **The warm server is OpenCode's, not the engine's.** Runs share OpenCode's background service, which already has config, skills, and MCP servers booted. The engine cannot health-check or restart it; if it is down, `opencode run` starts it.
 - **Agent file paths must be absolute or resolvable from the repo root.** Discovery reads the agent `.md` file and sets `agent.path`. Native adapters pass `--agent <name>`; other roots use the persona in the execution file for repository tasks, or inline for text-only tasks.
 - **Parallelism is opt-in, harness-gated, and isolated.** The engine executes the ready-task frontier concurrently up to `--concurrency <n>` (default `1` = sequential). Only harness adapters that declare `supportsConcurrency` are parallelized; **same-owner tasks are always serialized** (at most one task per agent per wave). Above concurrency `1` each task runs in its own `git worktree` under `.forge-sandboxes/`, so `outputFiles`, the no-op gate, and `validationCommands` stay exact. Two requirements come with it: **the working tree must be clean** (commit or stash first; the engine refuses and lists the offending paths). Each task's worktree is selected through the spawn `cwd`, with the child's `PWD` corrected to the same path, since OpenCode v2 resolves the project from `process.env.PWD ?? process.cwd()` and a stale inherited `PWD` outranks `cwd` (ADR-058, ADR-059). Cross-owner tasks that change the same file are detected at integration time and the second one fails. See ADR-056 and ADR-021.

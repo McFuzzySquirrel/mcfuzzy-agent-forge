@@ -174,6 +174,9 @@ export const api = {
   setConcurrency(value: number): Promise<{ ok: boolean; message: string }> {
     return post<{ ok: boolean; message: string }>("/api/engine-config", { concurrency: value });
   },
+  setSubagents(value: number | null): Promise<{ ok: boolean; message: string }> {
+    return post<{ ok: boolean; message: string }>("/api/engine-config", { subagents: value });
+  },
   setExecutionMode(mode: ExecutionMode): Promise<{ ok: boolean; message: string }> {
     return post<{ ok: boolean; message: string }>("/api/engine-config", { executionMode: mode });
   },

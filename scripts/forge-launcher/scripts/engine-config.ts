@@ -28,6 +28,25 @@ export interface PersistedEngineConfig {
   selectionScope?: SelectionScope;
   /** Explicit task ids to run when executionMode is "manual". */
   selectedTaskIds?: string[];
+  /**
+   * Teammate sub-agents one task may delegate to. Absent or `""` means auto (the
+   * engine offers delegation up to its hard cap), `"0"` disables it, and
+   * `"1"`-`"4"` caps it. Mirrors `--subagents`.
+   */
+  subagents?: string;
+}
+
+/**
+ * Hard ceiling on per-task delegation, mirroring the engine's
+ * `MAX_SUBAGENTS_PER_TASK`. The launcher cannot import engine code (it lives in
+ * the target repo), so the value is duplicated here; the engine still clamps
+ * defensively, so a drift can never over-delegate.
+ */
+export const MAX_SUBAGENTS = 4;
+
+/** Engine harnesses whose adapter declares sub-agent support. */
+export function harnessSupportsSubagents(harness: string | undefined): boolean {
+  return harness === "opencode" || harness === "stub";
 }
 
 export type ExecutionMode = "auto" | "manual";
@@ -93,6 +112,8 @@ export function effectiveExecution(repoDir: string): {
   autoCommit: boolean;
   logHarnessActivity: boolean;
   concurrency: number;
+  /** `null` means auto (the engine's own default cap). */
+  subagents: number | null;
 } {
   const project = loadEngineConfig(repoDir);
   const global = loadSettings().execution ?? {};
@@ -101,5 +122,17 @@ export function effectiveExecution(repoDir: string): {
     autoCommit: project?.autoCommit ?? global.autoCommit ?? true,
     logHarnessActivity: project?.logHarnessActivity ?? global.logHarnessActivity ?? false,
     concurrency,
+    subagents: normaliseSubagents(project?.subagents ?? global.subagents),
   };
+}
+
+/**
+ * Resolve a persisted delegation setting. `null` means auto/inherit; a number is
+ * an explicit cap (`0` = off). Anything out of range falls back to auto rather
+ * than propagating a value the engine would reject.
+ */
+export function normaliseSubagents(value: unknown): number | null {
+  if (value === undefined || value === null || value === "" || value === "auto") return null;
+  const parsed = typeof value === "number" ? value : Number(value);
+  return Number.isInteger(parsed) && parsed >= 0 && parsed <= MAX_SUBAGENTS ? parsed : null;
 }

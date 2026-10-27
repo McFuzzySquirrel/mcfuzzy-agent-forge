@@ -184,6 +184,10 @@ export interface Summary {
   logHarnessActivity: boolean;
   /** Max agents to run in parallel (engine-config; 0 means engine default). */
   concurrency: number;
+  /** Per-task sub-agent cap: null = auto, 0 = off, 1-4 = cap (engine-config). */
+  subagents: number | null;
+  /** Whether the selected engine harness can run teammate sub-agents. */
+  subagentsSupported: boolean;
   executionMode: ExecutionMode;
   selectionScope: SelectionScope | null;
   selectedTaskIds: string[];
@@ -372,6 +376,8 @@ export interface GlobalSettings {
     concurrency?: number;
     autoCommit?: boolean;
     logHarnessActivity?: boolean;
+    /** Teammate sub-agents per task: 0 = off, 1-4 = cap, absent = auto. */
+    subagents?: number;
   };
   harness?: "opencode" | "github" | "claude" | "agents";
   ui?: {

@@ -65,6 +65,13 @@ function openCodeSessionId(): string {
 export class OpenCodeAdapter implements HarnessAdapter {
   readonly name = "opencode";
   readonly supportsConcurrency = true;
+  /**
+   * `opencode run --agent <owner>` makes the owner a primary agent for the
+   * invocation, and every forge agent is generated with `mode: all`, so it can
+   * reach its teammates through the Task tool. This is the one harness where
+   * per-task fan-out is verified; see ADR-077.
+   */
+  readonly supportsSubagents = true;
   readonly capabilities = ["text", "repository-tools"] as const;
   readonly defaultModel?: string;
   /** `opencode run --session <id>` continues the session, or creates it if absent. */

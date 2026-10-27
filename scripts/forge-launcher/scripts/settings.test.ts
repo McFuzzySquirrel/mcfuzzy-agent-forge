@@ -42,7 +42,7 @@ test("saveSettings round-trips through loadSettings", (t) => {
   const settings: GlobalSettings = {
     version: 1,
     authoring: { runner: "claude", models: { prd: "opus" } },
-    execution: { concurrency: 3, autoCommit: false, logHarnessActivity: true },
+    execution: { concurrency: 3, autoCommit: false, logHarnessActivity: true, subagents: 2 },
     harness: "github",
     ui: { theme: "dark", boardMode: "gantt" },
   };
@@ -69,6 +69,11 @@ test("validateSettings rejects invalid shapes", () => {
   assert.throws(() => validateSettings({ version: 1, authoring: { models: { prd: "  " } } }), /non-empty model ID/);
   assert.throws(() => validateSettings({ version: 1, execution: { concurrency: -1 } }), /non-negative integer/);
   assert.throws(() => validateSettings({ version: 1, execution: { autoCommit: "yes" } }), /boolean/);
+  assert.throws(() => validateSettings({ version: 1, execution: { subagents: 5 } }), /0 to 4/);
+  assert.throws(() => validateSettings({ version: 1, execution: { subagents: -1 } }), /0 to 4/);
+  assert.throws(() => validateSettings({ version: 1, execution: { subagents: 1.5 } }), /0 to 4/);
+  assert.deepEqual(validateSettings({ version: 1, execution: { subagents: 0 } }).execution, { subagents: 0 });
+  assert.deepEqual(validateSettings({ version: 1, execution: { subagents: 4 } }).execution, { subagents: 4 });
   assert.throws(() => validateSettings({ version: 1, harness: "flowforge-kernel" }), /harness/);
   assert.throws(() => validateSettings({ version: 1, ui: { theme: "sepia" } }), /ui\.theme/);
   assert.throws(() => validateSettings({ version: 1, ui: { boardMode: "kanban3d" } }), /boardMode/);

@@ -3,13 +3,14 @@ import { dirname, join, resolve } from "node:path";
 import { existsSync, readFileSync } from "node:fs";
 import * as readline from "node:readline";
 
-import { runEngine, replayTask, resolveConcurrency, unmetPrerequisites } from "./engine.ts";
+import { runEngine, replayTask, resolveConcurrency, resolveSubagents, taskTimeoutFor, unmetPrerequisites } from "./engine.ts";
 import { loadState, statePath, auditPath } from "./state.ts";
 import { startVizServer, type VizServer } from "./viz/server.ts";
 import { controlPath, pidPath, readPid, removePid, writeControl, writePid } from "./control.ts";
 import {
   DEFAULT_TASK_TIMEOUT_MS,
   DEFAULT_HEARTBEAT_MS,
+  MAX_SUBAGENTS_PER_TASK,
   type ExecutionManifest,
   type HarnessAdapter,
   type EngineOptions,
@@ -29,7 +30,7 @@ function usage(): never {
 Usage:
   npm run workflow-engine -- run     [--repo <path>] [--harness opencode|copilot|claude|openai|stub]
                                      [--max-retries <n>] [--retry-delay-ms <ms>] [--heartbeat-ms <ms>] [--concurrency <n>] [--task-timeout-ms <ms>] [--yes]
-                                     [--session-scope <task|phase>]
+                                     [--session-scope <task|phase>] [--subagents <off|auto|0-4>]
                                      [--allow-noop] [--run-validation]
                                      [--log-harness-activity|--no-log-harness-activity]
                                      [--auto-commit|--no-auto-commit] [--commit-message-template <tmpl>]
@@ -53,6 +54,11 @@ Environment variables:
                                begins at each phase boundary), or "task" for a fresh session per task (default).
                                Phase sessions require --concurrency 1 and a project-orchestrator agent; the lead
                                agent delegates each task to its owner specialist as a sub-agent.
+  FORGE_ENGINE_SUBAGENTS       Teammate sub-agents one task may delegate to: "off"/"0" disables delegation,
+                               "auto" (default) or 1-4 caps it. Delegation only applies to harnesses that can
+                               run sub-agents (opencode today) and is always off under --session-scope phase,
+                               which already delegates through the project lead. A delegated task's default
+                               timeout grows with the cap. See ADR-077.
   FORGE_ENGINE_ALLOW_NOOP        "1" to allow tasks that produce no expected outputs, no file changes, and only
                                  trivial agent output to count as complete (bypasses the no-op output gate)
   FORGE_ENGINE_RUN_VALIDATION    "1" to execute each task's manifest validationCommands and require them to pass
@@ -217,6 +223,23 @@ function resolveSessionScope(args: string[]): "task" | "phase" {
   return "task";
 }
 
+/**
+ * Resolve `--subagents off|auto|0-4` (also `FORGE_ENGINE_SUBAGENTS`). `undefined`
+ * means "auto": delegation is offered and capped at `MAX_SUBAGENTS_PER_TASK`.
+ * An explicit value above the hard cap is rejected here rather than silently
+ * clamped, because the operator typed a number the engine will not honour.
+ */
+function resolveSubagentsOption(args: string[]): number | undefined {
+  const raw = (flag(args, "--subagents") ?? process.env["FORGE_ENGINE_SUBAGENTS"])?.trim().toLowerCase();
+  if (!raw || raw === "auto") return undefined;
+  if (raw === "off" || raw === "none") return 0;
+  const value = Number(raw);
+  if (!Number.isInteger(value) || value < 0 || value > MAX_SUBAGENTS_PER_TASK) {
+    throw new Error(`Unknown --subagents '${raw}'. Choose off, auto, or 0-${MAX_SUBAGENTS_PER_TASK}.`);
+  }
+  return value;
+}
+
 function buildOptions(
   args: string[],
   repoRoot: string,
@@ -257,6 +280,7 @@ function buildOptions(
     heartbeatMs: Number(flag(args, "--heartbeat-ms") ?? process.env["FORGE_ENGINE_HEARTBEAT_MS"] ?? String(DEFAULT_HEARTBEAT_MS)),
     maxConcurrency: Number(flag(args, "--concurrency") ?? process.env["FORGE_ENGINE_CONCURRENCY"] ?? "1"),
     sessionScope,
+    subagents: resolveSubagentsOption(args),
     taskTimeoutMs: Number(flag(args, "--task-timeout-ms") ?? process.env["FORGE_ENGINE_TASK_TIMEOUT_MS"] ?? String(DEFAULT_TASK_TIMEOUT_MS)),
     allowNoop: hasFlag(args, "--allow-noop") || process.env["FORGE_ENGINE_ALLOW_NOOP"] === "1",
     runValidation: hasFlag(args, "--run-validation") || process.env["FORGE_ENGINE_RUN_VALIDATION"] === "1",
@@ -308,6 +332,16 @@ async function confirmPreRun(opts: EngineOptions, args: string[]): Promise<void>
   console.log(`  Concurrency: ${concurrencyLabel}`);
   if (concurrency.notice) console.log(`  Concurrency warning: ${concurrency.notice}`);
   console.log(`  Session scope: ${opts.sessionScope === "phase" ? "phase (one conversation per phase, lead delegates to owner sub-agents)" : "task (fresh session per task)"}`);
+  const subagents = resolveSubagents({
+    requested: opts.subagents,
+    supportsSubagents: opts.harness.supportsSubagents === true,
+    sessionScope: opts.sessionScope,
+  });
+  const subagentLabel = subagents.effective > 0
+    ? `${subagents.effective} teammate(s) per task${subagents.auto ? " (auto)" : ""}; default task timeout ${Math.round(taskTimeoutFor(opts.taskTimeoutMs, subagents.effective) / 1000)}s`
+    : "off";
+  console.log(`  Sub-agents: ${subagentLabel}`);
+  if (subagents.notice) console.log(`  Sub-agent warning: ${subagents.notice}`);
   console.log(`  Output gate: ${opts.allowNoop ? "relaxed (--allow-noop: no-op tasks allowed)" : "strict (missing outputs / no-op tasks are retried then failed)"}`);
   if (opts.runValidation) console.log("  Validation: running manifest validationCommands per task (--run-validation)");
   const autoCommitLabel = opts.autoCommit === false

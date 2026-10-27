@@ -16,6 +16,7 @@ import type {
   TaskSelection,
   WorkflowState,
 } from "./types.ts";
+import { MAX_SUBAGENTS_PER_TASK, MAX_TASK_TIMEOUT_MS } from "./types.ts";
 
 import {
   appendAuditEvent,
@@ -73,6 +74,13 @@ function sleep(ms: number): Promise<void> {
  * task to its owner specialist as a sub-agent.
  */
 const PHASE_LEAD_AGENT_NAME = "project-orchestrator";
+
+/**
+ * Agents that orchestrate forge itself rather than perform a task's sub-work.
+ * They are excluded from the delegation roster: a build task should never hand
+ * implementation work to the team builder or a workflow orchestrator.
+ */
+const NON_SPECIALIST_AGENTS = new Set([PHASE_LEAD_AGENT_NAME, "forge-team-builder", "workflow-orchestrator"]);
 
 /**
  * Run `worker` over `items` with at most `limit` invocations in flight at once,
@@ -147,6 +155,72 @@ export function resolveConcurrency(options: { maxConcurrency: number; supportsCo
     };
   }
   return { requested, effective: wanted, sandboxMode: wanted > 1 };
+}
+
+export interface SubagentDecision {
+  /** The value the operator asked for; `undefined` means "auto". */
+  requested?: number;
+  /** Delegation cap the engine will instruct; `0` disables delegation. */
+  effective: number;
+  /** True when the operator left the cap to the engine default. */
+  auto: boolean;
+  /** Set when delegation was withheld or the cap was reduced, with the reason. */
+  notice?: string;
+}
+
+/**
+ * The single source of truth for per-task sub-agent delegation. The CLI uses it
+ * for the pre-run summary and the engine for the task instructions, so the
+ * reported policy and the instructions an agent actually receives cannot drift.
+ *
+ * Both degradations are notices, never errors: a phase session already delegates
+ * each task to its owner, so fan-out inside that owner is a depth the harnesses
+ * do not document; and a harness without `supportsSubagents` has no tool surface
+ * to reach a teammate. Neither should fail a run that would otherwise work.
+ */
+export function resolveSubagents(options: {
+  requested?: number;
+  supportsSubagents: boolean;
+  sessionScope: "task" | "phase";
+}): SubagentDecision {
+  const auto = options.requested === undefined;
+  if (options.sessionScope === "phase") {
+    return {
+      requested: options.requested,
+      effective: 0,
+      auto,
+      notice: "Sub-agent delegation is off for this run: a phase session already delegates each task to its owner specialist.",
+    };
+  }
+  if (!options.supportsSubagents) {
+    return {
+      requested: options.requested,
+      effective: 0,
+      auto,
+      notice: "Harness does not support teammate sub-agents; sub-agent delegation is off for this run.",
+    };
+  }
+  const wanted = Math.max(0, Math.floor(options.requested ?? MAX_SUBAGENTS_PER_TASK));
+  if (wanted > MAX_SUBAGENTS_PER_TASK) {
+    return {
+      requested: options.requested,
+      effective: MAX_SUBAGENTS_PER_TASK,
+      auto,
+      notice: `Sub-agent cap ${wanted} exceeds the hard limit of ${MAX_SUBAGENTS_PER_TASK}; using ${MAX_SUBAGENTS_PER_TASK}.`,
+    };
+  }
+  return { requested: options.requested, effective: wanted, auto };
+}
+
+/**
+ * Per-task timeout budget for a given delegation cap. A task that fans out runs
+ * several agent invocations inside one attempt, so the default budget grows with
+ * the cap; an explicit per-task `timeoutMs` in the manifest still wins, because
+ * `prepareTaskRequest` prefers it over this default.
+ */
+export function taskTimeoutFor(baseMs: number, subagentCap: number): number {
+  if (!(subagentCap > 0)) return baseMs;
+  return Math.min(baseMs * (1 + subagentCap), MAX_TASK_TIMEOUT_MS);
 }
 
 function loadManifest(path: string): ExecutionManifest {
@@ -414,6 +488,8 @@ interface TaskEnvironment {
   phaseHandoff?: string;
   /** Phase lead agent; when set, tasks delegate to their owner instead of running as it. */
   phaseLead?: AgentDescriptor;
+  /** Teammate sub-agents a task may delegate to; `0` disables the instruction. */
+  subagents: number;
   /** Persist a native harness session ID captured for a phase (capture harnesses). */
   captureSession?: (phaseId: string, sessionId: string) => Promise<void>;
 }
@@ -466,6 +542,14 @@ async function executeTask(
   // the phase session) and delegates to the task's owner specialist.
   const agent = env.phaseLead ?? owner;
   const delegateTo = env.phaseLead ? { owner } : undefined;
+
+  // The delegation roster: teammates the engine actually discovered, minus the
+  // running agent (never delegate to yourself) and forge's meta-agents (an
+  // orchestrator is not a specialist, and under phase scope it is already the
+  // running agent). Naming them turns "use sub-agents" into an actionable list.
+  const teammates = env.agents
+    .filter((candidate) => candidate.name !== agent.name && !NON_SPECIALIST_AGENTS.has(candidate.name))
+    .map(({ name, description }) => ({ name, description }));
 
   // ── Context projection ──────────────────────────────────────────────────────
   // Resolve input artifacts declared in the task manifest and build a
@@ -592,7 +676,10 @@ async function executeTask(
       result = await opts.harness.invoke(prepareTaskRequest({
         agent, task, repoRoot: workspace,
         contextBlock: [env.phaseHandoff, contextBlock].filter(Boolean).join("\n\n"),
-        defaultModel: opts.harness.defaultModel, timeoutMs: opts.taskTimeoutMs,
+        defaultModel: opts.harness.defaultModel,
+        timeoutMs: taskTimeoutFor(opts.taskTimeoutMs, env.subagents),
+        subagents: env.subagents,
+        teammates,
         maxRetries: opts.maxRetries, attempt: current.attempt,
         previousFailure, previousResultPath,
         runId: env.runId, signal: opts.signal,
@@ -793,7 +880,7 @@ async function executeTask(
 }
 
 async function preflightOwners(
-  manifest: ExecutionManifest, state: WorkflowState, opts: EngineOptions,
+  manifest: ExecutionManifest, state: WorkflowState, opts: EngineOptions, subagents: number,
 ): Promise<AgentDescriptor[]> {
   try {
     const { discoverForgeRepo } = await import("../../forge-execution-adapter/scripts/discovery.ts");
@@ -821,7 +908,8 @@ async function preflightOwners(
       assertTaskCapabilities(task, opts.harness);
       const owner = findAgentForTask(agents, task.ownerAgent)!;
       prepareTaskRequest({ agent: lead ?? owner, task,
-        repoRoot: opts.repoRoot, defaultModel: opts.harness.defaultModel, timeoutMs: opts.taskTimeoutMs,
+        repoRoot: opts.repoRoot, defaultModel: opts.harness.defaultModel,
+        timeoutMs: taskTimeoutFor(opts.taskTimeoutMs, subagents), subagents,
         maxRetries: opts.maxRetries,
         ...(lead ? { delegateTo: { owner } } : {}) });
     }
@@ -918,7 +1006,22 @@ async function runEngineSession(opts: EngineOptions): Promise<WorkflowState> {
     note: `harness=${opts.harness.name}`,
   });
 
-  const agents = await preflightOwners(manifest, state, opts);
+  // Delegation is decided once per run: the same value reaches the pre-run
+  // summary, every task's execution file, and the timeout budget, so what the
+  // operator was told and what an agent was instructed cannot drift.
+  const subagents = resolveSubagents({
+    requested: opts.subagents,
+    supportsSubagents: opts.harness.supportsSubagents === true,
+    sessionScope: opts.sessionScope,
+  });
+  // At the auto default the engine stays silent: delegation is simply not part
+  // of this run, whereas an explicit request that was withheld needs the reason.
+  if (subagents.notice && !subagents.auto) console.warn(`[engine] ${subagents.notice}`);
+  if (subagents.effective > 0) {
+    console.log(`[engine] Sub-agent delegation: up to ${subagents.effective} teammate(s) per task${subagents.auto ? " (auto)" : ""}; per-task timeout ${Math.round(taskTimeoutFor(opts.taskTimeoutMs, subagents.effective) / 1000)}s unless the task declares its own.`);
+  }
+
+  const agents = await preflightOwners(manifest, state, opts, subagents.effective);
   const phaseLead = opts.sessionScope === "phase"
     ? agents.find((a) => a.name === PHASE_LEAD_AGENT_NAME)
     : undefined;
@@ -1095,6 +1198,7 @@ async function runEngineSession(opts: EngineOptions): Promise<WorkflowState> {
         phaseSessionId,
         phaseHandoff,
         phaseLead,
+        subagents: subagents.effective,
         captureSession,
       });
       await queue.run(() => finishTask(entry, {
@@ -1259,9 +1363,17 @@ async function replayTaskSession(taskId: string, opts: EngineOptions): Promise<W
     return !isTaskDone(replayRecords[id]?.status) || (dependency?.contract?.kind === "human-review" && !humanTaskApproved(opts.repoRoot, dependency));
   });
   if (incomplete.length > 0) throw new Error(`Cannot replay '${taskId}': incomplete dependencies ${incomplete.join(", ")}. Run them first.`);
+  // A replay always runs a fresh per-task session, so phase scope's delegation
+  // clamp does not apply here: the operator's cap (or the auto default) does.
+  const subagents = resolveSubagents({
+    requested: opts.subagents,
+    supportsSubagents: opts.harness.supportsSubagents === true,
+    sessionScope: "task",
+  });
+  if (subagents.notice && !subagents.auto) console.warn(`[engine] ${subagents.notice}`);
   const agents = await preflightOwners(manifest, {
     ...state, selection: { mode: "manual", taskIds: [taskId] },
-  }, opts);
+  }, opts, subagents.effective);
   saveState(opts.statePath, state);
   if (!opts.signal?.aborted) {
     await opts.harness.prepare?.({ repoRoot: opts.repoRoot, runId: state.runId, signal: opts.signal });
@@ -1286,6 +1398,7 @@ async function replayTaskSession(taskId: string, opts: EngineOptions): Promise<W
     // A replay is a single task; it always runs a fresh, isolated session rather
     // than joining a phase conversation (replay semantics are per-task today).
     sessionScope: "task",
+    subagents: subagents.effective,
   });
   state = withTaskRecord(state, outcome.record);
   if (outcome.pauseRequested) state = { ...state, status: "paused" };

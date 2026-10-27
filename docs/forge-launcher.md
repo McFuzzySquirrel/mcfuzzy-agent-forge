@@ -104,7 +104,7 @@ npx forge-launcher@beta bootstrap [TARGET_DIR] ... [--init-git]
                               [--runner <copilot|opencode|claude|inherit>]
 npx forge-launcher@beta engine-run [--repo <path>] [--harness <h>] [--concurrency <n>]
                               [--task-timeout-ms <ms>] [--yes] [--dry-run]
-                              [--session-scope <task|phase>]
+                              [--session-scope <task|phase>] [--subagents <off|auto|0-4>]
                                [--allow-noop] [--run-validation]
                               [--log-harness-activity|--no-log-harness-activity]
                               [--auto-commit|--no-auto-commit] [--commit-message-template <tmpl>]
@@ -658,6 +658,15 @@ across each phase and requires `--concurrency 1`, a `project-orchestrator` lead
 agent, and a resume-capable harness (opencode, copilot, or claude). See
 [phase-scoped session reuse](workflow-engine.md#phase-scoped-session-reuse) and
 [ADR-067](adr/067-phase-scoped-session-reuse.md).
+
+**Per-task sub-agent delegation is on by default (`auto`, cap 4).** The
+launcher passes `--subagents <off|auto|0-4>` (`FORGE_ENGINE_SUBAGENTS` works
+too) and persists the choice in `docs/engine-config.json` (`subagents`), so
+`resume` rebuilds the same command. It only reaches harnesses that can run
+sub-agents (opencode today) and is always off under `--session-scope phase`.
+Delegation widens the task's default timeout (`base × (1 + cap)`, max 60 min).
+See [sub-agent delegation](workflow-engine.md#sub-agent-delegation) and
+[ADR-077](adr/077-per-task-subagent-delegation.md).
 
 **Auto-commit is on by default.** Each completed task is committed to git (one
 commit per task, including the engine-owned `docs/*` files). Disable with

@@ -217,6 +217,13 @@ export interface Summary {
   logHarnessActivity: boolean;
   /** Max agents to run in parallel (engine-config; 0 or absent means engine default). */
   concurrency: number;
+  /**
+   * Teammate sub-agents one task may delegate to: `null` = auto (engine default
+   * cap), `0` = off, `1`-`4` = explicit cap (engine-config).
+   */
+  subagents: number | null;
+  /** Whether the selected engine harness can run teammate sub-agents at all. */
+  subagentsSupported: boolean;
   /** Auto runs the full ready workflow; manual runs only the selected task set. */
   executionMode: ExecutionMode;
   /** How the current manual task set was selected. */

@@ -247,6 +247,7 @@ echo "Engine started detached. Log: docs/engine-run.log"
 - `nohup ... &` detaches the engine from this session: the build keeps running even if the chat session ends.
 - `--yes` skips the engine's pre-run gate (required here because the engine has no TTY).
 - `FORGE_ENGINE_HARNESS` picks the per-task harness; default `opencode`, or set it to `copilot` to drive per-task `copilot -p --yolo` calls.
+- Per-task sub-agent delegation is on by default (`auto`, cap 4) and needs no flag: with `opencode` each task's owner may fan independent sub-work out to teammates. Set `FORGE_ENGINE_SUBAGENTS=off` to withhold it, or `1`-`4` to cap it (see [ADR-077](../../../docs/adr/077-per-task-subagent-delegation.md)). It widens each task's default timeout, so raise `FORGE_ENGINE_TASK_TIMEOUT_MS` only if a fan-out task still times out.
 
 **Step 3c: Poll to completion**
 

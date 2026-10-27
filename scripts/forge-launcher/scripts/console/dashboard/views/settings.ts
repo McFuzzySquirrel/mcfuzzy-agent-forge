@@ -38,6 +38,7 @@ let settingsCache: GlobalSettings | null = null;
 let autoCommitCb: HTMLInputElement | null = null;
 let logActivityCb: HTMLInputElement | null = null;
 let concurrencyInput: HTMLInputElement | null = null;
+let subagentsSelect: HTMLSelectElement | null = null;
 
 export function unmountSettings(): void {
   for (const u of unsub) u();
@@ -48,6 +49,7 @@ export function unmountSettings(): void {
   autoCommitCb = null;
   logActivityCb = null;
   concurrencyInput = null;
+  subagentsSelect = null;
   settingsCache = null;
 }
 
@@ -204,6 +206,14 @@ function buildGlobalDefaults(initial: GlobalSettings): HTMLElement {
   ]) as HTMLSelectElement;
   logActivity.value = initial.execution?.logHarnessActivity === undefined ? "" : String(initial.execution.logHarnessActivity);
 
+  const subagents = el("select", { id: "global-subagents", "aria-label": "Default sub-agents per task" }, [
+    el("option", { value: "" }, "Engine default (auto)"),
+    el("option", { value: "0" }, "Off"),
+    el("option", { value: "2" }, "At most 2"),
+    el("option", { value: "4" }, "At most 4"),
+  ]) as HTMLSelectElement;
+  subagents.value = initial.execution?.subagents === undefined ? "" : String(initial.execution.subagents);
+
   const status = el("div", { className: "dim small", role: "status", "aria-live": "polite" });
   const save = el("button", { className: "btn btn-primary", type: "button" }, "Save global defaults") as HTMLButtonElement;
   save.addEventListener("click", () => {
@@ -227,6 +237,8 @@ function buildGlobalDefaults(initial: GlobalSettings): HTMLElement {
     else delete execution.autoCommit;
     if (logActivity.value) execution.logHarnessActivity = logActivity.value === "true";
     else delete execution.logHarnessActivity;
+    if (subagents.value) execution.subagents = Number(subagents.value);
+    else delete execution.subagents;
     if (Object.keys(execution).length > 0) next.execution = execution;
     else delete next.execution;
 
@@ -258,6 +270,7 @@ function buildGlobalDefaults(initial: GlobalSettings): HTMLElement {
       el("div", { className: "field" }, [el("label", { for: "global-concurrency" }, "Default concurrency"), concurrency]),
       el("div", { className: "field" }, [el("label", { for: "global-autocommit" }, "Default auto-commit"), autoCommit]),
       el("div", { className: "field" }, [el("label", { for: "global-logactivity" }, "Default harness-activity logging"), logActivity]),
+      el("div", { className: "field" }, [el("label", { for: "global-subagents" }, "Default sub-agents per task"), subagents]),
     ]),
     el("div", { className: "row gap wrap" }, [save, status]),
   ]);
@@ -275,6 +288,11 @@ function refreshExecution(): void {
   if (concurrencyInput && document.activeElement !== concurrencyInput) {
     const concurrency = summary?.concurrency ?? 0;
     concurrencyInput.value = concurrency > 0 ? String(concurrency) : "";
+  }
+  if (subagentsSelect && document.activeElement !== subagentsSelect) {
+    const value = summary?.subagents ?? null;
+    subagentsSelect.value = value === null ? "auto" : String(value);
+    subagentsSelect.disabled = !(summary?.subagentsSupported ?? false);
   }
 }
 
@@ -432,6 +450,7 @@ function executionSection(): HTMLElement {
     el("p", { className: "dim small" }, "These preferences are stored in the project's docs/engine-config.json and apply to subsequently started runs."),
     renderBuildModeSetting(summary?.executionMode ?? "auto"),
     renderConcurrencyControl(summary?.concurrency ?? 0),
+    renderSubagentsControl(summary?.subagents ?? null, summary?.subagentsSupported ?? false),
     renderAutoCommitToggle(summary?.autoCommit ?? true),
     renderLogHarnessActivityToggle(summary?.logHarnessActivity ?? false),
     renderTimeoutControls(),
@@ -541,6 +560,41 @@ function renderConcurrencyControl(current: number): HTMLElement {
       btn,
       hint,
     ]),
+  ]);
+}
+
+function renderSubagentsControl(value: number | null, supported: boolean): HTMLElement {
+  const select = el("select", { "aria-label": "Sub-agents per task" }, [
+    el("option", { value: "auto", selected: value === null }, "Auto (up to 4 where the work splits)"),
+    el("option", { value: "0", selected: value === 0 }, "Off"),
+    el("option", { value: "2", selected: value === 2 }, "At most 2"),
+    el("option", { value: "4", selected: value === 4 }, "At most 4"),
+  ]) as HTMLSelectElement;
+  select.value = value === null ? "auto" : String(value);
+  subagentsSelect = select;
+  // A harness with no sub-agent surface cannot honour the setting, so it is
+  // disabled rather than silently ignored.
+  select.disabled = !supported;
+  select.addEventListener("change", () => {
+    const raw = select.value;
+    const next = raw === "auto" ? null : Number(raw);
+    void (async () => {
+      try {
+        const res = await api.setSubagents(next);
+        toast(res.message || (res.ok ? "updated" : "update failed"));
+      } catch (err) {
+        toast(err instanceof Error ? err.message : "update failed");
+      }
+    })();
+  });
+  return el("div", { style: "margin-top:10px" }, [
+    el("div", { className: "row gap" }, [
+      el("span", { className: "dim small" }, "Sub-agents per task (owner delegates independent work)"),
+      select,
+    ]),
+    el("p", { className: "dim small", role: "note" }, supported
+      ? "Applies to subsequently started runs. An owner may delegate independent sub-work to teammates, at most this many at a time, always inside this task's working tree and committed as this task's work. Delegation widens the task's default timeout. It is off under phase-scoped sessions, which already delegate through the project lead."
+      : "Unavailable: the selected engine harness cannot run teammate sub-agents. Delegation is available with opencode."),
   ]);
 }
 

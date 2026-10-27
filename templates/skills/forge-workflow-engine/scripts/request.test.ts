@@ -45,6 +45,40 @@ test("prepareTaskRequest includes concise relevant skill guidance", () => {
   assert.match(request.instructions, /Recommended:\n- recommended-skill — Recommended procedure\n- missing-skill \(unavailable\)/);
 });
 
+test("prepareTaskRequest carries the delegation policy only when the engine resolved a cap", () => {
+  const capped = prepareTaskRequest({ agent, task, repoRoot: ".", subagents: 3 });
+  assert.match(capped.instructions, /## Sub-agent delegation/);
+  assert.match(capped.instructions, /at most 3 at a time/);
+  assert.match(capped.instructions, /only author of the final forge-result report/);
+  // The engine, not the agent, decides whether delegation exists at all.
+  assert.doesNotMatch(prepareTaskRequest({ agent, task, repoRoot: ".", subagents: 0 }).instructions, /Sub-agent delegation/);
+  assert.doesNotMatch(prepareTaskRequest({ agent, task, repoRoot: "." }).instructions, /Sub-agent delegation/);
+});
+
+test("the delegation roster names the discovered teammates and stays compact", () => {
+  const long = "x".repeat(400);
+  const teammates = [
+    { name: "qa-engineer", description: "Writes and maintains automated test suites." },
+    { name: "ui-engineer", description: long },
+  ];
+  const request = prepareTaskRequest({ agent, task, repoRoot: ".", subagents: 4, teammates });
+  assert.match(request.instructions, /Available teammates \(address them by these agent names\)/);
+  assert.match(request.instructions, /- `qa-engineer` — Writes and maintains automated test suites\./);
+  // Long descriptions are truncated: the roster is a pointer, not a second prompt.
+  assert.ok(request.instructions.includes(`\`ui-engineer\` — ${"x".repeat(160)}…`));
+  assert.ok(!request.instructions.includes(long), "the full description must not be inlined");
+  // The roster is capped so a large team cannot flood the task instructions.
+  const many = Array.from({ length: 12 }, (_, index) => ({ name: `agent-${index}`, description: `Does thing ${index}` }));
+  const capped = prepareTaskRequest({ agent, task, repoRoot: ".", subagents: 4, teammates: many });
+  assert.match(capped.instructions, /- `agent-7` — Does thing 7/);
+  assert.doesNotMatch(capped.instructions, /`agent-8`/);
+  assert.match(capped.instructions, /…and 4 more/);
+  // No roster is fine: the policy still renders without a list.
+  const bare = prepareTaskRequest({ agent, task, repoRoot: ".", subagents: 4, teammates: [] });
+  assert.doesNotMatch(bare.instructions, /Available teammates/);
+  assert.match(bare.instructions, /at most 4 at a time/);
+});
+
 for (const transport of ["copilot", "opencode", "claude", "openai", "stub"] as const) {
   test(`${transport} preserves normalized model precedence and task semantics`, async () => {
     const root = mkdtempSync(join(tmpdir(), "forge-conformance "));

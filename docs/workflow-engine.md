@@ -232,6 +232,9 @@ By default every task runs in a **fresh, isolated session** (ADR-058). For
 multi-task builds that means each task re-derives the repository and shares no
 context with its siblings — the dominant source of per-task latency.
 
+Phase scope is one answer to that cost; per-task delegation (see *Sub-agent
+delegation* below) is the other, and the engine does not combine them.
+
 `--session-scope phase` (or `FORGE_ENGINE_SESSION_SCOPE=phase`) reuses **one
 harness conversation per phase**, so tasks in a phase inherit each other's
 context. A new conversation begins at each phase boundary, which keeps context
@@ -274,13 +277,68 @@ See [ADR-067](adr/067-phase-scoped-session-reuse.md).
 
 ---
 
+## Sub-agent delegation
+
+By default a task's owner agent may delegate **independent sub-work inside its
+own task** to teammate sub-agents. This is not a second scheduling mode: the
+engine still dispatches one task at a time per owner, and each task is still
+verified, retried, and committed as one unit.
+
+```
+npm run workflow-engine -- run --harness opencode --subagents auto --yes
+```
+
+Why it exists: every forge agent is generated with `mode: all`, so an owner
+invoked with `opencode run --agent <owner>` can already reach its teammates
+through the harness's Task tool. Delegation was happening without instruction or
+bound. Making it explicit and capped is stricter than the alternative.
+
+- **Cap.** `--subagents off|auto|0-4` / `FORGE_ENGINE_SUBAGENTS`. `auto` (the
+  default) offers delegation up to a hard ceiling of `4`; an explicit `0`
+  withholds the instruction entirely. The engine clamps anything above `4`.
+- **A named roster.** The instruction lists the teammates the engine actually
+  discovered in the harness root — `agent-name` plus a one-line description,
+  capped at 8 entries — so the owner delegates to a real specialist instead of
+  guessing what the harness exposes. The running agent is never listed, and
+  forge's meta-agents (`project-orchestrator`, `forge-team-builder`,
+  `workflow-orchestrator`) are excluded: an orchestrator is not a specialist.
+- **Only where the harness can do it.** `HarnessAdapter.supportsSubagents`
+  gates the instruction. OpenCode declares it; Copilot, Claude, and the OpenAI
+  API do not (yet), so those runs simply omit the policy.
+- **Off under phase scope.** `--session-scope phase` already spends the
+  delegation hop on the phase lead → owner handoff; instructing the owner to fan
+  out again would be a nesting no harness documents. The engine withholds it and
+  records why in the pre-run summary.
+- **Timeout.** A fan-out task runs several invocations inside one attempt, so
+  the default per-task timeout becomes `base × (1 + cap)` (capped at 60 min).
+  A task's own `timeoutMs` in the manifest still wins.
+- **One report.** The owner — not a sub-agent — is the sole author of the final
+  `forge-result`. Sub-agents are input to it.
+- **Shared tree, shared commit.** Sub-agents work in the task's working tree
+  (including its worktree sandbox under `--concurrency > 1`), so their changes
+  are attributed and committed as that task's work. Two sub-agents editing the
+  same file is a silent lost edit the engine cannot detect; the instruction
+  therefore requires disjoint file scopes.
+
+**What the audit knows.** The engine records the delegation *policy* (cap,
+auto/explicit, degradations), not the observed number of sub-agent invocations —
+it never sees child sessions. Treat the audit as "delegation was permitted",
+not "N sub-agents ran".
+
+Delegation and cross-task parallelism are complementary: `--subagents` overlaps
+work *inside* a task, while `--concurrency N` overlaps *different* owners' tasks
+in separate worktrees. Neither replaces the other. See
+[ADR-077](adr/077-per-task-subagent-delegation.md).
+
+---
+
 ## CLI reference
 
 ```
 npm run workflow-engine -- run     [--repo <path>] [--harness <name>] [--max-retries <n>]
                                    [--retry-delay-ms <ms>] [--heartbeat-ms <ms>]
                                    [--concurrency <n>] [--task-timeout-ms <ms>] [--yes]
-                                   [--session-scope <task|phase>]
+                                   [--session-scope <task|phase>] [--subagents <off|auto|0-4>]
                                    [--allow-noop] [--run-validation]
                                    [--log-harness-activity|--no-log-harness-activity]
                                    [--auto-commit|--no-auto-commit] [--commit-message-template <tmpl>]
@@ -304,6 +362,7 @@ npm run workflow-engine -- viz     [--repo <path>] [--port <n>] [--no-open]
 | `--concurrency <n>` | `1` | Max ready tasks dispatched at once. Above `1` the harness must declare `supportsConcurrency` and the working tree must be clean; each task then runs in its own git worktree under `.forge-sandboxes/` (see *Execution waves and concurrency*) |
 | `--task-timeout-ms <ms>` | `600000` (10 min) | Per-task timeout before the harness call is killed; a task's own `timeoutMs` in the manifest overrides this |
 | `--session-scope <task\|phase>` | `task` | Reuse one harness conversation per phase (`phase`) or a fresh session per task (`task`, default). Phase scope requires `--concurrency 1`, a `project-orchestrator` lead agent, and a harness that can resume a session (see *Phase-scoped session reuse*) |
+| `--subagents <off\|auto\|0-4>` | `auto` (cap `4`) | Teammate sub-agents one task may delegate independent sub-work to (`0` = off). Only applies to harnesses that declare sub-agent support (opencode today), and is always off under `--session-scope phase`. Widens the task's default timeout (see *Sub-agent delegation*) |
 | `--yes` | *(off)* | Skip the interactive pre-run gate |
 | `--keep-alive`, `--keep-alive-port`, `--no-keep-alive`, `--attach` | *(retired)* | Removed in v3.87 with OpenCode v2 (ADR-058); passing them is an error |
 | `--viz [port]` | *(off)* | Launch the live Forge Board dashboard (default port `4299`, next free port if busy) |
@@ -765,6 +824,7 @@ To start fresh (e.g. after recompiling the manifest), delete `docs/WORKFLOW-STAT
 | `FORGE_ENGINE_CONCURRENCY` | `1` | Max concurrent tasks (same as `--concurrency`); above `1` each task runs in its own git worktree and the working tree must be clean |
 | `FORGE_ENGINE_TASK_TIMEOUT_MS` | `600000` | Per-task timeout in ms (same as `--task-timeout-ms`; per-task manifest `timeoutMs` overrides) |
 | `FORGE_ENGINE_SESSION_SCOPE` | `task` | `phase` reuses one harness conversation per phase; `task` runs a fresh session per task (same as `--session-scope`) |
+| `FORGE_ENGINE_SUBAGENTS` | `auto` | `off`/`0` disables per-task delegation; `auto` or `1`-`4` caps it (same as `--subagents`) |
 | `FORGE_ENGINE_HARNESS` | `opencode` | Default harness for the standalone runner |
 | `FORGE_ENGINE_VIZ` | *(unset)* | `1` enables `--viz` on the standalone runner |
 | `FORGE_ENGINE_VIZ_PORT` | `4299` | Dashboard port when `--viz` is enabled |

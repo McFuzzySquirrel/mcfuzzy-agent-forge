@@ -4,7 +4,7 @@ import { execFileSync } from "node:child_process";
 import { existsSync, mkdtempSync, mkdirSync, rmSync, writeFileSync, readFileSync, unlinkSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { allDepsComplete, isComplete, isTaskDone, mapLimit, nextReadyTasks, ownerUniqueReady, replayTask, resolveConcurrency, runEngine, unmetPrerequisites, validateManifestDependencies } from "./engine.ts";
+import { allDepsComplete, isComplete, isTaskDone, mapLimit, nextReadyTasks, ownerUniqueReady, replayTask, resolveConcurrency, resolveSubagents, runEngine, taskTimeoutFor, unmetPrerequisites, validateManifestDependencies } from "./engine.ts";
 import { runCommand } from "./harness/run.ts";
 import { OpenAIAdapter } from "./harness/openai-adapter.ts";
 import { compileExecutionManifestDetailed } from "../../forge-execution-adapter/scripts/compiler.ts";
@@ -14,6 +14,7 @@ import { approveHumanTask } from "./task-context.ts";
 import { ArtifactStore } from "./artifacts.ts";
 import { reconcileState, loadState, saveState, initState } from "./state.ts";
 import type { EngineOptions, ExecutionManifest, HarnessAdapter, ManifestTask, SessionResumeStrategy, TaskResult, TaskStatus, WorkflowState } from "./types.ts";
+import { MAX_SUBAGENTS_PER_TASK, MAX_TASK_TIMEOUT_MS } from "./types.ts";
 
 type ManifestPhase = ExecutionManifest["phases"][number];
 
@@ -254,11 +255,13 @@ class RecordingHarness implements HarnessAdapter {
   timeouts: number[] = [];
   retries: number[] = [];
   taskIds: string[] = [];
+  instructions: string[] = [];
 
-  async invoke({ task, budget, attempt }: Parameters<HarnessAdapter["invoke"]>[0]) {
+  async invoke({ task, budget, attempt, instructions }: Parameters<HarnessAdapter["invoke"]>[0]) {
     this.taskIds.push(task.id);
     this.timeouts.push(budget.timeoutMs);
     this.retries.push(attempt.maxRetries);
+    this.instructions.push(instructions);
     return {
       success: true,
       outputFiles: [],
@@ -267,6 +270,11 @@ class RecordingHarness implements HarnessAdapter {
       durationMs: 1,
     };
   }
+}
+
+/** Records like `RecordingHarness` but declares sub-agent support (an OpenCode-shaped harness). */
+class DelegatingHarness extends RecordingHarness {
+  readonly supportsSubagents = true;
 }
 
 /** Harness that calls `onInvoke` when a task starts and blocks until released. */
@@ -449,6 +457,7 @@ test("effective task timeout prefers the per-task manifest timeoutMs over the en
 class PhaseRecordingHarness implements HarnessAdapter {
   readonly name = "phase-recording";
   readonly supportsConcurrency = false;
+  readonly supportsSubagents = true;
   readonly capabilities = ["text", "repository-tools"] as const;
   readonly sessionStrategy: SessionResumeStrategy = {
     kind: "deterministic",
@@ -511,6 +520,9 @@ description: ${name}
   assert.notEqual(harness.seen[1]!.sessionId, harness.seen[2]!.sessionId);
   // Every task runs under the stable phase lead, not its owner.
   assert.ok(harness.seen.every((entry) => entry.agent === "project-orchestrator"), JSON.stringify(harness.seen));
+  // A phase session already delegates to the owner, so the engine withholds the
+  // owner's own delegation policy even though the harness supports sub-agents.
+  assert.ok(harness.seen.every((entry) => !entry.instructions.includes("Sub-agent delegation")), JSON.stringify(harness.seen));
   // Both phase session ids are persisted in state.
   assert.equal(Object.keys(state.sessions ?? {}).length, 2);
 
@@ -1993,6 +2005,98 @@ test("concurrency above 1 falls back to 1 when the harness cannot run tasks conc
   assert.deepEqual(resolveConcurrency({ maxConcurrency: Number.NaN, supportsConcurrency: true }), {
     requested: 1, effective: 1, sandboxMode: false,
   });
+});
+
+test("sub-agent delegation resolves one cap and degrades instead of failing", () => {
+  // Auto is the default: delegation is offered and capped at the hard limit.
+  assert.deepEqual(resolveSubagents({ supportsSubagents: true, sessionScope: "task" }), {
+    requested: undefined, effective: MAX_SUBAGENTS_PER_TASK, auto: true,
+  });
+  assert.deepEqual(resolveSubagents({ requested: 2, supportsSubagents: true, sessionScope: "task" }), {
+    requested: 2, effective: 2, auto: false,
+  });
+  // Off is silent: the operator asked for no delegation.
+  assert.deepEqual(resolveSubagents({ requested: 0, supportsSubagents: true, sessionScope: "task" }), {
+    requested: 0, effective: 0, auto: false,
+  });
+  // Above the hard limit is clamped, not rejected.
+  const clamped = resolveSubagents({ requested: 9, supportsSubagents: true, sessionScope: "task" });
+  assert.equal(clamped.effective, MAX_SUBAGENTS_PER_TASK);
+  assert.match(clamped.notice ?? "", /hard limit/);
+  // A harness with no sub-agent surface loses the instruction but keeps running.
+  const unsupported = resolveSubagents({ supportsSubagents: false, sessionScope: "task" });
+  assert.equal(unsupported.effective, 0);
+  assert.match(unsupported.notice ?? "", /does not support teammate sub-agents/);
+  // A phase session already delegates through the lead; a second hop is undocumentable.
+  const phase = resolveSubagents({ requested: 4, supportsSubagents: true, sessionScope: "phase" });
+  assert.equal(phase.effective, 0);
+  assert.match(phase.notice ?? "", /phase session already delegates/);
+});
+
+test("delegation widens the default task timeout but never past the ceiling", () => {
+  assert.equal(taskTimeoutFor(1_000, 0), 1_000);
+  assert.equal(taskTimeoutFor(1_000, 2), 3_000);
+  assert.equal(taskTimeoutFor(10 * 60 * 1000, MAX_SUBAGENTS_PER_TASK), 50 * 60 * 1000);
+  assert.equal(taskTimeoutFor(MAX_TASK_TIMEOUT_MS, MAX_SUBAGENTS_PER_TASK), MAX_TASK_TIMEOUT_MS);
+});
+
+test("an auto run instructs the task owner to delegate and widens its budget", async () => {
+  const fixture = makeEngineFixture();
+  // A second specialist turns the generic policy into a named roster.
+  writeFileSync(join(fixture.root, ".agents", "agents", "api-engineer.md"), `---
+name: api-engineer
+description: Builds HTTP endpoints and their contracts.
+---
+`, "utf8");
+  // Forge's meta-agents must never appear in a build task's roster.
+  writeFileSync(join(fixture.root, ".agents", "agents", "forge-team-builder.md"), `---
+name: forge-team-builder
+description: Builds agent teams.
+---
+`, "utf8");
+  const harness = new DelegatingHarness();
+
+  const state = await runEngine(engineOptionsFor(fixture, harness, 1_000));
+
+  assert.equal(state.status, "complete");
+  assert.match(harness.instructions[0]!, /## Sub-agent delegation/);
+  assert.match(harness.instructions[0]!, /at most 4 at a time/);
+  assert.match(harness.instructions[0]!, /- `api-engineer` — Builds HTTP endpoints and their contracts\./);
+  // The running agent is never offered to itself.
+  assert.doesNotMatch(harness.instructions[0]!, /`worker`/);
+  // Meta-agents are not specialists: they never appear in a build task's roster.
+  assert.doesNotMatch(harness.instructions[0]!, /forge-team-builder/);
+  // The budget grows with the cap so a fan-out task is not starved by the
+  // single-agent default.
+  assert.deepEqual(harness.timeouts, [5_000]);
+});
+
+test("subagents off withholds the delegation instruction and keeps the base timeout", async () => {
+  const fixture = makeEngineFixture();
+  const harness = new DelegatingHarness();
+
+  const state = await runEngine(engineOptionsFor(fixture, harness, 1_000, { subagents: 0 }));
+
+  assert.equal(state.status, "complete");
+  assert.doesNotMatch(harness.instructions[0]!, /Sub-agent delegation/);
+  assert.deepEqual(harness.timeouts, [1_000]);
+});
+
+test("a harness without sub-agent support gets no delegation instruction", async () => {
+  const fixture = makeEngineFixture();
+  const instructions: string[] = [];
+  const harness: HarnessAdapter = {
+    name: "no-subagents", supportsConcurrency: false, capabilities: ["text", "repository-tools"],
+    async invoke(request) {
+      instructions.push(request.instructions);
+      return { success: true, outputFiles: [], stdout: "[no-subagents] ok", stderr: "", durationMs: 1 };
+    },
+  };
+
+  const state = await runEngine(engineOptionsFor(fixture, harness, 1_000));
+
+  assert.equal(state.status, "complete");
+  assert.doesNotMatch(instructions[0]!, /Sub-agent delegation/);
 });
 
 test("a harness without supportsConcurrency keeps the engine sequential", async () => {

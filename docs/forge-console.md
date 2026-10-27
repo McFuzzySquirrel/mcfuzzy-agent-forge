@@ -473,6 +473,17 @@ volume; command invocation logging is always on regardless of this setting (see
 [workflow-engine.md](workflow-engine.md#harness-invocation-and-activity-logging)
 and [ADR-052](adr/052-harness-invocation-activity-logging.md)).
 
+The **Sub-agents per task** select (Settings → Execution) stores `subagents` in
+`docs/engine-config.json` and appears in the system-level defaults as well. It
+defaults to **Auto** (the engine offers delegation up to its cap of 4), with
+**Off** and explicit **2** / **4** caps available. It applies to subsequently
+started runs and is passed to the engine as `--subagents`. The control is
+disabled with a reason when the selected engine harness cannot run sub-agents
+(delegation is available with opencode), and it has no effect under a
+phase-scoped session, which already delegates through the project lead. See
+[sub-agent delegation](workflow-engine.md#sub-agent-delegation) and
+[ADR-077](adr/077-per-task-subagent-delegation.md).
+
 ### Task timeouts
 
 The Console can edit timeouts without leaving the browser, so a task that

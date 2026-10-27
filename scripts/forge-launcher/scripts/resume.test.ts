@@ -158,6 +158,7 @@ test("resume carries persisted engine config (concurrency/retries/viz)", async (
     keepAlive: true,
     attach: "http://127.0.0.1:4096",
     logHarnessActivity: true,
+    subagents: "2",
   }));
   const { code, out } = await runCli(["resume", "--repo", repo, "--non-interactive"]);
   assert.equal(code, 0, out);
@@ -169,6 +170,7 @@ test("resume carries persisted engine config (concurrency/retries/viz)", async (
   assert.ok(out.includes("--task-timeout-ms 300000"), out);
   assert.ok(out.includes("--viz"), out);
   assert.ok(out.includes("--log-harness-activity"), out);
+  assert.ok(out.includes("--subagents 2"), out);
 });
 
 test("explicit env overrides persisted engine config on resume", async () => {

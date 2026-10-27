@@ -484,6 +484,22 @@ work (per-task `forge-result` summaries and changed files) — so the fresh
 conversation at a phase boundary does not lose cross-phase context. See
 [ADR-067](adr/067-phase-scoped-session-reuse.md).
 
+### Delegation inside a task
+
+Session reuse keeps context; it does not add parallelism, and it is serial-only.
+The engine's other latency lever is **per-task delegation**
+([ADR-077](adr/077-per-task-subagent-delegation.md)): `--subagents` tells a
+task's owner it may fan independent sub-work out to teammate sub-agents, capped
+at 4. The owner is a primary agent for its invocation, so this needs no adapter
+work beyond the `supportsSubagents` capability flag; the policy itself is text in
+the engine-generated execution file, which keeps it harness-agnostic.
+
+The two levers are deliberately exclusive. A phase session already spends its
+delegation hop on lead → owner, so the engine forces delegation off there. And
+delegation is not a substitute for `--concurrency`: the dispatcher admits at most
+one task per owner per wave (`ownerUniqueReady`), so only concurrency overlaps
+*different* owners, while delegation overlaps work *within* one task.
+
 The engine is intentionally native to the supported harness adapters. The
 execution adapter compiles the manifest before the run; the workflow engine
 then owns dispatch, output verification, retries, timeouts, and durable state.

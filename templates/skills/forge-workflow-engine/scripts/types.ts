@@ -5,8 +5,17 @@ export type { AgentDescriptor, ExecutionManifest, ManifestTask, TaskCapability }
 /** Default per-task timeout (10 minutes), matching the previous hardcoded value. */
 export const DEFAULT_TASK_TIMEOUT_MS = 10 * 60 * 1000;
 
+/** Ceiling for a delegation-widened per-task timeout (60 minutes). */
+export const MAX_TASK_TIMEOUT_MS = 60 * 60 * 1000;
+
 /** Default heartbeat interval (60s) while a task is executing; 0 disables. */
 export const DEFAULT_HEARTBEAT_MS = 60 * 1000;
+
+/**
+ * Hard ceiling on teammate sub-agents one task may delegate to. Budgets above
+ * this are clamped so a single task can never fan out without bound.
+ */
+export const MAX_SUBAGENTS_PER_TASK = 4;
 
 // ─── Task execution status ────────────────────────────────────────────────────
 
@@ -192,6 +201,13 @@ export interface HarnessAdapter {
    * own git worktree, so repository-level isolation never rests on the adapter.
    */
   readonly supportsConcurrency: boolean;
+  /**
+   * Whether the harness can run teammate sub-agents inside one task invocation
+   * (for example OpenCode's Task tool, which can reach any `mode: all` agent).
+   * Optional: absent means the engine withholds delegation instructions for
+   * this harness instead of asking for a capability it does not have.
+   */
+  readonly supportsSubagents?: boolean;
   readonly capabilities: readonly TaskCapability[];
   readonly defaultModel?: string;
   /** Session-reuse support; absent means one fresh session per task. */
@@ -236,6 +252,17 @@ export interface EngineOptions {
    * `sessionStrategy`; the engine refuses loudly otherwise.
    */
   sessionScope: "task" | "phase";
+  /**
+   * Maximum teammate sub-agents one task may delegate to (`0`-`4`). `0` disables
+   * delegation; omitted means "auto" — delegation is offered and capped at
+   * `MAX_SUBAGENTS_PER_TASK`.
+   *
+   * The engine withholds the instruction when the harness does not declare
+   * `supportsSubagents`, and always under `--session-scope phase`, which already
+   * delegates each task through the phase lead. Both degradations are reported
+   * as a notice rather than an error. See ADR-077.
+   */
+  subagents?: number;
   /**
    * Default per-task timeout in milliseconds, used when a task does not declare
    * its own `timeoutMs`. Defaults to `DEFAULT_TASK_TIMEOUT_MS`.

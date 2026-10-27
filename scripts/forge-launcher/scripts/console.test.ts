@@ -744,6 +744,52 @@ test("engine-config sets concurrency and flows into engine-run args", async () =
   });
 });
 
+test("engine-config sets sub-agents and passes the cap to engine-run", async () => {
+  await withServer(async (server, repo, spawned) => {
+    const token = server.token;
+    const summary = await getJson(`${server.url}/api/summary`) as { subagents: number | null; subagentsSupported: boolean };
+    assert.equal(summary.subagents, null, "delegation defaults to auto");
+    assert.equal(summary.subagentsSupported, true, "the fixture harness can run sub-agents");
+
+    const set = await postJson(`${server.url}/api/engine-config`, { subagents: 2 }, { "X-Forge-Token": token });
+    assert.equal((set.body as { ok: boolean }).ok, true);
+    assert.equal(JSON.parse(readFileSync(join(repo, "docs", "engine-config.json"), "utf8")).subagents, "2");
+    assert.equal((await getJson(`${server.url}/api/summary`) as { subagents: number | null }).subagents, 2);
+
+    const run = await postJson(`${server.url}/api/control`, { action: "run" }, { "X-Forge-Token": token });
+    assert.equal((run.body as { ok: boolean }).ok, true);
+    const runArgs = spawned.calls.at(-1)!.args;
+    const idx = runArgs.indexOf("--subagents");
+    assert.ok(idx !== -1 && runArgs[idx + 1] === "2", "engine-run should pass --subagents 2");
+
+    // Reset to auto: no flag at all, so the engine applies its own cap.
+    const reset = await postJson(`${server.url}/api/engine-config`, { subagents: null }, { "X-Forge-Token": token });
+    assert.equal((reset.body as { ok: boolean }).ok, true);
+    assert.equal(JSON.parse(readFileSync(join(repo, "docs", "engine-config.json"), "utf8")).subagents, "");
+    assert.equal((await getJson(`${server.url}/api/summary`) as { subagents: number | null }).subagents, null);
+
+    const run2 = await postJson(`${server.url}/api/control`, { action: "run" }, { "X-Forge-Token": token });
+    assert.ok((run2.body as { ok: boolean }).ok, "engine-run after reset should succeed");
+    assert.ok(!spawned.calls.at(-1)!.args.includes("--subagents"), "no --subagents arg when auto");
+
+    // Off is an explicit value, not the same as auto.
+    await postJson(`${server.url}/api/engine-config`, { subagents: 0 }, { "X-Forge-Token": token });
+    const run3 = await postJson(`${server.url}/api/control`, { action: "run" }, { "X-Forge-Token": token });
+    assert.ok((run3.body as { ok: boolean }).ok);
+    const offArgs = spawned.calls.at(-1)!.args;
+    const offIdx = offArgs.indexOf("--subagents");
+    assert.ok(offIdx !== -1 && offArgs[offIdx + 1] === "0", "engine-run should pass --subagents 0 when off");
+  });
+});
+
+test("engine-config rejects an out-of-range sub-agent cap", async () => {
+  await withServer(async (server) => {
+    const res = await postJson(`${server.url}/api/engine-config`, { subagents: 9 }, { "X-Forge-Token": server.token });
+    assert.equal(res.status, 400);
+    assert.match((res.body as { message: string }).message, /integer from 0 to 4/);
+  });
+});
+
 test("engine-config stores manual selection and passes it to engine-run", async () => {
   await withServer(async (server, repo, spawned) => {
     const token = server.token;

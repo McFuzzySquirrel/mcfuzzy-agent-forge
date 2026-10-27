@@ -19,7 +19,7 @@ import { isRunnerChoice, loadAuthoringConfig, saveAuthoringConfig, validateAutho
 import { loadSettings, saveSettings, validateSettings } from "../settings.ts";
 import { interactiveAuthoringArgv, resolveAuthoringModel, type InventoryProbe } from "../authoring-inventory.ts";
 import { validateAuthoredPrd } from "../prd-validation.ts";
-import { effectiveExecution } from "../engine-config.ts";
+import { effectiveExecution, MAX_SUBAGENTS } from "../engine-config.ts";
 import { featureIncrementHandoffHasChange, recordAuthoringStageSuccess, recordFeatureIncrementHandoff } from "../authoring-state.ts";
 import { REDERIVE_STEPS, rederiveProgress, type RederiveStepId } from "../rederive-state.ts";
 import {
@@ -785,6 +785,15 @@ export async function startConsoleServer(options: ConsoleServerOptions = {}): Pr
               return sendJson(res, 400, { ok: false, message: "logHarnessActivity must be a boolean." });
             }
             const result = repo.setLogHarnessActivity(currentPaths()!, body.logHarnessActivity);
+            broadcast("snapshot", snapshotEvent());
+            return sendJson(res, result.ok ? 200 : 400, result);
+          }
+          if (body.subagents !== undefined) {
+            const subagents = body.subagents;
+            if (subagents !== null && (typeof subagents !== "number" || !Number.isInteger(subagents) || subagents < 0 || subagents > MAX_SUBAGENTS)) {
+              return sendJson(res, 400, { ok: false, message: `subagents must be null (auto) or an integer from 0 to ${MAX_SUBAGENTS}.` });
+            }
+            const result = repo.setSubagents(currentPaths()!, subagents as number | null);
             broadcast("snapshot", snapshotEvent());
             return sendJson(res, result.ok ? 200 : 400, result);
           }
