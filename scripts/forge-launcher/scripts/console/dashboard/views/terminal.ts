@@ -1,6 +1,7 @@
-import type { Terminal as XtermTerminal } from "@xterm/xterm";
+import type { ITheme, Terminal as XtermTerminal } from "@xterm/xterm";
 import { api } from "../api.js";
 import { el } from "../render/dom.js";
+import { getResolvedTheme, onThemeChange } from "../theme.js";
 import { appendReplay } from "./terminal-replay.js";
 
 declare global {
@@ -16,6 +17,44 @@ interface Surface {
   status: HTMLElement;
   startButton: HTMLButtonElement;
   stopButton: HTMLButtonElement;
+  /** Removes the theme listener when the view unmounts. */
+  themeUnsubscribe: () => void;
+}
+
+const DARK_TERMINAL_THEME: ITheme = {
+  background: "#070b16",
+  foreground: "#dbe4ff",
+  cursor: "#dbe4ff",
+  selectionBackground: "rgba(111, 208, 255, 0.28)",
+};
+
+/** A light ANSI palette so log colors stay readable on a white terminal. */
+const LIGHT_TERMINAL_THEME: ITheme = {
+  background: "#ffffff",
+  foreground: "#16203a",
+  cursor: "#16203a",
+  cursorAccent: "#ffffff",
+  selectionBackground: "rgba(11, 99, 206, 0.18)",
+  black: "#000000",
+  red: "#b42318",
+  green: "#107c10",
+  yellow: "#8a5a00",
+  blue: "#0b63ce",
+  magenta: "#a21caf",
+  cyan: "#0e7490",
+  white: "#58627a",
+  brightBlack: "#58627a",
+  brightRed: "#d1242f",
+  brightGreen: "#1a7f37",
+  brightYellow: "#8a5a00",
+  brightBlue: "#0550ae",
+  brightMagenta: "#a21caf",
+  brightCyan: "#0e7490",
+  brightWhite: "#16203a",
+};
+
+function terminalTheme(): ITheme {
+  return getResolvedTheme() === "light" ? LIGHT_TERMINAL_THEME : DARK_TERMINAL_THEME;
 }
 
 interface SessionState {
@@ -104,7 +143,7 @@ export function renderTerminal(container: HTMLElement): void {
     fontFamily: "ui-monospace, SFMono-Regular, Menlo, Consolas, monospace",
     fontSize: 13,
     scrollback: 5000,
-    theme: { background: "#070b16", foreground: "#dbe4ff" },
+    theme: terminalTheme(),
   });
   const fitAddon = new window.FitAddon.FitAddon();
   terminal.loadAddon(fitAddon);
@@ -127,7 +166,12 @@ export function renderTerminal(container: HTMLElement): void {
   });
   resizeObserver.observe(terminalHost);
 
-  state.surface = { terminal, resizeObserver, status, startButton, stopButton };
+  // The terminal outlives route changes, so it must follow theme changes made
+  // in Settings while it is open.
+  const themeUnsubscribe = onThemeChange(() => {
+    terminal.options.theme = terminalTheme();
+  });
+  state.surface = { terminal, resizeObserver, status, startButton, stopButton, themeUnsubscribe };
 
   // Replay output produced while this view was unmounted.
   if (state.buffer) terminal.write(state.buffer);
@@ -264,6 +308,7 @@ export function renderTerminal(container: HTMLElement): void {
 export function unmountTerminal(): void {
   const surface = state.surface;
   if (!surface) return;
+  surface.themeUnsubscribe();
   surface.resizeObserver.disconnect();
   surface.terminal.dispose();
   state.surface = null;

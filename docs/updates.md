@@ -4,6 +4,26 @@ Detailed release and change notes for MyForge.
 
 ---
 
+## October 2026 - v3.113
+
+### Console light theme and Appearance settings
+
+- **Settings → Appearance** now offers **System**, **Light**, and **Dark**.
+  `System` follows the operating system and updates live when it changes; an
+  explicit choice persists across reloads and browser sessions.
+- The Console has a full light palette alongside the existing dark one. Page,
+  bar, panel, table, dialog, markdown, badge, button, and form-control colors all
+  adapt, with semantic colors tuned for AA contrast on a light background.
+- The preference is stored as `ui.theme` in the Forge `settings.json`, cached
+  locally so the saved palette paints before the app loads, and reconciled with
+  the saved settings at startup.
+- Saving Global defaults no longer drops unrelated settings such as `ui.theme`,
+  and changing the theme no longer rewrites authoring or execution defaults.
+- The in-browser Terminal uses a readable light ANSI palette when the light
+  theme is active. The embedded Board remains dark for now (separate app).
+
+---
+
 ## October 2026 - v3.112
 
 ### Top category navigation and fluid layout

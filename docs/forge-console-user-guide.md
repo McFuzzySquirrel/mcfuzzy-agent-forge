@@ -166,9 +166,7 @@ Once the build starts, switch between the views to follow the work:
   blocks render as tables instead of code. Skills are shown as cards grouped
   into **Forge skills** and **Project skills**; the authoring stage cards and
   re-derivation footer live here too.
-- **Settings**: authoring models, execution preferences (build mode,
-  concurrency, auto-commit, harness logging, task timeouts), and per-agent
-  model overrides in one place.
+- **Settings**: Appearance (System/Light/Dark theme), authoring models, execution preferences (build mode, concurrency, auto-commit, harness logging, task timeouts), and per-agent model overrides in one place.
 
 The Console uses the selected harness root for team, report, and model-override
 operations. It does not merge agents with the same identity from other harness
@@ -346,6 +344,13 @@ Edit these defaults from the Console in **Settings → Global defaults** (defaul
 harness, default authoring runner, and default concurrency / auto-commit /
 harness-activity logging); the project-level sections below that override them
 per repository.
+
+**Settings → Appearance** chooses the Console's **System**, **Light**, or
+**Dark** theme. System follows the operating system and updates if it switches;
+the choice is a per-user preference stored as `ui.theme` in the same
+`settings.json`, so it applies to every project and persists across reloads.
+The Console caches the choice locally so the saved palette paints immediately,
+then reconciles with the saved settings on startup.
 
 A **background-job badge** in the context bar shows running and failed
 background jobs across all registered projects and links to the Projects view.

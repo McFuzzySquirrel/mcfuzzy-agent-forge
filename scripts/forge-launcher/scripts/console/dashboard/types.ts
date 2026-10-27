@@ -358,6 +358,9 @@ export interface AuthoringInventory {
 
 export type GlobalRunner = "copilot" | "opencode" | "claude";
 
+/** Console palette: `auto` follows the operating system preference. */
+export type ThemePreference = "light" | "dark" | "auto";
+
 /** System-level defaults shared across projects (settings.json in FORGE_HOME). */
 export interface GlobalSettings {
   version: 1;
@@ -372,7 +375,7 @@ export interface GlobalSettings {
   };
   harness?: "opencode" | "github" | "claude" | "agents";
   ui?: {
-    theme?: "light" | "dark" | "auto";
+    theme?: ThemePreference;
     boardMode?: "kanban" | "gantt" | "table";
   };
 }

@@ -5,6 +5,24 @@
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <meta name="forge-token" content="__FORGE_TOKEN__" />
   <title>Forge Console</title>
+  <script>
+    // Run before the stylesheet paints: mirror the cached theme preference onto
+    // <html> so a saved Light theme never flashes dark while settings load.
+    (() => {
+      try {
+        const stored = localStorage.getItem("forge-console.theme");
+        const preference = stored === "light" || stored === "dark" || stored === "auto" ? stored : "auto";
+        const dark = typeof window.matchMedia === "function"
+          ? window.matchMedia("(prefers-color-scheme: dark)").matches
+          : true;
+        const theme = preference === "auto" ? (dark ? "dark" : "light") : preference;
+        document.documentElement.dataset.theme = theme;
+        document.documentElement.style.colorScheme = theme;
+      } catch {
+        document.documentElement.dataset.theme = "dark";
+      }
+    })();
+  </script>
   <link rel="stylesheet" href="/style.css" />
   <link rel="stylesheet" href="/vendor/xterm.css" />
 </head>
