@@ -644,7 +644,7 @@ function writeSettings(homeDir: string): void {
     },
     execution: { concurrency: 3, autoCommit: true, logHarnessActivity: false },
     harness: "agents",
-    ui: { boardMode: "kanban" },
+    ui: { theme: "dark", boardMode: "kanban" },
   });
 }
 

@@ -17,6 +17,7 @@ import { renderNew, unmountNew } from "./views/new.js";
 import { refreshSettings, renderSettings, unmountSettings } from "./views/settings.js";
 import { openHelp } from "./views/help.js";
 import { isTerminalSessionActive, onTerminalSessionChange, renderTerminal, unmountTerminal } from "./views/terminal.js";
+import { applyTheme, parseThemePreference, readCachedThemePreference } from "./theme.js";
 
 interface View {
   id: string;
@@ -388,10 +389,18 @@ async function init(): Promise<void> {
     active?.refresh?.();
   });
 
-  try {
-    store.setSummary(await api.summary());
-  } catch {
-    store.setSummary(null);
+  // The inline script in index.html painted the cached palette already; mirror
+  // the cached preference into module state, then reconcile with the saved
+  // global settings so a change made in another browser session wins.
+  applyTheme(readCachedThemePreference() ?? "auto", { persist: false });
+
+  const [summary, settings] = await Promise.all([
+    api.summary().catch(() => null),
+    api.settings().catch(() => null),
+  ]);
+  store.setSummary(summary);
+  if (settings) {
+    applyTheme(parseThemePreference(settings.ui?.theme) ?? "auto");
   }
 
   connectEvents();

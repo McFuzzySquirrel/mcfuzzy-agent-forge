@@ -70,6 +70,7 @@ test("validateSettings rejects invalid shapes", () => {
   assert.throws(() => validateSettings({ version: 1, execution: { concurrency: -1 } }), /non-negative integer/);
   assert.throws(() => validateSettings({ version: 1, execution: { autoCommit: "yes" } }), /boolean/);
   assert.throws(() => validateSettings({ version: 1, harness: "flowforge-kernel" }), /harness/);
+  assert.throws(() => validateSettings({ version: 1, ui: { theme: "sepia" } }), /ui\.theme/);
   assert.throws(() => validateSettings({ version: 1, ui: { boardMode: "kanban3d" } }), /boardMode/);
 });
 

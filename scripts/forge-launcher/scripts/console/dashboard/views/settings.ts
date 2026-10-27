@@ -11,6 +11,7 @@ import { api } from "../api.js";
 import { store } from "../state.js";
 import { el, minutesToTimeoutMs, toast } from "../render/dom.js";
 import { AUTHORING_RUNNER_OPTIONS, effectiveRunner } from "../runners.js";
+import { applyTheme, getThemePreference } from "../theme.js";
 import type {
   AgentInfo,
   AuthoringConfig,
@@ -20,6 +21,7 @@ import type {
   GlobalRunner,
   GlobalSettings,
   TaskRow,
+  ThemePreference,
 } from "../types.js";
 
 let unsub: Array<() => void> = [];
@@ -28,6 +30,9 @@ let unsub: Array<() => void> = [];
 let globalGeneration = 0;
 let authoringGeneration = 0;
 let modelsGeneration = 0;
+// Last loaded global settings, used to build complete save payloads so one
+// section never overwrites another (the settings endpoint replaces the file).
+let settingsCache: GlobalSettings | null = null;
 // Execution controls that reflect store.summary and are updated in place so a
 // background snapshot never clobbers the user mid-edit.
 let autoCommitCb: HTMLInputElement | null = null;
@@ -43,6 +48,7 @@ export function unmountSettings(): void {
   autoCommitCb = null;
   logActivityCb = null;
   concurrencyInput = null;
+  settingsCache = null;
 }
 
 export function renderSettings(container: HTMLElement): void {
@@ -56,12 +62,74 @@ export function renderSettings(container: HTMLElement): void {
     ]),
   );
 
+  container.appendChild(appearanceSection());
   container.appendChild(globalDefaultsSection());
   container.appendChild(authoringSection());
   container.appendChild(executionSection());
   container.appendChild(modelsSection());
 
   unsub.push(store.subscribe(() => refreshExecution()));
+}
+
+// ─── Appearance ───────────────────────────────────────────────────────────────
+
+function appearanceSection(): HTMLElement {
+  const status = el("div", { className: "dim small", role: "status", "aria-live": "polite" });
+  const select = el("select", { id: "appearance-theme", "aria-label": "Console theme" }, [
+    el("option", { value: "auto" }, "System"),
+    el("option", { value: "light" }, "Light"),
+    el("option", { value: "dark" }, "Dark"),
+  ]) as HTMLSelectElement;
+  select.value = getThemePreference();
+
+  let saving = false;
+  select.addEventListener("change", () => {
+    if (saving) return;
+    const preference = select.value as ThemePreference;
+    // Preview immediately; persistence follows. A failed save leaves the
+    // preview in place for this tab and reports the error.
+    applyTheme(preference);
+    saving = true;
+    select.disabled = true;
+    status.textContent = "Saving appearance…";
+    void saveThemePreference(preference)
+      .then(() => {
+        status.textContent = `Theme set to ${themeLabel(preference)}.`;
+      })
+      .catch((error: unknown) => {
+        status.textContent = error instanceof Error
+          ? `Theme applied for this tab; saving failed: ${error.message}`
+          : "Theme applied for this tab; saving failed.";
+      })
+      .finally(() => {
+        saving = false;
+        select.disabled = false;
+      });
+  });
+
+  return el("div", { className: "panel" }, [
+    el("h2", null, "Appearance"),
+    el("p", { className: "dim small" }, "Theme for the Forge Console. This is a per-user system-level preference stored in your Forge settings and applies to every project. System follows your operating system's light or dark mode."),
+    el("div", { className: "form-row" }, [
+      el("div", { className: "field" }, [el("label", { for: "appearance-theme" }, "Theme"), select]),
+    ]),
+    status,
+  ]);
+}
+
+function themeLabel(preference: ThemePreference): string {
+  return preference === "light" ? "Light" : preference === "dark" ? "Dark" : "System";
+}
+
+/** Saves the theme without dropping the other global settings. */
+async function saveThemePreference(preference: ThemePreference): Promise<void> {
+  const base = settingsCache ?? await api.settings();
+  const result = await api.saveSettings({
+    ...base,
+    version: 1,
+    ui: { ...base.ui, theme: preference },
+  });
+  settingsCache = result.settings;
 }
 
 // ─── Global defaults ──────────────────────────────────────────────────────────
@@ -81,6 +149,7 @@ async function loadGlobalDefaults(panel: HTMLElement, generation: number): Promi
   try {
     const settings = await api.settings();
     if (generation !== globalGeneration) return;
+    settingsCache = settings;
     panel.replaceChildren(el("h2", null, "Global defaults"), buildGlobalDefaults(settings));
   } catch (error) {
     if (generation !== globalGeneration) return;
@@ -138,19 +207,38 @@ function buildGlobalDefaults(initial: GlobalSettings): HTMLElement {
   const status = el("div", { className: "dim small", role: "status", "aria-live": "polite" });
   const save = el("button", { className: "btn btn-primary", type: "button" }, "Save global defaults") as HTMLButtonElement;
   save.addEventListener("click", () => {
-    const next: GlobalSettings = { version: 1 };
+    // Start from the loaded settings so sections this form does not own (such
+    // as ui.theme or authoring.models) survive the whole-file save.
+    const next: GlobalSettings = { ...initial, version: 1 };
     if (harness.value) next.harness = harness.value as NonNullable<GlobalSettings["harness"]>;
-    if (runner.value) next.authoring = { runner: runner.value as GlobalRunner };
-    const execution: NonNullable<GlobalSettings["execution"]> = {};
+    else delete next.harness;
+
+    const authoring = { ...initial.authoring };
+    if (runner.value) authoring.runner = runner.value as GlobalRunner;
+    else delete authoring.runner;
+    if (Object.keys(authoring).length > 0) next.authoring = authoring;
+    else delete next.authoring;
+
+    const execution: NonNullable<GlobalSettings["execution"]> = { ...initial.execution };
     const c = Number(concurrency.value);
     if (concurrency.value && Number.isInteger(c) && c > 0) execution.concurrency = c;
+    else delete execution.concurrency;
     if (autoCommit.value) execution.autoCommit = autoCommit.value === "true";
+    else delete execution.autoCommit;
     if (logActivity.value) execution.logHarnessActivity = logActivity.value === "true";
+    else delete execution.logHarnessActivity;
     if (Object.keys(execution).length > 0) next.execution = execution;
+    else delete next.execution;
+
+    // Reflect the currently applied theme in case the Appearance panel saved
+    // after this form was rendered.
+    next.ui = { ...initial.ui, theme: getThemePreference() };
+
     save.disabled = true;
     status.textContent = "Saving global defaults…";
     void api.saveSettings(next)
       .then((result) => {
+        settingsCache = result.settings;
         status.textContent = result.message || "Global defaults saved.";
         toast(status.textContent);
       })
