@@ -477,10 +477,11 @@ The **Sub-agents per task** select (Settings → Execution) stores `subagents` i
 `docs/engine-config.json` and appears in the system-level defaults as well. It
 defaults to **Auto** (the engine offers delegation up to its cap of 4), with
 **Off** and explicit **2** / **4** caps available. It applies to subsequently
-started runs and is passed to the engine as `--subagents`. The control is
-disabled with a reason when the selected engine harness cannot run sub-agents
-(delegation is available with opencode), and it has no effect under a
-phase-scoped session, which already delegates through the project lead. See
+started runs and is passed to the engine as `--subagents`. It is enabled for the
+CLI harnesses (opencode, copilot, claude); the control is disabled when the
+selected harness does not declare sub-agent support — in practice the `openai`
+adapter, which has no tool surface. It has no effect under a phase-scoped
+session, which already delegates through the project lead. See
 [sub-agent delegation](workflow-engine.md#sub-agent-delegation) and
 [ADR-077](adr/077-per-task-subagent-delegation.md).
 

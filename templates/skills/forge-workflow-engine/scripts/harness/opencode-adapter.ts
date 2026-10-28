@@ -70,8 +70,9 @@ export class OpenCodeAdapter implements HarnessAdapter {
   /**
    * `opencode run --agent <owner>` makes the owner a primary agent for the
    * invocation, and every forge agent is generated with `mode: all`, so it can
-   * reach its teammates through the Task tool. This is the one harness where
-   * per-task fan-out is verified; see ADR-077.
+   * reach its teammates through the Task tool. Delegation is enabled for all
+   * three CLI harnesses; whether a task actually fans out is the model's call.
+   * See ADR-077.
    */
   readonly supportsSubagents = true;
   readonly capabilities = ["text", "repository-tools"] as const;

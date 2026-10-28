@@ -37,10 +37,18 @@ task owner.
    default and caps at `MAX_SUBAGENTS_PER_TASK = 4`; `0` withholds the
    instruction; values above the hard limit are clamped with a notice. The CLI
    rejects a typed value above the limit so a typo is not silently reduced.
-2. **`HarnessAdapter.supportsSubagents`** gates the instruction. OpenCode
-   declares it (verified: `mode: all` agents + the Task tool); Copilot, Claude,
-   and the OpenAI API do not, and simply receive no policy — a notice, never an
-   error. The stub declares it so policy is exercised in tests.
+2. **`HarnessAdapter.supportsSubagents`** gates the instruction. All three CLI
+   harnesses declare it — OpenCode (owner runs as a primary agent; `mode: all`
+   agents are reachable through the Task tool), Copilot (`copilot -p` is a full
+   agent loop over `.github/agents`), and Claude Code (native subagents in
+   `.claude/agents`). Delegation is policy text, so no transport flag is involved
+   and the experiment "tell the coding agent to use sub-agents" works as-is. The
+   OpenAI API adapter has no tool surface and receives no policy — a notice,
+   never an error. The stub declares it so policy is exercised in tests.
+
+   Enabling a harness means "the engine may instruct delegation here", not
+   "delegation is guaranteed": whether a task fans out, and how many sub-agents
+   it uses, remains the model's decision, and no harness enforces the cap.
 3. **Always off under `--session-scope phase`.** The lead already delegates to
    the owner; telling the owner to delegate again would be a depth none of the
    three harnesses document. Withholding it keeps ADR-067's contract intact and
@@ -56,8 +64,8 @@ task owner.
    minutes) because a fan-out task runs several invocations inside one attempt. A
    manifest `timeoutMs` still wins.
 6. **The Console exposes the policy** per project (`docs/engine-config.json`) and
-   as a system default, disabled with a reason when the selected harness cannot
-   delegate.
+   as a system default, disabled with a reason when the selected harness does not
+   declare sub-agent support (in practice the `openai` adapter).
 
 ## Consequences
 
@@ -101,6 +109,10 @@ task owner.
 4. **Auto-enable `--concurrency N` when the tree is clean** to chase the same
    speed. Rejected: N worktrees and N cold starts behind the operator's back, and
    a preflight failure they need to see.
+5. **Use Copilot's `--fleet` (parallel subagent orchestration) for delegation.**
+   Rejected: fleet mode decides parallelism on its own terms, competing with the
+   task's named roster and cap, and it is Copilot-only. The instruction works
+   without it, so the transport stays untouched.
 
 ## References
 

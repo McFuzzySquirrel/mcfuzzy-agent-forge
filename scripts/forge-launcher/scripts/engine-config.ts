@@ -46,7 +46,7 @@ export const MAX_SUBAGENTS = 4;
 
 /** Engine harnesses whose adapter declares sub-agent support. */
 export function harnessSupportsSubagents(harness: string | undefined): boolean {
-  return harness === "opencode" || harness === "stub";
+  return harness === "opencode" || harness === "copilot" || harness === "claude" || harness === "stub";
 }
 
 export type ExecutionMode = "auto" | "manual";

@@ -56,6 +56,13 @@ const STDOUT_PREVIEW_CHARS = 500;
 export class ClaudeAdapter implements HarnessAdapter {
   readonly name = "claude";
   readonly supportsConcurrency = true;
+  /**
+   * Claude Code has native subagents (`.claude/agents`, invoked through its Task
+   * tool), and `--permission-mode bypassPermissions` already approves tool use,
+   * so an owner can delegate by name without any transport flag. The delegation
+   * policy is text in the execution file.
+   */
+  readonly supportsSubagents = true;
   readonly capabilities = ["text", "repository-tools"] as const;
   readonly defaultModel?: string;
   /**

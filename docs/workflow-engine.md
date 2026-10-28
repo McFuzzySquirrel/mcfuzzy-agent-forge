@@ -307,9 +307,12 @@ bound. Making it explicit and capped is stricter than the alternative.
   The Console's task detail drawer reports what each task's execution snapshot
   actually instructed (`up to N · teammate, teammate`), or says it was not
   instructed when the snapshot predates delegation.
-- **Only where the harness can do it.** `HarnessAdapter.supportsSubagents`
-  gates the instruction. OpenCode declares it; Copilot, Claude, and the OpenAI
-  API do not (yet), so those runs simply omit the policy.
+- **Enabled on the CLI harnesses.** `HarnessAdapter.supportsSubagents` gates the
+  instruction. OpenCode, Copilot, and Claude declare it: a `-p`/`run` invocation
+  is a full agent loop that resolves the forge agents by name, and the policy
+  text in the execution file is the only lever — no transport flag is needed.
+  The OpenAI adapter has no tool surface, so it omits the policy. Nothing is
+  emitted for a harness that does not declare support.
 - **Off under phase scope.** `--session-scope phase` already spends the
   delegation hop on the phase lead → owner handoff; instructing the owner to fan
   out again would be a nesting no harness documents. The engine withholds it and
@@ -374,7 +377,7 @@ npm run workflow-engine -- viz     [--repo <path>] [--port <n>] [--no-open]
 | `--concurrency <n>` | `1` | Max ready tasks dispatched at once. Above `1` the harness must declare `supportsConcurrency` and the working tree must be clean; each task then runs in its own git worktree under `.forge-sandboxes/` (see *Execution waves and concurrency*) |
 | `--task-timeout-ms <ms>` | `600000` (10 min) | Per-task timeout before the harness call is killed; a task's own `timeoutMs` in the manifest overrides this |
 | `--session-scope <task\|phase>` | `task` | Reuse one harness conversation per phase (`phase`) or a fresh session per task (`task`, default). Phase scope requires `--concurrency 1`, a `project-orchestrator` lead agent, and a harness that can resume a session (see *Phase-scoped session reuse*) |
-| `--subagents <off\|auto\|0-4>` | `auto` (cap `4`) | Teammate sub-agents one task may delegate independent sub-work to (`0` = off). Only applies to harnesses that declare sub-agent support (opencode today), and is always off under `--session-scope phase`. Widens the task's default timeout (see *Sub-agent delegation*) |
+| `--subagents <off\|auto\|0-4>` | `auto` (cap `4`) | Teammate sub-agents one task may delegate independent sub-work to (`0` = off). Enabled for the CLI harnesses (opencode, copilot, claude); the openai adapter has no tool surface. Always off under `--session-scope phase`. Widens the task's default timeout (see *Sub-agent delegation*) |
 | `--yes` | *(off)* | Skip the interactive pre-run gate |
 | `--keep-alive`, `--keep-alive-port`, `--no-keep-alive`, `--attach` | *(retired)* | Removed in v3.87 with OpenCode v2 (ADR-058); passing them is an error |
 | `--viz [port]` | *(off)* | Launch the live Forge Board dashboard (default port `4299`, next free port if busy) |

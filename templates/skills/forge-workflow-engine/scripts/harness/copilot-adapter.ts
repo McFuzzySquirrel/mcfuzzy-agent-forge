@@ -32,6 +32,14 @@ import { executionPrompt } from "../task-execution.ts";
 export class CopilotAdapter implements HarnessAdapter {
   readonly name = "copilot";
   readonly supportsConcurrency = true;
+  /**
+   * A `copilot -p` run is a full agent loop, and Copilot resolves custom agents
+   * from `.github/agents`, so an owner can hand independent sub-work to a
+   * teammate by name. No transport flag is needed: the delegation policy is
+   * text in the execution file. (`--fleet` exists but orchestrates parallelism
+   * on its own terms, competing with the task's roster and cap.)
+   */
+  readonly supportsSubagents = true;
   readonly capabilities = ["text", "repository-tools"] as const;
   readonly defaultModel?: string;
   /** `copilot -p --session-id <uuid>` resumes the session, or sets the UUID for a new one. */

@@ -470,7 +470,7 @@ function delegationField(t: TaskRow): HTMLElement {
   if (!report) {
     text = "— (no execution file on this machine; written when the task is dispatched)";
   } else if (!report.instructionPresent) {
-    text = "not instructed (the engine that dispatched this task predates delegation, the cap resolved to 0, or the harness cannot run sub-agents)";
+    text = "not instructed (the engine that dispatched this task predates delegation, the cap resolved to 0, or this harness is not enabled for delegation)";
   } else {
     const cap = report.cap === null ? "unbounded" : `up to ${report.cap}`;
     text = `${cap}${report.teammates.length > 0 ? ` · ${report.teammates.join(", ")}` : " · no teammates listed"}`;

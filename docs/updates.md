@@ -20,10 +20,12 @@ Detailed release and change notes for MyForge.
   `forge-result`. It names the teammates the engine discovered (the running agent
   and forge's meta-agents are excluded, capped at 8 entries), so "use
   sub-agents" points at real specialists.
-- `HarnessAdapter.supportsSubagents` gates it. OpenCode declares it; Copilot,
-  Claude, and the OpenAI API receive no policy and run unchanged (a notice, never
-  an error). It is always off under `--session-scope phase`, which already
-  delegates through the project lead.
+- `HarnessAdapter.supportsSubagents` gates it. OpenCode, Copilot, and Claude
+  declare it — a `-p`/`run` invocation is a full agent loop that resolves forge
+  agents by name, so the policy text is the only lever and no transport flag is
+  needed. The OpenAI adapter has no tool surface and receives no policy. It is
+  always off under `--session-scope phase`, which already delegates through the
+  project lead.
 - The default per-task timeout widens to `base × (1 + cap)` (max 60 minutes)
   because a fan-out task runs several invocations inside one attempt; a manifest
   `timeoutMs` still wins.

@@ -184,8 +184,10 @@ npm run workflow-engine -- run --harness opencode --subagents auto --yes
 
 - `--subagents off|auto|0-4` / `FORGE_ENGINE_SUBAGENTS`; `auto` (default) caps at
   4, `0` withholds the instruction, and higher values are clamped.
-- Only harnesses declaring `supportsSubagents` receive the policy (opencode
-  today). Others run unchanged, with no instruction and no warning at `auto`.
+- Only harnesses declaring `supportsSubagents` receive the policy: opencode,
+  copilot, and claude. The openai adapter has no tool surface and runs
+  unchanged, with no instruction and no warning at `auto`. No transport flag is
+  needed — the policy text is the lever.
 - The default per-task timeout widens to `base × (1 + cap)`, max 60 min; a
   manifest `timeoutMs` still wins.
 - The owner remains the sole author of the `forge-result`; sub-agents are input

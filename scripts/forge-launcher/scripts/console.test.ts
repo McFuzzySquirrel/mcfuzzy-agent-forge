@@ -785,6 +785,21 @@ test("the tasks API exposes delegation per task and null before dispatch", async
   });
 });
 
+test("delegation is available for every CLI harness and disabled for the API adapter", async () => {
+  await withServer(async (server, repo) => {
+    const write = (harness: string) => writeFileSync(join(repo, "docs", "engine-config.json"), `${JSON.stringify({ harness })}\n`);
+    const supported = async () => (await getJson(`${server.url}/api/summary`) as { subagentsSupported: boolean }).subagentsSupported;
+
+    for (const harness of ["opencode", "copilot", "claude", "stub"]) {
+      write(harness);
+      assert.equal(await supported(), true, `${harness} should offer delegation`);
+    }
+    // The API adapter has no tool surface, so the Console control must be off.
+    write("openai");
+    assert.equal(await supported(), false);
+  });
+});
+
 test("engine-config sets concurrency and flows into engine-run args", async () => {
   await withServer(async (server, repo, spawned) => {
     const token = server.token;

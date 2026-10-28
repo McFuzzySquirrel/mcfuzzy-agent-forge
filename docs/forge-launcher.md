@@ -662,8 +662,9 @@ agent, and a resume-capable harness (opencode, copilot, or claude). See
 **Per-task sub-agent delegation is on by default (`auto`, cap 4).** The
 launcher passes `--subagents <off|auto|0-4>` (`FORGE_ENGINE_SUBAGENTS` works
 too) and persists the choice in `docs/engine-config.json` (`subagents`), so
-`resume` rebuilds the same command. It only reaches harnesses that can run
-sub-agents (opencode today) and is always off under `--session-scope phase`.
+`resume` rebuilds the same command. It applies to the CLI harnesses — opencode,
+copilot, and claude — and is always off under `--session-scope phase`
+(the openai adapter has no tool surface).
 Delegation widens the task's default timeout (`base × (1 + cap)`, max 60 min).
 See [sub-agent delegation](workflow-engine.md#sub-agent-delegation) and
 [ADR-077](adr/077-per-task-subagent-delegation.md).

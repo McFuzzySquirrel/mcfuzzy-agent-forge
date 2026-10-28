@@ -30,6 +30,22 @@ const task: ManifestTask = {
 /** The same task when it may use repository tools, which is what delegation requires. */
 const repoTask: ManifestTask = { ...task, requiredCapabilities: ["repository-tools"] };
 
+test("every CLI harness declares sub-agent support and the API adapter does not", () => {
+  // Enabling a harness is a deliberate capability claim; keep the matrix honest.
+  assert.equal(new OpenCodeAdapter().supportsSubagents, true);
+  assert.equal(new CopilotAdapter().supportsSubagents, true);
+  assert.equal(new ClaudeAdapter().supportsSubagents, true);
+  assert.equal(new StubAdapter().supportsSubagents, true);
+  const originalKey = process.env.OPENAI_API_KEY;
+  process.env.OPENAI_API_KEY = "test-key";
+  try {
+    assert.equal("supportsSubagents" in new OpenAIAdapter(), false, "no tool surface means no delegation");
+  } finally {
+    if (originalKey === undefined) delete process.env.OPENAI_API_KEY;
+    else process.env.OPENAI_API_KEY = originalKey;
+  }
+});
+
 test("prepareTaskRequest defaults harness activity logging off and carries it when enabled", () => {
   const root = mkdtempSync(join(tmpdir(), "forge-request-activity-"));
   try {

@@ -55,10 +55,10 @@ Environment variables:
                                Phase sessions require --concurrency 1 and a project-orchestrator agent; the lead
                                agent delegates each task to its owner specialist as a sub-agent.
   FORGE_ENGINE_SUBAGENTS       Teammate sub-agents one task may delegate to: "off"/"0" disables delegation,
-                               "auto" (default) or 1-4 caps it. Delegation only applies to harnesses that can
-                               run sub-agents (opencode today) and is always off under --session-scope phase,
-                               which already delegates through the project lead. A delegated task's default
-                               timeout grows with the cap. See ADR-077.
+                               "auto" (default) or 1-4 caps it. Delegation applies to the CLI harnesses
+                               (opencode, copilot, claude); the openai adapter has no tool surface. It is
+                               always off under --session-scope phase, which already delegates through the
+                               project lead. A delegated task's default timeout grows with the cap.
   FORGE_ENGINE_ALLOW_NOOP        "1" to allow tasks that produce no expected outputs, no file changes, and only
                                  trivial agent output to count as complete (bypasses the no-op output gate)
   FORGE_ENGINE_RUN_VALIDATION    "1" to execute each task's manifest validationCommands and require them to pass

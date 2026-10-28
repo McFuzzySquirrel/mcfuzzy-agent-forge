@@ -594,7 +594,7 @@ function renderSubagentsControl(value: number | null, supported: boolean): HTMLE
     ]),
     el("p", { className: "dim small", role: "note" }, supported
       ? "Applies to subsequently started runs. An owner may delegate independent sub-work to teammates, at most this many at a time, always inside this task's working tree and committed as this task's work. Delegation widens the task's default timeout. It is off under phase-scoped sessions, which already delegate through the project lead."
-      : "Unavailable: the selected engine harness cannot run teammate sub-agents. Delegation is available with opencode."),
+      : "Not available for this engine harness: it does not declare sub-agent support (the openai adapter has no tool surface). All three CLI harnesses -- opencode, copilot, and claude -- support delegation."),
   ]);
 }
 
