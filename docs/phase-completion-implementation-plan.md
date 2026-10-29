@@ -30,7 +30,9 @@ manifests compatible.
 - [x] Record the current scheduler/compiler behavior and compatibility
   constraints.
 - [ ] Reproduce representative phase spillover reports and classify them as
-  dependency, decomposition, contract, or missing phase-validation issues.
+  dependency, decomposition, contract, or missing phase-validation issues. No
+  representative run or manifest was supplied, so this incident-level diagnosis
+  remains open.
 - [x] Define a phase as complete only after required tasks, declared outputs,
   and phase-level validation pass.
 - [x] Keep the default barrier dependency-scoped; independent features may still
@@ -38,29 +40,30 @@ manifests compatible.
 
 ### 2. Strengthen phase and task contracts
 
-- [ ] Expose authoring guidance for declaring optional tasks and phase-level
+- [x] Expose authoring guidance for declaring optional tasks and phase-level
   checks in feature documents.
-- [ ] Ensure generated manifests make phase exit requirements explicit and
-  surface likely missing dependencies or incomplete task breakdowns.
-- [ ] Keep required tasks distinct from optional tasks; a skipped required task
+- [x] Ensure generated manifests make phase exit requirements explicit.
+- [ ] Surface likely missing dependencies or incomplete task breakdowns; this
+  implementation does not infer or repair an underspecified dependency graph.
+- [x] Keep required tasks distinct from optional tasks; a skipped required task
   cannot satisfy a strict phase gate.
 
 ### 3. Add a durable phase-completion gate
 
-- [ ] Persist phase lifecycle and validation evidence in workflow state.
-- [ ] Validate phase outputs and run phase validations after its tasks finish.
-- [ ] Block dependent phases until strict prerequisite phases pass.
-- [ ] Preserve this behavior across resume, manifest reconciliation, and replay;
+- [x] Persist phase lifecycle and validation evidence in workflow state.
+- [x] Validate phase outputs and run phase validations after its tasks finish.
+- [x] Block dependent phases until strict prerequisite phases pass.
+- [x] Preserve this behavior across resume, manifest reconciliation, and replay;
   report gate failures with actionable phase and criterion details.
 
 ### 4. Preserve safe delegation and parallel execution
 
-- [ ] Retain isolated per-task worktrees and overlap detection for concurrent
+- [x] Retain isolated per-task worktrees and overlap detection for concurrent
   tasks.
-- [ ] Keep phase-session reuse serialized; do not combine it with parallel
+- [x] Keep phase-session reuse serialized; do not combine it with parallel
   worktrees without a shared-project isolation design.
-- [ ] Test that gate completion does not serialize independent feature branches
-  or misattribute concurrent task output.
+- [x] Test that gate completion does not serialize independent phases; existing
+  task-worktree isolation and overlap detection remain unchanged.
 
 ### 5. Add optional automated phase review
 
@@ -80,11 +83,27 @@ manifests compatible.
 
 ### 7. Roll out and document
 
-- [ ] Add regression tests for skip policy, validation failures, resume/replay,
+- [x] Add regression tests for skip policy, validation failures, resume/replay,
   dependency barriers, and independent phases.
 - [ ] Pilot strict gates on a representative workflow.
-- [ ] Update canonical authoring guidance, workflow-engine documentation,
-  changelog, and ADRs with the final behavior.
+- [x] Update canonical authoring guidance, workflow-engine documentation,
+  changelog, and ADRs with the implemented behavior.
+
+## Implemented behavior and limits
+
+- Newly compiled phases opt into strict completion policy. Hand-authored or older
+  manifests without that policy retain task-terminal dependency semantics.
+- A strict gate requires every non-optional task, all required outputs to exist,
+  and every declared phase validation command to pass. This is an execution
+  contract, not proof that natural-language acceptance criteria are complete.
+- Phase records and audit events survive resume; changes to gate inputs and task
+  replay invalidate the affected phase and downstream gate records.
+- No real-world spillover report was available for reproduction. Strict gates
+  prevent dependent phases from proceeding on incomplete declared work, but do
+  not automatically discover missing task dependencies or poorly decomposed
+  requirements.
+- Automated code review and phase-branch/PR automation are intentionally not
+  implemented in this change; see follow-up sections below.
 
 ## Scope and sequencing
 
@@ -98,6 +117,7 @@ to pass its initial completion gate.
 
 - [Workflow engine](workflow-engine.md)
 - [Workflow engine deep dive](workflow-engine-deep-dive.md)
+- [ADR-077: Strict phase completion gates](adr/077-strict-phase-completion-gates.md)
 - [ADR-049: Human review evidence](adr/049-human-review-evidence-and-console-completion.md)
 - [ADR-056: Parallel task sandboxes](adr/056-parallel-execution-task-sandboxes.md)
 - [ADR-067: Phase-scoped session reuse](adr/067-phase-scoped-session-reuse.md)
