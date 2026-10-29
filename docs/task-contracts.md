@@ -26,6 +26,13 @@ See the [authoring contract and example](../templates/skills/forge-build-prd/ref
   report gates pass, regardless of `--run-validation` or `--allow-noop`. Failed checks
   prevent completion. These are trusted executable commands: review authored
   commands before running a plan, as with any build script.
+- Task validation commands should target the task's behavior and changed surface,
+  using checks explicitly named in its contract. Do not repeat the full phase or
+  repository suite after every task by default; include broader task checks when
+  risk or cross-cutting changes justify them. At the phase boundary, run the
+  comprehensive regression and integration checks for the combined phase. Both
+  levels must be explicit and meaningful; the engine does not infer related tests
+  from changed file paths.
 - Newly compiled phases have strict completion gates. Every task is required by
   default; set `"required": false` in a `forge-task` object, or prefix a legacy
   task bullet with `[optional]`, when it may be skipped. Required-task outputs
@@ -33,6 +40,10 @@ See the [authoring contract and example](../templates/skills/forge-build-prd/ref
   document run after its tasks finish. Dependent phases wait until the required
   tasks, outputs and phase checks all pass. This does not replace explicit human
   review tasks or automatically review the integrated code diff.
+- If optional automated phase review is enabled, it follows successful phase
+  validation and reviews the integrated diff against acceptance criteria. Any
+  implementation changes prompted by findings require rerunning the affected
+  task checks and the complete phase checks before the phase can pass review.
 - Required acceptance criteria are included in the task execution instructions; they are not a
   formal proof. A vacuous test can still pass, so command relevance and coverage
   remain authoring/review responsibilities.

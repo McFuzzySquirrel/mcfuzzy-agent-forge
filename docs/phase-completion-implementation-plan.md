@@ -68,8 +68,11 @@ manifests compatible.
 ### 5. Add optional automated phase review
 
 - [ ] Design an opt-in reviewer that inspects the integrated phase diff and its
-  acceptance criteria after validation.
+  acceptance criteria after the comprehensive phase checks pass.
 - [ ] Define blocking thresholds and return findings to implementation work.
+- [x] Define the testing order: focused task checks, complete phase regression
+  checks, then optional code review; fixes rerun affected task checks and the
+  full phase suite.
 - [ ] Keep agent review distinct from human approval; human approval continues to
   use the canonical content-bound attestation.
 
@@ -104,6 +107,11 @@ manifests compatible.
   requirements.
 - Automated code review and phase-branch/PR automation are intentionally not
   implemented in this change; see follow-up sections below.
+- Task checks are explicitly authored for each task's behavior and changed
+  surface. Comprehensive cross-task regression/integration checks are authored
+  at the phase boundary; the engine does not guess test selection from paths.
+- If review is enabled later, its findings return to implementation; affected
+  task checks and the full phase suite must pass again before review can clear.
 
 ## Scope and sequencing
 
@@ -118,6 +126,7 @@ to pass its initial completion gate.
 - [Workflow engine](workflow-engine.md)
 - [Workflow engine deep dive](workflow-engine-deep-dive.md)
 - [ADR-077: Strict phase completion gates](adr/077-strict-phase-completion-gates.md)
+- [ADR-078: Task and phase testing strategy](adr/078-task-and-phase-testing-strategy.md)
 - [ADR-049: Human review evidence](adr/049-human-review-evidence-and-console-completion.md)
 - [ADR-056: Parallel task sandboxes](adr/056-parallel-execution-task-sandboxes.md)
 - [ADR-067: Phase-scoped session reuse](adr/067-phase-scoped-session-reuse.md)

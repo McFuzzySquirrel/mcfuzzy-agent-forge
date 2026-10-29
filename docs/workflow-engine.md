@@ -237,6 +237,15 @@ commands pass. Optional tasks may be skipped. Phase validation commands are
 collected from that phase's feature-document content and run from the repository
 root after its tasks finish.
 
+Use task `validationCommands` for focused checks of each task's behavior and
+changed surface; do not repeat the full phase suite after every task by default.
+Declare comprehensive cross-task regression and integration checks in the phase
+content so they run once the phase's task work is integrated. The engine executes
+the commands authors declare and does not infer test selection from changed paths.
+If automated phase review is enabled in a future workflow, it follows successful
+phase checks; implementation fixes require rerunning affected task checks and
+the full phase checks before review can pass.
+
 The engine persists phase state and validation evidence in
 `docs/WORKFLOW-STATE.json`, and writes `phase.validating`, `phase.complete`, or
 `phase.failed` audit events. A dependent phase waits for its strict prerequisite

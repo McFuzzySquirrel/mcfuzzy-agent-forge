@@ -4,6 +4,20 @@ Detailed release and change notes for MyForge.
 
 ---
 
+## October 2026 - v3.115
+
+### Task-focused and phase-level testing
+
+- Task validation guidance now favors checks targeted to the task's behavior and
+  changed surface instead of repeating the full suite after every task.
+- Phase content owns comprehensive regression and integration checks after task
+  work is integrated. Optional automated review follows passing phase checks;
+  fixes require rerunning affected task checks and the full phase suite.
+- Test selection remains explicit; the engine does not guess related tests from
+  changed file paths.
+
+---
+
 ## October 2026 - v3.114
 
 ### Strict phase completion gates

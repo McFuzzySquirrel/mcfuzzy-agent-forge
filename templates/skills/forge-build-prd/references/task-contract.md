@@ -20,6 +20,11 @@ renumber completed work without the user's authorization.
 - Include tests in the task that implements the behavior. Specify repository-root
   commands that actually exist or are created by this task. Never invent passing
   results, tool availability, deployed resources, human review, or compliance.
+- Keep each task's `validationCommands` focused on its behavior and changed
+  surface, preferably the targeted tests explicitly named in its acceptance
+  criteria. Do not run the full phase/repository suite after each task by default;
+  include a broader task check when the change is risky or cross-cutting. Do not
+  infer test ownership solely from changed paths.
 - Tasks are required by default. Set `"required": false` only for work that may
   be skipped without preventing the phase from being delivered. A strict phase
   gate requires every non-optional task, its declared outputs, and the phase's
@@ -71,11 +76,12 @@ implementations. Extract unrelated infrastructure or presentation work instead.
 Shared foundation interfaces should be explicit prerequisites; do not chain every
 task to the previous task merely because it appears earlier in the document.
 
-Every changed surface needs a check: domain tests for invariants, UI interaction
-tests for views and confirmation flows, configuration/IaC validation for hosting,
-and documentation/evidence checks for release materials. A .NET category filter
-does not validate a React view. Name exact test files in outputs where tests are
-created or modified; directories such as `src/web` are not deliverables.
+Every changed surface needs a task-level check: domain tests for invariants, UI
+interaction tests for views and confirmation flows, configuration/IaC validation
+for hosting, and documentation/evidence checks for release materials. A .NET
+category filter does not validate a React view. Name exact test files in outputs
+where tests are created or modified; directories such as `src/web` are not
+deliverables.
 
 Commands are planned before code exists, so the prerequisite task must establish
 the test runner and its filtering convention. Require test discovery to find the
@@ -85,10 +91,15 @@ During execution use the runner's fail-on-no-tests option or inspect its structu
 test report with a repository validation script; do not assume exit zero proves
 any tests ran. Acceptance criteria must map to named checks, not generic categories.
 
-Keep focused tests with implementation. Put expensive statistical simulations,
-hosted integration, performance matrices, and release-wide evaluation in explicit
-integration/evaluation tasks after their prerequisites, with report files and
+Keep focused tests with implementation. Put comprehensive cross-task regression
+and integration commands in the phase body so they run after the phase's tasks
+have integrated. Put expensive statistical simulations, hosted integration,
+performance matrices, and release-wide evaluation in explicit integration/
+evaluation tasks after their prerequisites, with report files and
 threshold-checking commands. Do not make an early task pass the entire release suite.
+If optional automated phase review is enabled, run it only after phase checks
+pass; after fixes, rerun affected task checks and the full phase checks before
+review can pass.
 Human rubric scores, native-language approval, and stakeholder judgments belong
 only to dependent human-review tasks. Implementation produces reviewable evidence;
 it cannot claim "native-reviewed" or human-approved before that gate runs.
