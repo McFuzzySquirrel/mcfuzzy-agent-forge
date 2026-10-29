@@ -540,6 +540,36 @@ test("strict phase gate rejects a skipped required task but accepts an optional 
   }
 });
 
+test("independent strict phases remain concurrent", async () => {
+  const fixture = makeEngineFixture();
+  addStrictDependentPhase(fixture);
+  const manifest = JSON.parse(readFileSync(fixture.manifestPath, "utf8")) as ExecutionManifest;
+  manifest.phases[1]!.dependencies = [];
+  manifest.phases[1]!.tasks[0]!.ownerAgent = "designer";
+  manifest.phases[1]!.ownerAgents = ["designer"];
+  writeFileSync(fixture.manifestPath, JSON.stringify(manifest), "utf8");
+  writeFileSync(join(fixture.root, ".agents", "agents", "designer.md"), `---
+name: designer
+description: Builds the independent phase.
+---
+`, "utf8");
+  initGit(fixture.root);
+  execFileSync("git", ["add", "."], { cwd: fixture.root });
+  execFileSync("git", ["commit", "-qm", "test fixture"], { cwd: fixture.root });
+
+  const harness = new GatedConcurrentHarness();
+  const running = runEngine(engineOptionsFor(fixture, harness, 1_000, { maxConcurrency: 2 }));
+  await Promise.all([harness.whenStarted("1.1"), harness.whenStarted("2.1")]);
+  assert.equal(harness.maxOverlap, 2);
+  harness.release("1.1");
+  harness.release("2.1");
+  const state = await running;
+
+  assert.equal(state.status, "complete");
+  assert.equal(state.phases?.["1"]?.status, "complete");
+  assert.equal(state.phases?.["2"]?.status, "complete");
+});
+
 test("phase validation failure is retried after its contract changes on resume", async () => {
   const fixture = makeEngineFixture();
   addStrictDependentPhase(fixture, { validationCommands: [`node -e "process.exit(1)"`] });
