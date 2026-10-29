@@ -53,5 +53,13 @@ export function unmetPrerequisites(
   state: WorkflowState,
   taskId: string,
 ): string[] {
-  return prerequisites(manifest, taskId).filter((id) => !isTaskDone(state.tasks?.[id]?.status));
+  const taskPrerequisites = prerequisites(manifest, taskId)
+    .filter((id) => !isTaskDone(state.tasks?.[id]?.status));
+  const phase = manifest.phases.find((candidate) => candidate.tasks.some((task) => task.id === taskId));
+  const incompleteGates = (phase?.dependencies ?? []).flatMap((phaseId) => {
+    const dependency = manifest.phases.find((candidate) => candidate.id === phaseId);
+    if (dependency?.completionPolicy !== "strict" || dependency.tasks.some((task) => !isTaskDone(state.tasks?.[task.id]?.status))) return [];
+    return state.phases?.[phaseId]?.status === "complete" ? [] : [`phase:${phaseId}`];
+  });
+  return [...taskPrerequisites, ...incompleteGates];
 }

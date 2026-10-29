@@ -3,7 +3,7 @@ import { dirname, join } from "node:path";
 import { randomUUID } from "node:crypto";
 
 import type { AuditEvent, TaskRecord, TaskUsage, WorkflowState } from "./types.ts";
-import type { ExecutionManifest, TaskSelection } from "./types.ts";
+import type { ExecutionManifest, ManifestPhase, PhaseRecord, TaskSelection } from "./types.ts";
 import { broadcastAudit } from "./viz/bus.ts";
 
 // ─── State file helpers ───────────────────────────────────────────────────────
@@ -24,6 +24,29 @@ export function saveState(statePath: string, state: WorkflowState): void {
   }
 }
 
+function phaseContractFingerprint(phase: ManifestPhase): string {
+  return JSON.stringify({
+    completionPolicy: phase.completionPolicy ?? "task-only",
+    dependencies: phase.dependencies,
+    requiredOutputs: phase.requiredOutputs ?? [],
+    validationCommands: phase.validationCommands ?? [],
+    tasks: phase.tasks.map((task) => ({
+      id: task.id,
+      required: task.required !== false,
+      expectedOutputs: task.expectedOutputs,
+    })),
+  });
+}
+
+function initialPhaseRecord(phase: ManifestPhase, status: PhaseRecord["status"] = "pending"): PhaseRecord {
+  return {
+    phaseId: phase.id,
+    status,
+    contractFingerprint: phaseContractFingerprint(phase),
+    updatedAt: new Date().toISOString(),
+  };
+}
+
 export function initState(
   manifest: ExecutionManifest,
   manifestPath: string,
@@ -31,8 +54,10 @@ export function initState(
 ): WorkflowState {
   const now = new Date().toISOString();
   const tasks: Record<string, TaskRecord> = {};
+  const phases: Record<string, PhaseRecord> = {};
 
   for (const phase of manifest.phases) {
+    phases[phase.id] = initialPhaseRecord(phase);
     for (const task of phase.tasks) {
       tasks[task.id] = {
         taskId: task.id,
@@ -54,6 +79,7 @@ export function initState(
     status: "running",
     currentPhase: manifest.phases[0]?.id,
     tasks,
+    phases,
     blockers: [],
     auditLog: [],
     sessions: {},
@@ -63,6 +89,7 @@ export function initState(
 /** Preserve persisted task records by stable ID while adopting a new manifest. */
 export function reconcileState(state: WorkflowState, manifest: ExecutionManifest): WorkflowState {
   const nextTasks: Record<string, TaskRecord> = {};
+  const nextPhases: Record<string, PhaseRecord> = {};
   for (const phase of manifest.phases) {
     for (const task of phase.tasks) {
       nextTasks[task.id] = state.tasks[task.id] ?? {
@@ -70,15 +97,23 @@ export function reconcileState(state: WorkflowState, manifest: ExecutionManifest
       };
       if (state.tasks[task.id]) nextTasks[task.id] = { ...state.tasks[task.id], ownerAgent: task.ownerAgent };
     }
+    const previous = state.phases?.[phase.id];
+    const fingerprint = phaseContractFingerprint(phase);
+    nextPhases[phase.id] = previous?.contractFingerprint === fingerprint
+      ? previous
+      : initialPhaseRecord(phase);
   }
   const added = Object.keys(nextTasks).filter((id) => !state.tasks[id]);
   const removed = Object.keys(state.tasks).filter((id) => !nextTasks[id]);
+  const phaseRecordsChanged = Object.keys(nextPhases).length !== Object.keys(state.phases ?? {}).length
+    || Object.entries(nextPhases).some(([id, phase]) => phase !== state.phases?.[id]);
   const changed = new Set(manifest.reconciliation?.changedTaskIds ?? []);
-  if (added.length === 0 && removed.length === 0 && changed.size === 0 && state.manifestVersion === manifest.version) return state;
+  if (added.length === 0 && removed.length === 0 && changed.size === 0 && !phaseRecordsChanged && state.manifestVersion === manifest.version) return state;
   return {
     ...state,
     manifestVersion: manifest.version,
     tasks: nextTasks,
+    phases: nextPhases,
     blockers: [...state.blockers,
       ...(added.length ? [`Manifest reconciliation added ${added.length} pending task(s): ${added.join(", ")}`] : []),
       ...(removed.length ? [`Manifest reconciliation removed ${removed.length} task(s): ${removed.join(", ")}`] : []),

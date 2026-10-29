@@ -84,6 +84,16 @@ export interface TaskGateResult {
 // ─── Workflow run state ───────────────────────────────────────────────────────
 
 export type RunStatus = "running" | "paused" | "complete" | "failed";
+export type PhaseStatus = "pending" | "running" | "validating" | "complete" | "failed";
+
+export interface PhaseRecord {
+  phaseId: string;
+  status: PhaseStatus;
+  contractFingerprint: string;
+  updatedAt: string;
+  validationEvidence?: string[];
+  errorMessage?: string;
+}
 
 export interface WorkflowState {
   runId: string;
@@ -95,6 +105,8 @@ export interface WorkflowState {
   status: RunStatus;
   currentPhase?: string;
   tasks: Record<string, TaskRecord>;
+  /** Durable phase-level completion gates; absent in state files written before phase gates. */
+  phases?: Record<string, PhaseRecord>;
   blockers: string[];
   auditLog: AuditEvent[];
   selection?: TaskSelection;
