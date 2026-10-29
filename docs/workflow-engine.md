@@ -253,6 +253,10 @@ If automated phase review is enabled in a future workflow, it follows successful
 phase checks; implementation fixes require rerunning affected task checks and
 the full phase checks before review can pass.
 
+For a disposable end-to-end check of task test discovery, phase failure/blocking,
+resume, and independent-task parallelism, see the
+[phase completion real-run test guide](phase-completion-test-guide.md).
+
 The engine persists phase state and validation evidence in
 `docs/WORKFLOW-STATE.json`, and writes `phase.validating`, `phase.complete`, or
 `phase.failed` audit events. A dependent phase waits for its strict prerequisite

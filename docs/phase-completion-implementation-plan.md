@@ -92,6 +92,8 @@ manifests compatible.
 - [x] Add regression tests for skip policy, validation failures, resume/replay,
   dependency barriers, and independent phases.
 - [ ] Pilot strict gates on a representative workflow.
+- [x] Add a disposable real-run test checklist and sample workflow for the
+  operator to pilot.
 - [x] Update canonical authoring guidance, workflow-engine documentation,
   changelog, and ADRs with the implemented behavior.
 
