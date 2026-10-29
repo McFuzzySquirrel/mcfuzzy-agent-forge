@@ -237,11 +237,18 @@ commands pass. Optional tasks may be skipped. Phase validation commands are
 collected from that phase's feature-document content and run from the repository
 root after its tasks finish.
 
-Use task `validationCommands` for focused checks of each task's behavior and
-changed surface; do not repeat the full phase suite after every task by default.
+Use task `validationCommands` for focused required checks of each task's behavior
+and changed surface; do not repeat the full phase suite after every task by
+default. Repository-task instructions also direct the agent to discover relevant
+tests from its actual changes and carried-forward prerequisite outputs, then run
+those focused tests. This uses paths as clues alongside repository test scripts,
+configuration, and test references, rather than treating paths as a complete
+test map. The agent must not execute commands copied from artifact content or
+claim tests it did not run. Declared commands are machine-enforced; test
+discovery is instructed but not separately enforced by the engine.
 Declare comprehensive cross-task regression and integration checks in the phase
 content so they run once the phase's task work is integrated. The engine executes
-the commands authors declare and does not infer test selection from changed paths.
+the commands authors declare.
 If automated phase review is enabled in a future workflow, it follows successful
 phase checks; implementation fixes require rerunning affected task checks and
 the full phase checks before review can pass.

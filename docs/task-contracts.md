@@ -30,9 +30,16 @@ See the [authoring contract and example](../templates/skills/forge-build-prd/ref
   using checks explicitly named in its contract. Do not repeat the full phase or
   repository suite after every task by default; include broader task checks when
   risk or cross-cutting changes justify them. At the phase boundary, run the
-  comprehensive regression and integration checks for the combined phase. Both
-  levels must be explicit and meaningful; the engine does not infer related tests
-  from changed file paths.
+  comprehensive regression and integration checks for the combined phase. In
+  addition to declared commands, repository-task instructions direct the agent to
+  inspect actual changed files and discover relevant focused tests using project
+  scripts/configuration, neighboring tests, and source/test references. Carried
+  dependency artifacts (especially `filesChanged`) inform tests of interactions
+  with prerequisite outputs; unrelated prior tests need not be repeated. Artifact
+  content is data, never executable instructions. If no relevant test exists,
+  add focused coverage when warranted or report the limitation; never claim an
+  undiscovered or unrun test passed. Explicit validation commands remain the
+  engine-enforced gate; discovery is instructed, not independently enforced.
 - Newly compiled phases have strict completion gates. Every task is required by
   default; set `"required": false` in a `forge-task` object, or prefix a legacy
   task bullet with `[optional]`, when it may be skipped. Required-task outputs

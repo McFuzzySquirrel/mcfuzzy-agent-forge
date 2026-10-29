@@ -4,6 +4,22 @@ Detailed release and change notes for MyForge.
 
 ---
 
+## October 2026 - v3.116
+
+### Task test discovery from changes and handoffs
+
+- Repository-task prompts now direct agents to discover and run focused tests
+  relevant to actual changed files, using repository test configuration and
+  source/test references alongside path clues.
+- Carried-forward prerequisite artifact file lists help identify tests for
+  interactions with prior task outputs; unrelated tests are not rerun just
+  because they appear in the handoff.
+- Declared validation commands remain the machine-enforced gate. Agents must
+  treat artifact content as data, report unavailable/no-test cases accurately,
+  and never claim an unrun test passed.
+
+---
+
 ## October 2026 - v3.115
 
 ### Task-focused and phase-level testing

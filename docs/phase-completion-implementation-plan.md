@@ -73,6 +73,9 @@ manifests compatible.
 - [x] Define the testing order: focused task checks, complete phase regression
   checks, then optional code review; fixes rerun affected task checks and the
   full phase suite.
+- [x] Instruct each repository task to discover focused tests from its actual
+  changed files and carried-forward prerequisite outputs, in addition to running
+  declared validations; document safety boundaries and no-tests reporting.
 - [ ] Keep agent review distinct from human approval; human approval continues to
   use the canonical content-bound attestation.
 
@@ -108,8 +111,10 @@ manifests compatible.
 - Automated code review and phase-branch/PR automation are intentionally not
   implemented in this change; see follow-up sections below.
 - Task checks are explicitly authored for each task's behavior and changed
-  surface. Comprehensive cross-task regression/integration checks are authored
-  at the phase boundary; the engine does not guess test selection from paths.
+  surface, and the task agent is instructed to discover relevant focused tests
+  using actual changes plus carried-forward prerequisite output files. This is
+  prompt guidance, not an engine-enforced discovery subsystem. Comprehensive
+  cross-task regression/integration checks are authored at the phase boundary.
 - If review is enabled later, its findings return to implementation; affected
   task checks and the full phase suite must pass again before review can clear.
 
