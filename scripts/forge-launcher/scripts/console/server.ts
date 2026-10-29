@@ -172,7 +172,7 @@ async function approveConsoleHumanReview(repoRoot: string, taskId: string, revie
       const taskDependencies = unmet.filter((id) => !id.startsWith("phase:"));
       const phaseGates = unmet.filter((id) => id.startsWith("phase:")).map((id) => id.slice("phase:".length));
       const reasons = [
-        ...(taskDependencies.length ? [`${taskDependencies.join(", ")} must be complete or skipped`] : []),
+        ...(taskDependencies.length ? [`${taskDependencies.join(", ")} must be complete or skipped first`] : []),
         ...(phaseGates.length ? [`phase completion gate(s) ${phaseGates.join(", ")} must pass`] : []),
       ];
       throw new Error(`Cannot approve '${taskId}' yet: ${reasons.join("; ")}. A human review attests to delivered work.`);

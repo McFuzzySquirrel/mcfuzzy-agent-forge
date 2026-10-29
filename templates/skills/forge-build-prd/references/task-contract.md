@@ -20,6 +20,10 @@ renumber completed work without the user's authorization.
 - Include tests in the task that implements the behavior. Specify repository-root
   commands that actually exist or are created by this task. Never invent passing
   results, tool availability, deployed resources, human review, or compliance.
+- Tasks are required by default. Set `"required": false` only for work that may
+  be skipped without preventing the phase from being delivered. A strict phase
+  gate requires every non-optional task, its declared outputs, and the phase's
+  validation commands to pass before dependent phases begin.
 - References are input files, outputs are concrete deliverable files. Existing
   files can be outputs when intentionally modified, but a path cannot be both an
   input reference and an output in the same task. Reference another requirements
@@ -158,7 +162,7 @@ selected content: changed rules invalidate approval; unrelated sections do not.
 ## Legacy Version-1 JSON Format
 
 Place this inside a `### Phase 1: ...` section. Use ordinary JSON, no comments.
-Every field below is required except `timeoutMs`; empty constraints/dependencies
+Every field below is required except `required` and `timeoutMs`; empty constraints/dependencies
 are valid. Adapt paths, commands, names, and requirements to the actual project.
 
 ```forge-task

@@ -26,14 +26,22 @@ export function saveState(statePath: string, state: WorkflowState): void {
 
 function phaseContractFingerprint(phase: ManifestPhase): string {
   return JSON.stringify({
+    title: phase.title,
+    description: phase.description,
     completionPolicy: phase.completionPolicy ?? "task-only",
     dependencies: phase.dependencies,
     requiredOutputs: phase.requiredOutputs ?? [],
     validationCommands: phase.validationCommands ?? [],
     tasks: phase.tasks.map((task) => ({
       id: task.id,
+      title: task.title,
+      description: task.description,
+      ownerAgent: task.ownerAgent,
       required: task.required !== false,
+      dependencies: task.dependencies,
       expectedOutputs: task.expectedOutputs,
+      validationCommands: task.validationCommands,
+      contract: task.contract,
     })),
   });
 }

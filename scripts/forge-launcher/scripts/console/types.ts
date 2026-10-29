@@ -269,8 +269,7 @@ export interface TaskRow {
   /** Checks reported as not run by this task or, for human reviews, by any upstream dependency. */
   validationGaps: string[];
   /**
-   * Prerequisites that are not yet complete or skipped, using the engine's own
-   * dispatch rule (direct dependencies plus transitive phase dependencies). A
+   * Task dependencies or strict phase gates that are not yet complete. A
    * human-review task with a non-empty list is not reviewable yet, so the Tasks
    * view must not offer its approval action.
    */

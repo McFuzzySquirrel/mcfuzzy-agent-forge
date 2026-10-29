@@ -483,11 +483,16 @@ function humanReviewAction(t: TaskRow): HTMLElement {
   const complete = gate.state === "complete";
   if (gate.state === "blocked") {
     const unmet = gate.unmet;
+    const taskDependencies = unmet.filter((id) => !id.startsWith("phase:"));
+    const phaseGates = unmet.filter((id) => id.startsWith("phase:")).map((id) => id.slice("phase:".length));
+    const waiting = [
+      ...(taskDependencies.length ? [`prerequisite task${taskDependencies.length === 1 ? "" : "s"} ${taskDependencies.join(", ")}`] : []),
+      ...(phaseGates.length ? [`phase completion gate${phaseGates.length === 1 ? "" : "s"} ${phaseGates.join(", ")}`] : []),
+    ];
     return el("div", { class: "review-action" }, [
       el("div", { class: "k" }, "Human review blocked"),
       el("p", { class: "dim small" },
-        `Waiting on ${unmet.length} prerequisite task${unmet.length === 1 ? "" : "s"}: ${unmet.join(", ")}. `
-        + "The review action appears once they are complete."),
+        `Waiting on ${waiting.join(" and ")}. The review action appears once the prerequisites and phase gates pass.`),
     ]);
   }
   const button = el("button", {

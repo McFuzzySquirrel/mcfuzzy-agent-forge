@@ -39,9 +39,8 @@ export function prerequisites(manifest: ExecutionManifest, taskId: string): stri
 }
 
 /**
- * Every prerequisite of `taskId` that is not yet complete or skipped, using the
- * same direct-dependency plus transitive-phase-dependency rule the engine
- * dispatches on.
+ * Every prerequisite of `taskId` that is not yet complete or skipped, including
+ * strict phase completion gates that have not passed.
  *
  * This is the single definition of "is this task reviewable yet". The engine
  * gates dispatch on it, the Console surfaces it, and both approval surfaces

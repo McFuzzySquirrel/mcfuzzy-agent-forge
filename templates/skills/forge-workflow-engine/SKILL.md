@@ -44,6 +44,16 @@ npm run forge-execution-adapter -- compile
 
 ## Install & Run
 
+### Phase completion
+
+Newly compiled feature manifests use strict phase completion. Every task is
+required unless its `forge-task` block sets `"required": false` or a legacy task
+bullet starts with `[optional]`. Required outputs and phase-level validation
+commands must pass before dependent phases are dispatched. Inspect
+`docs/WORKFLOW-STATE.json` and `docs/EXECUTION-AUDIT.jsonl` for phase status and
+validation evidence when a gate fails. This automatic gate is not human approval;
+explicit human-review tasks still require operator evidence.
+
 ### Task execution files
 
 For repository-tool tasks, Copilot/OpenCode receive a short single-line prompt

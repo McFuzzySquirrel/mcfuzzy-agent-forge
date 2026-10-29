@@ -144,8 +144,10 @@ test("strict phase dependencies wait for the persisted completion gate", () => {
   state.phases = { one: { phaseId: "one", status: "validating", contractFingerprint: "test", updatedAt: new Date().toISOString() } };
 
   assert.deepEqual(nextReadyTasks(manifest, state).map((entry) => entry.task.id), []);
+  assert.deepEqual(unmetPrerequisites(manifest, state, "two.1"), ["phase:one"]);
   state.phases.one!.status = "complete";
   assert.deepEqual(nextReadyTasks(manifest, state).map((entry) => entry.task.id), ["two.1"]);
+  assert.deepEqual(unmetPrerequisites(manifest, state, "two.1"), []);
 });
 
 test("unmetPrerequisites agrees with nextReadyTasks about what is reviewable", () => {
@@ -463,6 +465,8 @@ function addStrictDependentPhase(fixture: EngineFixture, phaseOne: Partial<Manif
     id: "2",
     title: "Second phase",
     dependencies: ["1"],
+    requiredOutputs: [],
+    validationCommands: [],
     tasks: [secondTask],
   });
   writeFileSync(fixture.manifestPath, JSON.stringify(manifest), "utf8");
@@ -481,7 +485,7 @@ test("strict phase validation passes before dispatching a dependent phase", asyn
   const fixture = makeEngineFixture();
   addStrictDependentPhase(fixture, {
     requiredOutputs: ["phase-marker"],
-    validationCommands: [`node -e "require('fs').writeFileSync('phase-marker', 'passed')"`],
+    validationCommands: [`node -e "if (!require('fs').existsSync('phase-marker')) process.exit(1)"`],
   });
   const seen: string[] = [];
   const harness: HarnessAdapter = {
@@ -490,6 +494,7 @@ test("strict phase validation passes before dispatching a dependent phase", asyn
     capabilities: ["text", "repository-tools"],
     async invoke({ task, repoRoot }) {
       seen.push(task.id);
+      if (task.id === "1.1") writeFileSync(join(repoRoot, "phase-marker"), "passed");
       if (task.id === "2.1") assert.equal(existsSync(join(repoRoot, "phase-marker")), true);
       return { success: true, outputFiles: [], stdout: "completed task", stderr: "", durationMs: 1 };
     },

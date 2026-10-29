@@ -461,8 +461,8 @@ export function tasks(p: RepoPaths): TaskRow[] {
   }));
   const ownGaps = (taskId: string) => (state?.tasks?.[taskId]?.validationLimitations ?? []).map((gap) => `${taskId}: ${gap}`);
   // Mirrors the engine's dispatch rule (engine.ts `nextReadyTasks`): a task is
-  // dispatchable only once its direct dependencies and every task of a phase it
-  // depends on are complete or skipped. The engine exports this as
+  // dispatchable only once its direct dependencies, every task of a phase it
+  // depends on, and each strict phase completion gate have passed. The engine exports this as
   // `unmetPrerequisites`; this copy exists because `tasks()` is synchronous and
   // cannot reach engine code at runtime, so the approval API re-uses the
   // engine's own definition as the authority and this one only decides what the

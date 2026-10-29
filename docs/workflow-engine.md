@@ -226,6 +226,31 @@ On success, the envelope's `result` text supplies the `forge-result` report to t
 same engine completion gates, attempt archives, and retry feedback as the other
 adapters. A successful CLI envelope alone does not mark a structured task complete.
 
+### Strict phase completion
+
+Newly compiled feature manifests mark phases as `completionPolicy: "strict"`.
+Tasks default to required; a task may be declared optional with `"required":
+false` in a `forge-task` block or an `[optional]` prefix on a legacy task bullet.
+A strict phase completes only when each required task completes, its required
+outputs exist in the integrated repository, and its phase-level validation
+commands pass. Optional tasks may be skipped. Phase validation commands are
+collected from that phase's feature-document content and run from the repository
+root after its tasks finish.
+
+The engine persists phase state and validation evidence in
+`docs/WORKFLOW-STATE.json`, and writes `phase.validating`, `phase.complete`, or
+`phase.failed` audit events. A dependent phase waits for its strict prerequisite
+gate, not just for prerequisite task records to become terminal. A failed gate
+names the skipped task, missing output, or failed command; fix the contract or
+work and resume/replay. Recompiling a changed phase contract invalidates its
+stored gate, and replay invalidates gates for that phase and its dependents.
+
+This gate is automatic validation, not an operator approval or code review.
+Explicit `human-review` tasks still require the existing content-bound human
+attestation. Legacy manifests without `completionPolicy: "strict"` keep their
+existing task-terminal dependency behavior. Phase barriers remain
+dependency-scoped, so independent features are not serialized.
+
 ### Phase-scoped session reuse
 
 By default every task runs in a **fresh, isolated session** (ADR-058). For

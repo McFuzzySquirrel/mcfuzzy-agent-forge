@@ -4,6 +4,23 @@ Detailed release and change notes for MyForge.
 
 ---
 
+## October 2026 - v3.114
+
+### Strict phase completion gates
+
+- Newly compiled phases now require every required task, declared output, and
+  phase-level validation to pass before dependent phases can start. Optional
+  tasks can be skipped explicitly.
+- Phase lifecycle and validation evidence are persisted and audited; contract
+  changes and replay invalidate affected phase gates. Independent feature
+  branches remain dependency-scoped and can still run concurrently.
+- Added an implementation plan at
+  [`docs/phase-completion-implementation-plan.md`](phase-completion-implementation-plan.md).
+- Automated code review and phase-branch/PR automation remain separate
+  follow-up work.
+
+---
+
 ## October 2026 - v3.113
 
 ### Console light theme and Appearance settings

@@ -1358,6 +1358,29 @@ async function replayTaskSession(taskId: string, opts: EngineOptions): Promise<W
   const phaseId = findPhaseForTask(manifest, taskId);
   const task = findTask(manifest, taskId);
   if (!task || !phaseId) throw new Error(`Task '${taskId}' not found in manifest.`);
+  const invalidatedPhases = new Set([phaseId]);
+  let grew = true;
+  while (grew) {
+    grew = false;
+    for (const phase of manifest.phases) {
+      if (!invalidatedPhases.has(phase.id) && phase.dependencies.some((dependency) => invalidatedPhases.has(dependency))) {
+        invalidatedPhases.add(phase.id);
+        grew = true;
+      }
+    }
+  }
+  for (const id of invalidatedPhases) {
+    const record = state.phases?.[id];
+    if (!record) continue;
+    state.phases![id] = {
+      ...record,
+      status: "pending",
+      updatedAt: new Date().toISOString(),
+      validationEvidence: undefined,
+      errorMessage: undefined,
+    };
+  }
+  if (invalidatedPhases.size > 0) saveState(opts.statePath, state);
   const dependencyIds = expandSelectedTaskIds(manifest, [taskId]).filter((id) => id !== taskId);
   const replayRecords = state.tasks;
   const incomplete = dependencyIds.filter((id) => {
