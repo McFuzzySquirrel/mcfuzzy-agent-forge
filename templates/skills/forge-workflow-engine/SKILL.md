@@ -54,6 +54,12 @@ commands must pass before dependent phases are dispatched. Inspect
 validation evidence when a gate fails. This automatic gate is not human approval;
 explicit human-review tasks still require operator evidence.
 
+Declare focused task checks for each task's behavior and changed surface, and
+put comprehensive cross-task regression and integration checks in the phase
+content. The engine does not infer related tests from changed file paths. If
+automated phase review is enabled, it follows passing phase checks; any fixes
+must pass the affected task checks and the complete phase checks again.
+
 ### Task execution files
 
 For repository-tool tasks, Copilot/OpenCode receive a short single-line prompt
@@ -274,7 +280,9 @@ verifies a successful call before marking the task complete:
   `validationCommands` (cwd = repo root) and require them all to exit 0 before
   the task counts as complete. Tasks that declare validation are gated on it
   rather than the no-op heuristic. Without the flag, legacy commands are only
-  shown in the task prompt. Reported tests are not a substitute for engine checks.
+  shown in the task prompt. Keep task commands focused; phase commands provide
+  the broader regression/integration check after tasks finish. Reported tests are
+  not a substitute for engine checks.
 
 The pre-run summary prints the gate mode. The final summary and `status` also
 flag tasks completed with no recorded output files, so a hollow run is visible.
