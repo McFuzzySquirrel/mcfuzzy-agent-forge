@@ -74,6 +74,7 @@ export interface WorkflowState {
   status: string;
   currentPhase?: string;
   tasks: Record<string, TaskRecord>;
+  phases?: Record<string, { phaseId: string; status: string; errorMessage?: string }>;
   blockers: string[];
   selection?: { mode: ExecutionMode; scope?: SelectionScope; taskIds: string[] };
 }
@@ -98,12 +99,16 @@ export interface ExecutionManifest {
     ownerAgents: string[];
     dependencies: string[];
     approvalRequired: boolean;
+    completionPolicy?: "task-only" | "strict";
+    requiredOutputs?: string[];
+    validationCommands?: string[];
     tasks: Array<{
       id: string;
       title: string;
       description: string;
       ownerAgent?: string;
       dependencies: string[];
+      required?: boolean;
       expectedOutputs: string[];
       validationCommands: string[];
       approvalRequired: boolean;

@@ -17,6 +17,11 @@ test("structured tasks preserve fields without title truncation, path inference 
   assert.deepEqual(tasks[0]!.expectedOutputs, ["src/upload.ts"]);
   assert.deepEqual(tasks[0]!.contract, value.contract);
 });
+test("structured task required flag defaults on and may explicitly mark an optional task", () => {
+  assert.equal(parseTaskBlocks(block(value), [agent])![0]!.required, true);
+  assert.equal(parseTaskBlocks(block({ ...value, required: false }), [agent])![0]!.required, false);
+  assert.throws(() => parseTaskBlocks(block({ ...value, required: "no" }), [agent]), /required.*boolean/);
+});
 test("structured tasks reject missing validation and unknown owners", () => {
   assert.throws(() => parseTaskBlocks(block({ ...value, validationCommands: [] }), [agent]), /validationCommands/);
   assert.throws(() => parseTaskBlocks(block(value), []), /implementation owner/);

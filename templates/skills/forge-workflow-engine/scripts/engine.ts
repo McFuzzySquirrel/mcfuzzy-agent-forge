@@ -366,6 +366,7 @@ async function advancePhaseGates(
     const skippedRequired = phase.tasks
       .filter((task) => task.required !== false && state.tasks[task.id]?.status === "skipped")
       .map((task) => task.id);
+    const previousError = state.phases?.[phase.id]?.errorMessage;
     state = {
       ...state,
       phases: {
@@ -391,7 +392,6 @@ async function advancePhaseGates(
       : await runPhaseValidation(phase, opts.repoRoot, opts.taskTimeoutMs);
     const updatedAt = new Date().toISOString();
     const errorMessage = validation.ok ? undefined : validation.reason ?? `phase '${phase.id}' validation failed`;
-    const previousError = state.phases?.[phase.id]?.errorMessage;
     state = {
       ...state,
       phases: {

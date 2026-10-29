@@ -468,11 +468,21 @@ export function tasks(p: RepoPaths): TaskRow[] {
   // engine's own definition as the authority and this one only decides what the
   // row is labelled. A drift can therefore mislabel a row, never permit an
   // approval.
-  const unmetPrerequisites = (taskId: string): string[] =>
-    (dependenciesByTask.get(taskId) ?? []).filter((id) => {
+  const unmetPrerequisites = (taskId: string): string[] => {
+    const phaseId = manifest.phases.find((phase) => phase.tasks.some((task) => task.id === taskId))?.id;
+    const taskDependencies = (dependenciesByTask.get(taskId) ?? []).filter((id) => {
       const status = state?.tasks?.[id]?.status;
       return status !== "complete" && status !== "skipped";
     });
+    const phaseDependencies = (phasesById.get(phaseId ?? "")?.dependencies ?? []).flatMap((dependencyId) => {
+      const dependency = phasesById.get(dependencyId);
+      if (dependency?.completionPolicy !== "strict"
+          || dependency.tasks.some((task) => state?.tasks?.[task.id]?.status !== "complete" && state?.tasks?.[task.id]?.status !== "skipped")
+          || state?.phases?.[dependencyId]?.status === "complete") return [];
+      return [`phase:${dependencyId}`];
+    });
+    return [...taskDependencies, ...phaseDependencies];
+  };
   // A human reviewer must see every "not run" check the reviewed work depends on,
   // not only the review task's own record (which never has any).
   const upstreamGaps = (taskId: string): string[] => {

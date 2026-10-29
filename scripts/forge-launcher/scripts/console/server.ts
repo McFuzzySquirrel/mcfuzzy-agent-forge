@@ -169,7 +169,13 @@ async function approveConsoleHumanReview(repoRoot: string, taskId: string, revie
   if (state) {
     const unmet = engine.unmetPrerequisites(manifest, state, taskId);
     if (unmet.length > 0) {
-      throw new Error(`Cannot approve '${taskId}' yet: ${unmet.join(", ")} must be complete or skipped first. A human review attests to delivered work.`);
+      const taskDependencies = unmet.filter((id) => !id.startsWith("phase:"));
+      const phaseGates = unmet.filter((id) => id.startsWith("phase:")).map((id) => id.slice("phase:".length));
+      const reasons = [
+        ...(taskDependencies.length ? [`${taskDependencies.join(", ")} must be complete or skipped`] : []),
+        ...(phaseGates.length ? [`phase completion gate(s) ${phaseGates.join(", ")} must pass`] : []),
+      ];
+      throw new Error(`Cannot approve '${taskId}' yet: ${reasons.join("; ")}. A human review attests to delivered work.`);
     }
   }
   const generatedEvidence = context.writeHumanReviewEvidence(repoRoot, task, reviewer, notes);

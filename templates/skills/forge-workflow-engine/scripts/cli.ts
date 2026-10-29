@@ -613,7 +613,13 @@ async function main(): Promise<void> {
       if (state) {
         const unmet = unmetPrerequisites(manifest, state, task.id);
         if (unmet.length > 0) {
-          throw new Error(`Cannot approve '${task.id}' yet: ${unmet.join(", ")} must be complete or skipped first. A human review attests to delivered work.`);
+          const taskDependencies = unmet.filter((id) => !id.startsWith("phase:"));
+          const phaseGates = unmet.filter((id) => id.startsWith("phase:")).map((id) => id.slice("phase:".length));
+          const reasons = [
+            ...(taskDependencies.length ? [`${taskDependencies.join(", ")} must be complete or skipped`] : []),
+            ...(phaseGates.length ? [`phase completion gate(s) ${phaseGates.join(", ")} must pass`] : []),
+          ];
+          throw new Error(`Cannot approve '${task.id}' yet: ${reasons.join("; ")}. A human review attests to delivered work.`);
         }
       }
       const evidence = args.flatMap((arg, index) => arg === "--evidence" && args[index + 1] ? [args[index + 1]!] : []);
