@@ -175,6 +175,7 @@ After writing the PRD, run this self-check before presenting it to the user:
 - [ ] Every external-service integration has a dependent live integration task (or human-review task with explicit live checks); mocked tests alone do not satisfy it
 - [ ] Every external API detail (api-version, query parameter, payload format) cites official documentation or is listed in Open Questions and exercised by the live integration task
 - [ ] Human reviews of user-facing features require the primary user journey against the running system, not only subjective criteria
+- [ ] Every human-review task includes an ordered, task-specific reviewer checklist in its description and observable pass/fail outcomes in acceptance criteria; the reviewer must not have to invent the procedure
 - [ ] The deterministic `validate-prd` gate passes without `--allow-legacy`
 - [ ] Open Questions are populated with every unresolved decision, each with a default assumption
 - [ ] The document references any existing project docs rather than duplicating them

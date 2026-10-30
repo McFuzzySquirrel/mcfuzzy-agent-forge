@@ -4,6 +4,19 @@ Detailed release and change notes for MyForge.
 
 ---
 
+## October 2026 - v3.118
+
+### Task-specific human-review checklists
+
+- Human-review task authors must provide an ordered, task-specific procedure in
+  the task description and observable approval criteria, so reviewers know what
+  to inspect and exercise without inventing a test plan.
+- Added an example review task and clarified that the Console displays the
+  authored procedure and criteria; the general Human Review Guide supplements
+  rather than replaces them.
+
+---
+
 ## October 2026 - v3.117
 
 ### Human review walkthrough

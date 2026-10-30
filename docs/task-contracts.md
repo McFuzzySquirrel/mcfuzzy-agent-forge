@@ -209,6 +209,14 @@ A `human-review` contract is not dispatched to Copilot or another model.
 The engine holds it pending. `--yes` and headless PRD approval do not bypass this
 gate.
 
+Every human-review task must include an ordered, task-specific review procedure
+in its `description` and observable pass/fail outcomes in `acceptanceCriteria`.
+The Console displays these in the task detail/review form, so the reviewer can
+follow the authored steps without inventing a test plan. Include environment or
+setup, exact scenarios and journeys, outputs/references to inspect, evidence to
+record, and explicit conditions for approval versus rejection. The general
+guide supplements this task checklist; it does not replace it.
+
 Holding is not pausing. An unapproved review does not stop the run: every other
 task continues, including tasks that share its wave, and the run pauses only when
 nothing else is left to do. The operator is therefore interrupted once there is

@@ -233,6 +233,46 @@ declare their preparation tasks explicitly. Never represent a rehearsal or nativ
 review as autonomous code generation. Headless PRD approval does not approve
 later human work. Agents must never run `approve-task` or fabricate attestations.
 
+A human reviewer must not have to invent the review procedure. Put an ordered,
+task-specific checklist in the human-review task's `description`, and make its
+`acceptanceCriteria` concise pass/fail outcomes. The Console shows the
+description and acceptance criteria in the task detail and review form. Include
+the exact setup, environment, user journey or scenarios to exercise, outputs or
+references to inspect, checks to perform, and what evidence/findings to record.
+Link the [Human Review Guide](../../../../docs/human-review-guide.md) for the
+general approval process, but do not use that generic guide as a substitute for
+the task's concrete procedure.
+
+Example:
+
+````markdown
+```forge-task
+{
+  "id": "CHECKOUT-REVIEW",
+  "title": "Review checkout recovery flow",
+  "description": "Perform this review in order:\n1. Start the application with the documented test account and open a cart with one in-stock item.\n2. Submit checkout with the payment sandbox configured to decline once, then succeed on retry.\n3. Confirm the first response is actionable, the cart is preserved, and a retry creates exactly one order.\n4. Inspect the order history and relevant audit entry; record the observed order ID and any mismatch in the review notes.\n5. Approve only if every acceptance criterion passes; otherwise record the failing step and do not approve.",
+  "dependencies": ["CHECKOUT-IMPLEMENT", "CHECKOUT-INTEGRATION"],
+  "expectedOutputs": [],
+  "validationCommands": [],
+  "contract": {
+    "version": 2,
+    "kind": "human-review",
+    "requirements": ["A declined payment must not lose the cart or create a duplicate order on retry."],
+    "requirementRefs": [],
+    "acceptanceCriteria": [
+      "The reviewer exercises the decline-then-retry journey against the running application.",
+      "The cart remains available after decline and retry creates exactly one order.",
+      "The reviewer records the observed order ID and any audit mismatch in review notes."
+    ],
+    "constraints": ["Use only the payment sandbox; do not submit a real charge."],
+    "constraintRefs": [],
+    "references": ["docs/features/checkout.md#CHECKOUT-FR-04"],
+    "reviewFile": "docs/reviews/checkout-review.json"
+  }
+}
+```
+````
+
 A human review of a user-facing feature must include, as an acceptance criterion,
 that the reviewer completed the primary user journey against the running system
 (live backend where one exists), and its notes must state what was exercised.

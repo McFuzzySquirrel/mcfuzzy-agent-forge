@@ -7,6 +7,11 @@ attestation records the decision and binds it to the task and evidence files; it
 does not independently prove the review was thorough or authenticate reviewer
 identity.
 
+Each review task should contain its own ordered procedure and pass/fail
+acceptance checklist. In the Console, these appear in the task detail and review
+form; use the steps below as the general process, then follow the task-specific
+instructions rather than guessing what to test.
+
 ## Step-by-step review
 
 1. **Wait for the review to be ready.** In the Console, open **Tasks** and select
