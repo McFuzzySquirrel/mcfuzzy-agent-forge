@@ -4,6 +4,15 @@ Detailed release and change notes for MyForge.
 
 ---
 
+## October 2026 - v3.120
+
+### Fix Windows Console background jobs
+
+- Background jobs now resolve Windows command shims such as `npm.cmd`, allowing
+  Console replay and other npm-backed jobs to start correctly.
+
+---
+
 ## October 2026 - v3.119
 
 ### Retire Forge scaffolding and keep a support team

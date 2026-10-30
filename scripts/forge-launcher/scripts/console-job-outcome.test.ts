@@ -18,13 +18,25 @@ function repoFixture(name: string): string {
 }
 
 async function runRunner(id: string, resultPath: string, code: number): Promise<void> {
-  const command = jobRunnerCommand(process.execPath, ["-e", `process.exit(${code})`], resultPath, id);
+  await runRunnerCommand(id, resultPath, process.execPath, ["-e", `process.exit(${code})`]);
+}
+
+async function runRunnerCommand(id: string, resultPath: string, executable: string, args: string[]): Promise<void> {
+  const command = jobRunnerCommand(executable, args, resultPath, id);
   await new Promise<void>((resolve, reject) => {
     const child = spawn(command.cmd, command.args, { stdio: "ignore" });
     child.once("error", reject);
     child.once("close", () => resolve());
   });
 }
+
+test("job runner resolves npm command shims on Windows", { skip: process.platform !== "win32" }, async () => {
+  const resultPath = join(mkdtempSync(join(tmpdir(), "forge-job-npm-")), "result.json");
+  await runRunnerCommand("npm-version", resultPath, "npm", ["--version"]);
+
+  const outcome = JSON.parse(readFileSync(resultPath, "utf8")) as { exitCode: number | null };
+  assert.equal(outcome.exitCode, 0);
+});
 
 function job(overrides: Partial<BackgroundJob>): BackgroundJob {
   const now = new Date().toISOString();
