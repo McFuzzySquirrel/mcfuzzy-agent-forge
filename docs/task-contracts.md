@@ -202,6 +202,9 @@ See [ADR-046](adr/046-task-execution-files.md).
 
 ## Human review
 
+For an operator checklist covering criteria, evidence, and Console/CLI approval,
+see the [Human Review Guide](human-review-guide.md).
+
 A `human-review` contract is not dispatched to Copilot or another model.
 The engine holds it pending. `--yes` and headless PRD approval do not bypass this
 gate.

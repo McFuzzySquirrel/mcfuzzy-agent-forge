@@ -4,6 +4,18 @@ Detailed release and change notes for MyForge.
 
 ---
 
+## October 2026 - v3.117
+
+### Human review walkthrough
+
+- Added a step-by-step guide for reviewing human-review tasks, exercising
+  acceptance criteria, recording evidence, and approving through the Console or
+  CLI.
+- Clarified the limits of local attestations and included a reusable review
+  notes format.
+
+---
+
 ## October 2026 - v3.116
 
 ### Task test discovery from changes and handoffs

@@ -214,6 +214,9 @@ clean (see [ADR-056](adr/056-parallel-execution-task-sandboxes.md),
 
 ### Human review: when it pauses and how to prove approval
 
+For the complete reviewer procedure and a reusable notes template, see the
+[Human Review Guide](human-review-guide.md).
+
 Human review is a deliberate workflow gate, not a model task. A task causes a
 human review when its manifest contract has `kind: "human-review"`. These tasks
 are normally generated for work that requires human judgment—such as usability,

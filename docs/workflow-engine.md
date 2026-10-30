@@ -118,6 +118,9 @@ verifies every successful call before marking the task complete:
   no unresolved items. See [task contracts](task-contracts.md) for authoring,
   reference limits, migration, and operator-only human-review gates.
 
+For the operator's step-by-step review procedure, evidence checklist, and
+approval notes template, see the [Human Review Guide](human-review-guide.md).
+
 The final run summary and `workflow-engine status` flag tasks completed with no
 recorded output files, so a hollow "complete" run is visible. The opencode,
 copilot and claude harnesses select forge agents with `--agent <name>`
