@@ -117,6 +117,8 @@ npx forge-launcher@beta feature-prd --repo <path> --prompt "Describe the feature
 npx forge-launcher@beta feature-increment --repo <path> --prompt "Describe the increment"
 npx forge-launcher@beta feature-increment-continue --repo <path>
 npx forge-launcher@beta compile-manifest --repo <path>
+npx forge-launcher@beta retire [--repo <path>] [--apply] [--archive] [--keep <glob>]...
+                              [--allow-dirty] [--commit] [--run-checks]
 npx forge-launcher@beta draft-skills [--repo <path>] [--prd-model <id|inherit>]
                               [--team-model <id|inherit>] [--skills-model <id|inherit>]
 npx forge-launcher@beta authoring-config [--repo <path>] [--prd-model <id|inherit>]
@@ -497,6 +499,43 @@ on the current authoring stage. A project with a valid PRD, team, skills, and
 compiled manifest is sent to the native engine path; incomplete stages resume
 at their specific authoring command rather than through a monolithic auto-build
 prompt.
+
+### Retire a completed project
+
+When the build is finished, `forge-launcher retire` removes the Forge lifecycle
+and leaves a maintainable repository. Without `--apply` it is a read-only
+inventory:
+
+```bash
+forge-launcher retire --repo <path>                 # plan only
+forge-launcher retire --repo <path> --apply         # delete, rewrite, verify
+forge-launcher retire --repo <path> --apply --archive
+```
+
+The command removes `docs/PRD.md`, `docs/features/`, authoring state, execution
+manifests, engine files, Forge skills, and the Forge template agents. It keeps
+source, tests, CI, project documentation, project skills named in
+`docs/SKILL-CANDIDATES.json`, and every generated specialist agent. The
+specialists are rewritten against the repository's real source areas; the build
+orchestrator becomes `support-lead`, and `docs/SUPPORT.md` records the roster,
+ownership map, triage flow, release checklist, and escalation path.
+
+Safety gates:
+
+- The engine must be stopped (`docs/engine.pid` not live and workflow state not
+  `running`/`paused`).
+- The working tree must be clean unless `--allow-dirty` is passed.
+- Only classified paths are deleted; unknown files are reported, never touched.
+- `--keep <glob>` preserves a path. `--archive` moves removals to
+  `.forge-archive/<timestamp>/` and writes a retirement manifest.
+- The retirement skill removes itself last, only after its verification gate
+  passes.
+- `--commit` is opt-in. `--run-checks` runs the repository's `typecheck`,
+  `lint`, `test`, and `build` scripts when present.
+
+If the target repository predates the skill, the launcher installs
+`forge-retire-project` from its bundled resources for the run. In a chat
+harness, invoke `/forge-retire-project` directly.
 
 ### Forge Console (local web UI)
 

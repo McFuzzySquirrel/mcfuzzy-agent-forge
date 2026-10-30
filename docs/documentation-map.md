@@ -55,6 +55,7 @@ Before completing the change:
 | [`docs/task-contracts.md`](task-contracts.md) | Task contract format and execution requirements. | Task contract fields, validation, ownership, or generated execution instructions change. |
 | [`docs/feature...` templates](../templates/skills/forge-decompose-prd/references/feature-document-template.md) | Template for authored feature documents. | Feature-document structure or required authoring fields change. |
 | `templates/skills/*/SKILL.md` | Canonical instructions for each bootstrapped Forge skill. | The skill's inputs, outputs, workflow, commands, constraints, or examples change. |
+| `templates/skills/forge-retire-project/SKILL.md` | Post-build retirement contract: inventory, deletion safety, support-team rewrite, and verification. | Retirement categories, safety gates, agent/skill rewrite rules, or verification change. |
 | `templates/agents/*.md` | Built-in Forge agent personas and responsibilities. | Persona responsibilities, boundaries, collaboration, or supported workflow changes. |
 
 The active requirements contract is `docs/PRD.md` plus `docs/features/*.md`.
@@ -105,6 +106,7 @@ be treated as hand-maintained source documentation in this repository:
 - `docs/PROGRESS.md`
 - `docs/EXECUTION-AUDIT.jsonl`
 - `docs/task-executions/`
+- `docs/SUPPORT.md` (written in target repositories by `forge-retire-project`)
 
 Update the templates, skills, compiler, or engine that produce them instead.
 Only update generated examples or fixtures when a test explicitly requires

@@ -1,0 +1,11 @@
+{
+  "name": "forge-retire-project",
+  "version": "1.0.0",
+  "type": "module",
+  "description": "Retire Forge authoring and execution scaffolding, then convert the generated agents into a repository-derived support team",
+  "scripts": {
+    "test": "node --test scripts/*.test.mjs",
+    "inventory": "node scripts/inventory.mjs",
+    "verify": "node scripts/verify.mjs"
+  }
+}
