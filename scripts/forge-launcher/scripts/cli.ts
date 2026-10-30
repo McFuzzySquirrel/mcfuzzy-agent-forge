@@ -5,6 +5,7 @@ import { consoleCli } from "./console/cli.ts";
 import { engineRunCli } from "./engine-run.ts";
 import { fail } from "./format.ts";
 import { continueFeatureIncrement, runCompileManifest, runDraftExistingPrd, runDraftPrd, runDraftTeam, runDraftSkills, runFeaturePrd, runLauncher, runRederive, runResume } from "./launcher.ts";
+import { runRetire } from "./retire.ts";
 import { REDERIVE_STEPS, type RederiveStepId } from "./rederive-state.ts";
 import { AUTHORING_STAGES, isRunnerChoice, loadAuthoringConfig, saveAuthoringConfig, type AuthoringModels, type AuthoringOptions, type AuthoringRunnerChoice } from "./authoring-config.ts";
 import { readAuthoringInventory, refreshAuthoringInventory } from "./authoring-inventory.ts";
@@ -44,6 +45,9 @@ Usage:
   forge-launcher compile-manifest [--repo <path>]  # headless: team → execution manifest
   forge-launcher rederive [--repo <path>] [--from team|skills|manifest]
                                 # headless chain: team → project skills → manifest
+  forge-launcher retire [--repo <path>] [--apply] [--archive] [--keep <glob>]...
+                        [--allow-dirty] [--commit] [--run-checks]
+                        # retire Forge scaffolding, keep a support team
 
 Launcher options:
   --prd-model <id|inherit>     Select the PRD authoring model.
@@ -87,6 +91,14 @@ Resume options:
   --repo <path>       Repository to resume (default: current directory).
   --non-interactive   Print current state and the exact next commands to run.
   --dry-run           Print what would run without executing.
+
+Retire options:
+  --apply             Perform the retirement (default is a read-only inventory).
+  --archive           Move removed paths to .forge-archive/<timestamp>/.
+  --keep <glob>       Preserve a matching path. Repeatable.
+  --allow-dirty       Proceed with uncommitted changes (default: refuse).
+  --commit            Commit the retirement after verification passes.
+  --run-checks        Run package.json typecheck, lint, test, and build scripts.
 
 Forge skills run with FORGE_HEADLESS=1 so their headless gate fires
 deterministically. Requirements stages (PRD, feature documents, legacy
@@ -163,6 +175,53 @@ async function main(): Promise<number> {
     const rest = args.slice(1);
     if (requestedRunner !== undefined) rest.push("--runner", requestedRunner);
     return bootstrapCli(rest);
+  }
+  if (args[0] === "retire") {
+    let repo: string | undefined;
+    let apply = false;
+    let archive = false;
+    let allowDirty = false;
+    let commit = false;
+    let runChecks = false;
+    let dryRun = false;
+    const keep: string[] = [];
+    const rest = args.slice(1);
+    for (let i = 0; i < rest.length; i++) {
+      const a = rest[i];
+      if (a === "--repo") {
+        repo = rest[++i];
+        if (!repo || repo.startsWith("--")) throw new Error("--repo requires a path.");
+      } else if (a === "--apply") apply = true;
+      else if (a === "--archive") archive = true;
+      else if (a === "--allow-dirty") allowDirty = true;
+      else if (a === "--commit") commit = true;
+      else if (a === "--run-checks") runChecks = true;
+      else if (a === "--dry-run") dryRun = true;
+      else if (a === "--keep") {
+        const value = rest[++i];
+        if (!value || value.startsWith("--")) throw new Error("--keep requires a glob.");
+        keep.push(value);
+      } else if (a === "-h" || a === "--help") {
+        process.stdout.write(USAGE);
+        return 0;
+      } else {
+        fail(`Unknown option: ${a}`);
+        process.stdout.write("\n" + USAGE);
+        return 1;
+      }
+    }
+    if (apply && dryRun) throw new Error("--apply and --dry-run are mutually exclusive.");
+    return runRetire({
+      repo: repo ? path.resolve(repo) : undefined,
+      apply,
+      archive,
+      keep,
+      allowDirty,
+      commit,
+      runChecks,
+      dryRun,
+      runner: authoringOptions.runner,
+    });
   }
   if (args[0] === "console") return consoleCli(args.slice(1));
   if (args[0] === "engine-run") return engineRunCli(args.slice(1));

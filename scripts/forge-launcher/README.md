@@ -38,6 +38,7 @@ the queued command it prints.
 | `forge-launcher draft-team \| draft-skills [--repo <path>]` | Headless derivation stages (PRD → agent team → project skills). |
 | `forge-launcher draft-prd \| draft-existing-prd [--repo <path>]` | Report the interactive requirements handoff. The PRD is never authored headlessly — see [ADR-060](../../docs/adr/060-interactive-requirements-authoring.md). |
 | `forge-launcher compile-manifest [--repo <path>]` | Headless build-prep stage: install the adapter if needed and write `docs/EXECUTION-MANIFEST.json` without starting the engine. |
+| `forge-launcher retire [--repo <path>] [--apply]` | Retire Forge requirements, engine state, and skills; keep the generated agents as a repository-derived support team. |
 
 In the Console's **Projects** view, use **Remove from Forge** for one project or
 **Remove selected (N)** for several. Confirmation is required. Only Forge
@@ -68,6 +69,23 @@ OpenCode v2 is required. The former `--keep-alive`, `--keep-alive-port`,
 `opencode run` connects to OpenCode's own warm background service, so there is no
 server to manage. Set `OPENCODE_EXTRA_FLAGS=--standalone` for a private
 per-run server.
+
+### Retire a completed project
+
+```bash
+forge-launcher retire --repo <path>                 # read-only inventory
+forge-launcher retire --repo <path> --apply         # delete and verify
+forge-launcher retire --repo <path> --apply --archive
+```
+
+Retirement removes the PRD, feature documents, authoring and execution state,
+engine files, Forge skills, and the Forge template agents. It keeps source,
+tests, CI, project documentation, project skills, and the generated specialists,
+then rewrites the specialists against the repository's actual source areas. The
+build orchestrator becomes a support lead and `docs/SUPPORT.md` records the
+ownership map, triage flow, and release checklist. The engine must be stopped and
+the worktree clean; `--keep` preserves a path, `--archive` keeps a copy under
+`.forge-archive/`, and `--commit` is opt-in.
 
 ## Harnesses
 

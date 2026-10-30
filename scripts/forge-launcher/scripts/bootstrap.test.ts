@@ -40,6 +40,7 @@ test("bootstrap copies agents, skills, prompt-playbook, and excludes artifacts",
 
   assert.ok(fs.existsSync(path.join(target, ".agents", "agents", "project-orchestrator.md")));
   assert.ok(fs.existsSync(path.join(target, ".agents", "skills", "forge-auto-build", "SKILL.md")));
+  assert.ok(fs.existsSync(path.join(target, ".agents", "skills", "forge-retire-project", "SKILL.md")));
   assert.ok(fs.existsSync(path.join(target, "docs", "prompt-playbook.md")));
   assert.ok(!fs.existsSync(path.join(target, ".agents", "skills", "forge-workflow-engine", "node_modules")));
   assert.ok(!fs.existsSync(path.join(target, ".agents", "skills", "forge-workflow-engine", "dist")));

@@ -4,6 +4,29 @@ Detailed release and change notes for MyForge.
 
 ---
 
+## October 2026 - v3.119
+
+### Retire Forge scaffolding and keep a support team
+
+- Added the `forge-retire-project` skill. It inventories a completed project,
+  removes requirements, authoring state, execution manifests, engine files, and
+  Forge skills, then rewrites the generated agents into a support team derived
+  from the repository itself.
+- Added `forge-launcher retire`. It is read-only by default, supports
+  `--apply`, `--archive`, `--keep`, `--allow-dirty`, `--commit`, and
+  `--run-checks`, and installs the retirement skill from bundled resources when
+  an older project does not have it.
+- The retirement flow refuses to run while the engine is live or the worktree is
+  dirty, never deletes unclassified paths, protects project skills named in
+  `docs/SKILL-CANDIDATES.json`, and removes the retirement skill only after its
+  verification gate passes.
+- Rewritten agents own repository paths rather than PRD requirements. The
+  support lead replaces the build orchestrator, and `docs/SUPPORT.md` records
+  the roster, ownership map, triage flow, release checklist, and escalation
+  path.
+
+---
+
 ## October 2026 - v3.118
 
 ### Task-specific human-review checklists

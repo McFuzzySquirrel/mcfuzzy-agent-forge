@@ -7,7 +7,7 @@
 
 > MyForge turns an idea into a reviewed PRD, a specialist agent team, and an autonomous build.
 
-**Latest: v3.118** — see [docs/updates.md](docs/updates.md) for release notes.
+**Latest: v3.119** — see [docs/updates.md](docs/updates.md) for release notes.
 
 MyForge is a PRD-first workflow for turning product requirements into working software. It combines structured planning, agent-based implementation, and execution orchestration in one path so a project can move from concept to build without losing the review checkpoints that matter.
 
@@ -28,6 +28,7 @@ for projects that do not use MyForge.
 - Supports both guided, interactive execution and unattended "dark orchestration" runs.
 - Includes a local web console for monitoring and controlling builds.
 - Can bootstrap MyForge into an existing Git repository without replacing its application code.
+- Can retire the Forge lifecycle when the build is done, keeping the generated agents as a repository-derived support team.
 
 
 
@@ -92,12 +93,15 @@ For the manual prompting flow and the CLI’s expected prompts, see [docs/prompt
 1. Capture your idea and review the PRD.
 2. Generate the agent team and any model plan.
 3. Run the build interactively or unattended.
+4. Retire the requirements and execution scaffolding when the project is done;
+   the generated specialists continue as a maintenance team.
 
 ## Main components
 
 - `forge-launcher` - the entry point for onboarding, authoring, and launching builds
 - `forge-workflow-engine` - the execution engine for orchestration, checkpoints, replay, and state
 - `forge-execution-adapter` - compiles the authored plan into the execution manifest consumed by the workflow engine
+- `forge-retire-project` - retires the build lifecycle and rewrites the generated agents as a repository-derived support team
 - Native harness adapters - dispatch execution through Copilot, OpenCode, OpenAI text tasks, or the offline stub
 - Forge Console - a local web UI for authoring, monitoring, and controlling runs
 
