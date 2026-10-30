@@ -659,13 +659,15 @@ Every state transition returns a new object. This makes the flow of state throug
 
 ### For this system specifically
 
-- **Approval gates between phases**: The manifest already has `approvalGates.betweenPhases`. The engine could pause after each phase, surface a diff of what was produced, and wait for a human `continue` signal before proceeding to the next phase.
+- **Phase review and approval**: Strict phase completion now verifies required tasks, outputs, and phase validation before dependent work starts. A separate opt-in review could inspect the integrated phase diff and acceptance criteria; human approval must continue to use content-bound evidence rather than an agent verdict.
 
 - **Richer validation loops**: `validationCommands` already exist and can be enforced. The next step would be feeding the failing command output back into a localized repair loop instead of just marking the task failed.
 
 - **Deeper reconciliation-aware execution**: stable task IDs and manifest reconciliation already preserve work across feature increments. The next layer would let the engine reason explicitly about changed-task contracts and recommend reset/replay actions automatically.
 
 - **Console-initiated review workflows**: because the Console, launcher, and engine all now share the same state files, review and recovery actions can become first-class UI workflows without changing the engine contract.
+
+- **Phase branches and pull requests**: isolate a phase on an optional branch and define recovery/merge-conflict behavior before considering automatic PR creation or merging.
 
 ### As a pattern for other things
 

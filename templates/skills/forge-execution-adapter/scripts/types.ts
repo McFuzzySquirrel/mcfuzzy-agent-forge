@@ -72,6 +72,8 @@ export interface ManifestTask {
   /** Omitted/empty legacy requirements conservatively require repository tools. */
   requiredCapabilities?: TaskCapability[];
   dependencies: string[];
+  /** Defaults to true. Optional tasks may be skipped without failing a strict phase gate. */
+  required?: boolean;
   expectedOutputs: string[];
   validationCommands: string[];
   approvalRequired: boolean;
@@ -102,6 +104,10 @@ export interface ManifestPhase {
   ownerAgents: string[];
   dependencies: string[];
   approvalRequired: boolean;
+  /** Strict phases require all required tasks, declared outputs, and validations to pass. */
+  completionPolicy?: "task-only" | "strict";
+  requiredOutputs?: string[];
+  validationCommands?: string[];
   tasks: ManifestTask[];
 }
 

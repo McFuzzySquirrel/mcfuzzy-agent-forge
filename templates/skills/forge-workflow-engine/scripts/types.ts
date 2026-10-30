@@ -1,6 +1,6 @@
-import type { AgentDescriptor, ExecutionManifest, ManifestTask, TaskCapability } from "../../forge-execution-adapter/scripts/types.ts";
+import type { AgentDescriptor, ExecutionManifest, ManifestPhase, ManifestTask, TaskCapability } from "../../forge-execution-adapter/scripts/types.ts";
 
-export type { AgentDescriptor, ExecutionManifest, ManifestTask, TaskCapability };
+export type { AgentDescriptor, ExecutionManifest, ManifestPhase, ManifestTask, TaskCapability };
 
 /** Default per-task timeout (10 minutes), matching the previous hardcoded value. */
 export const DEFAULT_TASK_TIMEOUT_MS = 10 * 60 * 1000;
@@ -84,6 +84,16 @@ export interface TaskGateResult {
 // ─── Workflow run state ───────────────────────────────────────────────────────
 
 export type RunStatus = "running" | "paused" | "complete" | "failed";
+export type PhaseStatus = "pending" | "running" | "validating" | "complete" | "failed";
+
+export interface PhaseRecord {
+  phaseId: string;
+  status: PhaseStatus;
+  contractFingerprint: string;
+  updatedAt: string;
+  validationEvidence?: string[];
+  errorMessage?: string;
+}
 
 export interface WorkflowState {
   runId: string;
@@ -95,6 +105,8 @@ export interface WorkflowState {
   status: RunStatus;
   currentPhase?: string;
   tasks: Record<string, TaskRecord>;
+  /** Durable phase-level completion gates; absent in state files written before phase gates. */
+  phases?: Record<string, PhaseRecord>;
   blockers: string[];
   auditLog: AuditEvent[];
   selection?: TaskSelection;
@@ -308,7 +320,9 @@ export interface AuditEvent {
     | "task.skipped"
     | "task.committed"
     | "phase.started"
+    | "phase.validating"
     | "phase.complete"
+    | "phase.failed"
     | "state.saved"
     | "artifact.created"
      | "context.projected"

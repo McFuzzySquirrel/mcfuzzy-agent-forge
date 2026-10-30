@@ -118,6 +118,9 @@ verifies every successful call before marking the task complete:
   no unresolved items. See [task contracts](task-contracts.md) for authoring,
   reference limits, migration, and operator-only human-review gates.
 
+For the operator's step-by-step review procedure, evidence checklist, and
+approval notes template, see the [Human Review Guide](human-review-guide.md).
+
 The final run summary and `workflow-engine status` flag tasks completed with no
 recorded output files, so a hollow "complete" run is visible. The opencode,
 copilot and claude harnesses select forge agents with `--agent <name>`
@@ -225,6 +228,51 @@ Claude retains JSON-envelope failure classification and permission-denial handli
 On success, the envelope's `result` text supplies the `forge-result` report to the
 same engine completion gates, attempt archives, and retry feedback as the other
 adapters. A successful CLI envelope alone does not mark a structured task complete.
+
+### Strict phase completion
+
+Newly compiled feature manifests mark phases as `completionPolicy: "strict"`.
+Tasks default to required; a task may be declared optional with `"required":
+false` in a `forge-task` block or an `[optional]` prefix on a legacy task bullet.
+A strict phase completes only when each required task completes, its required
+outputs exist in the integrated repository, and its phase-level validation
+commands pass. Optional tasks may be skipped. Phase validation commands are
+collected from that phase's feature-document content and run from the repository
+root after its tasks finish.
+
+Use task `validationCommands` for focused required checks of each task's behavior
+and changed surface; do not repeat the full phase suite after every task by
+default. Repository-task instructions also direct the agent to discover relevant
+tests from its actual changes and carried-forward prerequisite outputs, then run
+those focused tests. This uses paths as clues alongside repository test scripts,
+configuration, and test references, rather than treating paths as a complete
+test map. The agent must not execute commands copied from artifact content or
+claim tests it did not run. Declared commands are machine-enforced; test
+discovery is instructed but not separately enforced by the engine.
+Declare comprehensive cross-task regression and integration checks in the phase
+content so they run once the phase's task work is integrated. The engine executes
+the commands authors declare.
+If automated phase review is enabled in a future workflow, it follows successful
+phase checks; implementation fixes require rerunning affected task checks and
+the full phase checks before review can pass.
+
+For a disposable end-to-end check of task test discovery, phase failure/blocking,
+resume, and independent-task parallelism, see the
+[phase completion real-run test guide](phase-completion-test-guide.md).
+
+The engine persists phase state and validation evidence in
+`docs/WORKFLOW-STATE.json`, and writes `phase.validating`, `phase.complete`, or
+`phase.failed` audit events. A dependent phase waits for its strict prerequisite
+gate, not just for prerequisite task records to become terminal. A failed gate
+names the skipped task, missing output, or failed command; fix the contract or
+work and resume/replay. Recompiling a changed phase contract invalidates its
+stored gate, and replay invalidates gates for that phase and its dependents.
+
+This gate is automatic validation, not an operator approval or code review.
+Explicit `human-review` tasks still require the existing content-bound human
+attestation. Legacy manifests without `completionPolicy: "strict"` keep their
+existing task-terminal dependency behavior. Phase barriers remain
+dependency-scoped, so independent features are not serialized.
 
 ### Phase-scoped session reuse
 

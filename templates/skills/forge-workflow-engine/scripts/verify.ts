@@ -18,7 +18,7 @@
 import { existsSync } from "node:fs";
 import { join } from "node:path";
 
-import type { ManifestTask, TaskResult } from "./types.ts";
+import type { ManifestPhase, ManifestTask, TaskResult } from "./types.ts";
 import { runCommand } from "./harness/run.ts";
 
 /** Trivial responses are short and contain no content line of real length. */
@@ -217,6 +217,33 @@ export async function runTaskValidation(
       return {
         ok: false,
         reason: `validation command failed (exit ${result.status}): ${command}${detail ? `\n${detail}` : ""}`,
+      };
+    }
+  }
+  return { ok: true };
+}
+
+/** Runs phase-level validations after its required tasks and outputs are integrated. */
+export async function runPhaseValidation(
+  phase: ManifestPhase,
+  repoRoot: string,
+  timeoutMs: number,
+): Promise<VerifyResult> {
+  const missing = (phase.requiredOutputs ?? []).filter((path) => !existsSync(resolveRepoPath(repoRoot, path)));
+  if (missing.length > 0) return { ok: false, reason: `phase '${phase.id}' outputs missing: ${missing.join(", ")}` };
+
+  for (const command of phase.validationCommands ?? []) {
+    const result = await runCommand(command, [], {
+      shell: true,
+      cwd: repoRoot,
+      timeoutMs,
+      maxBufferBytes: 10 * 1024 * 1024,
+    });
+    if (result.status !== 0) {
+      const detail = (result.stderr || result.stdout).trim();
+      return {
+        ok: false,
+        reason: `phase '${phase.id}' validation failed (exit ${result.status}): ${command}${detail ? `\n${detail}` : ""}`,
       };
     }
   }

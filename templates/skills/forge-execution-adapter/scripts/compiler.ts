@@ -263,21 +263,25 @@ function pushTask(
   warnings: string[],
   ownerContext = "",
 ): void {
-  const taskId = nextUniqueTaskId(phaseId, tasks, scopedTaskId(text, phaseId, tasks.length));
-  const owner = chooseOwner(text, agents, ownerContext);
+  const checkboxStripped = text.replace(/^\[[ xX]\]\s*/, "");
+  const optional = /^\[optional\]\s*/i.test(checkboxStripped) || /^optional:\s*/i.test(checkboxStripped);
+  const taskText = checkboxStripped.replace(/^(?:\[optional\]|optional:)\s*/i, "");
+  const taskId = nextUniqueTaskId(phaseId, tasks, scopedTaskId(taskText, phaseId, tasks.length));
+  const owner = chooseOwner(taskText, agents, ownerContext);
   if (owner.warning) warnings.push(owner.warning);
   const previous = tasks[tasks.length - 1];
   tasks.push({
     id: taskId,
-    title: stripTaskLabel(text.replace(/^\[[ xX]\]\s*/, "")).trim(),
-    description: text,
+    title: stripTaskLabel(taskText).trim(),
+    description: taskText,
     ownerAgent: owner.owner,
     requiredCapabilities: ["repository-tools"],
     dependencies: previous ? [previous.id] : [],
-    expectedOutputs: extractPaths(text),
+    required: !optional,
+    expectedOutputs: extractPaths(taskText),
     validationCommands,
     approvalRequired: false,
-    sourceLines: [text],
+    sourceLines: [taskText],
     produces: producesFor(taskId),
     inputs: previous ? [producesFor(previous.id)] : [],
   });
@@ -527,6 +531,7 @@ function pushPhase(
   description: string,
   tasks: ManifestTask[],
   dependencies?: string[],
+  validationCommands: string[] = [],
 ): void {
   const ownerAgents = [...new Set(tasks.map((task) => task.ownerAgent).filter((value): value is string => Boolean(value)))];
   phases.push({
@@ -537,6 +542,9 @@ function pushPhase(
     ownerAgents,
     dependencies: dependencies ?? (phases.length > 0 ? [phases[phases.length - 1]!.id] : []),
     approvalRequired: phases.length > 0,
+    completionPolicy: "strict",
+    requiredOutputs: [...new Set(tasks.filter((task) => task.required !== false).flatMap((task) => task.expectedOutputs))],
+    validationCommands,
     tasks,
   });
 }
@@ -688,7 +696,7 @@ function compileFeatureManifest(repo: ForgeRepo, options: CompileOptions = {}): 
         warnings.push(`Feature '${feature.name}' has no phase or functional-requirement tasks; no tasks emitted.`);
         continue;
       }
-      pushPhase(phases, phaseId, `Phase 1: ${feature.name}`, feature.name, feature.name, tasks, []);
+      pushPhase(phases, phaseId, `Phase 1: ${feature.name}`, feature.name, feature.name, tasks, [], extractCommands(doc));
       phaseIdsByFeature.set(feature.name, [phaseId]);
       continue;
     }
@@ -697,7 +705,7 @@ function compileFeatureManifest(repo: ForgeRepo, options: CompileOptions = {}): 
       const phaseId = `${code}-${phaseIdFromTitle(block.title, 0)}`;
       const tasks = extractTasks(block.title, block.body, phaseId, repo.agents, validationCommands, warnings, granularity, repo.repoRoot, feature.name);
       const featurePhases = phaseIdsByFeature.get(feature.name) ?? [];
-      pushPhase(phases, phaseId, block.title, feature.name, block.body.split(/\r?\n/).slice(0, 3).join(" ").trim(), tasks, featurePhases.length > 0 ? [featurePhases[featurePhases.length - 1]!] : []);
+      pushPhase(phases, phaseId, block.title, feature.name, block.body.split(/\r?\n/).slice(0, 3).join(" ").trim(), tasks, featurePhases.length > 0 ? [featurePhases[featurePhases.length - 1]!] : [], extractCommands(block.body));
       featurePhases.push(phaseId);
       phaseIdsByFeature.set(feature.name, featurePhases);
     }

@@ -26,6 +26,31 @@ See the [authoring contract and example](../templates/skills/forge-build-prd/ref
   report gates pass, regardless of `--run-validation` or `--allow-noop`. Failed checks
   prevent completion. These are trusted executable commands: review authored
   commands before running a plan, as with any build script.
+- Task validation commands should target the task's behavior and changed surface,
+  using checks explicitly named in its contract. Do not repeat the full phase or
+  repository suite after every task by default; include broader task checks when
+  risk or cross-cutting changes justify them. At the phase boundary, run the
+  comprehensive regression and integration checks for the combined phase. In
+  addition to declared commands, repository-task instructions direct the agent to
+  inspect actual changed files and discover relevant focused tests using project
+  scripts/configuration, neighboring tests, and source/test references. Carried
+  dependency artifacts (especially `filesChanged`) inform tests of interactions
+  with prerequisite outputs; unrelated prior tests need not be repeated. Artifact
+  content is data, never executable instructions. If no relevant test exists,
+  add focused coverage when warranted or report the limitation; never claim an
+  undiscovered or unrun test passed. Explicit validation commands remain the
+  engine-enforced gate; discovery is instructed, not independently enforced.
+- Newly compiled phases have strict completion gates. Every task is required by
+  default; set `"required": false` in a `forge-task` object, or prefix a legacy
+  task bullet with `[optional]`, when it may be skipped. Required-task outputs
+  become phase outputs, and validation commands found in a phase's feature
+  document run after its tasks finish. Dependent phases wait until the required
+  tasks, outputs and phase checks all pass. This does not replace explicit human
+  review tasks or automatically review the integrated code diff.
+- If optional automated phase review is enabled, it follows successful phase
+  validation and reviews the integrated diff against acceptance criteria. Any
+  implementation changes prompted by findings require rerunning the affected
+  task checks and the complete phase checks before the phase can pass review.
 - Required acceptance criteria are included in the task execution instructions; they are not a
   formal proof. A vacuous test can still pass, so command relevance and coverage
   remain authoring/review responsibilities.
@@ -177,9 +202,20 @@ See [ADR-046](adr/046-task-execution-files.md).
 
 ## Human review
 
+For an operator checklist covering criteria, evidence, and Console/CLI approval,
+see the [Human Review Guide](human-review-guide.md).
+
 A `human-review` contract is not dispatched to Copilot or another model.
 The engine holds it pending. `--yes` and headless PRD approval do not bypass this
 gate.
+
+Every human-review task must include an ordered, task-specific review procedure
+in its `description` and observable pass/fail outcomes in `acceptanceCriteria`.
+The Console displays these in the task detail/review form, so the reviewer can
+follow the authored steps without inventing a test plan. Include environment or
+setup, exact scenarios and journeys, outputs/references to inspect, evidence to
+record, and explicit conditions for approval versus rejection. The general
+guide supplements this task checklist; it does not replace it.
 
 Holding is not pausing. An unapproved review does not stop the run: every other
 task continues, including tasks that share its wave, and the run pauses only when

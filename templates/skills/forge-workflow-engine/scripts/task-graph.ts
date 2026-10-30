@@ -39,9 +39,8 @@ export function prerequisites(manifest: ExecutionManifest, taskId: string): stri
 }
 
 /**
- * Every prerequisite of `taskId` that is not yet complete or skipped, using the
- * same direct-dependency plus transitive-phase-dependency rule the engine
- * dispatches on.
+ * Every prerequisite of `taskId` that is not yet complete or skipped, including
+ * strict phase completion gates that have not passed.
  *
  * This is the single definition of "is this task reviewable yet". The engine
  * gates dispatch on it, the Console surfaces it, and both approval surfaces
@@ -53,5 +52,13 @@ export function unmetPrerequisites(
   state: WorkflowState,
   taskId: string,
 ): string[] {
-  return prerequisites(manifest, taskId).filter((id) => !isTaskDone(state.tasks?.[id]?.status));
+  const taskPrerequisites = prerequisites(manifest, taskId)
+    .filter((id) => !isTaskDone(state.tasks?.[id]?.status));
+  const phase = manifest.phases.find((candidate) => candidate.tasks.some((task) => task.id === taskId));
+  const incompleteGates = (phase?.dependencies ?? []).flatMap((phaseId) => {
+    const dependency = manifest.phases.find((candidate) => candidate.id === phaseId);
+    if (dependency?.completionPolicy !== "strict" || dependency.tasks.some((task) => !isTaskDone(state.tasks?.[task.id]?.status))) return [];
+    return state.phases?.[phaseId]?.status === "complete" ? [] : [`phase:${phaseId}`];
+  });
+  return [...taskPrerequisites, ...incompleteGates];
 }

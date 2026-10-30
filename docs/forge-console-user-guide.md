@@ -214,6 +214,9 @@ clean (see [ADR-056](adr/056-parallel-execution-task-sandboxes.md),
 
 ### Human review: when it pauses and how to prove approval
 
+For the complete reviewer procedure and a reusable notes template, see the
+[Human Review Guide](human-review-guide.md).
+
 Human review is a deliberate workflow gate, not a model task. A task causes a
 human review when its manifest contract has `kind: "human-review"`. These tasks
 are normally generated for work that requires human judgment—such as usability,
@@ -230,7 +233,11 @@ such a task; `--yes` cannot approve it.
    blocked** and lists the tasks it is waiting on, with no approval action. A
    review attests to delivered work, so the form cannot be submitted early - the
    API and the `approve-task` command both refuse it and name the prerequisites.
-2. Read its requirements, acceptance criteria, constraints, and references.
+2. Read its ordered, task-specific procedure in the description, plus its
+   requirements, acceptance criteria, constraints, and references. The task
+   author should supply the steps and pass/fail checks; reviewers should not have
+   to invent what to exercise. See the [Human Review Guide](human-review-guide.md)
+   for the common review/evidence process.
 3. Click **Complete human review**.
 4. Read **Unverified upstream checks**, which includes transitive task and
    prerequisite-phase dependencies. Exercise the primary user journey against

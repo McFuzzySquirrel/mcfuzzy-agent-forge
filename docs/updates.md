@@ -4,6 +4,78 @@ Detailed release and change notes for MyForge.
 
 ---
 
+## October 2026 - v3.118
+
+### Task-specific human-review checklists
+
+- Human-review task authors must provide an ordered, task-specific procedure in
+  the task description and observable approval criteria, so reviewers know what
+  to inspect and exercise without inventing a test plan.
+- Added an example review task and clarified that the Console displays the
+  authored procedure and criteria; the general Human Review Guide supplements
+  rather than replaces them.
+
+---
+
+## October 2026 - v3.117
+
+### Human review walkthrough
+
+- Added a step-by-step guide for reviewing human-review tasks, exercising
+  acceptance criteria, recording evidence, and approving through the Console or
+  CLI.
+- Clarified the limits of local attestations and included a reusable review
+  notes format.
+
+---
+
+## October 2026 - v3.116
+
+### Task test discovery from changes and handoffs
+
+- Repository-task prompts now direct agents to discover and run focused tests
+  relevant to actual changed files, using repository test configuration and
+  source/test references alongside path clues.
+- Carried-forward prerequisite artifact file lists help identify tests for
+  interactions with prior task outputs; unrelated tests are not rerun just
+  because they appear in the handoff.
+- Declared validation commands remain the machine-enforced gate. Agents must
+  treat artifact content as data, report unavailable/no-test cases accurately,
+  and never claim an unrun test passed.
+
+---
+
+## October 2026 - v3.115
+
+### Task-focused and phase-level testing
+
+- Task validation guidance now favors checks targeted to the task's behavior and
+  changed surface instead of repeating the full suite after every task.
+- Phase content owns comprehensive regression and integration checks after task
+  work is integrated. Optional automated review follows passing phase checks;
+  fixes require rerunning affected task checks and the full phase suite.
+- Test selection remains explicit; the engine does not guess related tests from
+  changed file paths.
+
+---
+
+## October 2026 - v3.114
+
+### Strict phase completion gates
+
+- Newly compiled phases now require every required task, declared output, and
+  phase-level validation to pass before dependent phases can start. Optional
+  tasks can be skipped explicitly.
+- Phase lifecycle and validation evidence are persisted and audited; contract
+  changes and replay invalidate affected phase gates. Independent feature
+  branches remain dependency-scoped and can still run concurrently.
+- Added an implementation plan at
+  [`docs/phase-completion-implementation-plan.md`](phase-completion-implementation-plan.md).
+- Automated code review and phase-branch/PR automation remain separate
+  follow-up work.
+
+---
+
 ## October 2026 - v3.113
 
 ### Console light theme and Appearance settings

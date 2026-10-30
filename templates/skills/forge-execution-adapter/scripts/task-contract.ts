@@ -47,9 +47,10 @@ export function parseTaskBlocks(body: string, agents: AgentDescriptor[], options
   const tasks: ManifestTask[] = [];
   const remainder = body.replace(/```forge-task\s*\r?\n([\s\S]*?)```/g, (_block, json: string) => {
     const value = JSON.parse(json) as Record<string, unknown>;
-    const allowed = new Set(["id", "title", "description", "ownerAgent", "dependencies", "expectedOutputs", "validationCommands", "contract", "timeoutMs"]);
+    const allowed = new Set(["id", "title", "description", "ownerAgent", "dependencies", "required", "expectedOutputs", "validationCommands", "contract", "timeoutMs"]);
     if (Object.keys(value).some((key) => !allowed.has(key))) throw new Error("Unknown structured task field.");
     for (const field of ["id", "title", "description"] as const) if (typeof value[field] !== "string") throw new Error(`Task '${field}' must be a string.`);
+    if (value.required !== undefined && typeof value.required !== "boolean") throw new Error("Task 'required' must be a boolean.");
     if (!value.contract || typeof value.contract !== "object") throw new Error("Structured task requires contract.");
     const authored = value.contract as Record<string, unknown>;
     if (authored.version === 2) {
@@ -73,6 +74,7 @@ export function parseTaskBlocks(body: string, agents: AgentDescriptor[], options
       id: value.id as string, title: value.title as string, description: value.description as string,
       ownerAgent: value.ownerAgent as string | undefined,
       dependencies: strings(value.dependencies, "dependencies"),
+      required: value.required !== false,
       expectedOutputs: strings(value.expectedOutputs, "expectedOutputs"),
       validationCommands: strings(value.validationCommands, "validationCommands"),
       contract: value.contract as unknown as TaskContract,

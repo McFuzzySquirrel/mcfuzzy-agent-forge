@@ -40,7 +40,7 @@ import {
 
 import { ArtifactStore } from "./artifacts.ts";
 import { commitTaskWork } from "./commit.ts";
-import { captureWorktree, diffWorktree, runTaskValidation, verifyTaskResult } from "./verify.ts";
+import { captureWorktree, diffWorktree, runPhaseValidation, runTaskValidation, verifyTaskResult } from "./verify.ts";
 import { clearControl, readControl } from "./control.ts";
 import { assertTaskCapabilities, prepareTaskRequest } from "./request.ts";
 import { humanTaskApproved, taskReferenceContext } from "./task-context.ts";
@@ -277,7 +277,12 @@ export function nextReadyTasks(manifest: ExecutionManifest, state: WorkflowState
     const phaseDepsOk = manifest.phases[entry.phaseIndex]?.dependencies.every(
       (depPhaseId) => {
         const depPhase = manifest.phases.find((p) => p.id === depPhaseId);
-        return depPhase?.tasks.every((t) => isTaskDone(state.tasks[t.id]?.status)) ?? true;
+        if (!depPhase) return true;
+        const allTasksDone = depPhase.tasks.every((t) => isTaskDone(state.tasks[t.id]?.status));
+        if (!allTasksDone) return false;
+        const fullPhaseSelected = !selected || depPhase.tasks.every((task) => selected.has(task.id));
+        return depPhase.completionPolicy !== "strict" || !fullPhaseSelected
+          || state.phases?.[depPhaseId]?.status === "complete";
       },
     ) ?? true;
 
@@ -318,16 +323,105 @@ export function ownerUniqueReady(ready: FlatTask[]): FlatTask[] {
 
 export function isComplete(manifest: ExecutionManifest, state: WorkflowState): boolean {
   const selected = scopedTaskSet(state.selection);
-  return flattenManifest(manifest)
+  const selectedTasksComplete = flattenManifest(manifest)
     .filter(({ task }) => !selected || selected.has(task.id))
-    .every(
-    ({ task }) => isTaskDone(state.tasks[task.id]?.status),
-  );
+    .every(({ task }) => isTaskDone(state.tasks[task.id]?.status));
+  if (!selectedTasksComplete) return false;
+  return manifest.phases.every((phase) => {
+    if (phase.completionPolicy !== "strict") return true;
+    if (selected && !phase.tasks.every((task) => selected.has(task.id))) return true;
+    return state.phases?.[phase.id]?.status === "complete";
+  });
 }
 
 function hasFailed(state: WorkflowState): boolean {
   const selected = scopedTaskSet(state.selection);
   return Object.values(state.tasks).some((t) => t.status === "failed" && (!selected || selected.has(t.taskId)));
+}
+
+function hasFailedPhase(manifest: ExecutionManifest, state: WorkflowState): boolean {
+  const selected = scopedTaskSet(state.selection);
+  return manifest.phases.some((phase) =>
+    phase.completionPolicy === "strict"
+    && (!selected || phase.tasks.every((task) => selected.has(task.id)))
+    && state.phases?.[phase.id]?.status === "failed",
+  );
+}
+
+function phaseIsSelected(phase: ExecutionManifest["phases"][number], state: WorkflowState): boolean {
+  const selected = scopedTaskSet(state.selection);
+  return !selected || phase.tasks.every((task) => selected.has(task.id));
+}
+
+async function advancePhaseGates(
+  manifest: ExecutionManifest,
+  state: WorkflowState,
+  opts: EngineOptions,
+): Promise<WorkflowState> {
+  for (const phase of manifest.phases) {
+    if (phase.completionPolicy !== "strict" || !phaseIsSelected(phase, state)) continue;
+    if (!phase.tasks.every((task) => isTaskDone(state.tasks[task.id]?.status))) continue;
+    if (state.phases?.[phase.id]?.status === "complete") continue;
+
+    const skippedRequired = phase.tasks
+      .filter((task) => task.required !== false && state.tasks[task.id]?.status === "skipped")
+      .map((task) => task.id);
+    const previousError = state.phases?.[phase.id]?.errorMessage;
+    state = {
+      ...state,
+      phases: {
+        ...(state.phases ?? {}),
+        [phase.id]: {
+          phaseId: phase.id,
+          status: "validating",
+          contractFingerprint: state.phases?.[phase.id]?.contractFingerprint ?? "",
+          updatedAt: new Date().toISOString(),
+        },
+      },
+    };
+    saveState(opts.statePath, state);
+    writeAuditEvent(opts.auditPath, {
+      timestamp: new Date().toISOString(),
+      action: "phase.validating",
+      runId: state.runId,
+      phaseId: phase.id,
+    });
+
+    const validation = skippedRequired.length > 0
+      ? { ok: false, reason: `phase '${phase.id}' has skipped required task(s): ${skippedRequired.join(", ")}. Mark them optional or replay them before continuing.` }
+      : await runPhaseValidation(phase, opts.repoRoot, opts.taskTimeoutMs);
+    const updatedAt = new Date().toISOString();
+    const errorMessage = validation.ok ? undefined : validation.reason ?? `phase '${phase.id}' validation failed`;
+    state = {
+      ...state,
+      phases: {
+        ...(state.phases ?? {}),
+        [phase.id]: {
+          phaseId: phase.id,
+          status: validation.ok ? "complete" : "failed",
+          contractFingerprint: state.phases?.[phase.id]?.contractFingerprint ?? "",
+          updatedAt,
+          ...(validation.ok
+            ? { validationEvidence: [...(phase.requiredOutputs ?? []).map((path) => `output exists: ${path}`), ...(phase.validationCommands ?? []).map((command) => `validation passed: ${command}`)] }
+            : { errorMessage }),
+        },
+      },
+      blockers: validation.ok
+        ? state.blockers.filter((blocker) => blocker !== previousError)
+        : errorMessage && !state.blockers.includes(errorMessage) ? [...state.blockers, errorMessage] : state.blockers,
+    };
+    saveState(opts.statePath, state);
+    writeAuditEvent(opts.auditPath, {
+      timestamp: updatedAt,
+      action: validation.ok ? "phase.complete" : "phase.failed",
+      runId: state.runId,
+      phaseId: phase.id,
+      ...(errorMessage ? { note: errorMessage } : {}),
+    });
+    if (!validation.ok) console.error(`[engine] Phase ${phase.id} FAILED: ${errorMessage}`);
+    else console.log(`[engine] Phase ${phase.id} complete.`);
+  }
+  return state;
 }
 
 const PHASE_HANDOFF_SUMMARY_CHARS = 300;
@@ -1110,8 +1204,9 @@ async function runEngineSession(opts: EngineOptions): Promise<WorkflowState> {
   };
 
   while (!isComplete(manifest, state) && !shouldStop()) {
-    if (hasFailed(state)) {
-      console.error("[engine] Stopping: one or more tasks failed.");
+    state = await advancePhaseGates(manifest, state, opts);
+    if (hasFailed(state) || hasFailedPhase(manifest, state)) {
+      console.error("[engine] Stopping: a task or phase completion gate failed.");
       state = { ...state, status: "failed" };
       break;
     }
@@ -1163,6 +1258,17 @@ async function runEngineSession(opts: EngineOptions): Promise<WorkflowState> {
       if (entry.phaseId !== currentPhaseId) {
         currentPhaseId = entry.phaseId;
         state = setCurrentPhase(state, currentPhaseId);
+        const phase = manifest.phases.find((candidate) => candidate.id === currentPhaseId);
+        if (phase?.completionPolicy === "strict" && state.phases?.[currentPhaseId]?.status === "pending") {
+          state = {
+            ...state,
+            phases: {
+              ...(state.phases ?? {}),
+              [currentPhaseId]: { ...state.phases[currentPhaseId]!, status: "running", updatedAt: new Date().toISOString() },
+            },
+          };
+          saveState(opts.statePath, state);
+        }
         writeAuditEvent(opts.auditPath, {
           timestamp: new Date().toISOString(),
           action: "phase.started",
@@ -1190,7 +1296,7 @@ async function runEngineSession(opts: EngineOptions): Promise<WorkflowState> {
       note: pauseNote,
     });
     console.log(`[engine] ${pauseNote}`);
-  } else if (hasFailed(state)) {
+  } else if (hasFailed(state) || hasFailedPhase(manifest, state)) {
     state = { ...state, status: "failed" };
     writeAuditEvent(opts.auditPath, {
       timestamp: new Date().toISOString(),
@@ -1252,6 +1358,29 @@ async function replayTaskSession(taskId: string, opts: EngineOptions): Promise<W
   const phaseId = findPhaseForTask(manifest, taskId);
   const task = findTask(manifest, taskId);
   if (!task || !phaseId) throw new Error(`Task '${taskId}' not found in manifest.`);
+  const invalidatedPhases = new Set([phaseId]);
+  let grew = true;
+  while (grew) {
+    grew = false;
+    for (const phase of manifest.phases) {
+      if (!invalidatedPhases.has(phase.id) && phase.dependencies.some((dependency) => invalidatedPhases.has(dependency))) {
+        invalidatedPhases.add(phase.id);
+        grew = true;
+      }
+    }
+  }
+  for (const id of invalidatedPhases) {
+    const record = state.phases?.[id];
+    if (!record) continue;
+    state.phases![id] = {
+      ...record,
+      status: "pending",
+      updatedAt: new Date().toISOString(),
+      validationEvidence: undefined,
+      errorMessage: undefined,
+    };
+  }
+  if (invalidatedPhases.size > 0) saveState(opts.statePath, state);
   const dependencyIds = expandSelectedTaskIds(manifest, [taskId]).filter((id) => id !== taskId);
   const replayRecords = state.tasks;
   const incomplete = dependencyIds.filter((id) => {

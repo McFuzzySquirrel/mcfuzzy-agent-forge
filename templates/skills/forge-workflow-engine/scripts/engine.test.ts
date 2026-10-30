@@ -136,6 +136,20 @@ test("nextReadyTasks blocks a downstream phase while its dependency is pending",
   assert.deepEqual(ready.map((entry) => entry.task.id), ["1.2"]);
 });
 
+test("strict phase dependencies wait for the persisted completion gate", () => {
+  const first = makePhase("one", [makeTask("one.1")]);
+  first.completionPolicy = "strict";
+  const manifest = makeManifest([first, makePhase("two", [makeTask("two.1")], ["one"])]);
+  const state = makeState({ "one.1": "complete", "two.1": "pending" });
+  state.phases = { one: { phaseId: "one", status: "validating", contractFingerprint: "test", updatedAt: new Date().toISOString() } };
+
+  assert.deepEqual(nextReadyTasks(manifest, state).map((entry) => entry.task.id), []);
+  assert.deepEqual(unmetPrerequisites(manifest, state, "two.1"), ["phase:one"]);
+  state.phases.one!.status = "complete";
+  assert.deepEqual(nextReadyTasks(manifest, state).map((entry) => entry.task.id), ["two.1"]);
+  assert.deepEqual(unmetPrerequisites(manifest, state, "two.1"), []);
+});
+
 test("unmetPrerequisites agrees with nextReadyTasks about what is reviewable", () => {
   // The Console surfaces this list and both approval surfaces refuse on it, so
   // it has to be the same gate the dispatcher applies - including for a
@@ -436,6 +450,28 @@ function engineOptionsFor(
   };
 }
 
+function addStrictDependentPhase(fixture: EngineFixture, phaseOne: Partial<ManifestPhase> = {}): void {
+  const manifest = JSON.parse(readFileSync(fixture.manifestPath, "utf8")) as ExecutionManifest;
+  const first = manifest.phases[0]!;
+  Object.assign(first, {
+    completionPolicy: "strict",
+    requiredOutputs: [],
+    validationCommands: [],
+    ...phaseOne,
+  });
+  const secondTask = { ...first.tasks[0]!, id: "2.1", title: "Second phase task", description: "Second phase task", dependencies: [] };
+  manifest.phases.push({
+    ...first,
+    id: "2",
+    title: "Second phase",
+    dependencies: ["1"],
+    requiredOutputs: [],
+    validationCommands: [],
+    tasks: [secondTask],
+  });
+  writeFileSync(fixture.manifestPath, JSON.stringify(manifest), "utf8");
+}
+
 test("effective task timeout prefers the per-task manifest timeoutMs over the engine default", async () => {
   const fixture = makeEngineFixture({ timeoutMs: 25_000 });
   const harness = new RecordingHarness();
@@ -443,6 +479,114 @@ test("effective task timeout prefers the per-task manifest timeoutMs over the en
 
   assert.equal(state.status, "complete");
   assert.deepEqual(harness.timeouts, [25_000]);
+});
+
+test("strict phase validation passes before dispatching a dependent phase", async () => {
+  const fixture = makeEngineFixture();
+  addStrictDependentPhase(fixture, {
+    requiredOutputs: ["phase-marker"],
+    validationCommands: [`node -e "if (!require('fs').existsSync('phase-marker')) process.exit(1)"`],
+  });
+  const seen: string[] = [];
+  const harness: HarnessAdapter = {
+    name: "phase-gate-test",
+    supportsConcurrency: false,
+    capabilities: ["text", "repository-tools"],
+    async invoke({ task, repoRoot }) {
+      seen.push(task.id);
+      if (task.id === "1.1") writeFileSync(join(repoRoot, "phase-marker"), "passed");
+      if (task.id === "2.1") assert.equal(existsSync(join(repoRoot, "phase-marker")), true);
+      return { success: true, outputFiles: [], stdout: "completed task", stderr: "", durationMs: 1 };
+    },
+  };
+
+  const state = await runEngine(engineOptionsFor(fixture, harness, 1_000));
+  assert.equal(state.status, "complete");
+  assert.deepEqual(seen, ["1.1", "2.1"]);
+  assert.equal(state.phases?.["1"]?.status, "complete");
+  assert.equal(state.phases?.["2"]?.status, "complete");
+  const actions = readFileSync(join(fixture.root, "docs", "EXECUTION-AUDIT.jsonl"), "utf8");
+  assert.match(actions, /"action":"phase\.complete","runId":"[^"]+","phaseId":"1"/);
+});
+
+test("strict phase gate rejects a skipped required task but accepts an optional one", async () => {
+  for (const required of [true, false]) {
+    const fixture = makeEngineFixture({ required });
+    addStrictDependentPhase(fixture);
+    const manifest = JSON.parse(readFileSync(fixture.manifestPath, "utf8")) as ExecutionManifest;
+    const state = initState(manifest, fixture.manifestPath, "phase-gate-test");
+    state.tasks["1.1"]!.status = "skipped";
+    saveState(join(fixture.root, "docs", "WORKFLOW-STATE.json"), state);
+    const seen: string[] = [];
+    const harness: HarnessAdapter = {
+      name: "phase-gate-test",
+      supportsConcurrency: false,
+      capabilities: ["text", "repository-tools"],
+      async invoke({ task }) {
+        seen.push(task.id);
+        return { success: true, outputFiles: [], stdout: "completed task", stderr: "", durationMs: 1 };
+      },
+    };
+
+    const result = await runEngine(engineOptionsFor(fixture, harness, 1_000));
+    if (required) {
+      assert.equal(result.status, "failed");
+      assert.match(result.phases?.["1"]?.errorMessage ?? "", /skipped required task/);
+      assert.deepEqual(seen, []);
+    } else {
+      assert.equal(result.status, "complete");
+      assert.deepEqual(seen, ["2.1"]);
+    }
+  }
+});
+
+test("independent strict phases remain concurrent", async () => {
+  const fixture = makeEngineFixture();
+  addStrictDependentPhase(fixture);
+  const manifest = JSON.parse(readFileSync(fixture.manifestPath, "utf8")) as ExecutionManifest;
+  manifest.phases[1]!.dependencies = [];
+  manifest.phases[1]!.tasks[0]!.ownerAgent = "designer";
+  manifest.phases[1]!.ownerAgents = ["designer"];
+  writeFileSync(fixture.manifestPath, JSON.stringify(manifest), "utf8");
+  writeFileSync(join(fixture.root, ".agents", "agents", "designer.md"), `---
+name: designer
+description: Builds the independent phase.
+---
+`, "utf8");
+  initGit(fixture.root);
+  execFileSync("git", ["add", "."], { cwd: fixture.root });
+  execFileSync("git", ["commit", "-qm", "test fixture"], { cwd: fixture.root });
+
+  const harness = new GatedConcurrentHarness();
+  const running = runEngine(engineOptionsFor(fixture, harness, 1_000, { maxConcurrency: 2 }));
+  await Promise.all([harness.whenStarted("1.1"), harness.whenStarted("2.1")]);
+  assert.equal(harness.maxOverlap, 2);
+  harness.release("1.1");
+  harness.release("2.1");
+  const state = await running;
+
+  assert.equal(state.status, "complete");
+  assert.equal(state.phases?.["1"]?.status, "complete");
+  assert.equal(state.phases?.["2"]?.status, "complete");
+});
+
+test("phase validation failure is retried after its contract changes on resume", async () => {
+  const fixture = makeEngineFixture();
+  addStrictDependentPhase(fixture, { validationCommands: [`node -e "process.exit(1)"`] });
+  const harness = new RecordingHarness();
+  const first = await runEngine(engineOptionsFor(fixture, harness, 1_000));
+  assert.equal(first.status, "failed");
+  assert.equal(first.phases?.["1"]?.status, "failed");
+  assert.deepEqual(harness.taskIds, ["1.1"]);
+
+  const manifest = JSON.parse(readFileSync(fixture.manifestPath, "utf8")) as ExecutionManifest;
+  manifest.phases[0]!.validationCommands = [`node -e "process.exit(0)"`];
+  writeFileSync(fixture.manifestPath, JSON.stringify(manifest), "utf8");
+  const resumedHarness = new RecordingHarness();
+  const resumed = await runEngine(engineOptionsFor(fixture, resumedHarness, 1_000));
+  assert.equal(resumed.status, "complete");
+  assert.equal(resumed.phases?.["1"]?.status, "complete");
+  assert.deepEqual(resumedHarness.taskIds, ["2.1"]);
 });
 
 /** Harness that records the session id, running agent, and instructions of every task it runs. */

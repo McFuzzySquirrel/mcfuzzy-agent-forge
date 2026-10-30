@@ -461,18 +461,28 @@ export function tasks(p: RepoPaths): TaskRow[] {
   }));
   const ownGaps = (taskId: string) => (state?.tasks?.[taskId]?.validationLimitations ?? []).map((gap) => `${taskId}: ${gap}`);
   // Mirrors the engine's dispatch rule (engine.ts `nextReadyTasks`): a task is
-  // dispatchable only once its direct dependencies and every task of a phase it
-  // depends on are complete or skipped. The engine exports this as
+  // dispatchable only once its direct dependencies, every task of a phase it
+  // depends on, and each strict phase completion gate have passed. The engine exports this as
   // `unmetPrerequisites`; this copy exists because `tasks()` is synchronous and
   // cannot reach engine code at runtime, so the approval API re-uses the
   // engine's own definition as the authority and this one only decides what the
   // row is labelled. A drift can therefore mislabel a row, never permit an
   // approval.
-  const unmetPrerequisites = (taskId: string): string[] =>
-    (dependenciesByTask.get(taskId) ?? []).filter((id) => {
+  const unmetPrerequisites = (taskId: string): string[] => {
+    const phaseId = manifest.phases.find((phase) => phase.tasks.some((task) => task.id === taskId))?.id;
+    const taskDependencies = (dependenciesByTask.get(taskId) ?? []).filter((id) => {
       const status = state?.tasks?.[id]?.status;
       return status !== "complete" && status !== "skipped";
     });
+    const phaseDependencies = (phasesById.get(phaseId ?? "")?.dependencies ?? []).flatMap((dependencyId) => {
+      const dependency = phasesById.get(dependencyId);
+      if (dependency?.completionPolicy !== "strict"
+          || dependency.tasks.some((task) => state?.tasks?.[task.id]?.status !== "complete" && state?.tasks?.[task.id]?.status !== "skipped")
+          || state?.phases?.[dependencyId]?.status === "complete") return [];
+      return [`phase:${dependencyId}`];
+    });
+    return [...taskDependencies, ...phaseDependencies];
+  };
   // A human reviewer must see every "not run" check the reviewed work depends on,
   // not only the review task's own record (which never has any).
   const upstreamGaps = (taskId: string): string[] => {

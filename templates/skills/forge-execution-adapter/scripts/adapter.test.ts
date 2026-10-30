@@ -91,6 +91,24 @@ test("phase-opening tasks consume prerequisite phase artifacts", () => {
   assert.deepEqual(manifest.phases[1]!.tasks[0]!.inputs, ["work.foundation-1.1", "work.foundation-1.2"]);
 });
 
+test("compiled phases declare strict completion outputs and scoped validations", () => {
+  const root = createFixture();
+  writeFileSync(join(root, "docs", "features", "foundation.md"), `# PRD
+
+## Phase 1: Foundation
+- [optional] Generate a sample at \`src/sample.json\`
+- Create the required API at \`src/api.ts\`
+\`npm run check\`
+`);
+  const manifest = compileExecutionManifest(discoverForgeRepo(root));
+  const phase = manifest.phases[0]!;
+  assert.equal(phase.completionPolicy, "strict");
+  assert.deepEqual(phase.requiredOutputs, ["src/api.ts"]);
+  assert.deepEqual(phase.validationCommands, ["npm run check"]);
+  assert.equal(phase.tasks[0]!.required, false);
+  assert.equal(phase.tasks[1]!.required, true);
+});
+
 test("structured tasks preserve atomic scope and reject unknown or cyclic dependencies", () => {
   const root = createFixture();
   const task = { id: "api-one", title: "API 2.2: Upload", description: "Implement upload; verify all boundaries. Preserve valid existing behavior.", ownerAgent: "api-engineer", dependencies: [] as string[], expectedOutputs: ["src/upload.ts"], validationCommands: ["npm test"], contract: { version: 1, kind: "implementation", references: ["docs/features/foundation.md"], requirements: ["FR-1: Upload"], acceptanceCriteria: ["Oversize upload rejected"], constraints: [] } };
