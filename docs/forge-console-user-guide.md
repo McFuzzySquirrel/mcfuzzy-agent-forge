@@ -28,6 +28,24 @@ forge-launcher console --port 4400                    # prefer a specific port
 forge-launcher console --no-open                      # keep the browser handoff manual
 ```
 
+### Expose the Console on your tailnet
+
+For Tailscale Serve, keep the Console on loopback and supply the HTTPS origin
+that Serve exposes. First configure Serve for the chosen port and note its URL
+with `tailscale serve status`, then start the Console with that origin:
+
+```bash
+tailscale serve --bg 4300
+forge-launcher console --port 4300 \
+  --external-origin https://my-host.example.ts.net --no-open
+```
+
+Replace the example URL with your machine's Tailscale Serve origin. The
+`--external-origin` value must be HTTPS and must not include a path. Apply
+tailnet ACLs to restrict who can reach the Console. The Console token is not
+user authentication; do not expose this service through Tailscale Funnel or a
+public proxy.
+
 ---
 
 ## 2. Create or open a project

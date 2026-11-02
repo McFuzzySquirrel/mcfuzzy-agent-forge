@@ -4,6 +4,18 @@ Detailed release and change notes for MyForge.
 
 ---
 
+## November 2026 - v3.121
+
+### Tailscale Serve access for Forge Console
+
+- Added `forge-launcher console --external-origin <https-origin>` for using the
+  loopback-only Console through Tailscale Serve or another trusted HTTPS proxy.
+  The browser terminal accepts only the explicitly configured origin; the
+  Console does not open a network listener or treat the setting as user
+  authentication.
+
+---
+
 ## October 2026 - v3.120
 
 ### Fix Windows Console background jobs

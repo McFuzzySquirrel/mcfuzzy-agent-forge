@@ -109,7 +109,7 @@ npx forge-launcher@beta engine-run [--repo <path>] [--harness <h>] [--concurrenc
                               [--log-harness-activity|--no-log-harness-activity]
                               [--auto-commit|--no-auto-commit] [--commit-message-template <tmpl>]
 npx forge-launcher@beta resume [--repo <path>] [--non-interactive] [--dry-run]
-npx forge-launcher@beta console [--repo <path>] [--port <n>] [--no-open]
+npx forge-launcher@beta console [--repo <path>] [--port <n>] [--external-origin <https-origin>] [--no-open]
 npx forge-launcher@beta draft-prd --repo <path> [model flags]
 npx forge-launcher@beta draft-existing-prd --repo <path> [model flags]
 npx forge-launcher@beta draft-team --repo <path> [model flags]
@@ -543,7 +543,7 @@ The **Forge Console** is a self-contained, loopback-only web UI that fronts the
 launcher and the workflow engine from one browser app:
 
 ```bash
-forge-launcher console [--repo <path>] [--port <n>] [--no-open]
+forge-launcher console [--repo <path>] [--port <n>] [--external-origin <https-origin>] [--no-open]
 ```
 
 From it you can pick or create a project, advance the pipeline one stage at a
