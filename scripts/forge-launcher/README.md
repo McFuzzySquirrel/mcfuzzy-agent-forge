@@ -15,6 +15,25 @@ npm install -g forge-launcher
 npx forge-launcher
 ```
 
+With npm 11, if the global install reports unapproved install scripts, rerun it
+with explicit approval for the two required packages:
+
+```bash
+npm install -g --allow-scripts=node-pty,esbuild forge-launcher
+```
+
+For a one-shot `npx` run on npm 11, pass the same approval:
+
+```bash
+npx --allow-scripts=node-pty,esbuild forge-launcher
+```
+
+These commands approve only `node-pty` and `esbuild` for that invocation. The
+package's `allowScripts` field does not set npm's global approval policy. To
+remember the approval for future global installs, run
+`npm config set allow-scripts=node-pty,esbuild --location=user` once; this
+user-level setting applies to future global installs.
+
 ## Quick start
 
 ```bash

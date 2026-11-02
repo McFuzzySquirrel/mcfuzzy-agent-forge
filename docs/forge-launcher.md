@@ -159,6 +159,21 @@ npm install -g ./forge-launcher-1.0.0-beta.6.tgz   # global `forge-launcher`
 npm run build && npm link
 ```
 
+If npm 11 reports unapproved install scripts, rerun the global install with
+explicit approval for the launcher's `node-pty` and `esbuild` scripts:
+
+```bash
+npm install -g --allow-scripts=node-pty,esbuild ./forge-launcher-1.0.0-beta.6.tgz
+```
+
+This one-time flag approves only these packages for this command; the package's
+`allowScripts` field cannot approve scripts for npm's global installation. To
+persist the approval for future global installs, run
+`npm config set allow-scripts=node-pty,esbuild --location=user` once; this
+user-level setting applies to future global installs. `esbuild` installs the
+platform binary used by `tsx`, and `node-pty` prepares the Console's native
+terminal backend.
+
 Remove either install with:
 
 ```bash

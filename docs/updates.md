@@ -4,6 +4,16 @@ Detailed release and change notes for MyForge.
 
 ---
 
+## November 2026 - v3.122
+
+### Clarify npm 11 global install approvals
+
+- Documented npm 11's one-time `--allow-scripts=node-pty,esbuild` option for
+  global and `npx` launcher runs, plus the optional per-user npm setting. The
+  package's `allowScripts` field does not control global-install approvals.
+
+---
+
 ## November 2026 - v3.121
 
 ### Tailscale Serve access for Forge Console
