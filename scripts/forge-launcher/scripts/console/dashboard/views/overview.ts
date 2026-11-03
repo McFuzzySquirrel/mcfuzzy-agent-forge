@@ -1,8 +1,10 @@
 // ─── Overview: run header, progress, actions, pipeline guidance ─────────────
 
 import { api } from "../api.js";
+import { getGuidedAuthoringStep, type GuidedAuthoringStep } from "../project-authoring.js";
 import { Epoch, store } from "../state.js";
 import { el, fmtAgo, fmtDuration, fmtTime, fmtTokens, fmtUsd, statusBadge, toast } from "../render/dom.js";
+import { isTerminalSessionActive, onTerminalSessionChange } from "./terminal.js";
 import type {
   Actions,
   AuthoringSessionTarget,
@@ -23,6 +25,8 @@ let pollTimer: number | undefined;
 let refreshTimer: number | undefined;
 let overviewContainer: HTMLElement | null = null;
 let refreshInFlight = false;
+let cachedBrief: { repoRoot: string; content: string } | null = null;
+let pendingBrief: { repoRoot: string; load: Promise<string> } | null = null;
 
 function stopPoll(): void {
   if (pollTimer !== undefined) {
@@ -52,6 +56,7 @@ export function unmountOverview(): void {
   stopPoll();
   stopScheduledRender();
   overviewContainer = null;
+  cachedBrief = null;
 }
 
 export async function renderOverview(container: HTMLElement): Promise<void> {
@@ -67,6 +72,7 @@ export async function renderOverview(container: HTMLElement): Promise<void> {
   unsub = [];
   const myGen = renderEpoch.next();
   unsub.push(store.onAudit(() => scheduleRender(container)));
+  unsub.push(onTerminalSessionChange(() => scheduleRender(container)));
 
   // Re-fetch on every render (navigation, snapshot, or audit event) so counts
   // and actions stay current during a live run.
@@ -687,6 +693,11 @@ function validatePrdButton(): HTMLButtonElement {
 }
 
 function renderGuidance(container: HTMLElement, summary: Summary, actions: Actions): HTMLElement {
+  const guidedStep = getGuidedAuthoringStep(summary.repoRoot);
+  if (guidedStep && !summary.hasTeam && !summary.hasManifest && !summary.run) {
+    return renderGuidedAuthoring(container, summary, guidedStep);
+  }
+
   const step = nextStep(summary, actions);
   const working = summary.job?.status === "running";
 
@@ -763,6 +774,87 @@ function renderGuidance(container: HTMLElement, summary: Summary, actions: Actio
 
   children.push(el("p", { className: "dim" }, hint));
   return el("div", { className: "panel hint" }, children);
+}
+
+function renderGuidedAuthoring(
+  container: HTMLElement,
+  summary: Summary,
+  step: GuidedAuthoringStep,
+): HTMLElement {
+  const prdDetail = summary.authoringStages?.find((stage) => stage.stage === "prd");
+  const trackedPrdIsCurrent = summary.authoring?.stages.prd?.status === "complete" && !prdDetail?.stale;
+  const briefReady = summary.hasPrd && (step === "review" || trackedPrdIsCurrent);
+  const activeStep: "idea" | "brief" | "review" = briefReady ? "review" : step === "idea" ? "idea" : "brief";
+  const phaseItems = el("ol", { className: "guided-authoring-phases" }, [
+    el("li", activeStep === "idea" ? { "aria-current": "step" } : null, [
+      el("strong", null, "Explore your Idea"),
+      el("span", { className: "dim small" }, activeStep === "idea" ? "Current step" : "Complete"),
+    ]),
+    el("li", activeStep === "brief" ? { "aria-current": "step" } : null, [
+      el("strong", null, "Author your Project brief"),
+      el("span", { className: "dim small" }, activeStep === "review" ? "Ready for review" : activeStep === "brief" ? "Current step" : "Next"),
+    ]),
+  ]);
+  const children: HTMLElement[] = [phaseItems];
+
+  if (briefReady) {
+    const brief = el("pre", { className: "guided-brief-content", role: "region", "aria-label": "Project brief" }, "Loading your Project brief…");
+    children.push(
+      el("h3", null, "Project brief ready for review"),
+      el("p", { className: "dim" }, "Review the outcome, scope, assumptions, and open questions below. You can return to interactive authoring to make changes."),
+      brief,
+      el("div", { className: "actions" }, [
+        sessionButton(container, "prd", "Revise the Project brief"),
+        el("a", { className: "btn", href: "#/documents" }, "Project documents"),
+      ]),
+    );
+    void loadProjectBrief(summary.repoRoot)
+      .then((content) => { if (brief.isConnected) brief.textContent = content; })
+      .catch(() => { if (brief.isConnected) brief.textContent = "Could not load the Project brief. Refresh to try again."; });
+  } else {
+    const ideaPhase = activeStep === "idea";
+    children.push(
+      el("h3", null, ideaPhase ? "First: explore your Idea" : "Next: author your Project brief"),
+      el("p", { className: "dim" }, ideaPhase
+        ? "Use an interactive conversation to clarify the idea. It is fine to leave details unknown; assumptions and questions should stay visible."
+        : "Use an interactive conversation to shape the Project brief. Existing notes or PRD material provide context but do not replace this step."),
+      el("div", { className: "actions" }, [
+        sessionButton(container, ideaPhase ? "idea" : "prd", ideaPhase ? "Explore your idea" : "Author the Project brief"),
+      ]),
+    );
+  }
+
+  if (isTerminalSessionActive()) {
+    children.push(el("p", { className: "dim small", role: "status" }, [
+      "Your interactive session is still running. ",
+      el("a", { href: "#/terminal" }, "Return to the session"),
+      " when you are ready.",
+    ]));
+  }
+
+  return el("section", { className: "panel hint", "aria-labelledby": "guided-authoring-heading" }, [
+    el("h2", { id: "guided-authoring-heading" }, "Your Project guide"),
+    ...children,
+  ]);
+}
+
+function sessionButton(container: HTMLElement, target: "idea" | "prd", label: string): HTMLButtonElement {
+  const button = el("button", { className: "btn btn-primary", disabled: isTerminalSessionActive() ? true : null }, label) as HTMLButtonElement;
+  button.addEventListener("click", () => startSession(container, target));
+  return button;
+}
+
+function loadProjectBrief(repoRoot: string): Promise<string> {
+  if (cachedBrief?.repoRoot === repoRoot) return Promise.resolve(cachedBrief.content);
+  if (pendingBrief?.repoRoot === repoRoot) return pendingBrief.load;
+  const load = api.docContent("docs/PRD.md").then((file) => {
+    cachedBrief = { repoRoot, content: file.content };
+    return file.content;
+  }).finally(() => {
+    if (pendingBrief?.load === load) pendingBrief = null;
+  });
+  pendingBrief = { repoRoot, load };
+  return load;
 }
 
 function renderActions(container: HTMLElement, summary: Summary, actions: Actions, tasks: TaskRow[]): HTMLElement {

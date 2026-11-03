@@ -80,13 +80,13 @@ Projects you create or open are remembered in a registry at
 **Home** view emphasizes **Start with an idea** as its primary action. Recent
 Projects and existing-application setup remain available as secondary choices.
 
-- **Start with an idea** - the New Project wizard collects a name, harness,
-  visibility, parent directory, and idea, then spawns
-  `forge-launcher --non-interactive` in the background. That run bootstraps and
-  stops with the interactive PRD handoff; it never authors requirements
-  (ADR-060). It also lets you **add an existing PRD and
-  research/seed documents** (see *Adding a PRD and research/seed documents*
-  below), mirroring the CLI's Step 6.
+- **Start with an idea** - begin with an Idea, an editable suggested Project
+  name, and an **AI coding tool**. The configured default is selected when
+  available; without one, choose explicitly. Technical settings and optional
+  PRD/research source documents stay under **Advanced setup**. The Console
+  creates the workspace, then guides the user through interactive Idea
+  exploration and Project-brief authoring before presenting the brief for
+  review. Requirements are never authored headlessly (ADR-060).
 - **Open a Project** - a table of your projects plus an
   "Add folder" input for a forge repo you have on disk but haven't opened yet.
 - **Set up an app** - copies MyForge into an existing application
@@ -150,15 +150,17 @@ preservation guarantee.
 
 ---
 
-## The pipeline (the Continue button)
+## The existing pipeline (the Continue button)
 
-Projects flow through five stages. The **Continue** button on the Overview
-advances one stage at a time, running the same steps the terminal launcher runs,
-so you can review each result and come back later:
+New Projects first use the two interactive phases in the Project guide and stop
+at a review-ready Project brief. For Projects outside that guided authoring
+path, the **Continue** button on Overview advances the existing downstream
+stages one at a time, running the same steps as the terminal launcher:
 
 | Stage | Continue does | Produces |
 |---|---|---|
-| Idea (no PRD) | **Author PRD (interactive)** opens `forge-build-prd` in the Console Terminal view or an external terminal; there is no headless alternative (ADR-060). **Grill the idea first** runs `forge-grill-idea` the same way | `docs/PRD.md` + `docs/features/*.md` |
+| New Project | **Explore your Idea** opens `forge-grill-idea`, then **Author your Project brief** opens `forge-build-prd`; both are interactive and resumable, and source documents do not skip either phase | `docs/IDEA.md`, then `docs/PRD.md` + `docs/features/*.md` |
+| Existing Project (no brief) | **Author PRD (interactive)** opens `forge-build-prd` in the Console Terminal view or an external terminal; there is no headless alternative (ADR-060). **Grill the idea first** remains available when an Idea exists | `docs/PRD.md` + `docs/features/*.md` |
 | PRD (no team) | **Generate team** (headless `forge-build-agent-team`) | agent files and ownership metadata |
 | Team (skills incomplete) | **Generate project skills** | project skill candidates and review result |
 | Skills ready (no manifest) | **Compile manifest** (`forge-execution-adapter`) | `docs/EXECUTION-MANIFEST.json` |
@@ -189,21 +191,25 @@ agents and recompile the manifest; review the resulting tasks before running the
 
 ### Interactive authoring
 
-The **Overview** pipeline card leads with the interactive interview that the
-pre-Console workflow was built around; these actions live only there. Use the
-**Terminal** view to run the project harness or start a PRD, idea, or Feature PRD
-session in the browser. It resolves the configured authoring runner and PRD-stage
-model, queues the approved skill prompt, and supports terminal input, output, and
-resizing. The **Open in external terminal** button remains available as a
-fallback. These interactive actions do not become headless jobs: the
-`draft-prd`, `draft-existing-prd`, and `feature-prd` control actions continue to
-report the interactive handoff.
+The New Project guide separates **Explore your Idea** from **Author your
+Project brief**. The first runs `forge-grill-idea`; the second runs
+`forge-build-prd`. Both use the configured authoring runner and PRD-stage model,
+remain interactive, and can be resumed at the saved phase. Source documents
+provide context but do not bypass either session. Existing Projects keep the
+interactive authoring action on Overview.
 
-- **Grill the idea first (interactive)** runs the `forge-grill-idea` skill,
-  which interviews you in rounds to sharpen `docs/IDEA.md` before PRD authoring,
-  then rewrites and commits it.
-- **Author PRD (interactive)** runs `forge-build-prd` (inspecting the existing
-  repository when one is present) with the interview enabled.
+Use the **Terminal** view to run the project tool or start a Project-brief,
+Idea, or Feature PRD session in the browser. The **Open in external terminal**
+button remains available as a fallback. These interactive actions do not become
+headless jobs: the `draft-prd`, `draft-existing-prd`, and `feature-prd` control
+actions continue to report the interactive handoff.
+
+- **Explore your Idea (interactive)** runs `forge-grill-idea`, which interviews
+  you in rounds to sharpen `docs/IDEA.md` before Project-brief authoring, then
+  rewrites and commits it.
+- **Author your Project brief (interactive)** runs `forge-build-prd` with the
+  interview enabled and displays the resulting brief, including assumptions
+  and open questions, for review.
 - **Validate PRD** runs the read-only `validate-prd` check and reports the
   result, for documents authored outside the Console. It appears on the pipeline
   card once a PRD exists.
@@ -350,18 +356,18 @@ it keeps its own mode switch and Table toggle.
 
 ---
 
-## Adding a PRD and research/seed documents
+## Adding PRD and research source material
 
-The **New Project wizard** mirrors the CLI's Step 6 (`addPrdAndResearch`): after
-you enter the idea, a **Project documents** section lets you supply an existing
-PRD and research/seed documents (design specs, market research, technical
-notes). Both fields accept either a **file-picker browse** or a **typed absolute
-path** (comma-separated for multiple research docs):
+Under **Advanced setup**, the **New Project wizard** accepts existing PRD and
+research/seed documents (design specs, market research, technical notes). Both
+fields accept a **file-picker browse** or a **typed absolute path**
+(comma-separated for multiple research docs):
 
-- **Existing PRD** → copied to `docs/PRD.md` and used as-is, instead of the
-  pipeline drafting one from the idea.
-- **Research / seed documents** → copied to `docs/research/`, where the later
-  PRD build (`forge-build-prd`) reads them as extra context.
+- **Existing PRD** → copied to `docs/requirements-source.md` and used as
+  context for interactive Project-brief authoring. It does not replace the
+  generated brief or skip either guided authoring phase.
+- **Research / seed documents** → copied to `docs/research/`, where
+  `forge-build-prd` reads them as extra context.
 
 Picked files are uploaded to the server (`POST /api/uploads`, staged under the
 OS temp dir) and the launcher is handed the paths via `FORGE_PRD_FILE` /

@@ -4,6 +4,7 @@ import { api } from "../api.js";
 import { store } from "../state.js";
 import { el, toast } from "../render/dom.js";
 import { AUTHORING_RUNNER_OPTIONS, effectiveRunner } from "../runners.js";
+import { initialProjectToolChoice, initializeGuidedAuthoring, suggestProjectName } from "../project-authoring.js";
 import type { AuthoringConfig, CreateProjectRequest, ProjectInfo } from "../types.js";
 
 let createRepoDir: string | null = null;
@@ -20,8 +21,8 @@ export function unmountNew(): void {
 
 export function renderNew(container: HTMLElement): void {
   container.textContent = "";
-  container.appendChild(el("h1", null, "New project"));
-  container.appendChild(el("p", { className: "dim" }, "Creates the repo and bootstraps MyForge, then hands you off to interactive PRD authoring."));
+  container.appendChild(el("h1", null, "Start with an idea"));
+  container.appendChild(el("p", { className: "dim" }, "Create a Project workspace first. Then explore your Idea and work through an interactive Project-brief authoring session."));
   container.appendChild(buildForm());
   if (createRepoDir) {
     const host = el("div");
@@ -31,60 +32,77 @@ export function renderNew(container: HTMLElement): void {
 }
 
 function buildForm(): HTMLElement {
-  const name = el("input", { type: "text", placeholder: "my-project" });
+  const name = el("input", { type: "text", placeholder: "A suggested name will appear from your Idea", required: true });
   const description = el("input", { type: "text", placeholder: "Short description (optional)" });
   const harness = el("select", null, [
-    el("option", { value: "opencode" }, "opencode"),
-    el("option", { value: "github" }, "github"),
-    el("option", { value: "claude" }, "claude"),
-    el("option", { value: "agents" }, "agents"),
-  ]);
+    el("option", { value: "" }, "Choose an AI coding tool"),
+    el("option", { value: "opencode" }, "OpenCode"),
+    el("option", { value: "github" }, "GitHub Copilot"),
+    el("option", { value: "claude" }, "Claude Code"),
+    el("option", { value: "agents" }, "Other compatible agent setup"),
+  ]) as HTMLSelectElement;
+  harness.required = true;
   const visibility = el("select", null, [
     el("option", { value: "private" }, "private"),
     el("option", { value: "public" }, "public"),
   ]);
   const parentDir = el("input", { type: "text", placeholder: "/path/to/parent (optional)" });
   const concurrency = el("input", { type: "number", placeholder: "1 (optional)", min: "1" });
-  const idea = el("textarea", { rows: "5", placeholder: "Describe the project idea…" });
+  const idea = el("textarea", { rows: "5", placeholder: "What would you like to build? It is fine if some details are still unknown.", required: true });
 
-  // ── Project documents (PRD + research/seed) ──────────────────────────────
-  // Mirrors the CLI's Step 6 (addPrdAndResearch): both a file-picker browse and
-  // an absolute-path input. Picked files are uploaded to the server; paths are
-  // validated and copied. Sources land in docs/requirements-source.md / docs/research/
-  // and inform the later PRD build (forge-build-prd reads docs/research/).
   const prdPicker = buildFilePicker(".md,.txt", false);
   const researchPicker = buildFilePicker(".md,.txt", true);
   const prdPath = el("input", { type: "text", placeholder: "…or an absolute path to a PRD file" });
   const researchPaths = el("input", { type: "text", placeholder: "…or comma-separated absolute paths" });
   const authoring = buildAuthoringControls(harness as HTMLSelectElement);
 
-  const submit = el("button", { className: "btn btn-primary", type: "submit" }, "Create project") as HTMLButtonElement;
+  const submit = el("button", { className: "btn btn-primary", type: "submit" }, "Create Project workspace") as HTMLButtonElement;
   const cancel = el("a", { className: "btn", href: "#/home" }, "Cancel");
 
   const form = el("form", null, [
-    el("div", { className: "form-row" }, [field("Name", name), field("Harness", harness), field("Visibility", visibility)]),
-    field("Description", description),
-    field("Parent directory", parentDir),
-    field("Concurrency (parallel tasks)", concurrency),
-    field("Idea", idea),
-    el("div", { className: "doc-section" }, [
-      el("h4", null, "Project documents (optional, recommended)"),
-      field("Existing PRD", prdPicker.root),
-      field("PRD server path", prdPath),
-      field("Research / seed documents", researchPicker.root),
-      field("Research server paths", researchPaths),
-      el("p", { className: "dim small" }, "Research and seed docs (design specs, market research, technical notes) are copied to docs/research/ and give the PRD build extra context. An existing PRD is used as-is instead of drafting from the idea."),
+    field("Your Idea", idea),
+    field("Suggested Project name (editable)", name),
+    field("AI coding tool", harness),
+    el("p", { className: "dim small" }, "The configured default is selected when available. Choose a tool to continue if no default is configured."),
+    el("details", { className: "collapsible" }, [
+      el("summary", null, "Advanced setup (optional)"),
+      el("div", { className: "doc-section" }, [
+        field("Description", description),
+        field("Project visibility", visibility),
+        field("Parent directory", parentDir),
+        field("Concurrency (parallel tasks)", concurrency),
+        el("h4", null, "Project documents (optional)"),
+        field("Existing PRD as source material", prdPicker.root),
+        field("PRD source path", prdPath),
+        field("Research / seed documents", researchPicker.root),
+        field("Research source paths", researchPaths),
+        el("p", { className: "dim small" }, "These documents provide context for your interactive authoring sessions; they do not replace Idea exploration or Project-brief authoring."),
+        authoring.root,
+      ]),
     ]),
-    authoring.root,
-    el("p", { className: "dim small" }, "After creation, open the project Overview to author the PRD interactively. Team, project-skill, and manifest stages can run headlessly after the requirements are reviewed."),
+    el("p", { className: "dim small" }, "Both Idea exploration and Project-brief authoring are interactive. You can leave unknown details as open questions and return to your saved Project."),
     el("div", { className: "actions" }, [submit, cancel]),
   ]);
   const project = store.projectKey();
+  let nameEdited = false;
   for (const [key, control] of [["name", name], ["description", description], ["parentDir", parentDir], ["idea", idea], ["prdPath", prdPath], ["researchPaths", researchPaths]] as const) {
     const input = control as HTMLInputElement | HTMLTextAreaElement;
     input.value = store.getDraft(project, key, "");
     input.addEventListener("input", () => store.setDraft(project, key, input.value));
   }
+  nameEdited = Boolean((name as HTMLInputElement).value);
+  const ideaInput = idea as HTMLTextAreaElement;
+  const nameInput = name as HTMLInputElement;
+  if (!nameEdited && ideaInput.value.trim()) nameInput.value = suggestProjectName(ideaInput.value);
+  ideaInput.addEventListener("input", () => {
+    if (nameEdited) return;
+    nameInput.value = suggestProjectName(ideaInput.value);
+    store.setDraft(project, "name", nameInput.value);
+  });
+  nameInput.addEventListener("input", () => { nameEdited = true; });
+  const configuredTool = store.getDraft(project, "harness", "");
+  if (configuredTool) harness.value = configuredTool;
+  harness.addEventListener("change", () => store.setDraft(project, "harness", harness.value));
 
   form.addEventListener("submit", (event) => {
     event.preventDefault();
@@ -94,7 +112,7 @@ function buildForm(): HTMLElement {
     void submitNewProject({
       name: (name as HTMLInputElement).value.trim(),
       description: (description as HTMLInputElement).value.trim() || undefined,
-      harness: (harness as HTMLSelectElement).value,
+      harness: harness.value,
       visibility: (visibility as HTMLSelectElement).value,
       parentDir: (parentDir as HTMLInputElement).value.trim() || undefined,
       concurrency: Number((concurrency as HTMLInputElement).value) || undefined,
@@ -110,7 +128,7 @@ function buildForm(): HTMLElement {
     });
   });
 
-  void prefillFromSettings(harness as HTMLSelectElement, concurrency as HTMLInputElement, authoring.runner);
+  void prefillFromSettings(harness, concurrency as HTMLInputElement, authoring.runner);
 
   return el("div", { className: "panel" }, [form]);
 }
@@ -119,7 +137,12 @@ function buildForm(): HTMLElement {
 async function prefillFromSettings(harness: HTMLSelectElement, concurrency: HTMLInputElement, runner: HTMLSelectElement): Promise<void> {
   try {
     const settings = await api.settings();
-    if (settings.harness) harness.value = settings.harness;
+    const configuredTool = initialProjectToolChoice(settings.harness);
+    if (configuredTool && !store.getDraft(store.projectKey(), "harness", "")) {
+      harness.value = configuredTool;
+      store.setDraft(store.projectKey(), "harness", configuredTool);
+      harness.dispatchEvent(new Event("change"));
+    }
     if (settings.execution?.concurrency && !concurrency.value) {
       concurrency.value = String(settings.execution.concurrency);
     }
@@ -154,6 +177,10 @@ function buildAuthoringControls(harness: HTMLSelectElement): AuthoringControls {
 
   const load = async (force: boolean): Promise<void> => {
     const selectedHarness = harness.value;
+    if (!selectedHarness) {
+      status.textContent = "Choose an AI coding tool to load model choices.";
+      return;
+    }
     const runner = effectiveRunner(runnerSelect.value, selectedHarness);
     const id = ++requestId;
     status.textContent = force ? "Refreshing authoring models…" : "Loading authoring models…";
@@ -307,8 +334,8 @@ async function submitNewProject(req: {
   researchPaths?: string;
   authoringConfig: AuthoringConfig;
 }): Promise<void> {
-  if (!req.name || !req.idea) {
-    toast("Name and idea are required.");
+  if (!req.name || !req.idea.trim() || !req.harness) {
+    toast("Add an Idea, keep the suggested Project name, and choose an AI coding tool.");
     return;
   }
 
@@ -346,6 +373,7 @@ async function submitNewProject(req: {
     toast(res.message);
     if (res.repoDir) {
       createRepoDir = res.repoDir;
+      initializeGuidedAuthoring(res.repoDir);
       const view = document.querySelector<HTMLElement>("#view");
       const host = view ? el("div") : null;
       if (host && view) {
@@ -373,7 +401,7 @@ async function renderCreateStatus(host: HTMLElement, repoDir: string): Promise<v
       ]),
       el("p", { className: "create-status-message dim" }, `${project?.stage ?? "creating"} — ${message}`),
       el("div", { className: "actions" }, [
-        el("button", { className: "btn btn-primary", "data-action": "select", disabled: project ? null : true }, "Select this project"),
+        el("button", { className: "btn btn-primary", "data-action": "select", disabled: !project || running ? true : null }, "Open your Project guide"),
         el("a", { className: "btn", href: "#/projects" }, "View projects"),
       ]),
     ]);
@@ -396,7 +424,7 @@ async function renderCreateStatus(host: HTMLElement, repoDir: string): Promise<v
     status.textContent = `${project?.stage ?? "creating"} — ${message}`;
   }
   if (spinner) spinner.style.display = running ? "" : "none";
-  for (const btn of panel.querySelectorAll<HTMLButtonElement>("[data-action]")) btn.disabled = !project;
+  for (const btn of panel.querySelectorAll<HTMLButtonElement>("[data-action]")) btn.disabled = !project || running;
 
   if (createPoll !== undefined) window.clearInterval(createPoll);
   if (running) {
