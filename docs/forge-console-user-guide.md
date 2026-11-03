@@ -152,14 +152,21 @@ Once the build starts, switch between the views to follow the work:
     the engine-computed critical path and current-time marker are shown.
   - Both views share Task summaries, responsibility, attention cues, selection,
     status filters, and compact details. Selecting a card or bar opens the same
-    detail view with its blocker and next action; open **All tasks** for full
+    detail view with its blocker, next action, prerequisites, artifact inputs
+    and outputs, and changed files. These relationships are structured text,
+    not pointer-only links or extra focus stops; open **All tasks** for full
     diagnostics.
   - Status filters dim rather than hide Tasks, keeping the full workflow shape
     visible. Selection and filters persist per Project, and each view retains
     its own scroll position across refreshes and view switches.
-  - The Board is semantic HTML/CSS and works without PixiJS. Task controls and
-    the Gantt timeline are keyboard-operable; loading, empty, failed, and stale
-    data states offer a next step.
+  - The Board is semantic HTML/CSS and works without PixiJS. Every Task card
+    and Gantt bar is a keyboard-focusable control; Enter or Space opens its
+    details, and closing details returns focus to the originating control.
+    Filters and view changes retain logical focus and the selected Task while
+    it remains available.
+  - The Board announces failures, newly ready Human reviews, and cleared
+    blockers, but not routine progress. Loading, empty, failed, and stale data
+    states offer a next step.
 - **Tasks**: a focused queue containing only Human review Tasks. Each entry
   shows why it is ready or waiting, its Task-specific criteria and references,
   the blocker, and who acts next. A Human review is separate from Project

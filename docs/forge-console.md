@@ -347,11 +347,16 @@ and adds timeline information:
 - **The critical path** is highlighted: the longest chain of remaining work.
 
 Selecting a card or bar opens the same compact Task details: its summary,
-blocker, next responsible, next action, and prerequisites. Full diagnostics
-remain in **Tasks**. Keyboard-operable Task controls and structured tables make
-the Board usable without a pointer. Status filters dim rather than hide Tasks,
-so workflow shape remains visible. Loading, empty, failed, and stale-data states
-explain what happened and offer a next step.
+blocker, next responsible, next action, prerequisites, artifact inputs and
+outputs, and changed files. Relationships are structured text, not
+pointer-only links or extra focus stops. Full diagnostics remain in **Tasks**.
+Every Task card and Gantt bar is a keyboard-focusable control; Enter or Space
+opens its details, and closing details returns focus to the originating
+control. Filters and view changes retain logical focus and the selected Task
+while it remains available. The Board announces failures, newly ready Human
+reviews, and cleared blockers, but not routine progress. Status filters dim
+rather than hide Tasks, so workflow shape remains visible. Loading, empty,
+failed, and stale-data states explain what happened and offer a next step.
 
 The standalone `workflow-engine run --viz` dashboard remains available
 separately and may use PixiJS; it does not affect the Console Board.

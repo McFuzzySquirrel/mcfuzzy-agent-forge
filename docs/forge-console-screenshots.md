@@ -49,6 +49,9 @@ capture is full-page so the Controls are visible.)
 ## 3. Board
 
 The semantic HTML/CSS Board in either mode. PixiJS is not required.
+Task cards and Gantt bars are keyboard controls. Task details expose
+prerequisites and artifact relationships as structured text; selection moves
+focus into details and Close restores it.
 
 **Kanban** — Tasks grouped by phase and workflow status. Cards include their
 summary, responsibility, and attention/next-action cue.
@@ -62,7 +65,8 @@ highlighted.
 ![Board - gantt](images/forge-console/03b-board-gantt.png)
 
 Selecting a card or timeline bar opens the shared compact Task details with its
-blocker, next action, prerequisites, and a link to full diagnostics in All tasks.
+blocker, next action, prerequisites, artifact inputs and outputs, changed files,
+and a link to full diagnostics in All tasks.
 
 ![Board - Task details](images/forge-console/03c-board-detail.png)
 
@@ -231,7 +235,9 @@ npm run capture -- --board-only # refreshes only Board images and thumbnails
 ```
 
 Requirements: `google-chrome` (or set `CHROME_PATH`), `ffmpeg` on `PATH`, and
-Node 18+. The tool writes the responsive set to
+Node 18+. Board captures also run deterministic keyboard, focus-restoration,
+filter/view-continuity, and structured-relationship assertions. The tool writes
+the responsive set to
 `docs/images/forge-console/current/`, derives the numbered tour images and the
 640px thumbnails, and rebuilds `console-walkthrough.gif`. Board-only capture
 skips the GIF and unrelated views. Pass `--headed` to watch the browser while it
