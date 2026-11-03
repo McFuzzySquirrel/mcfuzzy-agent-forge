@@ -17,6 +17,10 @@ export interface BoardTaskSummary {
   attentionCue: string | null;
   blocker: string | null;
   dependencies: string[];
+  artifactInputs: string[];
+  artifactId: string | null;
+  artifactType: string | null;
+  outputFiles: string[];
 }
 
 export function summarizeBoardTasks(tasks: readonly TaskRow[]): BoardTaskSummary[] {
@@ -73,8 +77,36 @@ export function summarizeBoardTasks(tasks: readonly TaskRow[]): BoardTaskSummary
       attentionCue,
       blocker,
       dependencies: [...task.dependencies],
+      artifactInputs: [...task.inputs],
+      artifactId: task.artifactId,
+      artifactType: task.produces,
+      outputFiles: [...task.outputFiles],
     };
   });
+}
+
+export function boardTaskChangeAnnouncement(
+  previous: readonly BoardTaskSummary[],
+  current: readonly BoardTaskSummary[],
+): string | null {
+  const previousById = new Map(previous.map((task) => [task.id, task]));
+  const changes: string[] = [];
+  for (const task of current) {
+    const before = previousById.get(task.id);
+    if (!before) continue;
+    if (task.status === "failed" && before.status !== "failed") {
+      changes.push(`${task.title} failed.`);
+      continue;
+    }
+    if (before.attention === "blocked" && task.attention !== "blocked") {
+      changes.push(`${task.title} is no longer blocked.`);
+    }
+    if (task.attention === "human-review" && before.attention !== "human-review") {
+      changes.push(`${task.title} is ready for Human review.`);
+    }
+  }
+  if (changes.length === 0) return null;
+  return changes.slice(0, 3).join(" ") + (changes.length > 3 ? ` ${changes.length - 3} more Task updates.` : "");
 }
 
 export function shouldDimBoardTask(task: BoardTaskSummary, statuses: readonly BoardStatusFilter[]): boolean {

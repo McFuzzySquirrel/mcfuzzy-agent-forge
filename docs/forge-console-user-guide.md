@@ -142,6 +142,12 @@ the list open. A persistent project context bar below the menu shows the current
 project name, harness, and Live/Idle state, and its switcher changes projects
 from any view.
 
+Choose **Project files** from **Start** to read the Project idea, Project brief,
+build progress, and feature documents in the Console. Delivered files are
+listed separately with an explicit **Open externally** action. This view does
+not edit or remove repository content; Task-by-Task artifact history remains in
+**Artifacts**.
+
 Once the build starts, switch between the views to follow the work:
 
 - **Board**: the live build, in **Kanban** or **Gantt** mode.
@@ -151,14 +157,21 @@ Once the build starts, switch between the views to follow the work:
     the engine-computed critical path and current-time marker are shown.
   - Both views share Task summaries, responsibility, attention cues, selection,
     status filters, and compact details. Selecting a card or bar opens the same
-    detail view with its blocker and next action; open **All tasks** for full
+    detail view with its blocker, next action, prerequisites, artifact inputs
+    and outputs, and changed files. These relationships are structured text,
+    not pointer-only links or extra focus stops; open **All tasks** for full
     diagnostics.
   - Status filters dim rather than hide Tasks, keeping the full workflow shape
     visible. Selection and filters persist per Project, and each view retains
     its own scroll position across refreshes and view switches.
-  - The Board is semantic HTML/CSS and works without PixiJS. Task controls and
-    the Gantt timeline are keyboard-operable; loading, empty, failed, and stale
-    data states offer a next step.
+  - The Board is semantic HTML/CSS and works without PixiJS. Every Task card
+    and Gantt bar is a keyboard-focusable control; Enter or Space opens its
+    details, and closing details returns focus to the originating control.
+    Filters and view changes retain logical focus and the selected Task while
+    it remains available.
+  - The Board announces failures, newly ready Human reviews, and cleared
+    blockers, but not routine progress. Loading, empty, failed, and stale data
+    states offer a next step.
 - **Tasks**: a focused queue containing only Human review Tasks. Each entry
   shows why it is ready or waiting, its Task-specific criteria and references,
   the blocker, and who acts next. A Human review is separate from Project
@@ -169,12 +182,13 @@ Once the build starts, switch between the views to follow the work:
   cost usage (or an explicit "not reported"); the Overview run stats show the
   run totals.
 - **Logs**: the engine and authoring log tail plus the live audit event stream.
-- **Plan & Team**: the project documents as a table (kind, title, path, status)
+- **Plan & Team**: the technical project documents as a table (kind, title, path, status)
   and the generated agent/skill files. Selecting a document opens it in a wide
   popup with an **Open externally** button; `forge-requirement` and `forge-task`
   blocks render as tables instead of code. Skills are shown as cards grouped
   into **Forge skills** and **Project skills**; the authoring stage cards and
   re-derivation footer live here too.
+- **Artifacts**: the detailed outputs and provenance for each Task.
 - **Settings**: Appearance (System/Light/Dark theme), authoring models, execution preferences (build mode, concurrency, auto-commit, harness logging, task timeouts), and per-agent model overrides in one place.
 
 The Console uses the selected harness root for team, report, and model-override
@@ -183,7 +197,6 @@ roots, so a skills-only directory cannot silently replace the generated team.
 For an existing compiled manifest, the manifest's `harnessRoot` is preferred
 over automatic detection. If that path is stale, update the selected root and
 recompile the manifest explicitly; the Console will not silently switch roots.
-- **Artifacts**: structured outputs produced by the run, browsable by type and task.
 - **Timeline**: a chronological record of important events and failures.
 
 The most useful combination for day-to-day work is usually Overview + Board + Logs.

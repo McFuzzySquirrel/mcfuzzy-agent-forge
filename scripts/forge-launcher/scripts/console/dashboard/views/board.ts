@@ -2,7 +2,7 @@ import { api } from "../api.js";
 import { store } from "../state.js";
 import { el, fmtAgo, fmtDuration, statusBadge } from "../render/dom.js";
 import type { BoardGanttBar, BoardGanttLayout, BoardLayout } from "../types.js";
-import { shouldDimBoardTask, summarizeBoardTasks, type BoardTaskSummary } from "./board-model.js";
+import { boardTaskChangeAnnouncement, shouldDimBoardTask, summarizeBoardTasks, type BoardTaskSummary } from "./board-model.js";
 import { BoardPreferences, type BoardMode, type BoardStatusFilter } from "./board-preferences.js";
 
 const STATUSES: Array<{ value: BoardStatusFilter; label: string }> = [
@@ -34,7 +34,7 @@ let refreshGeneration = 0;
 let refreshTimer: number | undefined;
 let unsubscribe: (() => void) | null = null;
 let focusAfterRender: string | null = null;
-let returnFocusTaskId: string | null = null;
+let returnFocusKey: string | null = null;
 let staleNoticeActive = false;
 
 function currentProject(): string {
@@ -84,29 +84,13 @@ function announce(message: string): void {
   liveRegion.textContent = message;
 }
 
-function announceTaskChanges(previous: readonly BoardTaskSummary[], current: readonly BoardTaskSummary[]): void {
-  const previousById = new Map(previous.map((task) => [task.id, task]));
-  const changes: string[] = [];
-  for (const task of current) {
-    const before = previousById.get(task.id);
-    if (!before) continue;
-    if (task.status === "failed" && before.status !== "failed") {
-      changes.push(`${task.title} failed.`);
-    } else if (before.attention === "blocked" && task.attention !== "blocked") {
-      changes.push(`${task.title} is no longer blocked.`);
-    } else if (task.status === "complete" && before.status !== "complete") {
-      changes.push(`${task.title} is complete.`);
-    }
-  }
-  if (changes.length > 0) {
-    announce(changes.slice(0, 3).join(" ") + (changes.length > 3 ? ` ${changes.length - 3} more Task updates.` : ""));
-  }
-}
-
 function focusByKey(root: HTMLElement, key: string | null): void {
   if (!key) return;
-  const target = [...root.querySelectorAll<HTMLElement>("[data-board-focus]")]
-    .find((element) => element.dataset.boardFocus === key);
+  const targets = [...root.querySelectorAll<HTMLElement>("[data-board-focus]")];
+  const target = targets.find((element) => element.dataset.boardFocus === key)
+    ?? (key.startsWith("bar:") || key.startsWith("attention:task:")
+      ? targets.find((element) => element.dataset.boardFocus === `task:${key.slice(key.lastIndexOf(":") + 1)}`)
+      : undefined);
   target?.focus({ preventScroll: true });
 }
 
@@ -148,7 +132,7 @@ function renderAttention(tasksToShow: BoardTaskSummary[], selectedId: string | n
       el("p", { className: "dim small" }, "Failures, blocked work, and Human review Tasks stay visible in either view."),
     ]),
     el("ul", { className: "board-attention-list" }, attentionTasks.map((task) =>
-      el("li", null, taskControl(task, selectedId, statuses)),
+      el("li", null, taskControl(task, selectedId, statuses, `attention:${taskFocusKey(task.id)}`)),
     )),
   ]);
 }
@@ -372,9 +356,18 @@ function renderDetails(task: BoardTaskSummary): HTMLElement {
     definition("Next action", task.nextAction),
   ];
   if (task.blocker) rows.push(definition("Blocked by / failure", task.blocker));
-  rows.push(definition("Prerequisites", dependencies.length
-    ? el("ul", { className: "board-detail-list" }, dependencies.map((dependency) => el("li", null, dependency)))
+  const textList = (values: readonly string[]): HTMLElement => el("ul", { className: "board-detail-list" },
+    values.map((value) => el("li", null, value)),
+  );
+  rows.push(definition("Prerequisites", dependencies.length ? textList(dependencies) : "None"));
+  rows.push(definition("Artifact inputs", task.artifactInputs.length ? textList(task.artifactInputs) : "None"));
+  const artifactsProduced: HTMLElement[] = [];
+  if (task.artifactId) artifactsProduced.push(el("li", null, `Artifact ID: ${task.artifactId}`));
+  if (task.artifactType) artifactsProduced.push(el("li", null, `Artifact type: ${task.artifactType}`));
+  rows.push(definition("Artifacts produced", artifactsProduced.length
+    ? el("ul", { className: "board-detail-list" }, artifactsProduced)
     : "None"));
+  if (task.outputFiles.length > 0) rows.push(definition("Files changed", textList(task.outputFiles)));
 
   return el("aside", {
     className: "board-details",
@@ -546,7 +539,10 @@ async function refreshBoard(): Promise<void> {
   );
   try {
     const taskSummaries = summarizeBoardTasks(await api.tasks());
-    if (tasksLoaded) announceTaskChanges(tasks, taskSummaries);
+    if (tasksLoaded) {
+      const changeAnnouncement = boardTaskChangeAnnouncement(tasks, taskSummaries);
+      if (changeAnnouncement) announce(changeAnnouncement);
+    }
     else tasksLoaded = true;
     if (taskError) announce("Board Task data is current again.");
     tasks = taskSummaries;
@@ -621,14 +617,14 @@ function handleClick(event: Event): void {
   if (target.closest("[data-board-close]")) {
     const selectedId = currentPreferences().selectedTaskId;
     preferences.setSelectedTaskId(null);
-    focusAfterRender = returnFocusTaskId ? taskFocusKey(returnFocusTaskId) : (selectedId ? taskFocusKey(selectedId) : null);
-    returnFocusTaskId = null;
+    focusAfterRender = returnFocusKey ?? (selectedId ? taskFocusKey(selectedId) : null);
+    returnFocusKey = null;
     renderBoardUi();
     return;
   }
   const taskId = target.closest<HTMLElement>("[data-board-task-id]")?.dataset.boardTaskId;
   if (taskId && taskById(taskId)) {
-    returnFocusTaskId = taskId;
+    returnFocusKey = target.closest<HTMLElement>("[data-board-focus]")?.dataset.boardFocus ?? taskFocusKey(taskId);
     preferences.setSelectedTaskId(taskId);
     focusAfterRender = "details-heading";
     renderBoardUi();
@@ -672,7 +668,7 @@ export function unmountBoard(): void {
   lastRefreshedAt = null;
   refreshGeneration += 1;
   focusAfterRender = null;
-  returnFocusTaskId = null;
+  returnFocusKey = null;
   staleNoticeActive = false;
 }
 

@@ -54,6 +54,9 @@ capture is full-page so the Controls are visible.)
 ## 3. Board
 
 The semantic HTML/CSS Board in either mode. PixiJS is not required.
+Task cards and Gantt bars are keyboard controls. Task details expose
+prerequisites and artifact relationships as structured text; selection moves
+focus into details and Close restores it.
 
 **Kanban** — Tasks grouped by phase and workflow status. Cards include their
 summary, responsibility, and attention/next-action cue.
@@ -67,7 +70,8 @@ highlighted.
 ![Board - gantt](images/forge-console/03b-board-gantt.png)
 
 Selecting a card or timeline bar opens the shared compact Task details with its
-blocker, next action, prerequisites, and a link to full diagnostics in All tasks.
+blocker, next action, prerequisites, artifact inputs and outputs, changed files,
+and a link to full diagnostics in All tasks.
 
 ![Board - Task details](images/forge-console/03c-board-detail.png)
 
@@ -195,11 +199,29 @@ view keeps the amber underline. The page content uses the full browser width.
 
 ![Navigation - category dropdown](images/forge-console/16-nav-menu.png)
 
+## 17. Project files
+
+Project files foregrounds the idea, brief, progress, and feature documents, then
+lists delivered files separately from Task-by-Task history.
+
+![Project files - documents and deliverables](images/forge-console/17-project-files.png)
+
+Selecting **Read Project brief** opens its rendered Markdown in the Console.
+
+![Project files - rendered brief](images/forge-console/17b-project-files-detail.png)
+
+## 18. Human review
+
+The focused review queue shows Tasks that need a person, their criteria,
+evidence, blockers, and next action.
+
+![Human review - focused queue](images/forge-console/18-human-review.png)
+
 ## Responsive current captures
 
-The current build was captured at 1440px, 1024px, 720px, 390px, and 320px for
-every route. Detail-state captures (expanded task, rendered PRD, rendered
-feature, artifact detail, and audit log) are also included in
+The checked-in build was captured at 1440px, 1024px, 720px, 390px, and 320px for
+its routes. Detail-state captures (expanded task, rendered PRD, rendered
+feature, Project brief, artifact detail, and audit log) are also included in
 `images/forge-console/current/`.
 
 | View | 1024px | 720px | 390px | 320px |
@@ -210,6 +232,8 @@ feature, artifact detail, and audit log) are also included in
 | Logs | [image](images/forge-console/current/logs-1024.png) | [image](images/forge-console/current/logs-720.png) | [image](images/forge-console/current/logs-390.png) | [image](images/forge-console/current/logs-320.png) |
 | Plan & Team | [image](images/forge-console/current/documents-1024.png) | [image](images/forge-console/current/documents-720.png) | [image](images/forge-console/current/documents-390.png) | [image](images/forge-console/current/documents-320.png) |
 | Artifacts | [image](images/forge-console/current/artifacts-1024.png) | [image](images/forge-console/current/artifacts-720.png) | [image](images/forge-console/current/artifacts-390.png) | [image](images/forge-console/current/artifacts-320.png) |
+| Project files | [image](images/forge-console/current/project-files-1024.png) | [image](images/forge-console/current/project-files-720.png) | [image](images/forge-console/current/project-files-390.png) | [image](images/forge-console/current/project-files-320.png) |
+| Human review | [image](images/forge-console/current/review-queue-1024.png) | [image](images/forge-console/current/review-queue-720.png) | [image](images/forge-console/current/review-queue-390.png) | [image](images/forge-console/current/review-queue-320.png) |
 | Timeline | [image](images/forge-console/current/timeline-1024.png) | [image](images/forge-console/current/timeline-720.png) | [image](images/forge-console/current/timeline-390.png) | [image](images/forge-console/current/timeline-320.png) |
 | Projects | [image](images/forge-console/current/projects-1024.png) | [image](images/forge-console/current/projects-720.png) | [image](images/forge-console/current/projects-390.png) | [image](images/forge-console/current/projects-320.png) |
 | New project | [image](images/forge-console/current/new-1024.png) | [image](images/forge-console/current/new-720.png) | [image](images/forge-console/current/new-390.png) | [image](images/forge-console/current/new-320.png) |
@@ -230,7 +254,9 @@ npm run capture -- --board-only # refreshes only Board images and thumbnails
 ```
 
 Requirements: `google-chrome` (or set `CHROME_PATH`), `ffmpeg` on `PATH`, and
-Node 18+. The tool writes the responsive set to
+Node 18+. Board captures also run deterministic keyboard, focus-restoration,
+filter/view-continuity, and structured-relationship assertions. The tool writes
+the responsive set to
 `docs/images/forge-console/current/`, derives the numbered tour images and the
 640px thumbnails, and rebuilds `console-walkthrough.gif`. Board-only capture
 skips the GIF and unrelated views. Pass `--headed` to watch the browser while it
