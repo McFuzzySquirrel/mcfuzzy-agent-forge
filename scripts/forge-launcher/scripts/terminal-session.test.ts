@@ -55,13 +55,14 @@ function fakePty(): { pty: IPty; state: FakePty } {
 
 async function setup(
   t: import("node:test").TestContext,
-  overrides: { resolveCli?: (name: string) => string | null } = {},
+  overrides: { resolveCli?: (name: string) => string | null; origin?: string } = {},
 ) {
   const server = http.createServer();
   await new Promise<void>((resolve) => server.listen(0, "127.0.0.1", resolve));
   const address = server.address();
   assert.ok(address && typeof address === "object");
-  const origin = `http://127.0.0.1:${address.port}`;
+  const localOrigin = `http://127.0.0.1:${address.port}`;
+  const origin = overrides.origin ?? localOrigin;
   const spawned: Array<{ cli: string; args: string[]; cwd?: string; pwd?: string }> = [];
   const fake = fakePty();
   const resolveCommand = async (request: TerminalStartRequest, repoRoot: string): Promise<TerminalCommand> => {
@@ -85,8 +86,8 @@ async function setup(
     await new Promise<void>((resolve) => server.close(() => resolve()));
   });
   const socket = (auth = token, requestOrigin = origin) =>
-    new WebSocket(`${origin.replace(/^http/, "ws")}/api/terminal`, [protocol, auth], { origin: requestOrigin });
-  return { origin, spawned, fake: fake.state, socket };
+    new WebSocket(`${localOrigin.replace(/^http/, "ws")}/api/terminal`, [protocol, auth], { origin: requestOrigin });
+  return { origin, localOrigin, spawned, fake: fake.state, socket };
 }
 
 function receive(socket: WebSocket, type: string): Promise<Record<string, unknown>> {
@@ -129,6 +130,19 @@ test("terminal WebSocket requires the Console token and same-origin browser", as
   });
   await rejected(socket("wrong-token"));
   await rejected(socket(token, "http://evil.example"));
+});
+
+test("terminal WebSocket accepts the configured HTTPS proxy origin, not the loopback origin", async (t) => {
+  const { socket, localOrigin } = await setup(t, { origin: "https://forge.example.ts.net" });
+  const rejected = (client: WebSocket) => new Promise<void>((resolve) => {
+    client.once("close", () => resolve());
+    client.once("error", () => resolve());
+  });
+  await rejected(socket(token, localOrigin));
+  const client = socket();
+  await once(client, "open");
+  client.close();
+  await once(client, "close");
 });
 
 test("terminal sessions launch a fixed harness in the selected project and bridge PTY I/O", async (t) => {

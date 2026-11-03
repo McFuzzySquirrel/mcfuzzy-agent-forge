@@ -57,19 +57,38 @@ From there:
 ## Usage
 
 ```bash
-forge-launcher console [--repo <path>] [--port <n>] [--no-open]
+forge-launcher console [--repo <path>] [--port <n>] [--external-origin <https-origin>] [--no-open]
 ```
 
 | Flag | Default | Purpose |
 |------|---------|---------|
 | `--repo <path>` | *(none)* | Open this forge repo. Omit to show the project picker. |
 | `--port <n>` | `4300` | Preferred port; the next free port is used when busy. |
+| `--external-origin <https-origin>` | *(none)* | HTTPS origin used by browsers through a trusted reverse proxy, such as Tailscale Serve. |
 | `--no-open` | `false` | Do not auto-open the browser. |
 
 Run it from anywhere (`npx forge-launcher@beta console …` before the npm package
 is published). It requires Node 18+ and, for authoring steps, the harness CLI the
 project was created with (`opencode` or `copilot`) - see
 [Prerequisites](forge-launcher.md#prerequisites).
+
+### Remote access with Tailscale Serve
+
+The Console continues to listen on `127.0.0.1`; `--external-origin` only tells
+the browser-terminal WebSocket which HTTPS origin to accept through the proxy.
+Set the origin to the HTTPS URL shown by `tailscale serve status` (origin only,
+no path), then configure Serve to proxy the same local port:
+
+```bash
+forge-launcher console --port 4300 --external-origin https://my-host.example.ts.net --no-open
+tailscale serve --bg 4300
+```
+
+Replace the example origin with the URL for your machine. Restrict access with
+your tailnet ACLs and do not expose the Console through Tailscale Funnel or a
+public reverse proxy: the Console token protects browser actions against
+cross-origin requests, but is not user authentication. The external-origin
+setting does not open a network listener or trust forwarded headers.
 
 ---
 
@@ -525,11 +544,15 @@ job status keeps updating even if you switch between **Home**, **Projects**, and
 
 ## Security
 
-- The server binds to **`127.0.0.1` only** (loopback) - it is never exposed to
-  the network.
+- The server binds to **`127.0.0.1` only** (loopback). Remote access is possible
+  only through a separately configured trusted proxy; the Console does not
+  open a network listener.
 - All `POST` endpoints require an **`X-Forge-Token`** header holding a
   per-server random token embedded in the served page, so cross-origin web pages
   cannot trigger actions.
+- The token is not user authentication. When using a proxy, restrict access at
+  the proxy or network layer (for example with Tailscale ACLs); do not expose
+  the Console publicly.
 - File reads are confined to `docs/`, the harness `agents/`/`skills/` dirs, and
   `docs/artifacts/` with path-traversal guards.
 - "Open externally" (`POST /api/open`) only opens a whitelisted path in the

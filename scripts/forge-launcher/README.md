@@ -15,6 +15,25 @@ npm install -g forge-launcher
 npx forge-launcher
 ```
 
+With npm 11, if the global install reports unapproved install scripts, rerun it
+with explicit approval for the two required packages:
+
+```bash
+npm install -g --allow-scripts=node-pty,esbuild forge-launcher
+```
+
+For a one-shot `npx` run on npm 11, pass the same approval:
+
+```bash
+npx --allow-scripts=node-pty,esbuild forge-launcher
+```
+
+These commands approve only `node-pty` and `esbuild` for that invocation. The
+package's `allowScripts` field does not set npm's global approval policy. To
+remember the approval for future global installs, run
+`npm config set allow-scripts=node-pty,esbuild --location=user` once; this
+user-level setting applies to future global installs.
+
 ## Quick start
 
 ```bash
@@ -34,7 +53,7 @@ the queued command it prints.
 | `forge-launcher bootstrap <dir> [--harness agents\|github\|claude\|opencode]` | Copy agent/skill templates into an existing project. |
 | `forge-launcher engine-run [--repo <path>] [--harness <h>] …` | Compile the manifest and run the workflow engine (autonomous build). |
 | `forge-launcher resume [--repo <path>]` | Pick up a paused/finished setup where it left off. |
-| `forge-launcher console [--repo <path>]` | Local web UI (`http://127.0.0.1:4300`) for authoring, build monitoring, and run controls. |
+| `forge-launcher console [--repo <path>] [--external-origin <https-origin>]` | Loopback web UI (`http://127.0.0.1:4300`) for authoring, build monitoring, and run controls; external origin supports a trusted HTTPS proxy. |
 | `forge-launcher draft-team \| draft-skills [--repo <path>]` | Headless derivation stages (PRD → agent team → project skills). |
 | `forge-launcher draft-prd \| draft-existing-prd [--repo <path>]` | Report the interactive requirements handoff. The PRD is never authored headlessly — see [ADR-060](../../docs/adr/060-interactive-requirements-authoring.md). |
 | `forge-launcher compile-manifest [--repo <path>]` | Headless build-prep stage: install the adapter if needed and write `docs/EXECUTION-MANIFEST.json` without starting the engine. |
