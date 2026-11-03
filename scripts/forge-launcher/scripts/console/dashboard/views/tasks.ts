@@ -13,6 +13,7 @@ const STATUSES = ["pending", "running", "complete", "failed", "skipped"];
 let gen = 0;
 let unsub: Array<() => void> = [];
 let allTasks: TaskRow[] = [];
+let taskViewMode: "all" | "review-queue" = "all";
 let filterStatus: string | null = null;
 let search = "";
 let sortKey: SortKey = "status";
@@ -30,6 +31,7 @@ export function unmountTasks(): void {
   for (const u of unsub) u();
   unsub = [];
   allTasks = [];
+  taskViewMode = "all";
   filterStatus = null;
   search = "";
   sortKey = "status";
@@ -50,7 +52,16 @@ function taskFilterFromHash(): string | null {
 }
 
 export async function renderTasks(container: HTMLElement): Promise<void> {
+  await renderTaskView(container, "all");
+}
+
+export async function renderHumanReviewQueue(container: HTMLElement): Promise<void> {
+  await renderTaskView(container, "review-queue");
+}
+
+async function renderTaskView(container: HTMLElement, mode: "all" | "review-queue"): Promise<void> {
   unmountTasks();
+  taskViewMode = mode;
   container.textContent = "";
   const myGen = ++gen;
   unsub.push(store.subscribe(() => {
@@ -61,6 +72,22 @@ export async function renderTasks(container: HTMLElement): Promise<void> {
   if (fromHash) {
     search = fromHash;
     expandedId = fromHash;
+  }
+
+  countLine = el("div", { className: "dim small" });
+  tableHost = el("div", null);
+  if (mode === "review-queue") {
+    const projectName = store.summary?.repoName ?? "selected Project";
+    container.appendChild(el("section", { className: "review-queue" }, [
+      el("h1", null, "Tasks"),
+      el("p", { className: "dim" }, `Human review for ${projectName}. This focused queue is separate from Project brief approval.`),
+      el("p", { className: "panel hint" },
+        "A Human review requires a person's findings and explicit Task-bound approval. An agent or unattended flag cannot approve it."),
+      countLine,
+      tableHost,
+    ]));
+    await loadInitialTasks(myGen);
+    return;
   }
 
   const statusChips = el("div", { className: "chips" }, [
@@ -110,8 +137,6 @@ export async function renderTasks(container: HTMLElement): Promise<void> {
     })();
   });
 
-  countLine = el("div", { className: "dim small" });
-  tableHost = el("div", null);
   selectedIds = new Set(store.summary?.selectedTaskIds ?? []);
   selectionScope = store.summary?.selectionScope ?? null;
 
@@ -131,7 +156,7 @@ export async function renderTasks(container: HTMLElement): Promise<void> {
   container.appendChild(
     el("div", { className: "panel" }, [
       el("div", { className: "row between wrap" }, [
-        el("h3", null, "Tasks"),
+        el("h3", null, "All tasks"),
         el("div", { className: "row gap" }, [launch, countLine]),
       ]),
       statusChips,
@@ -180,6 +205,10 @@ export async function renderTasks(container: HTMLElement): Promise<void> {
     void runSelectionAction("resume");
   });
 
+  await loadInitialTasks(myGen);
+}
+
+async function loadInitialTasks(myGen: number): Promise<void> {
   const request = ++refreshGeneration;
   try {
     allTasks = await api.tasks();
@@ -189,7 +218,7 @@ export async function renderTasks(container: HTMLElement): Promise<void> {
   if (request !== refreshGeneration || myGen !== gen) return;
   syncRangeOptions();
   if (myGen !== gen) return;
-  renderTable();
+  renderCurrentTasks();
 }
 
 function chip(label: string, active: boolean, onClick: () => void): HTMLElement {
@@ -218,7 +247,12 @@ async function refresh(): Promise<void> {
     // keep the existing rows on failure
   }
   syncRangeOptions();
-  renderTable();
+  renderCurrentTasks();
+}
+
+function renderCurrentTasks(): void {
+  if (taskViewMode === "review-queue") renderReviewQueue();
+  else renderTable();
 }
 
 function syncRangeOptions(): void {
@@ -476,6 +510,114 @@ export function humanReviewGate(t: TaskRow): HumanReviewGate {
   if (t.status === "complete") return { state: "complete" };
   if (unmet.length > 0) return { state: "blocked", unmet };
   return { state: "ready" };
+}
+
+export interface HumanReviewQueueEntry {
+  task: TaskRow;
+  state: "ready" | "waiting" | "complete";
+  blocker: string;
+  nextResponsible: string;
+  nextAction: string;
+}
+
+/** Project-facing summary for the Human review queue, derived from Task contracts and engine gates. */
+export function humanReviewQueueEntries(tasks: TaskRow[]): HumanReviewQueueEntry[] {
+  return tasks
+    .filter((task) => task.contractKind === "human-review")
+    .map((task) => {
+      const gate = humanReviewGate(task);
+      if (gate.state === "complete") {
+        return {
+          task,
+          state: "complete",
+          blocker: "None — Task approval is recorded.",
+          nextResponsible: "No action required",
+          nextAction: `Review evidence is recorded at ${task.reviewFile ?? "the configured review file"}.`,
+        };
+      }
+      if (gate.state === "blocked") {
+        const taskDependencies = gate.unmet.filter((id) => !id.startsWith("phase:"));
+        const phaseGates = gate.unmet.filter((id) => id.startsWith("phase:")).map((id) => id.slice("phase:".length));
+        const blockers = [
+          taskDependencies.length === 1
+            ? `Prerequisite task ${taskDependencies[0]} is not complete.`
+            : taskDependencies.length > 1
+              ? `Prerequisite tasks ${taskDependencies.join(", ")} are not complete.`
+              : "",
+          phaseGates.length === 1
+            ? `Phase completion gate ${phaseGates[0]} is not complete.`
+            : phaseGates.length > 1
+              ? `Phase completion gates ${phaseGates.join(", ")} are not complete.`
+              : "",
+        ].filter(Boolean);
+        const responsible = [
+          taskDependencies.length ? "Prerequisite task owners" : "",
+          phaseGates.length ? "Owners of prerequisite phases" : "",
+        ].filter(Boolean);
+        return {
+          task,
+          state: "waiting",
+          blocker: blockers.join(" "),
+          nextResponsible: responsible.join(" and "),
+          nextAction: "Wait for the listed prerequisites to complete; a person can review this Task once it is ready.",
+        };
+      }
+      return {
+        task,
+        state: "ready",
+        blocker: "None — prerequisites are complete.",
+        nextResponsible: "Human reviewer",
+        nextAction: "Review the criteria and references, record your findings, and explicitly approve this Task.",
+      };
+    });
+}
+
+function renderReviewQueue(): void {
+  if (!tableHost) return;
+  tableHost.textContent = "";
+  const entries = humanReviewQueueEntries(allTasks);
+  if (countLine) {
+    const ready = entries.filter((entry) => entry.state === "ready").length;
+    const waiting = entries.filter((entry) => entry.state === "waiting").length;
+    const complete = entries.filter((entry) => entry.state === "complete").length;
+    countLine.textContent = `${entries.length} Human review Task${entries.length === 1 ? "" : "s"} · ${ready} ready · ${waiting} waiting · ${complete} complete`;
+  }
+  if (entries.length === 0) {
+    tableHost.appendChild(el("div", { className: "panel" }, "No Human review Tasks are defined for this Project yet."));
+    return;
+  }
+  for (const entry of entries) tableHost.appendChild(renderReviewQueueEntry(entry));
+}
+
+function renderReviewQueueEntry(entry: HumanReviewQueueEntry): HTMLElement {
+  const { task } = entry;
+  const label = entry.state === "ready" ? "Ready for human review" : entry.state === "waiting" ? "Waiting" : "Human review recorded";
+  const list = (title: string, values: string[]): HTMLElement => el("div", { className: "review-queue-field" }, [
+    el("div", { className: "k" }, title),
+    values.length
+      ? el("ul", { className: "detail-list" }, values.map((value) => el("li", null, value)))
+      : el("p", { className: "dim small" }, "Not specified in this Task contract."),
+  ]);
+  const stateDetail = el("div", { className: "review-queue-state" }, [
+    el("div", { className: "row between wrap" }, [el("strong", null, label), statusBadge(entry.state)]),
+    el("p", null, [el("strong", null, "Blocker: "), entry.blocker]),
+    el("p", null, [el("strong", null, "Next responsible: "), entry.nextResponsible]),
+    el("p", { className: "dim small" }, entry.nextAction),
+  ]);
+  return el("article", { className: "panel review-queue-card" }, [
+    el("div", { className: "row between wrap" }, [
+      el("h2", null, `${task.id} · ${task.title}`),
+      statusBadge(task.status),
+    ]),
+    el("p", { className: "dim small" }, `${task.phaseTitle} · ${task.description || "No Task description provided."}`),
+    list("Requirements", task.requirements),
+    list("Acceptance criteria", task.acceptanceCriteria),
+    list("Constraints", task.constraints),
+    list("References", task.references),
+    list("Unverified upstream checks", task.validationGaps),
+    stateDetail,
+    humanReviewAction(task),
+  ]);
 }
 
 function humanReviewAction(t: TaskRow): HTMLElement {

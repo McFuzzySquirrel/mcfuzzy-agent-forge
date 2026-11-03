@@ -7,7 +7,7 @@ import type { AuditEvent, JobsSummary, ProjectsIndex } from "./types.js";
 import { renderBoard, unmountBoard } from "./views/board.js";
 import { renderHome, unmountHome } from "./views/home.js";
 import { refreshOverview, renderOverview, unmountOverview } from "./views/overview.js";
-import { renderTasks, unmountTasks } from "./views/tasks.js";
+import { renderHumanReviewQueue, renderTasks, unmountTasks } from "./views/tasks.js";
 import { renderLogs, unmountLogs } from "./views/logs.js";
 import { refreshDocuments, renderDocuments, unmountDocuments } from "./views/documents.js";
 import { renderArtifacts, unmountArtifacts } from "./views/artifacts.js";
@@ -35,7 +35,8 @@ const views: View[] = [
   { id: "project-files", label: "Project files", group: "Start", render: renderProjectFiles, unmount: unmountProjectFiles },
   { id: "overview", label: "Overview", group: "Pipeline", render: renderOverview, unmount: unmountOverview, refresh: refreshOverview },
   { id: "board", label: "Board", group: "Monitor", render: renderBoard, unmount: unmountBoard },
-  { id: "tasks", label: "Tasks", group: "Monitor", render: renderTasks, unmount: unmountTasks },
+  { id: "review-queue", label: "Human review", group: "Tasks", render: renderHumanReviewQueue, unmount: unmountTasks },
+  { id: "tasks", label: "All tasks", group: "Monitor", render: renderTasks, unmount: unmountTasks },
   { id: "logs", label: "Logs", group: "Monitor", render: renderLogs, unmount: unmountLogs },
   { id: "timeline", label: "Timeline", group: "Monitor", render: renderTimeline, unmount: unmountTimeline },
   { id: "documents", label: "Plan & Team", group: "Review", render: renderDocuments, unmount: unmountDocuments, refresh: refreshDocuments },
@@ -48,6 +49,7 @@ const views: View[] = [
 /** Sidebar sections in display order; the "new" wizard is intentionally absent. */
 const NAV_GROUPS: Array<[string, string[]]> = [
   ["Start", ["home", "projects", "project-files"]],
+  ["Tasks", ["review-queue"]],
   ["Pipeline", ["overview"]],
   ["Monitor", ["board", "tasks", "logs", "timeline"]],
   ["Review", ["documents", "artifacts", "terminal"]],
