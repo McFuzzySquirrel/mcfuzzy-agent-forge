@@ -152,19 +152,23 @@ preservation guarantee.
 
 ## The existing pipeline (the Continue button)
 
-New Projects first use the two interactive phases in the Project guide and stop
-at a review-ready Project brief. For Projects outside that guided authoring
-path, the **Continue** button on Overview advances the existing downstream
-stages one at a time, running the same steps as the terminal launcher:
+New Projects use interactive Idea and Project-brief authoring, followed by an
+editable review checkpoint. **Request changes** returns to interactive brief
+authoring; the separate **Approve** action authorizes preparation only. After
+the prepared plan is ready, the user explicitly chooses **Start build**.
+Projects outside that guided path retain the **Continue** actions on Overview,
+which advance their existing downstream stages one at a time:
 
 | Stage | Continue does | Produces |
 |---|---|---|
 | New Project | **Explore your Idea** opens `forge-grill-idea`, then **Author your Project brief** opens `forge-build-prd`; both are interactive and resumable, and source documents do not skip either phase | `docs/IDEA.md`, then `docs/PRD.md` + `docs/features/*.md` |
+| Project brief review | Edit the brief and at-a-glance summary; **Request changes** reopens interactive authoring, while **Approve** validates the brief and authorizes preparation only | Reviewed `docs/PRD.md`; no Build execution |
+| Approved Project brief | Prepare the team, project guidance, and Build plan in one guided background step; progress and failures remain actionable in Overview | agent files, project skills, and `docs/EXECUTION-MANIFEST.json`; no Build execution |
+| Prepared plan | Review major phases, assumptions, and warnings, then choose **Start build** explicitly | durable workflow-engine run |
 | Existing Project (no brief) | **Author PRD (interactive)** opens `forge-build-prd` in the Console Terminal view or an external terminal; there is no headless alternative (ADR-060). **Grill the idea first** remains available when an Idea exists | `docs/PRD.md` + `docs/features/*.md` |
 | PRD (no team) | **Generate team** (headless `forge-build-agent-team`) | agent files and ownership metadata |
 | Team (skills incomplete) | **Generate project skills** | project skill candidates and review result |
 | Skills ready (no manifest) | **Compile manifest** (`forge-execution-adapter`) | `docs/EXECUTION-MANIFEST.json` |
-| Manifest ready | **Start build** (`forge-launcher engine-run`) | durable workflow-engine run |
 | Paused/incomplete run | **Resume build** | engine resumes from `WORKFLOW-STATE.json` |
 
 The derivation steps run detached in the background (output is appended to
@@ -172,7 +176,9 @@ The derivation steps run detached in the background (output is appended to
 team, skills, manifest-authoring jobs, and engine output. The console now tracks
 those detached jobs directly, so the Overview can show whether work is actively
 creating the project, generating the team, running the build, paused, complete,
-or failed. Nothing runs until you click it, and the generated team and skills are
+or failed. Preparation generates the team, project skills, and manifest but
+does not launch the workflow engine. For a guided Project, only the explicit
+**Start build** action begins execution. The generated team and skills are
 **view-only** in the console - review them in **Plan & Team** and edit them in
 your editor.
 
@@ -210,6 +216,14 @@ actions continue to report the interactive handoff.
 - **Author your Project brief (interactive)** runs `forge-build-prd` with the
   interview enabled and displays the resulting brief, including assumptions
   and open questions, for review.
+- **Review and approve the Project brief** provides an editable page and an
+  at-a-glance summary. **Request changes** saves edits and returns to
+  `forge-build-prd`; **Approve** validates the brief and authorizes team, skill,
+  and manifest preparation only. This is separate from Task-bound Human review
+  and its evidence contract in [ADR-049](adr/049-human-review-evidence-and-console-completion.md).
+- **Start build** appears only after preparation completes and the prepared plan
+  has been shown. It is the only guided-path action that starts workflow
+  execution.
 - **Validate PRD** runs the read-only `validate-prd` check and reports the
   result, for documents authored outside the Console. It appears on the pipeline
   card once a PRD exists.
@@ -447,17 +461,22 @@ does:
 
 ### Execution mode
 
-The Overview pipeline card now exposes just one pre-build gate: a **Manual build**
-checkbox. Turn it on when you want to prevent the team → build step from
-immediately running the full workflow.
+For Projects outside the new guided review path, the Overview pipeline card
+exposes a **Manual build** checkbox. Turn it on when you want to prevent the
+team → build step from immediately running the full workflow.
 
 When **Manual build** is enabled and the repo has a generated team but no
 manifest yet, the pipeline action changes from **Start build** to **Create
 manifest**. That compiles `docs/EXECUTION-MANIFEST.json` without starting the
 engine, so task selection can happen only after the manifest exists.
 
-Once the manifest exists, the Overview **Controls** panel persists how the next
-run should behave:
+New guided Projects always prepare the team, project skills, and manifest first,
+then require the separate **Start build** action. The prepared-plan gate is
+independent of execution mode: **Auto** and **Manual** settings control what the
+engine does only after the user starts the Build.
+
+For existing Projects, the Overview **Controls** panel persists how the next run
+should behave:
 
 - **Auto** - the engine runs the full ready workflow.
 - **Manual** - the engine runs only the selected task set saved from the

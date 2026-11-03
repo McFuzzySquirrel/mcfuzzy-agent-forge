@@ -311,17 +311,35 @@ h4 { font-size: 12px; text-transform: uppercase; letter-spacing: 0.6px; color: v
 .panel.hint { border-left: 3px solid var(--accent-ink); }
 .guided-authoring-phases { display: grid; gap: 8px; padding-left: 22px; }
 .guided-authoring-phases li > span { display: block; }
-.guided-brief-content {
-  max-height: 34rem;
-  overflow: auto;
+.project-brief-review, .project-preparation, .project-prepared-plan { margin-top: 16px; }
+.project-brief-review-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1.35fr) minmax(16rem, .65fr);
+  gap: 16px;
+  align-items: start;
+}
+.project-brief-editor-wrap { display: grid; gap: 6px; min-width: 0; }
+.project-brief-editor { min-height: 30rem; resize: vertical; font-family: var(--mono); }
+.project-brief-at-a-glance, .prepared-plan-content {
   padding: 14px;
   border: 1px solid var(--panel-border);
-  border-radius: 6px;
-  background: var(--surface);
-  color: var(--text);
-  font: inherit;
-  white-space: pre-wrap;
-  overflow-wrap: anywhere;
+  border-radius: var(--radius);
+  background: var(--surface-raised);
+}
+.project-brief-at-a-glance h4, .prepared-plan-content h4 { margin: 0 0 10px; }
+.project-brief-highlights-list { display: grid; gap: 12px; }
+.project-brief-highlight { border-bottom: 1px solid var(--panel-border-soft); padding-bottom: 10px; }
+.project-brief-highlight:last-child { border-bottom: 0; padding-bottom: 0; }
+.project-brief-highlight p { margin: 4px 0 0; white-space: pre-wrap; overflow-wrap: anywhere; }
+.project-preparation, .project-prepared-plan { padding-top: 4px; }
+.prepared-plan-content { display: grid; gap: 10px; }
+.prepared-plan-phases { display: grid; gap: 8px; margin: 0; padding-left: 22px; }
+.prepared-plan-phases p { margin: 2px 0 0; }
+.prepared-plan-attention { border-left: 3px solid var(--accent-ink); padding-left: 12px; }
+.prepared-plan-attention ul { margin: 6px 0; padding-left: 18px; }
+@media (max-width: 900px) {
+  .project-brief-review-grid { grid-template-columns: minmax(0, 1fr); }
+  .project-brief-editor { min-height: 20rem; }
 }
 .panel.controls-disabled {
   opacity: 0.6;

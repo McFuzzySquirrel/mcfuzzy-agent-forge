@@ -1,7 +1,7 @@
 import { mkdirSync } from "node:fs";
 import { join } from "node:path";
 
-import type { Browser } from "puppeteer-core";
+import type { Browser, HTTPRequest } from "puppeteer-core";
 import { clickByText, openRoute, settle, type Viewport } from "./chrome.ts";
 
 export interface CaptureTarget {
@@ -185,7 +185,237 @@ async function captureTargets(browser: Browser, baseUrl: string, currentDir: str
 }
 
 export async function captureAll(browser: Browser, baseUrl: string, currentDir: string): Promise<string[]> {
-  return captureTargets(browser, baseUrl, currentDir, [...routeTargets(), ...detailTargets()]);
+  const names = await captureTargets(browser, baseUrl, currentDir, [...routeTargets(), ...detailTargets()]);
+  names.push(...await captureProjectBriefLifecycle(browser, baseUrl, currentDir));
+  return names;
+}
+
+async function captureProjectBriefLifecycle(browser: Browser, baseUrl: string, currentDir: string): Promise<string[]> {
+  const page = await browser.newPage();
+  const controlActions: string[] = [];
+  const savedBriefs: string[] = [];
+  const savedBriefProjects: unknown[] = [];
+  let phase: "review" | "preparing" | "ready" | "started" = "review";
+  page.setDefaultTimeout(20000);
+  await page.setViewport({ width: 1440, height: 1100, deviceScaleFactor: 1 });
+  await page.emulateMediaFeatures([{ name: "prefers-reduced-motion", value: "reduce" }]);
+
+  try {
+    await page.goto(`${baseUrl}/#/home`, { waitUntil: "load" });
+    await settle(page);
+    const fixtureSummary = await page.evaluate(async () => {
+      const response = await fetch("/api/summary");
+      return response.json() as Promise<Record<string, unknown> | null>;
+    });
+    if (!fixtureSummary || typeof fixtureSummary.repoRoot !== "string") {
+      throw new Error("The Project brief acceptance fixture has no selected Project.");
+    }
+    const repoRoot = fixtureSummary.repoRoot;
+    if (!repoRoot) throw new Error("The Project brief acceptance fixture has no selected Project.");
+    await page.evaluate((root) => {
+      localStorage.setItem(`forge-console:guided-authoring:${root}`, "review");
+    }, repoRoot);
+    await page.setRequestInterception(true);
+
+    const respond = (request: HTTPRequest, body: unknown): void => {
+      void request.respond({
+        status: 200,
+        contentType: "application/json",
+        body: JSON.stringify(body),
+      }).catch(() => {});
+    };
+    page.on("request", (request) => {
+      const url = new URL(request.url());
+      if (url.pathname === "/api/summary") {
+        const ready = phase === "ready" || phase === "started";
+        const preparing = phase === "preparing";
+        const progress = preparing
+          ? {
+            runId: "capture-preparation",
+            active: true,
+            currentStep: "team",
+            failedStep: null,
+            complete: false,
+            steps: [
+              { id: "team", label: "Team", status: "running" },
+              { id: "skills", label: "Project skills", status: "pending" },
+              { id: "manifest", label: "Build plan", status: "pending" },
+            ],
+          }
+          : ready
+            ? {
+              runId: "capture-preparation",
+              active: false,
+              currentStep: null,
+              failedStep: null,
+              complete: true,
+              steps: [
+                { id: "team", label: "Team", status: "complete" },
+                { id: "skills", label: "Project skills", status: "complete" },
+                { id: "manifest", label: "Build plan", status: "complete" },
+              ],
+            }
+            : null;
+        const job = preparing || phase === "ready"
+          ? {
+            id: "capture-rederive",
+            type: "rederive",
+            repoPath: repoRoot,
+            startedAt: "2026-01-01T00:00:00.000Z",
+            updatedAt: "2026-01-01T00:00:01.000Z",
+            status: preparing ? "running" : "complete",
+            message: preparing ? "Preparing the Project." : "Preparation complete.",
+          }
+          : phase === "started"
+            ? {
+              id: "capture-build",
+              type: "engine-run",
+              repoPath: repoRoot,
+              startedAt: "2026-01-01T00:00:02.000Z",
+              updatedAt: "2026-01-01T00:00:02.000Z",
+              status: "running",
+              message: "Build started.",
+            }
+            : null;
+        respond(request, {
+          ...fixtureSummary,
+          hasIdea: true,
+          hasPrd: true,
+          hasTeam: ready,
+          hasManifest: ready,
+          manifest: ready ? fixtureSummary.manifest : null,
+          run: phase === "started" ? fixtureSummary.run : null,
+          live: phase === "started",
+          job,
+          authoringReady: true,
+          authoringBlocker: null,
+          authoringStages: [],
+          rederive: progress,
+        });
+        return;
+      }
+      if (request.method() === "POST" && url.pathname === "/api/project-brief") {
+        const body = JSON.parse(request.postData() ?? "{}") as { repoRoot?: unknown; content?: unknown };
+        savedBriefProjects.push(body.repoRoot);
+        const content = body.content;
+        if (typeof content === "string") savedBriefs.push(content);
+        respond(request, { ok: true, message: "Project brief saved." });
+        return;
+      }
+      if (request.method() === "POST" && url.pathname === "/api/authoring/validate") {
+        respond(request, { ok: true, message: "Project brief validated." });
+        return;
+      }
+      if (request.method() === "POST" && url.pathname === "/api/control") {
+        const action = (JSON.parse(request.postData() ?? "{}") as { action?: string }).action ?? "";
+        controlActions.push(action);
+        if (action === "rederive") {
+          phase = "preparing";
+          setTimeout(() => {
+            if (phase === "preparing") phase = "ready";
+          }, 1200);
+          respond(request, {
+            ok: true,
+            message: "Preparation started.",
+            job: {
+              id: "capture-rederive",
+              type: "rederive",
+              repoPath: repoRoot,
+              startedAt: "2026-01-01T00:00:00.000Z",
+              updatedAt: "2026-01-01T00:00:01.000Z",
+              status: "running",
+              message: "Preparing the Project.",
+            },
+          });
+          return;
+        }
+        if (action === "run") {
+          phase = "started";
+          respond(request, {
+            ok: true,
+            message: "Build started.",
+            job: {
+              id: "capture-build",
+              type: "engine-run",
+              repoPath: repoRoot,
+              startedAt: "2026-01-01T00:00:02.000Z",
+              updatedAt: "2026-01-01T00:00:02.000Z",
+              status: "running",
+              message: "Build started.",
+            },
+          });
+          return;
+        }
+        respond(request, { ok: false, message: `Unexpected control action: ${action}` });
+        return;
+      }
+      void request.continue().catch(() => {});
+    });
+
+    await page.evaluate(() => { location.hash = "#/overview"; });
+    await page.waitForFunction(() => {
+      const editor = document.querySelector<HTMLTextAreaElement>("#project-brief-editor");
+      return editor !== null && !editor.disabled && editor.value.length > 0;
+    }, { timeout: 15000 });
+    const earlyButtons = await page.$$eval("button", (buttons) => buttons.map((button) => button.textContent?.trim() ?? ""));
+    if (earlyButtons.includes("Start build") || earlyButtons.includes("Run")) {
+      throw new Error("Build execution was offered before the Project brief was approved and prepared.");
+    }
+
+    await expandToContent(page, WIDE);
+    await page.screenshot({ path: join(currentDir, "project-brief-review-1440.png"), type: "png" });
+    await clickByText(page, "button", "Approve");
+    await page.waitForSelector(".project-preparation", { timeout: 15000 });
+    await expandToContent(page, WIDE);
+    await page.screenshot({ path: join(currentDir, "project-preparing-1440.png"), type: "png" });
+    await page.waitForFunction(() => document.querySelector(".project-prepared-plan") !== null, { timeout: 15000 });
+
+    if (controlActions.join("|") !== "rederive") {
+      throw new Error(`Approving the Project brief must only prepare the plan; observed actions: ${controlActions.join(", ") || "none"}.`);
+    }
+    const preparedButtons = await page.$$eval("button", (buttons) => buttons.map((button) => button.textContent?.trim() ?? ""));
+    if (!preparedButtons.includes("Start build") || preparedButtons.includes("Run")) {
+      throw new Error("A prepared Project must present Start build explicitly without exposing a generic Run action.");
+    }
+    await expandToContent(page, WIDE);
+    await page.screenshot({ path: join(currentDir, "prepared-plan-1440.png"), type: "png" });
+    await clickByText(page, "button", "Start build");
+    if (controlActions.join("|") !== "rederive|run") {
+      throw new Error(`Start build must be the first action that runs execution; observed actions: ${controlActions.join(", ")}.`);
+    }
+
+    phase = "review";
+    await page.evaluate((root) => {
+      localStorage.setItem(`forge-console:guided-authoring:${root}`, "review");
+      window.dispatchEvent(new HashChangeEvent("hashchange"));
+    }, repoRoot);
+    await page.waitForFunction(() => {
+      const editor = document.querySelector<HTMLTextAreaElement>("#project-brief-editor");
+      return editor !== null && !editor.disabled;
+    }, { timeout: 15000 });
+    const requestedBrief = "# Revised after review\n\n## Assumptions\n- Keep the original outcome.";
+    await page.evaluate((content) => {
+      const editor = document.querySelector<HTMLTextAreaElement>("#project-brief-editor");
+      if (!editor) throw new Error("The editable brief is missing.");
+      editor.value = content;
+      editor.dispatchEvent(new Event("input", { bubbles: true }));
+    }, requestedBrief);
+    await clickByText(page, "button", "Request changes");
+    await page.waitForFunction(() => location.hash.includes("#/terminal?authoring=prd"), { timeout: 15000 });
+    const savedStep = await page.evaluate((root) => localStorage.getItem(`forge-console:guided-authoring:${root}`), repoRoot);
+    if (savedStep !== "brief" || !savedBriefs.includes(requestedBrief)) {
+      throw new Error("Request changes must save the edited Project brief and return to interactive authoring.");
+    }
+    if (savedBriefProjects.length !== 2 || savedBriefProjects.some((project) => project !== repoRoot)) {
+      throw new Error("Project brief saves must be bound to the reviewed Project.");
+    }
+    if (controlActions.join("|") !== "rederive|run") {
+      throw new Error(`Request changes must not launch Build execution; observed actions: ${controlActions.join(", ")}.`);
+    }
+    return ["project-brief-review-1440", "project-preparing-1440", "prepared-plan-1440"];
+  } finally {
+    await page.close();
+  }
 }
 
 export async function captureBoard(browser: Browser, baseUrl: string, currentDir: string): Promise<string[]> {

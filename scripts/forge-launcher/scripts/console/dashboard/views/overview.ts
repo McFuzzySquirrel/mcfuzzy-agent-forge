@@ -1,7 +1,7 @@
 // ─── Overview: run header, progress, actions, pipeline guidance ─────────────
 
 import { api } from "../api.js";
-import { getGuidedAuthoringStep, type GuidedAuthoringStep } from "../project-authoring.js";
+import { getGuidedAuthoringStep, setGuidedAuthoringStep, type GuidedAuthoringStep } from "../project-authoring.js";
 import { Epoch, store } from "../state.js";
 import { el, fmtAgo, fmtDuration, fmtTime, fmtTokens, fmtUsd, statusBadge, toast } from "../render/dom.js";
 import { isTerminalSessionActive, onTerminalSessionChange } from "./terminal.js";
@@ -27,6 +27,9 @@ let overviewContainer: HTMLElement | null = null;
 let refreshInFlight = false;
 let cachedBrief: { repoRoot: string; content: string } | null = null;
 let pendingBrief: { repoRoot: string; load: Promise<string> } | null = null;
+const preparationStarting = new Set<string>();
+const buildStarting = new Set<string>();
+const reviewDecisionInFlight = new Set<string>();
 
 function stopPoll(): void {
   if (pollTimer !== undefined) {
@@ -101,14 +104,15 @@ export async function renderOverview(container: HTMLElement): Promise<void> {
     return;
   }
 
+  const guided = Boolean(activeGuidedStep(summary));
   container.replaceChildren(
     region("overview-header", renderHeader(summary)),
     region("overview-guidance", renderGuidance(container, summary, actions)),
-    ...(summary.authoring ? [region("overview-authoring", renderAuthoringStatus(summary))] : []),
+    ...(summary.authoring ? [region("overview-authoring", guided ? el("div") : renderAuthoringStatus(summary))] : []),
     region("overview-run", renderRun(summary.run)),
-    region("overview-manifest", renderManifest(summary)),
+    region("overview-manifest", guided ? el("div") : renderManifest(summary)),
     region("overview-actions", renderActions(container, summary, actions, tasks)),
-    region("overview-feature", summary.hasPrd && summary.hasTeam ? renderFeatureIncrement(container) : renderFeaturePrd(container)),
+    region("overview-feature", guided ? el("div") : summary.hasPrd && summary.hasTeam ? renderFeatureIncrement(container) : renderFeaturePrd(container)),
   );
   syncRederiveRegion(container, summary);
   announce(`Opened ${summary.repoName}.`);
@@ -154,12 +158,13 @@ async function refreshOverviewData(container: HTMLElement): Promise<void> {
     };
     update("overview-header", renderHeader(summary));
     update("overview-guidance", renderGuidance(container, summary, actions));
-    if (summary.authoring) update("overview-authoring", renderAuthoringStatus(summary));
+    const guided = Boolean(activeGuidedStep(summary));
+    if (summary.authoring) update("overview-authoring", guided ? el("div") : renderAuthoringStatus(summary));
     syncRederiveRegion(container, summary);
     update("overview-run", renderRun(summary.run));
-    update("overview-manifest", renderManifest(summary));
+    update("overview-manifest", guided ? el("div") : renderManifest(summary));
     update("overview-actions", renderActions(container, summary, actions, tasks));
-    const feature = summary.hasPrd && summary.hasTeam ? renderFeatureIncrement(container) : renderFeaturePrd(container);
+    const feature = guided ? el("div") : summary.hasPrd && summary.hasTeam ? renderFeatureIncrement(container) : renderFeaturePrd(container);
     update("overview-feature", feature);
     announce(`Status updated: ${summary.run?.status ?? "pipeline ready"}.`);
   } catch (error) {
@@ -301,6 +306,7 @@ function renderRederive(container: HTMLElement, summary: Summary): HTMLElement |
  */
 function syncRederiveRegion(container: HTMLElement, summary: Summary): void {
   for (const stale of container.querySelectorAll('[data-overview-region="overview-rederive"]')) stale.remove();
+  if (activeGuidedStep(summary)) return;
   const content = renderRederive(container, summary);
   if (!content) return;
   // Sits directly above the run panel: it is a pipeline action, not a run stat.
@@ -693,8 +699,11 @@ function validatePrdButton(): HTMLButtonElement {
 }
 
 function renderGuidance(container: HTMLElement, summary: Summary, actions: Actions): HTMLElement {
-  const guidedStep = getGuidedAuthoringStep(summary.repoRoot);
-  if (guidedStep && !summary.hasTeam && !summary.hasManifest && !summary.run) {
+  if (summary.run || (summary.job?.type === "engine-run" && summary.job.status !== "running")) {
+    buildStarting.delete(summary.repoRoot);
+  }
+  const guidedStep = activeGuidedStep(summary);
+  if (guidedStep) {
     return renderGuidedAuthoring(container, summary, guidedStep);
   }
 
@@ -776,43 +785,24 @@ function renderGuidance(container: HTMLElement, summary: Summary, actions: Actio
   return el("div", { className: "panel hint" }, children);
 }
 
+function activeGuidedStep(summary: Summary): GuidedAuthoringStep | null {
+  const step = getGuidedAuthoringStep(summary.repoRoot);
+  if (!step || summary.run) return null;
+  if (step === "idea" || step === "brief") {
+    return !summary.hasTeam && !summary.hasManifest ? step : null;
+  }
+  return step;
+}
+
 function renderGuidedAuthoring(
   container: HTMLElement,
   summary: Summary,
   step: GuidedAuthoringStep,
 ): HTMLElement {
-  const prdDetail = summary.authoringStages?.find((stage) => stage.stage === "prd");
-  const trackedPrdIsCurrent = summary.authoring?.stages.prd?.status === "complete" && !prdDetail?.stale;
-  const briefReady = summary.hasPrd && (step === "review" || trackedPrdIsCurrent);
-  const activeStep: "idea" | "brief" | "review" = briefReady ? "review" : step === "idea" ? "idea" : "brief";
-  const phaseItems = el("ol", { className: "guided-authoring-phases" }, [
-    el("li", activeStep === "idea" ? { "aria-current": "step" } : null, [
-      el("strong", null, "Explore your Idea"),
-      el("span", { className: "dim small" }, activeStep === "idea" ? "Current step" : "Complete"),
-    ]),
-    el("li", activeStep === "brief" ? { "aria-current": "step" } : null, [
-      el("strong", null, "Author your Project brief"),
-      el("span", { className: "dim small" }, activeStep === "review" ? "Ready for review" : activeStep === "brief" ? "Current step" : "Next"),
-    ]),
-  ]);
-  const children: HTMLElement[] = [phaseItems];
-
-  if (briefReady) {
-    const brief = el("pre", { className: "guided-brief-content", role: "region", "aria-label": "Project brief" }, "Loading your Project brief…");
-    children.push(
-      el("h3", null, "Project brief ready for review"),
-      el("p", { className: "dim" }, "Review the outcome, scope, assumptions, and open questions below. You can return to interactive authoring to make changes."),
-      brief,
-      el("div", { className: "actions" }, [
-        sessionButton(container, "prd", "Revise the Project brief"),
-        el("a", { className: "btn", href: "#/documents" }, "Project documents"),
-      ]),
-    );
-    void loadProjectBrief(summary.repoRoot)
-      .then((content) => { if (brief.isConnected) brief.textContent = content; })
-      .catch(() => { if (brief.isConnected) brief.textContent = "Could not load the Project brief. Refresh to try again."; });
-  } else {
-    const ideaPhase = activeStep === "idea";
+  const displayStep = step === "preparing" && isPreparationComplete(summary, step) ? "ready" : step;
+  const children: HTMLElement[] = [renderGuidedPhases(displayStep)];
+  if (displayStep === "idea" || displayStep === "brief") {
+    const ideaPhase = displayStep === "idea";
     children.push(
       el("h3", null, ideaPhase ? "First: explore your Idea" : "Next: author your Project brief"),
       el("p", { className: "dim" }, ideaPhase
@@ -822,20 +812,423 @@ function renderGuidedAuthoring(
         sessionButton(container, ideaPhase ? "idea" : "prd", ideaPhase ? "Explore your idea" : "Author the Project brief"),
       ]),
     );
-  }
-
-  if (isTerminalSessionActive()) {
-    children.push(el("p", { className: "dim small", role: "status" }, [
-      "Your interactive session is still running. ",
-      el("a", { href: "#/terminal" }, "Return to the session"),
-      " when you are ready.",
-    ]));
+    if (isTerminalSessionActive()) {
+      children.push(el("p", { className: "dim small", role: "status" }, [
+        "Your interactive session is still running. ",
+        el("a", { href: "#/terminal" }, "Return to the session"),
+        " when you are ready.",
+      ]));
+    }
+  } else if (displayStep === "review") {
+    children.push(renderBriefReview(container, summary));
+  } else {
+    children.push(renderPreparation(container, summary, displayStep));
   }
 
   return el("section", { className: "panel hint", "aria-labelledby": "guided-authoring-heading" }, [
     el("h2", { id: "guided-authoring-heading" }, "Your Project guide"),
     ...children,
   ]);
+}
+
+function renderGuidedPhases(step: GuidedAuthoringStep): HTMLElement {
+  const current = step === "idea" ? 0 : step === "brief" ? 1 : step === "review" ? 2 : -1;
+  const briefStatus = step === "idea" ? "Next" : step === "brief" ? "Current step" : "Complete";
+  const reviewStatus = step === "review" ? "Current step"
+    : step === "preparing" ? "Approved · preparing"
+      : step === "ready" ? "Approved · ready to start"
+        : "Next";
+  return el("ol", { className: "guided-authoring-phases" }, [
+    el("li", current === 0 ? { "aria-current": "step" } : null, [
+      el("strong", null, "Explore your Idea"),
+      el("span", { className: "dim small" }, current === 0 ? "Current step" : "Complete"),
+    ]),
+    el("li", current === 1 ? { "aria-current": "step" } : null, [
+      el("strong", null, "Author your Project brief"),
+      el("span", { className: "dim small" }, briefStatus),
+    ]),
+    el("li", current === 2 ? { "aria-current": "step" } : null, [
+      el("strong", null, "Review and prepare"),
+      el("span", { className: "dim small" }, reviewStatus),
+    ]),
+  ]);
+}
+
+function renderBriefReview(container: HTMLElement, summary: Summary): HTMLElement {
+  const repoRoot = summary.repoRoot;
+  if (!summary.hasPrd) {
+    return el("div", { className: "project-brief-review" }, [
+      el("h3", null, "Project brief unavailable"),
+      el("p", { className: "error-text", role: "alert" }, "The brief could not be found at docs/PRD.md. Author it interactively before reviewing."),
+      sessionButton(container, "prd", "Author the Project brief"),
+    ]);
+  }
+
+  const editor = el("textarea", {
+    id: "project-brief-editor",
+    className: "project-brief-editor",
+    rows: "22",
+    disabled: true,
+    "aria-label": "Editable Project brief",
+  }) as HTMLTextAreaElement;
+  const highlights = el("div", {
+    className: "project-brief-highlights",
+    role: "region",
+    "aria-label": "At-a-glance Project brief",
+  }, "Loading the brief summary…");
+  const status = el("p", { className: "dim small", role: "status", "aria-live": "polite" },
+    store.getDraft(repoRoot, "reviewStatus", "Edit the brief here. Changes are saved when you request changes or approve."));
+  const requestChanges = el("button", {
+    className: "btn",
+    type: "button",
+    disabled: true,
+  }, "Request changes") as HTMLButtonElement;
+  const approve = el("button", {
+    className: "btn btn-primary",
+    type: "button",
+    disabled: true,
+  }, "Approve") as HTMLButtonElement;
+  const busy = reviewDecisionInFlight.has(repoRoot) || isTerminalSessionActive();
+  if (busy) {
+    requestChanges.disabled = true;
+    approve.disabled = true;
+    status.textContent = "Saving and checking the Project brief…";
+  }
+
+  editor.addEventListener("input", () => {
+    store.setDraft(repoRoot, "reviewBrief", editor.value);
+    store.clearDraft(repoRoot, "reviewStatus");
+    status.className = "dim small";
+    status.textContent = "Changes are saved when you request changes or approve.";
+    highlights.replaceChildren(renderBriefHighlights(editor.value));
+  });
+  requestChanges.addEventListener("click", () => {
+    if (reviewDecisionInFlight.has(repoRoot)) return;
+    reviewDecisionInFlight.add(repoRoot);
+    requestChanges.disabled = true;
+    approve.disabled = true;
+    status.textContent = "Saving the brief before returning to interactive authoring…";
+    void saveProjectBrief(repoRoot, editor.value)
+      .then(() => {
+        setGuidedAuthoringStep(repoRoot, "brief");
+        store.clearDraft(repoRoot, "reviewStatus");
+        startSession(container, "prd");
+      })
+      .catch((error: unknown) => setBriefReviewError(repoRoot, status, error))
+      .finally(() => {
+        reviewDecisionInFlight.delete(repoRoot);
+        if (status.isConnected && !location.hash.includes("terminal")) {
+          requestChanges.disabled = false;
+          approve.disabled = false;
+        }
+      });
+  });
+  approve.addEventListener("click", () => {
+    if (reviewDecisionInFlight.has(repoRoot)) return;
+    reviewDecisionInFlight.add(repoRoot);
+    requestChanges.disabled = true;
+    approve.disabled = true;
+    status.textContent = "Saving and validating the Project brief…";
+    void (async () => {
+      try {
+        await saveProjectBrief(repoRoot, editor.value);
+        const validation = await api.validateAuthoring();
+        if (!validation.ok) throw new Error(validation.message || "The Project brief needs changes before preparation.");
+        setGuidedAuthoringStep(repoRoot, "preparing");
+        store.clearDraft(repoRoot, "reviewStatus");
+        reviewDecisionInFlight.delete(repoRoot);
+        await startPreparation(container, repoRoot);
+      } catch (error) {
+        setBriefReviewError(repoRoot, status, error);
+      } finally {
+        reviewDecisionInFlight.delete(repoRoot);
+        if (status.isConnected) {
+          requestChanges.disabled = false;
+          approve.disabled = false;
+        }
+      }
+    })();
+  });
+
+  const grid = el("div", { className: "project-brief-review-grid" }, [
+    el("div", { className: "project-brief-editor-wrap" }, [
+      el("label", { for: "project-brief-editor" }, "Project brief (editable)"),
+      editor,
+    ]),
+    el("aside", { className: "project-brief-at-a-glance" }, [
+      el("h4", null, "At a glance"),
+      highlights,
+    ]),
+  ]);
+  const review = el("div", { className: "project-brief-review" }, [
+    el("h3", null, "Review your Project brief"),
+    el("p", { className: "dim" }, "Check the outcome, scope, success criteria, assumptions, and open questions. Approval starts preparation only; it does not start a Build."),
+    grid,
+    status,
+    el("div", { className: "actions" }, [
+      requestChanges,
+      approve,
+      el("a", { className: "btn", href: "#/documents" }, "Project files"),
+    ]),
+  ]);
+
+  void loadProjectBrief(repoRoot).then((content) => {
+    if (!editor.isConnected) return;
+    editor.value = store.getDraft(repoRoot, "reviewBrief", content);
+    editor.disabled = false;
+    highlights.replaceChildren(renderBriefHighlights(editor.value));
+    if (!reviewDecisionInFlight.has(repoRoot) && !isTerminalSessionActive()) {
+      requestChanges.disabled = false;
+      approve.disabled = false;
+    }
+  }).catch((error: unknown) => {
+    if (!editor.isConnected) return;
+    editor.disabled = true;
+    status.className = "error-text small";
+    status.textContent = error instanceof Error ? `Could not load the Project brief: ${error.message}` : "Could not load the Project brief.";
+  });
+  return review;
+}
+
+function renderBriefHighlights(content: string): HTMLElement {
+  const sections: Array<{ heading: string; body: string }> = [];
+  let heading = "";
+  let lines: string[] = [];
+  const finish = (): void => {
+    const body = lines.join("\n").trim();
+    if (heading && body) sections.push({ heading, body });
+  };
+  for (const line of content.split(/\r?\n/)) {
+    const match = /^\s{0,3}#{1,4}\s+(.+?)\s*#*\s*$/.exec(line);
+    if (match) {
+      finish();
+      heading = match[1]!.trim();
+      lines = [];
+    } else {
+      lines.push(line);
+    }
+  }
+  finish();
+
+  const selected = sections.filter(({ heading: title }) =>
+    /vision|outcome|goal|audience|user|scope|capabilit|feature|success|acceptance|assumption|open question|risk|constraint/i.test(title))
+    .slice(0, 7);
+  const shown = selected.length > 0
+    ? selected
+    : [{ heading: "Brief preview", body: content.trim() }];
+  const items = shown.map(({ heading: title, body }) => {
+    const excerpt = body.replace(/\s+/g, " ").trim();
+    return el("section", { className: "project-brief-highlight" }, [
+      el("strong", null, title),
+      el("p", { className: "dim small" }, excerpt.length > 360 ? `${excerpt.slice(0, 357)}…` : excerpt),
+    ]);
+  });
+  const hasOpenItems = sections.some(({ heading: title }) => /assumption|open question/i.test(title));
+  if (!hasOpenItems) {
+    items.push(el("p", { className: "dim small" }, "Assumptions and open questions are not called out under a section heading. Check the editable brief for anything that still needs attention."));
+  }
+  return el("div", { className: "project-brief-highlights-list" }, items);
+}
+
+function renderPreparation(container: HTMLElement, summary: Summary, step: GuidedAuthoringStep): HTMLElement {
+  const repoRoot = summary.repoRoot;
+  if (isPreparationComplete(summary, step)) {
+    setGuidedAuthoringStep(repoRoot, "ready");
+    return renderPreparedPlan(container, summary);
+  }
+
+  const progress = summary.rederive;
+  const failedStep = progress?.failedStep ?? null;
+  const failedEntry = progress?.steps.find((entry) => entry.id === failedStep);
+  const savedError = store.getDraft(repoRoot, "preparationError", "");
+  const jobFailed = summary.job?.type === "rederive" && summary.job.status === "failed";
+  const failure = failedEntry?.message
+    || (failedStep ? `The ${failedStep} preparation step did not complete.` : "")
+    || (jobFailed ? summary.job?.message : "")
+    || savedError;
+  const current = progress?.steps.find((entry) => entry.status === "running")
+    ?? progress?.steps.find((entry) => entry.status === "pending");
+  const labels: Record<string, string> = {
+    team: "Setting up your Project team",
+    skills: "Preparing guidance for the work",
+    manifest: "Organizing the Build plan",
+  };
+  const requestStarting = preparationStarting.has(repoRoot);
+  const children: HTMLElement[] = [
+    el("h3", null, failure ? "Preparation needs attention" : "Preparing your Build"),
+    el("p", { className: failure ? "error-text" : "dim", role: failure ? "alert" : "status", "aria-live": "polite" },
+      failure
+        ? `Preparation stopped: ${failure}`
+        : requestStarting
+          ? "Starting the guided preparation step…"
+          : current
+            ? `${labels[current.id] ?? current.label}…`
+            : "Your approved brief is being prepared into a ready-to-start plan."),
+  ];
+
+  if (progress?.active || summary.job?.status === "running" || requestStarting) {
+    children.push(
+      el("div", { className: "spinner-row", role: "status", "aria-live": "polite" }, [
+        el("span", { className: "spinner", "aria-hidden": "true" }),
+        el("span", null, "Preparation runs in the background. You can leave this page and return to the same Project."),
+      ]),
+      el("p", { className: "dim small" }, ["For details, ", el("a", { href: "#/logs" }, "open the preparation logs"), "."]),
+    );
+  } else {
+    const retry = el("button", { className: "btn btn-primary", type: "button" }, "Retry preparation") as HTMLButtonElement;
+    retry.addEventListener("click", () => void startPreparation(container, repoRoot, failedStep ?? undefined));
+    children.push(
+      el("p", { className: "dim small" }, "Preparation has not completed, so the Build remains stopped. Retry preparation or inspect the logs for details."),
+      el("div", { className: "actions" }, [
+        retry,
+        el("a", { className: "btn", href: "#/logs" }, "Open logs"),
+      ]),
+    );
+  }
+  return el("div", { className: "project-preparation" }, children);
+}
+
+function isPreparationComplete(summary: Summary, step: GuidedAuthoringStep): boolean {
+  if (
+    !summary.hasTeam ||
+    !summary.hasManifest ||
+    summary.authoringReady === false ||
+    summary.rederive?.active ||
+    summary.rederive?.failedStep ||
+    summary.job?.type === "rederive" && (summary.job.status === "running" || summary.job.status === "failed") ||
+    staleDerivationStages(summary).length > 0
+  ) return false;
+  if (summary.rederive?.complete) return true;
+  return step === "ready";
+}
+
+function renderPreparedPlan(container: HTMLElement, summary: Summary): HTMLElement {
+  const repoRoot = summary.repoRoot;
+  const status = el("p", {
+    className: "dim small",
+    role: "status",
+    "aria-live": "polite",
+  }, store.getDraft(repoRoot, "buildStartError", "Preparation is complete. A Build has not started."));
+  const start = el("button", {
+    className: "btn btn-primary",
+    type: "button",
+    disabled: buildStarting.has(repoRoot) ? true : null,
+  }, buildStarting.has(repoRoot) ? "Starting build…" : "Start build") as HTMLButtonElement;
+  start.addEventListener("click", () => void startPreparedBuild(container, summary, start, status));
+  const content = el("div", { className: "prepared-plan-content" }, "Loading the prepared plan…");
+  const panel = el("div", { className: "project-prepared-plan" }, [
+    el("h3", null, "Your Build is ready"),
+    el("p", { className: "dim" }, "Review the plan before you decide. Preparation is complete; no Build execution has started."),
+    content,
+    status,
+    el("div", { className: "actions" }, [
+      start,
+      el("a", { className: "btn", href: "#/documents" }, "Project files"),
+    ]),
+  ]);
+  void Promise.all([loadProjectBrief(repoRoot), api.manifest()]).then(([brief, manifest]) => {
+    if (!content.isConnected) return;
+    const sections: HTMLElement[] = [
+      el("h4", null, "Project brief at a glance"),
+      renderBriefHighlights(brief),
+      el("h4", null, "Major phases"),
+    ];
+    if (manifest?.phases.length) {
+      sections.push(el("ol", { className: "prepared-plan-phases" }, manifest.phases.map((phase) =>
+        el("li", null, [
+          el("strong", null, phase.title),
+          phase.description ? el("p", { className: "dim small" }, phase.description) : null,
+        ]))));
+    } else {
+      sections.push(el("p", { className: "dim small" }, "No phase summary is available. Refresh to check the prepared plan."));
+    }
+    if (manifest?.warnings.length) {
+      sections.push(el("section", { className: "prepared-plan-attention" }, [
+        el("h4", null, "Items needing attention"),
+        el("ul", null, manifest.warnings.map((warning) => el("li", null, warning))),
+      ]));
+    } else {
+      sections.push(el("p", { className: "dim small" }, "No additional preparation warnings were reported."));
+    }
+    content.replaceChildren(...sections);
+  }).catch((error: unknown) => {
+    if (content.isConnected) content.replaceChildren(el("p", { className: "error-text", role: "alert" },
+      error instanceof Error ? `Could not load the prepared plan: ${error.message}` : "Could not load the prepared plan."));
+  });
+  return panel;
+}
+
+async function saveProjectBrief(repoRoot: string, content: string): Promise<void> {
+  const result = await api.saveProjectBrief(repoRoot, content);
+  if (!result.ok) throw new Error(result.message || "Could not save the Project brief.");
+  cachedBrief = { repoRoot, content };
+  store.clearDraft(repoRoot, "reviewBrief");
+}
+
+function setBriefReviewError(repoRoot: string, status: HTMLElement, error: unknown): void {
+  const message = error instanceof Error ? error.message : "The Project brief could not be saved.";
+  store.setDraft(repoRoot, "reviewStatus", message);
+  status.className = "error-text small";
+  status.textContent = message;
+}
+
+async function startPreparation(container: HTMLElement, repoRoot: string, from?: "team" | "skills" | "manifest"): Promise<void> {
+  if (preparationStarting.has(repoRoot)) return;
+  preparationStarting.add(repoRoot);
+  setGuidedAuthoringStep(repoRoot, "preparing");
+  store.clearDraft(repoRoot, "preparationError");
+  try {
+    const result = await api.rederive(from);
+    if (!result.ok) {
+      store.setDraft(repoRoot, "preparationError", result.message || "Preparation could not be started.");
+    } else if (result.job?.status === "running") {
+      startPoll(container);
+    } else if (result.job?.status === "failed") {
+      store.setDraft(repoRoot, "preparationError", result.job.message);
+    }
+  } catch (error) {
+    store.setDraft(repoRoot, "preparationError", error instanceof Error ? error.message : "Preparation could not be started.");
+  } finally {
+    preparationStarting.delete(repoRoot);
+    void renderOverview(container);
+  }
+}
+
+async function startPreparedBuild(
+  container: HTMLElement,
+  summary: Summary,
+  button: HTMLButtonElement,
+  status: HTMLElement,
+): Promise<void> {
+  const repoRoot = summary.repoRoot;
+  if (!isPreparationComplete(summary, "ready") || summary.run) {
+    status.className = "error-text small";
+    status.textContent = "The prepared plan is no longer ready. Refresh and complete preparation before starting a Build.";
+    return;
+  }
+  if (buildStarting.has(repoRoot)) return;
+  buildStarting.add(repoRoot);
+  button.disabled = true;
+  button.textContent = "Starting build…";
+  status.textContent = "Starting the Build you approved…";
+  store.clearDraft(repoRoot, "buildStartError");
+  try {
+    const result = await api.control("run");
+    if (!result.ok) {
+      store.setDraft(repoRoot, "buildStartError", result.message || "The Build could not be started.");
+      buildStarting.delete(repoRoot);
+    } else if (result.job?.status === "running") {
+      startPoll(container);
+    } else {
+      store.setDraft(repoRoot, "buildStartError", result.message || "The Build did not start.");
+      buildStarting.delete(repoRoot);
+    }
+  } catch (error) {
+    store.setDraft(repoRoot, "buildStartError", error instanceof Error ? error.message : "The Build could not be started.");
+    buildStarting.delete(repoRoot);
+  } finally {
+    void renderOverview(container);
+  }
 }
 
 function sessionButton(container: HTMLElement, target: "idea" | "prd", label: string): HTMLButtonElement {
@@ -858,6 +1251,12 @@ function loadProjectBrief(repoRoot: string): Promise<string> {
 }
 
 function renderActions(container: HTMLElement, summary: Summary, actions: Actions, tasks: TaskRow[]): HTMLElement {
+  if (activeGuidedStep(summary)) {
+    return el("div", { className: "panel controls-disabled" }, [
+      el("h4", null, "Build controls"),
+      el("p", { className: "dim small" }, "This Project's Build has not started. Complete preparation, then choose Start build when you are ready."),
+    ]);
+  }
   if (!summary.hasManifest) {
     return el("div", { className: "panel controls-disabled" }, [
       el("h4", null, "Controls"),

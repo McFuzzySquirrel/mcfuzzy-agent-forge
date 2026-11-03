@@ -7,6 +7,11 @@ stable numbered filenames below. The complete desktop and responsive capture
 set is archived under `images/forge-console/current/`. Start with
 `forge-launcher console`.
 
+The Project brief review captures also run a browser acceptance path with
+deterministic API responses: approval is checked to request preparation only,
+and the Build request is observed only after **Start build**. No authoring or
+workflow process is launched by this capture.
+
 > See [forge-console.md](forge-console.md) for the full reference.
 >
 > **Capture note (v3.112):** these captures show the top category navigation
@@ -144,6 +149,20 @@ Selecting an existing PRD skips drafting it. Failed uploads or saves keep
 the draft available rather than silently starting with missing inputs.
 
 ![New project - wizard](images/forge-console/13-new-project.png)
+
+### Project brief review and preparation
+
+The review is an editable page with an at-a-glance summary. **Request changes**
+returns to interactive authoring; **Approve** authorizes preparation only.
+Preparation progress is one guided background step. Once the prepared plan is
+ready, the page summarizes major phases, assumptions, and warnings and offers
+the separate **Start build** action.
+
+![Project brief review - editable brief and summary](images/forge-console/current/project-brief-review-1440.png)
+
+![Preparing a Build - guided progress](images/forge-console/current/project-preparing-1440.png)
+
+![Prepared plan - explicit Start build action](images/forge-console/current/prepared-plan-1440.png)
 
 ## 14. Help
 

@@ -5,6 +5,7 @@ import {
   initialProjectToolChoice,
   initializeGuidedAuthoring,
   recordGuidedAuthoringSessionExit,
+  setGuidedAuthoringStep,
   suggestProjectName,
 } from "./console/dashboard/project-authoring.ts";
 
@@ -44,6 +45,18 @@ test("a brief session cannot bypass the required interactive Idea exploration", 
 
   recordGuidedAuthoringSessionExit(repo, "prd", 0, storage);
   assert.equal(getGuidedAuthoringStep(repo, storage), "idea");
+});
+
+test("brief approval and preparation progress resume at their saved Project step", () => {
+  const storage = new MemoryStorage();
+  const repo = "/projects/weather-helper";
+  initializeGuidedAuthoring(repo, storage);
+  setGuidedAuthoringStep(repo, "review", storage);
+  setGuidedAuthoringStep(repo, "preparing", storage);
+  assert.equal(getGuidedAuthoringStep(repo, storage), "preparing");
+  setGuidedAuthoringStep(repo, "ready", storage);
+  assert.equal(getGuidedAuthoringStep(repo, storage), "ready");
+  assert.equal(getGuidedAuthoringStep("/projects/another-project", storage), null);
 });
 
 test("Project name suggestions are editable-safe URL-friendly slugs", () => {

@@ -62,7 +62,8 @@ shows two distinct phases: **Explore your Idea** and **Author your Project
 brief**. Each opens the supported interactive session in the Console Terminal;
 the session continues while you move between Console views, and the guide
 returns to the same Project and saved phase. The completed Project brief,
-including its assumptions and open questions, is shown for review.
+including its assumptions and open questions, is shown in an editable review
+page with an at-a-glance summary.
 
 ---
 
@@ -78,10 +79,10 @@ The Overview is the main control center for a project. It shows:
 - the pipeline status,
 - and the run controls.
 
-For a new Project, the Overview shows the saved guided authoring phase rather
-than a technical pipeline action. Existing Projects continue to use their
-pipeline actions, and the Console shows generated artifacts before later work
-moves forward.
+For a new Project, the Overview shows the saved guided authoring, review, and
+preparation phase rather than a technical pipeline action. Existing Projects
+continue to use their pipeline actions, and the Console shows generated
+artifacts before later work moves forward.
 
 For a new Project, follow the **Explore your Idea** and **Author your Project
 brief** phases on the Project guide in order. Both are interactive; neither is
@@ -102,10 +103,14 @@ New Project authoring:
 
 1. **Explore your Idea**: the Project guide opens `forge-grill-idea` for an interactive exploration.
 2. **Author your Project brief**: the guide opens `forge-build-prd` for interactive authoring; assumptions and open questions remain visible in the resulting brief.
-3. **Review the Project brief**: the completed brief is shown in Overview. This authoring checkpoint does not prepare or start a Build.
+3. **Review the Project brief**: edit the brief in Overview and use the at-a-glance summary to check its outcome, scope, success criteria, assumptions, and open questions.
+4. Choose **Request changes** to save the edits and return to interactive brief authoring, or choose **Approve** as a separate decision.
+5. Approval authorizes preparation only. The Console prepares the team, project guidance, and Build plan as one guided background step; it does not start execution. Progress and failures remain visible, with retry and Logs actions.
+6. When preparation is complete, review the major phases, assumptions, and warnings in the prepared plan. Choose **Start build** explicitly to begin execution. Project brief approval is separate from approving a runtime Human review Task.
 
 The existing pipeline actions remain available for Projects outside the guided
-authoring path. A Build is a separate action from authoring and review.
+authoring path. A Build is a separate action from authoring, review, and
+preparation.
 
 The console polls for state changes and updates the button label as each stage
 completes. When a detached step finishes or fails, Overview keeps the result

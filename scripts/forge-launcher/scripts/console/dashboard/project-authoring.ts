@@ -1,4 +1,4 @@
-export type GuidedAuthoringStep = "idea" | "brief" | "review";
+export type GuidedAuthoringStep = "idea" | "brief" | "review" | "preparing" | "ready";
 export type GuidedAuthoringTarget = "idea" | "prd";
 export type ProjectToolChoice = "opencode" | "github" | "claude" | "agents";
 
@@ -8,7 +8,7 @@ interface ProgressStorage {
 }
 
 const STORAGE_PREFIX = "forge-console:guided-authoring:";
-const STEPS = new Set<GuidedAuthoringStep>(["idea", "brief", "review"]);
+const STEPS = new Set<GuidedAuthoringStep>(["idea", "brief", "review", "preparing", "ready"]);
 const PROJECT_TOOLS = new Set<ProjectToolChoice>(["opencode", "github", "claude", "agents"]);
 
 export function initialProjectToolChoice(configuredDefault?: string): ProjectToolChoice | "" {
@@ -47,6 +47,19 @@ export function initializeGuidedAuthoring(repoPath: string, storage = browserSto
     if (storage.getItem(storageKey(repoPath)) === null) storage.setItem(storageKey(repoPath), "idea");
   } catch {
     // The guided flow can still be used when browser storage is unavailable.
+  }
+}
+
+export function setGuidedAuthoringStep(
+  repoPath: string,
+  step: GuidedAuthoringStep,
+  storage = browserStorage(),
+): void {
+  if (!repoPath || !storage || !STEPS.has(step)) return;
+  try {
+    storage.setItem(storageKey(repoPath), step);
+  } catch {
+    // The current phase remains available if browser storage cannot be updated.
   }
 }
 

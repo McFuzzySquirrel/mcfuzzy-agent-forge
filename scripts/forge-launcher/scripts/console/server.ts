@@ -613,6 +613,21 @@ export async function startConsoleServer(options: ConsoleServerOptions = {}): Pr
         if (!authorized) return sendText(res, 403, "forbidden");
         const body = (await readBody(req)) as Record<string, unknown>;
 
+        if (urlPath === "/api/project-brief") {
+          if (!currentRepo) return sendJson(res, 400, { ok: false, message: "no repo selected" });
+          if (body.repoRoot !== currentRepo) {
+            return sendJson(res, 409, { ok: false, message: "The selected Project changed. Reload the page before saving its brief." });
+          }
+          const content = typeof body.content === "string" ? body.content : "";
+          if (!content.trim()) return sendJson(res, 400, { ok: false, message: "Project brief content is required." });
+          const briefPath = repo.resolveWithin(currentRepo, "docs/PRD.md");
+          if (!briefPath || !fs.existsSync(briefPath) || !fs.statSync(briefPath).isFile()) {
+            return sendJson(res, 404, { ok: false, message: "Project brief not found at docs/PRD.md." });
+          }
+          fs.writeFileSync(briefPath, content, "utf8");
+          broadcast("snapshot", snapshotEvent());
+          return sendJson(res, 200, { ok: true, message: "Project brief saved." });
+        }
         if (urlPath === "/api/authoring-config") {
           if (!currentRepo) return sendJson(res, 400, { ok: false, message: "no repo selected" });
           let config;
