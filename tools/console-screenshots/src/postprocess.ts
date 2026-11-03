@@ -24,6 +24,7 @@ export const NUMBERED: Array<{ numbered: string; from: string }> = [
   { numbered: "16-nav-menu", from: "nav-menu-1440" },
   { numbered: "17-project-files", from: "project-files-1024" },
   { numbered: "17b-project-files-detail", from: "project-files-detail-1440" },
+  { numbered: "18-human-review", from: "review-queue-1024" },
 ];
 
 function run(bin: string, args: string[]): void {

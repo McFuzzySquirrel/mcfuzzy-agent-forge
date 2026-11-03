@@ -179,6 +179,13 @@ Selecting **Read Project brief** opens its rendered Markdown in the Console.
 
 ![Project files - rendered brief](images/forge-console/17b-project-files-detail.png)
 
+## 18. Human review
+
+The focused review queue shows Tasks that need a person, their criteria,
+evidence, blockers, and next action.
+
+![Human review - focused queue](images/forge-console/18-human-review.png)
+
 ## Responsive current captures
 
 The checked-in build was captured at 1440px, 1024px, 720px, 390px, and 320px for
@@ -195,6 +202,7 @@ feature, Project brief, artifact detail, and audit log) are also included in
 | Plan & Team | [image](images/forge-console/current/documents-1024.png) | [image](images/forge-console/current/documents-720.png) | [image](images/forge-console/current/documents-390.png) | [image](images/forge-console/current/documents-320.png) |
 | Artifacts | [image](images/forge-console/current/artifacts-1024.png) | [image](images/forge-console/current/artifacts-720.png) | [image](images/forge-console/current/artifacts-390.png) | [image](images/forge-console/current/artifacts-320.png) |
 | Project files | [image](images/forge-console/current/project-files-1024.png) | [image](images/forge-console/current/project-files-720.png) | [image](images/forge-console/current/project-files-390.png) | [image](images/forge-console/current/project-files-320.png) |
+| Human review | [image](images/forge-console/current/review-queue-1024.png) | [image](images/forge-console/current/review-queue-720.png) | [image](images/forge-console/current/review-queue-390.png) | [image](images/forge-console/current/review-queue-320.png) |
 | Timeline | [image](images/forge-console/current/timeline-1024.png) | [image](images/forge-console/current/timeline-720.png) | [image](images/forge-console/current/timeline-390.png) | [image](images/forge-console/current/timeline-320.png) |
 | Projects | [image](images/forge-console/current/projects-1024.png) | [image](images/forge-console/current/projects-720.png) | [image](images/forge-console/current/projects-390.png) | [image](images/forge-console/current/projects-320.png) |
 | New project | [image](images/forge-console/current/new-1024.png) | [image](images/forge-console/current/new-720.png) | [image](images/forge-console/current/new-390.png) | [image](images/forge-console/current/new-320.png) |
