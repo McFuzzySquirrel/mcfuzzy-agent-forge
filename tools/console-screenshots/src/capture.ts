@@ -19,7 +19,7 @@ const TABLET: Viewport = { width: 720, height: 1100 };
 const MOBILE_L: Viewport = { width: 390, height: 900 };
 const MOBILE_S: Viewport = { width: 320, height: 900 };
 
-const ROUTES = ["home", "overview", "board", "tasks", "logs", "documents", "artifacts", "timeline", "projects", "new", "settings"] as const;
+const ROUTES = ["home", "overview", "board", "tasks", "logs", "documents", "artifacts", "project-files", "timeline", "projects", "new", "settings"] as const;
 const VIEWPORTS: Array<[label: string, viewport: Viewport]> = [
   ["1440", WIDE],
   ["1024", MEDIUM],
@@ -63,6 +63,23 @@ function detailTargets(): CaptureTarget[] {
       route: "documents",
       viewport: WIDE,
       prepare: async (page) => { await openDocument(page, "docs/features/auth.md"); },
+    },
+    {
+      name: "project-files-detail-1440",
+      route: "project-files",
+      viewport: WIDE,
+      prepare: async (page) => {
+        await page.waitForFunction(() => {
+          const text = document.body.innerText;
+          return text.includes("Read Project brief") && text.includes("Open index.ts externally");
+        }, { timeout: 10000 });
+        await clickByText(page, ".project-file-card button", "Read Project brief");
+        await page.waitForSelector("dialog.doc-dialog", { timeout: 10000 });
+        await page.waitForFunction(() => {
+          const body = document.querySelector("dialog.doc-dialog .doc-dialog-body");
+          return body?.textContent?.includes("Ledgerly gives a small company") ?? false;
+        }, { timeout: 10000 });
+      },
     },
     {
       name: "artifacts-detail-1440",

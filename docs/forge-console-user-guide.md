@@ -141,6 +141,12 @@ the list open. A persistent project context bar below the menu shows the current
 project name, harness, and Live/Idle state, and its switcher changes projects
 from any view.
 
+Choose **Project files** from **Start** to read the Project idea, Project brief,
+build progress, and feature documents in the Console. Delivered files are
+listed separately with an explicit **Open externally** action. This view does
+not edit or remove repository content; Task-by-Task artifact history remains in
+**Artifacts**.
+
 Once the build starts, switch between the views to follow the work:
 
 - **Board**: the live build, in **Kanban** or **Gantt** mode.
@@ -163,12 +169,13 @@ Once the build starts, switch between the views to follow the work:
   cost usage (or an explicit "not reported"); the Overview run stats show the run
   totals.
 - **Logs**: the engine and authoring log tail plus the live audit event stream.
-- **Plan & Team**: the project documents as a table (kind, title, path, status)
+- **Plan & Team**: the technical project documents as a table (kind, title, path, status)
   and the generated agent/skill files. Selecting a document opens it in a wide
   popup with an **Open externally** button; `forge-requirement` and `forge-task`
   blocks render as tables instead of code. Skills are shown as cards grouped
   into **Forge skills** and **Project skills**; the authoring stage cards and
   re-derivation footer live here too.
+- **Artifacts**: the detailed outputs and provenance for each Task.
 - **Settings**: Appearance (System/Light/Dark theme), authoring models, execution preferences (build mode, concurrency, auto-commit, harness logging, task timeouts), and per-agent model overrides in one place.
 
 The Console uses the selected harness root for team, report, and model-override
@@ -177,7 +184,6 @@ roots, so a skills-only directory cannot silently replace the generated team.
 For an existing compiled manifest, the manifest's `harnessRoot` is preferred
 over automatic detection. If that path is stale, update the selected root and
 recompile the manifest explicitly; the Console will not silently switch roots.
-- **Artifacts**: structured outputs produced by the run, browsable by type and task.
 - **Timeline**: a chronological record of important events and failures.
 
 The most useful combination for day-to-day work is usually Overview + Board + Logs.

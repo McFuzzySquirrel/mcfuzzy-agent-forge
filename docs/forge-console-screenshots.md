@@ -168,11 +168,22 @@ view keeps the amber underline. The page content uses the full browser width.
 
 ![Navigation - category dropdown](images/forge-console/16-nav-menu.png)
 
+## 17. Project files
+
+Project files foregrounds the idea, brief, progress, and feature documents, then
+lists delivered files separately from Task-by-Task history.
+
+![Project files - documents and deliverables](images/forge-console/17-project-files.png)
+
+Selecting **Read Project brief** opens its rendered Markdown in the Console.
+
+![Project files - rendered brief](images/forge-console/17b-project-files-detail.png)
+
 ## Responsive current captures
 
-The current build was captured at 1440px, 1024px, 720px, 390px, and 320px for
-every route. Detail-state captures (expanded task, rendered PRD, rendered
-feature, artifact detail, and audit log) are also included in
+The checked-in build was captured at 1440px, 1024px, 720px, 390px, and 320px for
+its routes. Detail-state captures (expanded task, rendered PRD, rendered
+feature, Project brief, artifact detail, and audit log) are also included in
 `images/forge-console/current/`.
 
 | View | 1024px | 720px | 390px | 320px |
@@ -183,6 +194,7 @@ feature, artifact detail, and audit log) are also included in
 | Logs | [image](images/forge-console/current/logs-1024.png) | [image](images/forge-console/current/logs-720.png) | [image](images/forge-console/current/logs-390.png) | [image](images/forge-console/current/logs-320.png) |
 | Plan & Team | [image](images/forge-console/current/documents-1024.png) | [image](images/forge-console/current/documents-720.png) | [image](images/forge-console/current/documents-390.png) | [image](images/forge-console/current/documents-320.png) |
 | Artifacts | [image](images/forge-console/current/artifacts-1024.png) | [image](images/forge-console/current/artifacts-720.png) | [image](images/forge-console/current/artifacts-390.png) | [image](images/forge-console/current/artifacts-320.png) |
+| Project files | [image](images/forge-console/current/project-files-1024.png) | [image](images/forge-console/current/project-files-720.png) | [image](images/forge-console/current/project-files-390.png) | [image](images/forge-console/current/project-files-320.png) |
 | Timeline | [image](images/forge-console/current/timeline-1024.png) | [image](images/forge-console/current/timeline-720.png) | [image](images/forge-console/current/timeline-390.png) | [image](images/forge-console/current/timeline-320.png) |
 | Projects | [image](images/forge-console/current/projects-1024.png) | [image](images/forge-console/current/projects-720.png) | [image](images/forge-console/current/projects-390.png) | [image](images/forge-console/current/projects-320.png) |
 | New project | [image](images/forge-console/current/new-1024.png) | [image](images/forge-console/current/new-720.png) | [image](images/forge-console/current/new-390.png) | [image](images/forge-console/current/new-320.png) |

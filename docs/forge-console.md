@@ -397,13 +397,14 @@ long-form prose capped for readability.
 |---|---|
 | **Home** | create a new project or open an existing one (landing), including live status labels for detached work. |
 | **Projects** | switch projects, add a folder, or remove one or more projects from Forge. |
+| **Project files** | read the Project idea, Project brief, progress, and feature documents, and open delivered files without Task-by-Task history. |
 | **Overview** | run status, progress + counts, blockers, the pipeline next-step card with a **Manual build** checkbox, background-job status, run controls (Run/Resume/Pause/Stop, Replay, build mode), and a **Launch \<harness\> CLI** button. Also the **Re-derive team & skills** panel when authoring is stale, and manifest reconciliation with a confirmed **Reset changed tasks for review**. |
 | **Terminal** | interactive browser session for the selected harness or an existing authoring target, with PTY input/output, resize, stop, and external-terminal fallback. |
 | **Board** | the PixiJS Forge Board in **Kanban** or **Gantt** mode, with status filters and a **Table** view of the same data. |
 | **Tasks** | every task in a filterable/sortable table with a detail drawer, editable per-task timeout, explicit/range selection controls for manual mode, and a **Launch \<harness\> CLI** button. |
 | **Logs** | `docs/engine-run.log` tail + the audit event stream (live via SSE). |
-| **Plan & Team** | authoring stage cards — always actionable, each stating why it is stale — plus the re-derivation footer, the project documents (IDEA, PRD, features, progress, model plan) as a table that opens a document in a wide popup, and agents and skills in collapsible card sections. Requirement and task blocks render as tables. |
-| **Artifacts** | the structured outputs tasks produced (`docs/artifacts/`), browsable by type/task with previews. |
+| **Plan & Team** | authoring stage cards — always actionable, each stating why it is stale — plus the re-derivation footer, technical project documents, and agents and skills in collapsible card sections. Requirement and task blocks render as tables. |
+| **Artifacts** | Task-produced files and records (`docs/artifacts/`), browsable by type and Task with their detailed provenance. |
 | **Timeline** | chronological audit events, failures highlighted. |
 | **Settings** | Appearance (System/Light/Dark theme), authoring models (runner + stage models), execution preferences (build mode, concurrency, auto-commit, harness logging, task timeouts), and per-agent model overrides + the model planning terminal. |
 
@@ -531,6 +532,10 @@ job status keeps updating even if you switch between **Home**, **Projects**, and
 - All `POST` endpoints require an **`X-Forge-Token`** header holding a
   per-server random token embedded in the served page, so cross-origin web pages
   cannot trigger actions.
+- Project files is a read-only collection: Project documents are viewed in the
+  Console, and delivered files offer an explicit external-open action. It does
+  not edit or remove repository content. Detailed Task artifact provenance stays
+  in **Artifacts**.
 - File reads are confined to `docs/`, the harness `agents/`/`skills/` dirs, and
   `docs/artifacts/` with path-traversal guards.
 - "Open externally" (`POST /api/open`) only opens a whitelisted path in the

@@ -11,6 +11,7 @@ import { renderTasks, unmountTasks } from "./views/tasks.js";
 import { renderLogs, unmountLogs } from "./views/logs.js";
 import { refreshDocuments, renderDocuments, unmountDocuments } from "./views/documents.js";
 import { renderArtifacts, unmountArtifacts } from "./views/artifacts.js";
+import { renderProjectFiles, unmountProjectFiles } from "./views/project-files.js";
 import { renderTimeline, unmountTimeline } from "./views/timeline.js";
 import { refreshProjectList, renderProjects, unmountProjects } from "./views/projects.js";
 import { renderNew, unmountNew } from "./views/new.js";
@@ -31,6 +32,7 @@ interface View {
 const views: View[] = [
   { id: "home", label: "Home", group: "Start", render: renderHome, unmount: unmountHome },
   { id: "projects", label: "Projects", group: "Start", render: renderProjects, unmount: unmountProjects },
+  { id: "project-files", label: "Project files", group: "Start", render: renderProjectFiles, unmount: unmountProjectFiles },
   { id: "overview", label: "Overview", group: "Pipeline", render: renderOverview, unmount: unmountOverview, refresh: refreshOverview },
   { id: "board", label: "Board", group: "Monitor", render: renderBoard, unmount: unmountBoard },
   { id: "tasks", label: "Tasks", group: "Monitor", render: renderTasks, unmount: unmountTasks },
@@ -45,7 +47,7 @@ const views: View[] = [
 
 /** Sidebar sections in display order; the "new" wizard is intentionally absent. */
 const NAV_GROUPS: Array<[string, string[]]> = [
-  ["Start", ["home", "projects"]],
+  ["Start", ["home", "projects", "project-files"]],
   ["Pipeline", ["overview"]],
   ["Monitor", ["board", "tasks", "logs", "timeline"]],
   ["Review", ["documents", "artifacts", "terminal"]],
