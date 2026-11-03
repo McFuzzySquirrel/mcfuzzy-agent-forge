@@ -103,7 +103,7 @@ function quickHelp(): HTMLElement {
     ]),
     helpSection("Prepare and control a build", [
       "Before a manifest exists, enable Manual build if you want the pipeline to stop at Create manifest instead of starting the full workflow.",
-      "After the manifest exists, Controls offers auto (full workflow) or manual (selected tasks). Manual mode requires a saved task selection from Tasks; dependencies are expanded automatically.",
+      "After the manifest exists, Controls offers auto (full workflow) or manual (selected tasks). Manual mode requires a saved task selection from All tasks; dependencies are expanded automatically.",
       dl([
         ["Run / Resume", "start or continue the workflow; manual mode uses Run selected / Resume selected."],
         ["Pause / Stop", "pause after the current task or terminate the running engine."],
@@ -117,13 +117,14 @@ function quickHelp(): HTMLElement {
       "Review preserved, new, changed, and removed task IDs in Manifest. Reset changed tasks for review only when changed completed tasks should run again.",
     ]),
     helpSection("Views", [
-      "Navigation is grouped into top categories (Start / Pipeline / Monitor / Review / Settings); hover a category, or select it to pin its list open. A persistent project context bar below the menu shows the current project and a switcher.",
+      "Navigation is grouped into top categories (Start / Tasks / Pipeline / Monitor / Review / Settings); hover a category, or select it to pin its list open. A persistent project context bar below the menu shows the current project and a switcher.",
       dl([
         ["Home", "create a new project or open an existing one."],
         ["Projects", "switch to a different project or add a folder."],
         ["Overview", "run status, manifest/reconciliation, pipeline steps, feature authoring, and run controls."],
-        ["Board", "live kanban of tasks flowing To Do → In Progress → Done → Failed."],
-        ["Tasks", "filterable, sortable task table with detail, timeout editing, and saved single/range/list selection."],
+        ["Board", "semantic Kanban and Gantt views with shared Task summaries, attention cues, and compact details."],
+        ["Human review", "focused queue for explicit Task-bound reviews, separate from Project brief approval."],
+        ["All tasks", "filterable, sortable Task table with detail, timeout editing, and saved single/range/list selection."],
         ["Logs", "engine and authoring output plus audit and lifecycle event streams."],
         ["Timeline", "chronological audit events, failures highlighted."],
         ["Plan & Team", "project documents plus agents and skills grouped into Forge skills and Project skills."],

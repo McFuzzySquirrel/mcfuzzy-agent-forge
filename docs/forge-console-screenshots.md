@@ -13,6 +13,9 @@ set is archived under `images/forge-console/current/`. Start with
 > (hover or select a category for its dropdown), the persistent project context
 > bar, full-width content, run-level token/cost stats, the Tasks **Tokens**
 > column, and the consolidated **Settings** view.
+>
+> The Board captures show the semantic HTML/CSS baseline. Board-only capture
+> refreshes Board images and thumbnails without rebuilding the walkthrough GIF.
 
 ---
 
@@ -38,25 +41,23 @@ capture is full-page so the Controls are visible.)
 
 ## 3. Board
 
-The PixiJS **Forge Board**, embedded full-screen, in one of two modes.
+The semantic HTML/CSS Board in either mode. PixiJS is not required.
 
-**Kanban** — tasks as name-tag cards flowing through **To Do · In Progress ·
-Done · Failed**, grouped by phase.
+**Kanban** — Tasks grouped by phase and workflow status. Cards include their
+summary, responsibility, and attention/next-action cue.
 
 ![Board - kanban](images/forge-console/03-board.png)
 
-**Gantt** — the same run against time on its dependencies. Filled bars are
-measured, outlined hatched bars are forecast; phase rollups span each phase, the
-critical path is outlined in gold, and the axis follows the local clock. The
-forecast continues from where the run last did something, so a stale run stays on
-its own window instead of stretching out to the present.
+**Gantt** — the same Task summaries against time. Actual and forecast durations
+are distinguished, Human review Tasks are milestones, and the critical path is
+highlighted.
 
 ![Board - gantt](images/forge-console/03b-board-gantt.png)
 
-**Table** — the same data as a real table. The board is a canvas, so this is the
-route for keyboard and screen-reader use.
+Selecting a card or timeline bar opens the shared compact Task details with its
+blocker, next action, prerequisites, and a link to full diagnostics in All tasks.
 
-![Board - table](images/forge-console/03c-board-table.png)
+![Board - Task details](images/forge-console/03c-board-detail.png)
 
 ## 4. Tasks
 
@@ -199,10 +200,12 @@ model or external authoring runs; every timestamp in the fixture is fixed.
 cd tools/console-screenshots
 npm install         # first time; installs puppeteer-core (no bundled browser)
 npm run capture     # builds the launcher, captures, then writes images + GIF
+npm run capture -- --board-only # refreshes only Board images and thumbnails
 ```
 
 Requirements: `google-chrome` (or set `CHROME_PATH`), `ffmpeg` on `PATH`, and
 Node 18+. The tool writes the responsive set to
 `docs/images/forge-console/current/`, derives the numbered tour images and the
-640px thumbnails, and rebuilds `console-walkthrough.gif`. Pass `--headed` to
-watch it run (useful if headless WebGL ever renders the Board blank).
+640px thumbnails, and rebuilds `console-walkthrough.gif`. Board-only capture
+skips the GIF and unrelated views. Pass `--headed` to watch the browser while it
+captures.
