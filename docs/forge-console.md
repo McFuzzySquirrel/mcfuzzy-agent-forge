@@ -310,7 +310,7 @@ Stable task IDs preserve completed work across a recompile. When a task's
 *contract* changed, its record is stale and it must run again. **Reset changed
 tasks for review** lives in the Overview **Manifest** panel, beside the
 reconciliation data it acts on: it lists the changed and new task IDs, each
-linking into **Tasks**, and the reset is behind a confirmation naming every task
+linking into **All tasks**, and the reset is behind a confirmation naming every task
 it will discard. It clears those tasks' status, timings, outputs and artifacts,
 setting them back to pending.
 
@@ -373,7 +373,7 @@ alongside the other project documents.
 
 ## Launching the harness CLI
 
-A **Launch \<harness\> CLI** button on the **Tasks** view header and the
+A **Launch \<harness\> CLI** button on the **All tasks** view header and the
 **Overview** header opens the project's harness CLI in a new terminal window,
 working from the project folder — so you can watch the live run and take over
 at any point. The **Terminal** view also offers the same harness session in the
@@ -386,7 +386,7 @@ the exact command to run manually.
 
 ## Views
 
-The views are grouped under top categories (**Start / Pipeline / Monitor /
+The views are grouped under top categories (**Start / Tasks / Pipeline / Monitor /
 Review / Settings**); hovering a category opens its list, and selecting it pins
 the list open (for touch). A persistent project context bar below the menu shows
 the current project name, harness, Live/Idle state, a project switcher, and the
@@ -400,7 +400,8 @@ long-form prose capped for readability.
 | **Overview** | run status, progress + counts, blockers, the pipeline next-step card with a **Manual build** checkbox, background-job status, run controls (Run/Resume/Pause/Stop, Replay, build mode), and a **Launch \<harness\> CLI** button. Also the **Re-derive team & skills** panel when authoring is stale, and manifest reconciliation with a confirmed **Reset changed tasks for review**. |
 | **Terminal** | interactive browser session for the selected harness or an existing authoring target, with PTY input/output, resize, stop, and external-terminal fallback. |
 | **Board** | the PixiJS Forge Board in **Kanban** or **Gantt** mode, with status filters and a **Table** view of the same data. |
-| **Tasks** | every task in a filterable/sortable table with a detail drawer, editable per-task timeout, explicit/range selection controls for manual mode, and a **Launch \<harness\> CLI** button. |
+| **Tasks** | a focused queue of Human review Tasks, with each Task's criteria, references, blocker, next responsible action, and explicit review control. This is separate from Project brief approval. |
+| **All tasks** | every Task in a filterable/sortable table with a detail drawer, editable per-task timeout, explicit/range selection controls for manual mode, and a **Launch \<harness\> CLI** button. |
 | **Logs** | `docs/engine-run.log` tail + the audit event stream (live via SSE). |
 | **Plan & Team** | authoring stage cards — always actionable, each stating why it is stale — plus the re-derivation footer, the project documents (IDEA, PRD, features, progress, model plan) as a table that opens a document in a wide popup, and agents and skills in collapsible card sections. Requirement and task blocks render as tables. |
 | **Artifacts** | the structured outputs tasks produced (`docs/artifacts/`), browsable by type/task with previews. |
@@ -410,10 +411,14 @@ long-form prose capped for readability.
 A **Help** button (in the context bar) explains the UI, the pipeline, each view,
 and key terms.
 
-For human-review tasks, **Complete human review** lists unverified checks from
-all upstream task and prerequisite-phase dependencies, including transitive
-ones. Exercise the required journey and applicable live checks before approving,
-and record what you checked and found in at least 40 characters after trimming.
+The focused **Tasks** queue distinguishes reviews that are ready, waiting on
+prerequisites, or already recorded. Each entry keeps its Task-bound criteria,
+references, blocker, and next responsible action visible. Review findings and
+explicit approval are required; an agent or unattended flag cannot approve a
+Human review. **Complete human review** lists unverified checks from all
+upstream task and prerequisite-phase dependencies, including transitive ones.
+Exercise the required journey and applicable live checks before approving, and
+record what you checked and found in at least 40 characters after trimming.
 These reported gaps are advisory, not proof of validation; see the
 [human-review walkthrough](forge-console-user-guide.md#human-review-when-it-pauses-and-how-to-prove-approval).
 
@@ -448,7 +453,7 @@ run should behave:
 
 - **Auto** - the engine runs the full ready workflow.
 - **Manual** - the engine runs only the selected task set saved from the
-  **Tasks** view. The primary button text changes to **Run selected** /
+  **All tasks** view. The primary button text changes to **Run selected** /
   **Resume selected**.
 
 Manual selections are stored in `docs/engine-config.json` with the run mode, the
@@ -479,9 +484,9 @@ and [ADR-052](adr/052-harness-invocation-activity-logging.md)).
 The Console can edit timeouts without leaving the browser, so a task that
 outruns its budget (a slow build or test) can be retried with a larger one:
 
-- **Per task** - open a task's detail drawer in **Tasks** (or use the task picker
+- **Per task** - open a task's detail drawer in **All tasks** (or use the task picker
   in **Settings → Execution**) and set its timeout, then **Replay** it.
-- **All tasks** - the Tasks view header and **Settings → Execution** both have a
+- **All tasks** - the All tasks view header and **Settings → Execution** both have a
   "set all" control that gives every task the same timeout.
 
 Storage and precedence (same as the CLI):
@@ -504,7 +509,7 @@ audit events. OpenCode usage is read from `opencode session export` for the
 task's session; Claude from its JSON result envelope; Copilot from its stderr
 stats block (tokens and AI credits). A harness that reports nothing is recorded
 as `unavailable`, not zero. The Overview shows run totals (tokens, cost, credits)
-and the Tasks view shows a Tokens column plus a per-task breakdown in the detail
+and **All tasks** shows a Tokens column plus a per-task breakdown in the detail
 drawer. See [ADR-074](adr/074-token-and-cost-usage-capture.md).
 
 ### Background job tracking

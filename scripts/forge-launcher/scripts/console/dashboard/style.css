@@ -433,6 +433,14 @@ tr.detail-row td { background: var(--surface-deep); }
 .detail .k { color: var(--text-dim); font-size: 11px; text-transform: uppercase; letter-spacing: 0.5px; margin-top: 10px; }
 .detail-list { margin: 4px 0; padding-left: 18px; }
 .detail-list li { font-family: var(--mono); font-size: 12px; }
+.review-queue-card > .row:first-child h2 { margin: 0; font-size: 15px; }
+.review-queue-field { margin-top: 12px; }
+.review-queue-field .k { color: var(--text-dim); font-size: 11px; text-transform: uppercase; letter-spacing: 0.5px; }
+.review-queue-field .detail-list { margin: 4px 0; }
+.review-queue-state { margin-top: 14px; padding: 12px; border: 1px solid var(--panel-border-soft); border-radius: 8px; background: var(--surface); }
+.review-queue-state p { margin: 6px 0 0; }
+.badge-ready { background: color-mix(in srgb, var(--blue) 16%, transparent); color: var(--blue); }
+.badge-waiting { background: color-mix(in srgb, var(--accent) 16%, transparent); color: var(--accent-ink); }
 
 input, select, textarea {
   font: inherit;
