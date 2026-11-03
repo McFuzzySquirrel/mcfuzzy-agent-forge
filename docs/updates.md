@@ -4,6 +4,16 @@ Detailed release and change notes for MyForge.
 
 ---
 
+## November 2026 - v3.121
+
+### Make Home's first step clear
+
+- Give **Start with an idea** one prominent action on Console Home while
+  preserving Recent Projects, opening a Project, and setting up an existing app
+  as secondary paths.
+
+---
+
 ## October 2026 - v3.120
 
 ### Fix Windows Console background jobs

@@ -949,7 +949,8 @@ export async function startConsoleServer(options: ConsoleServerOptions = {}): Pr
       if (method === "GET") {
         if (urlPath === "/") {
           const idx = fs.readFileSync(path.join(clientDir, "index.html"), "utf8")
-            .replace(/__FORGE_TOKEN__/g, token);
+            .replace(/__FORGE_TOKEN__/g, token)
+            .replace(/__FORGE_PROTOTYPES__/g, process.env.NODE_ENV === "production" ? "disabled" : "enabled");
           res.writeHead(200, { "Content-Type": "text/html; charset=utf-8" });
           res.end(idx);
           return;

@@ -711,45 +711,39 @@ body[data-view="board"] #view { max-width: none; padding: 16px; }
   box-shadow: var(--shadow-sm);
 }
 
-/* ── Home hero + action cards ─────────────────────────────── */
+/* ── Home ──────────────────────────────────────────────────── */
 
-.hero {
-  padding: 8px 0 24px;
-}
-.hero h1 {
-  font-size: 28px;
-  margin-bottom: 6px;
-}
-.hero p {
-  margin: 0;
-  max-width: 560px;
-}
-
-.action-cards {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
-  gap: 16px;
-  margin-bottom: 16px;
-}
-.action-card {
+.home-hero {
   display: flex;
-  flex-direction: column;
-  gap: 10px;
-  padding: 22px;
+  align-items: center;
+  justify-content: space-between;
+  gap: 28px;
+  margin-bottom: 18px;
+  padding: clamp(24px, 4vw, 40px);
   background: var(--panel-bg);
   border: 1px solid var(--panel-border);
   border-radius: var(--radius);
-  color: var(--text);
-  text-decoration: none;
-  transition: border-color .15s, transform .1s;
 }
-.action-card:hover {
-  border-color: var(--blue);
-  text-decoration: none;
+.home-hero-copy { max-width: 640px; }
+.home-hero h1 {
+  margin: 0;
+  font-size: clamp(28px, 4vw, 40px);
 }
-.action-card h3 { margin: 0; }
-.action-card p { margin: 0; flex: 1; }
-.action-card .btn { align-self: flex-start; }
+.home-hero p { margin: 10px 0 0; }
+.home-primary-action {
+  flex-shrink: 0;
+  min-height: 44px;
+  white-space: nowrap;
+}
+.home-support-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1.2fr) minmax(260px, .8fr);
+  gap: 16px;
+}
+.home-support-card { min-width: 0; margin-bottom: 0; }
+.home-support-card h2 { margin-top: 0; font-size: 18px; }
+.home-support-card p { margin: 0 0 14px; }
+.home-support-actions { display: flex; flex-wrap: wrap; gap: 10px; }
 
 .dropdown-row {
   display: flex;
@@ -895,6 +889,9 @@ body[data-view="board"] #view { max-width: none; padding: 16px; }
   #contextbar { height: auto; flex-wrap: wrap; padding: 8px 12px; gap: 8px; }
   #contextbar-project { width: 100%; }
   #contextbar-actions { margin-left: 0; }
+  .home-hero { align-items: flex-start; flex-direction: column; gap: 18px; padding: 24px 18px; }
+  .home-primary-action { width: 100%; justify-content: center; }
+  .home-support-grid { grid-template-columns: 1fr; }
   .row.between { align-items: flex-start; flex-wrap: wrap; }
   .row.gap:not(.wrap) { flex-wrap: wrap; }
   .row.between > * { max-width: 100%; }

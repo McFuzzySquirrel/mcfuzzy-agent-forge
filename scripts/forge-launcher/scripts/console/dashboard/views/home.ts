@@ -12,52 +12,32 @@ export function renderHome(container: HTMLElement): void {
   container.textContent = "";
 
   container.appendChild(
-    el("div", { className: "hero" }, [
-      el("h1", null, "Forge Console"),
-      el("p", { className: "dim" }, "Create a new MyForge project or open an existing one."),
+    el("section", { className: "home-hero", "aria-labelledby": "home-heading" }, [
+      el("div", { className: "home-hero-copy" }, [
+        el("h1", { id: "home-heading" }, "Start a Project from an Idea"),
+        el("p", { className: "dim" }, "Create a new Project workspace, or pick up one you already have."),
+      ]),
+      el("a", { className: "btn btn-primary home-primary-action", href: "#/new" }, "Start with an idea"),
     ]),
   );
 
   container.appendChild(
-    el("div", { className: "action-cards" }, [
-      actionCard(
-        "Create a new project",
-        "Start from an idea — sets up a repo, bootstraps the agent harness, and opens the interactive PRD authoring handoff.",
-        "#/new",
-        "Create new",
-      ),
-      actionCard(
-        "Open an existing project",
-        "Pick a forge repo to monitor its build, resume a run, or browse artifacts and docs.",
-        "#/projects",
-        "Open existing",
-      ),
-      actionCard(
-        "Bootstrap an existing repo",
-        "Add MyForge's harness and skills to an application you already have, without replacing its code.",
-        "#/projects?bootstrap=1",
-        "Bootstrap repo",
-      ),
+    el("div", { className: "home-support-grid" }, [
+      renderRecent(),
+      el("section", { className: "panel home-support-card", "aria-labelledby": "home-existing-heading" }, [
+        el("h2", { id: "home-existing-heading" }, "Working with an existing application?"),
+        el("p", { className: "dim" }, "Open a Project or add Forge to an app without replacing its code."),
+        el("div", { className: "home-support-actions" }, [
+          el("a", { className: "btn", href: "#/projects" }, "Open a Project"),
+          el("a", { className: "btn", href: "#/projects?bootstrap=1" }, "Set up an app"),
+        ]),
+      ]),
     ]),
-  );
-
-  container.appendChild(renderRecent());
-}
-
-function actionCard(title: string, desc: string, href: string, cta: string): HTMLElement {
-  return el(
-    "a",
-    { className: "action-card", href },
-    [
-      el("h3", null, title),
-      el("p", { className: "dim" }, desc),
-      el("span", { className: "btn btn-primary" }, cta),
-    ],
   );
 }
 
 function renderRecent(): HTMLElement {
-  const select = el("select", { className: "project-select" });
+  const select = el("select", { className: "project-select", "aria-label": "Choose a recent Project" });
   const open = el("button", { className: "btn", disabled: true }, "Open");
   const meta = el("div", { className: "dim small" });
 
@@ -68,7 +48,7 @@ function renderRecent(): HTMLElement {
     if (index.projects.length === 0) {
       select.appendChild(el("option", { value: "" }, "No projects yet"));
       open.setAttribute("disabled", "");
-      meta.textContent = "Create a new project or add an existing folder to get started.";
+      meta.textContent = "Start with an idea or open an existing folder to get started.";
       return;
     }
     for (const project of index.projects) {
@@ -96,8 +76,8 @@ function renderRecent(): HTMLElement {
     });
   });
 
-  return el("div", { className: "panel" }, [
-    el("h4", null, "Recent projects"),
+  return el("section", { className: "panel home-support-card", "aria-labelledby": "home-recent-heading" }, [
+    el("h2", { id: "home-recent-heading" }, "Recent Projects"),
     el("div", { className: "dropdown-row" }, [select, open]),
     meta,
   ]);

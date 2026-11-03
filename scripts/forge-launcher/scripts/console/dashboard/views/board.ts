@@ -7,6 +7,7 @@
 
 import { el } from "../render/dom.js";
 import { store } from "../state.js";
+import { renderBoardRenderingPrototype, unmountBoardRenderingPrototype } from "./board-rendering-prototype.js";
 
 type BoardMode = "kanban" | "gantt";
 
@@ -53,6 +54,7 @@ function setMode(mode: BoardMode): void {
 }
 
 export function unmountBoard(): void {
+  unmountBoardRenderingPrototype();
   unsubscribe?.();
   unsubscribe = null;
   frame = null;
@@ -62,6 +64,12 @@ export function unmountBoard(): void {
 export function renderBoard(container: HTMLElement): void {
   unmountBoard();
   container.textContent = "";
+
+  const params = new URLSearchParams(location.hash.split("?")[1] ?? "");
+  if (params.get("prototype") === "1" && document.documentElement.dataset.prototypes === "enabled") {
+    renderBoardRenderingPrototype(container);
+    return;
+  }
 
   const project = currentProject();
   container.appendChild(el("div", { className: "board-toolbar" }, [

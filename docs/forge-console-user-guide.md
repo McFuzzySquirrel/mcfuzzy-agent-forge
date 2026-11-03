@@ -32,10 +32,13 @@ forge-launcher console --no-open                      # keep the browser handoff
 
 ## 2. Create or open a project
 
-On the landing page you will see one of two choices:
+The Home page emphasizes one primary action:
 
-- **Create a new project** to start a fresh forge repo from the console.
-- **Open an existing project** to switch to a repo that already exists on disk.
+- Choose **Start with an idea** to create a new Project from the Console.
+- Use **Recent Projects** or **Open a Project** to return to a repo already on
+  disk.
+- Choose **Set up an app** to bootstrap Forge into an existing application
+  repository.
 
 The project picker remembers recent repos in your local Forge registry, so you can return to them later without re-adding the folder.
 

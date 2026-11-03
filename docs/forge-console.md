@@ -77,18 +77,19 @@ project was created with (`opencode` or `copilot`) - see
 
 Projects you create or open are remembered in a registry at
 `~/.myforge/projects.json` (honors `FORGE_HOME`, then `XDG_CONFIG_HOME`). The
-**Home** view lists recent projects (most-recent-first) and offers three actions:
+**Home** view emphasizes **Start with an idea** as its primary action. Recent
+Projects and existing-application setup remain available as secondary choices.
 
-- **Create a new project** - the New Project wizard collects a name, harness,
+- **Start with an idea** - the New Project wizard collects a name, harness,
   visibility, parent directory, and idea, then spawns
   `forge-launcher --non-interactive` in the background. That run bootstraps and
   stops with the interactive PRD handoff; it never authors requirements
   (ADR-060). It also lets you **add an existing PRD and
   research/seed documents** (see *Adding a PRD and research/seed documents*
   below), mirroring the CLI's Step 6.
-- **Open an existing project** - a table of your projects plus an
+- **Open a Project** - a table of your projects plus an
   "Add folder" input for a forge repo you have on disk but haven't opened yet.
-- **Bootstrap an existing repo** - copies MyForge into an existing application
+- **Set up an app** - copies MyForge into an existing application
   repository. Existing files are preserved unless overwrite is explicitly
   selected. A non-Git folder requires the explicit **Initialize git if needed**
   option.

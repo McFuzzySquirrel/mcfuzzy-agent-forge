@@ -18,9 +18,9 @@ set is archived under `images/forge-console/current/`. Start with
 
 ## 1. Home
 
-The landing page. Two action cards - **Create a new project** (→ `#/new`) and
-**Open an existing project** (→ `#/projects`) - plus a **Recent projects**
-dropdown for one-click return to a prior project.
+The landing page emphasizes **Start with an idea** (`#/new`) as its primary
+action. Recent Projects and existing-application setup remain available as
+secondary choices.
 
 ![Home - landing page](images/forge-console/current/home-1024.png)
 
