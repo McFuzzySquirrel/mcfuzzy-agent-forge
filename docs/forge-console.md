@@ -30,8 +30,8 @@ still takes priority. If the recorded root is stale, update the selection and
 recompile the manifest; Console will not silently switch to another harness
 root.
 
-It is TypeScript, compiled with `tsc` (no framework or bundler), and embeds the
-existing PixiJS **Forge Board** as one of its views.
+It is TypeScript, compiled with `tsc` (no framework or bundler). The Console
+Board uses semantic HTML/CSS; PixiJS is not required to use it.
 
 ---
 
@@ -320,33 +320,35 @@ The Overview **Controls** panel points here rather than duplicating the button.
 
 ## The Forge Board
 
-The Board is the engine's PixiJS dashboard, framed inside the Console. It has
-two modes, chosen above the frame and remembered per project.
+The Console Board is a semantic HTML/CSS view over the Project's Task data and
+the workflow engine's tested layout APIs. It does not load a canvas or require
+PixiJS. **Kanban** and **Gantt** are peer views; each Project remembers its
+selection and status filters, and each view remembers its own scroll position.
 
-**Kanban** is the original board: one band per phase, four status columns, task
-cards flowing left to right.
+**Kanban** groups Tasks into phase rows and workflow-status columns. Cards
+foreground the current state while keeping the phase label, Task summary,
+responsibility, attention cue, and next action together.
 
-**Gantt** plots the same run against time on its dependencies:
+**Gantt** uses the same Task summaries, attention cues, selection, and filters,
+and adds timeline information:
 
-- **Filled bars are measured; outlined, hatched bars are forecast.** A forecast
-  is an inference from observed durations, and the tooltip names its source — the
-  task's own attempts, the same agent's other tasks, or a default.
+- **Filled bars are measured; outlined bars are forecast.** Forecasts identify
+  their source: observed attempts, the same agent's Tasks, or a default estimate.
 - **Bars respect the engine's own dispatch rule** (direct dependencies plus every
   task of a depended-on phase) and the configured concurrency, so the forecast
   never promises a sequence the engine will not run.
-- **Phase rollups** span each phase; **human-review tasks** appear as milestone
-  diamonds, since a review is a decision rather than a duration.
+- **Human-review Tasks** appear as milestones rather than durations.
 - **The critical path** is highlighted: the longest chain of remaining work.
-- **A "now" line** advances continuously; the axis follows your local clock.
 
-Filters dim tasks rather than hiding them, so the shape of the build stays
-visible. **Table** renders the same data as a real table for keyboard and
-screen-reader use. Hovering a card or bar offers **Open in Tasks**, **Logs** and
-**Artifacts**, so the board is not a dead end. Failures stay listed in the lower
-left with a link into Tasks, rather than only flashing once.
+Selecting a card or bar opens the same compact Task details: its summary,
+blocker, next responsible, next action, and prerequisites. Full diagnostics
+remain in **Tasks**. Keyboard-operable Task controls and structured tables make
+the Board usable without a pointer. Status filters dim rather than hide Tasks,
+so workflow shape remains visible. Loading, empty, failed, and stale-data states
+explain what happened and offer a next step.
 
-The Board is still available standalone via `workflow-engine run --viz`, where
-it keeps its own mode switch and Table toggle.
+The standalone `workflow-engine run --viz` dashboard remains available
+separately and may use PixiJS; it does not affect the Console Board.
 
 ---
 
@@ -399,7 +401,7 @@ long-form prose capped for readability.
 | **Projects** | switch projects, add a folder, or remove one or more projects from Forge. |
 | **Overview** | run status, progress + counts, blockers, the pipeline next-step card with a **Manual build** checkbox, background-job status, run controls (Run/Resume/Pause/Stop, Replay, build mode), and a **Launch \<harness\> CLI** button. Also the **Re-derive team & skills** panel when authoring is stale, and manifest reconciliation with a confirmed **Reset changed tasks for review**. |
 | **Terminal** | interactive browser session for the selected harness or an existing authoring target, with PTY input/output, resize, stop, and external-terminal fallback. |
-| **Board** | the PixiJS Forge Board in **Kanban** or **Gantt** mode, with status filters and a **Table** view of the same data. |
+| **Board** | the semantic HTML/CSS Board in **Kanban** or **Gantt** mode, with shared Task summaries and details, attention cues, status filters, and per-view scroll positions. |
 | **Tasks** | a focused queue of Human review Tasks, with each Task's criteria, references, blocker, next responsible action, and explicit review control. This is separate from Project brief approval. |
 | **All tasks** | every Task in a filterable/sortable table with a detail drawer, editable per-task timeout, explicit/range selection controls for manual mode, and a **Launch \<harness\> CLI** button. |
 | **Logs** | `docs/engine-run.log` tail + the audit event stream (live via SSE). |
@@ -554,5 +556,7 @@ The console does not replace `forge-launcher`, `forge-launcher engine-run`, or
 - The Forge Board is still available standalone via `workflow-engine run --viz`
   (see [workflow-engine](workflow-engine.md)).
 
-See [ADR-034](adr/034-forge-console-web-ui.md) for the design decisions
-(web-first, tsc-only client, iframe board embed, registry, CSRF guard).
+See [ADR-034](adr/034-forge-console-web-ui.md) for the original web-first,
+tsc-only client, registry, and CSRF-guard decisions. The current semantic Board
+baseline is recorded in [ADR-080](adr/080-semantic-console-board.md); ADR-063
+preserves the earlier iframe-and-table decision.

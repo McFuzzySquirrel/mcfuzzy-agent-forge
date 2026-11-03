@@ -6,20 +6,20 @@ access to Task details.
 
 **Blocked by:** None (can start immediately).
 
-**Status:** in_progress
+**Status:** resolved
 
-- [ ] Kanban foregrounds workflow state; Gantt adds timeline information such
+- [x] Kanban foregrounds workflow state; Gantt adds timeline information such
   as actual and forecast duration and the critical path.
-- [ ] Both views share Task summaries, responsibility, failure and attention
+- [x] Both views share Task summaries, responsibility, failure and attention
   cues, and the next action.
-- [ ] Selecting a card or bar opens the same compact Board details with the
+- [x] Selecting a card or bar opens the same compact Board details with the
   Task summary, blocker, and next action; full diagnostics remain available in
   Tasks.
-- [ ] Task selection and filters survive view switching and refresh, and each
+- [x] Task selection and filters survive view switching and refresh, and each
   view retains its own Board position.
-- [ ] The core Board experience uses semantic HTML/CSS and does not require
+- [x] The core Board experience uses semantic HTML/CSS and does not require
   PixiJS; visual enhancement remains optional.
-- [ ] The Board exposes meaningful empty, loading, failure, and stale-data
+- [x] The Board exposes meaningful empty, loading, failure, and stale-data
   states with an appropriate next action.
-- [ ] Affected Console documentation and visual captures reflect the delivered
+- [x] Affected Console documentation and visual captures reflect the delivered
   Board.

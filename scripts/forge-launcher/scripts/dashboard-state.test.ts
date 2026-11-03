@@ -1,10 +1,37 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { AppStore, Epoch } from "./console/dashboard/state.js";
+import { BoardPreferences, type BoardPreferenceStorage } from "./console/dashboard/views/board-preferences.js";
 import { validateTextUpload } from "./console/dashboard/views/new.js";
 import { AUTHORING_RUNNER_OPTIONS, effectiveRunner, runnerForHarness } from "./console/dashboard/runners.js";
 import { authoringRunnerForHarness, engineHarnessForHarness, harnessCliForHarness, harnessKey } from "./console/dashboard/harness-rules.js";
 import type { AuthoringRunnerName, EngineHarnessName, HarnessCliName, HarnessKey } from "./console/dashboard/harness-rules.js";
+
+test("board view, filters, selection, and independent positions survive reload per project", () => {
+  const values = new Map<string, string>();
+  const storage: BoardPreferenceStorage = {
+    getItem: (key) => values.get(key) ?? null,
+    setItem: (key, value) => { values.set(key, value); },
+  };
+  const first = new BoardPreferences(storage, "/repo/one");
+  first.setMode("gantt");
+  first.setStatuses(["failed", "running"]);
+  first.setSelectedTaskId("build.2");
+  first.setPosition("kanban", { left: 120, top: 40 });
+  first.setPosition("gantt", { left: 360, top: 85 });
+
+  const reloaded = new BoardPreferences(storage, "/repo/one");
+  assert.deepEqual(reloaded.get(), {
+    mode: "gantt",
+    statuses: ["failed", "running"],
+    selectedTaskId: "build.2",
+    positions: {
+      kanban: { left: 120, top: 40 },
+      gantt: { left: 360, top: 85 },
+    },
+  });
+  assert.equal(new BoardPreferences(storage, "/repo/two").get().mode, "kanban");
+});
 
 test("project drafts remain isolated and can be reset independently", () => {
   const store = new AppStore();

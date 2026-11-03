@@ -144,20 +144,20 @@ from any view.
 Once the build starts, switch between the views to follow the work:
 
 - **Board**: the live build, in **Kanban** or **Gantt** mode.
-  - **Kanban** is one band per phase with To Do / In Progress / Done / Failed
-    columns; cards flow left to right as their status changes.
-  - **Gantt** plots the same run against time on its dependencies. Filled bars are
-    measured, outlined hatched bars are forecast; human reviews appear as
-    milestone diamonds; the critical path is highlighted; a "now" line advances
-    continuously.
-  - **Filters** dim tasks by status rather than hiding them, so the shape of the
-    build stays visible.
-  - **Table** renders the same data as a real table — the Board is a canvas, so
-    this is the route for keyboard and screen-reader use.
-  - Hovering a card or bar offers **Open in Tasks**, **Logs** and **Artifacts**, so
-    you can follow a card into the task that produced it.
-  - Failed tasks stay listed at the lower left with a link into Tasks.
-  - The mode and filters are remembered per project.
+  - **Kanban** groups Tasks by phase and workflow status.
+  - **Gantt** plots the same run against time. Filled bars are measured, outlined
+    hatched bars are forecast; Human reviews appear as milestone diamonds, and
+    the engine-computed critical path and current-time marker are shown.
+  - Both views share Task summaries, responsibility, attention cues, selection,
+    status filters, and compact details. Selecting a card or bar opens the same
+    detail view with its blocker and next action; open **All tasks** for full
+    diagnostics.
+  - Status filters dim rather than hide Tasks, keeping the full workflow shape
+    visible. Selection and filters persist per Project, and each view retains
+    its own scroll position across refreshes and view switches.
+  - The Board is semantic HTML/CSS and works without PixiJS. Task controls and
+    the Gantt timeline are keyboard-operable; loading, empty, failed, and stale
+    data states offer a next step.
 - **Tasks**: a focused queue containing only Human review Tasks. Each entry
   shows why it is ready or waiting, its Task-specific criteria and references,
   the blocker, and who acts next. A Human review is separate from Project

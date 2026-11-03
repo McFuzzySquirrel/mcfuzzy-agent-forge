@@ -83,10 +83,10 @@ function detailTargets(): CaptureTarget[] {
       prepare: async (page) => { await setBoardMode(page, "gantt"); },
     },
     {
-      name: "board-table-1440",
+      name: "board-detail-1440",
       route: "board",
       viewport: WIDE,
-      prepare: async (page) => { await openBoardTable(page); },
+      prepare: async (page) => { await openBoardDetails(page); },
     },
     {
       name: "nav-menu-1440",
@@ -107,38 +107,31 @@ async function openNavMenu(page: Awaited<ReturnType<Browser["newPage"]>>, label:
   await new Promise((resolve) => setTimeout(resolve, 150));
 }
 
-/**
- * The board frame's URL carries the view mode and filters (`/board?mode=…`), so
- * matching on `endsWith("/board")` silently stops finding it.
- */
-function boardFrame(page: Awaited<ReturnType<Browser["newPage"]>>) {
-  return page.frames().find((candidate) => /\/board(\?|$)/.test(candidate.url()));
-}
-
 async function waitForBoard(page: Awaited<ReturnType<Browser["newPage"]>>): Promise<void> {
-  const frame = boardFrame(page);
-  if (frame) await frame.waitForSelector("canvas", { timeout: 8000 }).catch(() => {});
-  await new Promise((resolve) => setTimeout(resolve, 1200));
+  await page.waitForSelector(".semantic-board", { timeout: 10000 });
+  await page.waitForFunction(() => {
+    const board = document.querySelector<HTMLElement>(".semantic-board");
+    return board?.getAttribute("aria-busy") === "false";
+  }, { timeout: 15000 });
 }
 
-/** Switches the board to a mode through the Console chrome above the frame. */
+/** Switches the semantic Board mode and waits for the selected tab to update. */
 async function setBoardMode(page: Awaited<ReturnType<Browser["newPage"]>>, mode: "kanban" | "gantt"): Promise<void> {
   await page.evaluate((target) => {
-    document.querySelector(`.board-toolbar [data-mode="${target}"]`)?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+    document.querySelector(`[data-board-mode="${target}"]`)?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
   }, mode);
-  // The chrome reloads the frame for the new mode, so wait for the canvas again.
-  await new Promise((resolve) => setTimeout(resolve, 600));
-  const frame = boardFrame(page);
-  await frame?.waitForSelector("canvas", { timeout: 10000 }).catch(() => {});
-  await frame?.waitForFunction((expected) => document.body.dataset.boardMode === expected, { timeout: 10000 }, mode).catch(() => {});
-  await new Promise((resolve) => setTimeout(resolve, 900));
+  await page.waitForFunction((expected) => document.querySelector(`[data-board-mode="${expected}"]`)?.getAttribute("aria-selected") === "true", { timeout: 10000 }, mode);
+  if (mode === "gantt") {
+    await page.waitForSelector(".board-gantt-table, .board-timeline-unavailable", { timeout: 10000 });
+  }
 }
 
-/** Opens the board's accessible table view from inside the frame. */
-async function openBoardTable(page: Awaited<ReturnType<Browser["newPage"]>>): Promise<void> {
-  const frame = boardFrame(page);
-  await frame?.evaluate(() => document.getElementById("table-toggle")?.click());
-  await new Promise((resolve) => setTimeout(resolve, 700));
+/** Opens the shared compact Task detail from a semantic Kanban card. */
+async function openBoardDetails(page: Awaited<ReturnType<Browser["newPage"]>>): Promise<void> {
+  await setBoardMode(page, "kanban");
+  await page.waitForSelector(".board-kanban-table .board-task-control", { timeout: 10000 });
+  await page.click(".board-kanban-table .board-task-control");
+  await page.waitForSelector(".board-details", { timeout: 10000 });
 }
 
 /** Expands the collapsed Documents section, opens a document in the wide popup, and waits for it to render. */
@@ -169,12 +162,13 @@ async function expandToContent(page: Awaited<ReturnType<Browser["newPage"]>>, vi
   }
 }
 
-export async function captureAll(browser: Browser, baseUrl: string, currentDir: string): Promise<string[]> {
+async function captureTargets(browser: Browser, baseUrl: string, currentDir: string, targets: CaptureTarget[]): Promise<string[]> {
   mkdirSync(currentDir, { recursive: true });
   const written: string[] = [];
-  for (const target of [...routeTargets(), ...detailTargets()]) {
+  for (const target of targets) {
     const page = await openRoute(browser, baseUrl, target.route, target.viewport);
     try {
+      if (target.route === "board") await waitForBoard(page);
       if (target.prepare) await target.prepare(page);
       if (target.route === "board") await waitForBoard(page);
       if (target.fullPage) await expandToContent(page, target.viewport);
@@ -188,6 +182,18 @@ export async function captureAll(browser: Browser, baseUrl: string, currentDir: 
     }
   }
   return written;
+}
+
+export async function captureAll(browser: Browser, baseUrl: string, currentDir: string): Promise<string[]> {
+  return captureTargets(browser, baseUrl, currentDir, [...routeTargets(), ...detailTargets()]);
+}
+
+export async function captureBoard(browser: Browser, baseUrl: string, currentDir: string): Promise<string[]> {
+  const targets = [
+    ...routeTargets().filter((target) => target.route === "board"),
+    ...detailTargets().filter((target) => target.name.startsWith("board-")),
+  ];
+  return captureTargets(browser, baseUrl, currentDir, targets);
 }
 
 /** The walkthrough GIF frames: a short scripted tour. */

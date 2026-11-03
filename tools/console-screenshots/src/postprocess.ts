@@ -8,7 +8,7 @@ export const NUMBERED: Array<{ numbered: string; from: string }> = [
   { numbered: "02-overview", from: "overview-1024" },
   { numbered: "03-board", from: "board-1440" },
   { numbered: "03b-board-gantt", from: "board-gantt-1440" },
-  { numbered: "03c-board-table", from: "board-table-1440" },
+  { numbered: "03c-board-detail", from: "board-detail-1440" },
   { numbered: "04-tasks", from: "tasks-1440" },
   { numbered: "05-tasks-detail", from: "tasks-detail-1440" },
   { numbered: "06-logs", from: "logs-1440" },
@@ -30,15 +30,16 @@ function run(bin: string, args: string[]): void {
   if (result.status !== 0) throw new Error(`${bin} failed (exit ${result.status}): ${result.stderr?.toString().trim() ?? ""}`);
 }
 
-export function writeNumbered(currentDir: string, imagesRoot: string): void {
+export function writeNumbered(currentDir: string, imagesRoot: string, only?: ReadonlySet<string>): void {
   for (const { numbered, from } of NUMBERED) {
+    if (only && !only.has(numbered)) continue;
     copyFileSync(join(currentDir, `${from}.png`), join(imagesRoot, `${numbered}.png`));
   }
 }
 
-export function writeThumbnails(imagesRoot: string, thumbDir: string): void {
+export function writeThumbnails(imagesRoot: string, thumbDir: string, only?: ReadonlySet<string>): void {
   mkdirSync(thumbDir, { recursive: true });
-  for (const { numbered } of NUMBERED) {
+  for (const { numbered } of NUMBERED.filter(({ numbered }) => !only || only.has(numbered))) {
     run("ffmpeg", ["-y", "-loglevel", "error", "-i", join(imagesRoot, `${numbered}.png`), "-vf", "scale=640:-1", join(thumbDir, `${numbered}.png`)]);
   }
 }
