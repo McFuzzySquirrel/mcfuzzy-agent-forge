@@ -42,33 +42,27 @@ The Home page emphasizes one primary action:
 
 The project picker remembers recent repos in your local Forge registry, so you can return to them later without re-adding the folder.
 
-If you are creating a repo from the browser, the wizard collects:
+The New Project path starts with only an **Idea**, a suggested (editable)
+Project name, and an **AI coding tool**. The configured default tool is selected
+when one exists; otherwise choose a tool explicitly. Project visibility,
+description, parent directory, concurrency, existing PRD/research documents,
+and authoring runner/model preferences are available under **Advanced setup**.
+You can leave those details unknown and use the defaults.
 
-- the project **name**,
-- the **description** (optional),
-- the **harness** choice (opencode / github / claude / agents),
-- the **visibility** (private or public),
-- the **parent directory**,
-- the initial **idea**,
-- optionally an **existing PRD** and **research/seed documents** — browse a file
-  picker or type absolute paths (comma-separated for multiple research files).
-Uploaded files must be plain text or Markdown (`.md` or `.txt`) because the
-browser staging path reads text directly. Existing PRDs are copied to
-`docs/PRD.md`; research/seed files are copied to `docs/research/` and inform
-the PRD build,
-- and optional authoring runner/model preferences. Project creation does not
-auto-draft a PRD. After the repository is ready, open Overview and start the
-interactive PRD authoring session.
-- **Concurrency preference** (optional): a stored engine setting carried into
-  `docs/engine-config.json` and later runs. Leave blank to use the engine
-  default or adjust it later from the Settings view.
+Existing PRD and research/seed files are optional source material for
+authoring—not a substitute for the guided sessions. Browse a file picker or
+type absolute paths (comma-separated for multiple research files). Uploaded
+files must be plain text or Markdown (`.md` or `.txt`). PRD source material is
+copied to `docs/requirements-source.md`; research/seed files go to
+`docs/research/`. Both the Idea and Project brief still go through interactive
+authoring.
 
-Once it finishes, the console opens that project's Overview view, where the
-interactive PRD authoring action lives. If creation continues in the background,
-the wizard shows a live status card with a **Select this project** button so you
-can open Overview as soon as the repository is ready. Supplying an existing PRD
-does not start authoring; it imports that document and lets you continue with
-validation and downstream derivation.
+After creation, choose **Open your Project guide** when setup is ready. The guide
+shows two distinct phases: **Explore your Idea** and **Author your Project
+brief**. Each opens the supported interactive session in the Console Terminal;
+the session continues while you move between Console views, and the guide
+returns to the same Project and saved phase. The completed Project brief,
+including its assumptions and open questions, is shown for review.
 
 ---
 
@@ -84,32 +78,34 @@ The Overview is the main control center for a project. It shows:
 - the pipeline status,
 - and the run controls.
 
-When a project is still at an earlier stage, the pipeline card advances the workflow one step at a time. The same actions are available from the terminal launcher, but the console lets you review the generated artifacts before moving on.
+For a new Project, the Overview shows the saved guided authoring phase rather
+than a technical pipeline action. Existing Projects continue to use their
+pipeline actions, and the Console shows generated artifacts before later work
+moves forward.
 
-The PRD and Feature PRD steps use the **interactive** path on the Overview
-pipeline card: the button starts an authoring session with the skill queued, so
-the skill interviews you before drafting. There is no headless PRD alternative.
-Use the **Terminal** view to run the session in the browser, or click **Open in
-external terminal** there to use a desktop terminal. The Console refreshes the
-pipeline after the authored files change. Once a PRD exists, the pipeline card
-also offers **Validate PRD**, which runs the read-only validation.
+For a new Project, follow the **Explore your Idea** and **Author your Project
+brief** phases on the Project guide in order. Both are interactive; neither is
+silently skipped when source documents are supplied. Existing Projects without
+a guided setup use the **interactive** authoring action on Overview. There is
+no headless requirements-authoring alternative. Use the **Terminal** view to
+run a session in the browser, or choose **Open in external terminal** there.
 
-The **Terminal** view supports the selected project harness, PRD/idea/feature
-authoring sessions, keyboard input, and terminal resizing. It runs only a
+The **Terminal** view supports the selected project tool, Idea/Project-brief/
+feature authoring sessions, keyboard input, and terminal resizing. It runs only a
 supported harness CLI—there is no general-purpose shell. One session can run at
 a time. The session keeps running in the background when you navigate to another
 view (the Terminal nav link shows a dot); it ends when you press **Stop**, change
 projects, reload the page, or stop the Console. Use the external-terminal button
 if an in-browser session is unavailable or you prefer a separate window.
 
-Typical progression:
+New Project authoring:
 
-1. **Idea → PRD**: **Author PRD (interactive)** interviews you before writing the PRD and feature documents. If `docs/IDEA.md` exists you can also **Grill the idea first (interactive)** to sharpen it before authoring.
-2. **PRD → team**: generate the agent team and ownership metadata.
-3. **Team → project skills**: generate or review project-specific skills.
-4. **Skills → manifest**: compile `docs/EXECUTION-MANIFEST.json`.
-5. **Manifest → build**: start the build, or stop after compilation for review.
-6. **Paused or incomplete run**: resume the build.
+1. **Explore your Idea**: the Project guide opens `forge-grill-idea` for an interactive exploration.
+2. **Author your Project brief**: the guide opens `forge-build-prd` for interactive authoring; assumptions and open questions remain visible in the resulting brief.
+3. **Review the Project brief**: the completed brief is shown in Overview. This authoring checkpoint does not prepare or start a Build.
+
+The existing pipeline actions remain available for Projects outside the guided
+authoring path. A Build is a separate action from authoring and review.
 
 The console polls for state changes and updates the button label as each stage
 completes. When a detached step finishes or fails, Overview keeps the result

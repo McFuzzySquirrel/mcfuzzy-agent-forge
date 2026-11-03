@@ -309,6 +309,20 @@ h4 { font-size: 12px; text-transform: uppercase; letter-spacing: 0.6px; color: v
   overflow-wrap: anywhere;
 }
 .panel.hint { border-left: 3px solid var(--accent-ink); }
+.guided-authoring-phases { display: grid; gap: 8px; padding-left: 22px; }
+.guided-authoring-phases li > span { display: block; }
+.guided-brief-content {
+  max-height: 34rem;
+  overflow: auto;
+  padding: 14px;
+  border: 1px solid var(--panel-border);
+  border-radius: 6px;
+  background: var(--surface);
+  color: var(--text);
+  font: inherit;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
 .panel.controls-disabled {
   opacity: 0.6;
   border-style: dashed;

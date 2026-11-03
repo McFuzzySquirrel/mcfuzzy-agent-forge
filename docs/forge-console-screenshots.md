@@ -27,6 +27,13 @@ secondary choices.
 
 ![Home - landing page](images/forge-console/current/home-1024.png)
 
+### Starting a Project
+
+The New Project screen asks for an Idea, a suggested editable name, and an AI
+coding tool. Optional technical settings stay collapsed under **Advanced setup**.
+
+![New Project - idea-first setup](images/forge-console/current/new-1024.png)
+
 ## 2. Overview
 
 The dashboard puts project identity, the next pipeline action, and blockers
