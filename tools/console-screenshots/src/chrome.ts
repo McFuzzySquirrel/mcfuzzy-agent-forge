@@ -25,11 +25,13 @@ const BASE_ARGS = [
 export interface LaunchOptions {
   headless?: boolean;
   executablePath?: string;
+  userDataDir?: string;
 }
 
 export async function launchBrowser(options: LaunchOptions = {}): Promise<Browser> {
   return puppeteer.launch({
     executablePath: options.executablePath ?? CHROME_CANDIDATES[0],
+    userDataDir: options.userDataDir,
     headless: options.headless ?? true,
     args: BASE_ARGS,
     defaultViewport: null,

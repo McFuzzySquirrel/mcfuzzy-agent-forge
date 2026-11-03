@@ -30,8 +30,8 @@ still takes priority. If the recorded root is stale, update the selection and
 recompile the manifest; Console will not silently switch to another harness
 root.
 
-It is TypeScript, compiled with `tsc` (no framework or bundler), and embeds the
-existing PixiJS **Forge Board** as one of its views.
+It is TypeScript, compiled with `tsc` (no framework or bundler). The Console
+Board uses semantic HTML/CSS; PixiJS is not required to use it.
 
 ---
 
@@ -316,7 +316,7 @@ Stable task IDs preserve completed work across a recompile. When a task's
 *contract* changed, its record is stale and it must run again. **Reset changed
 tasks for review** lives in the Overview **Manifest** panel, beside the
 reconciliation data it acts on: it lists the changed and new task IDs, each
-linking into **Tasks**, and the reset is behind a confirmation naming every task
+linking into **All tasks**, and the reset is behind a confirmation naming every task
 it will discard. It clears those tasks' status, timings, outputs and artifacts,
 setting them back to pending.
 
@@ -326,33 +326,35 @@ The Overview **Controls** panel points here rather than duplicating the button.
 
 ## The Forge Board
 
-The Board is the engine's PixiJS dashboard, framed inside the Console. It has
-two modes, chosen above the frame and remembered per project.
+The Console Board is a semantic HTML/CSS view over the Project's Task data and
+the workflow engine's tested layout APIs. It does not load a canvas or require
+PixiJS. **Kanban** and **Gantt** are peer views; each Project remembers its
+selection and status filters, and each view remembers its own scroll position.
 
-**Kanban** is the original board: one band per phase, four status columns, task
-cards flowing left to right.
+**Kanban** groups Tasks into phase rows and workflow-status columns. Cards
+foreground the current state while keeping the phase label, Task summary,
+responsibility, attention cue, and next action together.
 
-**Gantt** plots the same run against time on its dependencies:
+**Gantt** uses the same Task summaries, attention cues, selection, and filters,
+and adds timeline information:
 
-- **Filled bars are measured; outlined, hatched bars are forecast.** A forecast
-  is an inference from observed durations, and the tooltip names its source — the
-  task's own attempts, the same agent's other tasks, or a default.
+- **Filled bars are measured; outlined bars are forecast.** Forecasts identify
+  their source: observed attempts, the same agent's Tasks, or a default estimate.
 - **Bars respect the engine's own dispatch rule** (direct dependencies plus every
   task of a depended-on phase) and the configured concurrency, so the forecast
   never promises a sequence the engine will not run.
-- **Phase rollups** span each phase; **human-review tasks** appear as milestone
-  diamonds, since a review is a decision rather than a duration.
+- **Human-review Tasks** appear as milestones rather than durations.
 - **The critical path** is highlighted: the longest chain of remaining work.
-- **A "now" line** advances continuously; the axis follows your local clock.
 
-Filters dim tasks rather than hiding them, so the shape of the build stays
-visible. **Table** renders the same data as a real table for keyboard and
-screen-reader use. Hovering a card or bar offers **Open in Tasks**, **Logs** and
-**Artifacts**, so the board is not a dead end. Failures stay listed in the lower
-left with a link into Tasks, rather than only flashing once.
+Selecting a card or bar opens the same compact Task details: its summary,
+blocker, next responsible, next action, and prerequisites. Full diagnostics
+remain in **Tasks**. Keyboard-operable Task controls and structured tables make
+the Board usable without a pointer. Status filters dim rather than hide Tasks,
+so workflow shape remains visible. Loading, empty, failed, and stale-data states
+explain what happened and offer a next step.
 
-The Board is still available standalone via `workflow-engine run --viz`, where
-it keeps its own mode switch and Table toggle.
+The standalone `workflow-engine run --viz` dashboard remains available
+separately and may use PixiJS; it does not affect the Console Board.
 
 ---
 
@@ -379,7 +381,7 @@ alongside the other project documents.
 
 ## Launching the harness CLI
 
-A **Launch \<harness\> CLI** button on the **Tasks** view header and the
+A **Launch \<harness\> CLI** button on the **All tasks** view header and the
 **Overview** header opens the project's harness CLI in a new terminal window,
 working from the project folder — so you can watch the live run and take over
 at any point. The **Terminal** view also offers the same harness session in the
@@ -392,7 +394,7 @@ the exact command to run manually.
 
 ## Views
 
-The views are grouped under top categories (**Start / Pipeline / Monitor /
+The views are grouped under top categories (**Start / Tasks / Pipeline / Monitor /
 Review / Settings**); hovering a category opens its list, and selecting it pins
 the list open (for touch). A persistent project context bar below the menu shows
 the current project name, harness, Live/Idle state, a project switcher, and the
@@ -405,8 +407,9 @@ long-form prose capped for readability.
 | **Projects** | switch projects, add a folder, or remove one or more projects from Forge. |
 | **Overview** | run status, progress + counts, blockers, the pipeline next-step card with a **Manual build** checkbox, background-job status, run controls (Run/Resume/Pause/Stop, Replay, build mode), and a **Launch \<harness\> CLI** button. Also the **Re-derive team & skills** panel when authoring is stale, and manifest reconciliation with a confirmed **Reset changed tasks for review**. |
 | **Terminal** | interactive browser session for the selected harness or an existing authoring target, with PTY input/output, resize, stop, and external-terminal fallback. |
-| **Board** | the PixiJS Forge Board in **Kanban** or **Gantt** mode, with status filters and a **Table** view of the same data. |
-| **Tasks** | every task in a filterable/sortable table with a detail drawer, editable per-task timeout, explicit/range selection controls for manual mode, and a **Launch \<harness\> CLI** button. |
+| **Board** | the semantic HTML/CSS Board in **Kanban** or **Gantt** mode, with shared Task summaries and details, attention cues, status filters, and per-view scroll positions. |
+| **Tasks** | a focused queue of Human review Tasks, with each Task's criteria, references, blocker, next responsible action, and explicit review control. This is separate from Project brief approval. |
+| **All tasks** | every Task in a filterable/sortable table with a detail drawer, editable per-task timeout, explicit/range selection controls for manual mode, and a **Launch \<harness\> CLI** button. |
 | **Logs** | `docs/engine-run.log` tail + the audit event stream (live via SSE). |
 | **Plan & Team** | authoring stage cards — always actionable, each stating why it is stale — plus the re-derivation footer, the project documents (IDEA, PRD, features, progress, model plan) as a table that opens a document in a wide popup, and agents and skills in collapsible card sections. Requirement and task blocks render as tables. |
 | **Artifacts** | the structured outputs tasks produced (`docs/artifacts/`), browsable by type/task with previews. |
@@ -416,10 +419,14 @@ long-form prose capped for readability.
 A **Help** button (in the context bar) explains the UI, the pipeline, each view,
 and key terms.
 
-For human-review tasks, **Complete human review** lists unverified checks from
-all upstream task and prerequisite-phase dependencies, including transitive
-ones. Exercise the required journey and applicable live checks before approving,
-and record what you checked and found in at least 40 characters after trimming.
+The focused **Tasks** queue distinguishes reviews that are ready, waiting on
+prerequisites, or already recorded. Each entry keeps its Task-bound criteria,
+references, blocker, and next responsible action visible. Review findings and
+explicit approval are required; an agent or unattended flag cannot approve a
+Human review. **Complete human review** lists unverified checks from all
+upstream task and prerequisite-phase dependencies, including transitive ones.
+Exercise the required journey and applicable live checks before approving, and
+record what you checked and found in at least 40 characters after trimming.
 These reported gaps are advisory, not proof of validation; see the
 [human-review walkthrough](forge-console-user-guide.md#human-review-when-it-pauses-and-how-to-prove-approval).
 
@@ -454,7 +461,7 @@ run should behave:
 
 - **Auto** - the engine runs the full ready workflow.
 - **Manual** - the engine runs only the selected task set saved from the
-  **Tasks** view. The primary button text changes to **Run selected** /
+  **All tasks** view. The primary button text changes to **Run selected** /
   **Resume selected**.
 
 Manual selections are stored in `docs/engine-config.json` with the run mode, the
@@ -485,9 +492,9 @@ and [ADR-052](adr/052-harness-invocation-activity-logging.md)).
 The Console can edit timeouts without leaving the browser, so a task that
 outruns its budget (a slow build or test) can be retried with a larger one:
 
-- **Per task** - open a task's detail drawer in **Tasks** (or use the task picker
+- **Per task** - open a task's detail drawer in **All tasks** (or use the task picker
   in **Settings → Execution**) and set its timeout, then **Replay** it.
-- **All tasks** - the Tasks view header and **Settings → Execution** both have a
+- **All tasks** - the All tasks view header and **Settings → Execution** both have a
   "set all" control that gives every task the same timeout.
 
 Storage and precedence (same as the CLI):
@@ -510,7 +517,7 @@ audit events. OpenCode usage is read from `opencode session export` for the
 task's session; Claude from its JSON result envelope; Copilot from its stderr
 stats block (tokens and AI credits). A harness that reports nothing is recorded
 as `unavailable`, not zero. The Overview shows run totals (tokens, cost, credits)
-and the Tasks view shows a Tokens column plus a per-task breakdown in the detail
+and **All tasks** shows a Tokens column plus a per-task breakdown in the detail
 drawer. See [ADR-074](adr/074-token-and-cost-usage-capture.md).
 
 ### Background job tracking
@@ -555,5 +562,7 @@ The console does not replace `forge-launcher`, `forge-launcher engine-run`, or
 - The Forge Board is still available standalone via `workflow-engine run --viz`
   (see [workflow-engine](workflow-engine.md)).
 
-See [ADR-034](adr/034-forge-console-web-ui.md) for the design decisions
-(web-first, tsc-only client, iframe board embed, registry, CSRF guard).
+See [ADR-034](adr/034-forge-console-web-ui.md) for the original web-first,
+tsc-only client, registry, and CSRF-guard decisions. The current semantic Board
+baseline is recorded in [ADR-080](adr/080-semantic-console-board.md); ADR-063
+preserves the earlier iframe-and-table decision.

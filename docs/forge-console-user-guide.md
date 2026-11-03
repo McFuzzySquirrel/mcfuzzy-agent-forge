@@ -140,24 +140,29 @@ from any view.
 Once the build starts, switch between the views to follow the work:
 
 - **Board**: the live build, in **Kanban** or **Gantt** mode.
-  - **Kanban** is one band per phase with To Do / In Progress / Done / Failed
-    columns; cards flow left to right as their status changes.
-  - **Gantt** plots the same run against time on its dependencies. Filled bars are
-    measured, outlined hatched bars are forecast; human reviews appear as
-    milestone diamonds; the critical path is highlighted; a "now" line advances
-    continuously.
-  - **Filters** dim tasks by status rather than hiding them, so the shape of the
-    build stays visible.
-  - **Table** renders the same data as a real table — the Board is a canvas, so
-    this is the route for keyboard and screen-reader use.
-  - Hovering a card or bar offers **Open in Tasks**, **Logs** and **Artifacts**, so
-    you can follow a card into the task that produced it.
-  - Failed tasks stay listed at the lower left with a link into Tasks.
-  - The mode and filters are remembered per project.
-- **Tasks**: a sortable, filterable task table with a detail drawer for each task.
-  The **Tokens** column and the detail drawer show the harness-reported token and
-  cost usage (or an explicit "not reported"); the Overview run stats show the run
-  totals.
+  - **Kanban** groups Tasks by phase and workflow status.
+  - **Gantt** plots the same run against time. Filled bars are measured, outlined
+    hatched bars are forecast; Human reviews appear as milestone diamonds, and
+    the engine-computed critical path and current-time marker are shown.
+  - Both views share Task summaries, responsibility, attention cues, selection,
+    status filters, and compact details. Selecting a card or bar opens the same
+    detail view with its blocker and next action; open **All tasks** for full
+    diagnostics.
+  - Status filters dim rather than hide Tasks, keeping the full workflow shape
+    visible. Selection and filters persist per Project, and each view retains
+    its own scroll position across refreshes and view switches.
+  - The Board is semantic HTML/CSS and works without PixiJS. Task controls and
+    the Gantt timeline are keyboard-operable; loading, empty, failed, and stale
+    data states offer a next step.
+- **Tasks**: a focused queue containing only Human review Tasks. Each entry
+  shows why it is ready or waiting, its Task-specific criteria and references,
+  the blocker, and who acts next. A Human review is separate from Project
+  brief approval and requires a person's findings and explicit Task-bound
+  approval; agent or unattended flags cannot approve it.
+- **All tasks**: the sortable, filterable technical Task table with a detail
+  drawer. The **Tokens** column and drawer show harness-reported token and
+  cost usage (or an explicit "not reported"); the Overview run stats show the
+  run totals.
 - **Logs**: the engine and authoring log tail plus the live audit event stream.
 - **Plan & Team**: the project documents as a table (kind, title, path, status)
   and the generated agent/skill files. Selecting a document opens it in a wide
@@ -200,7 +205,7 @@ The Overview controls panel offers the same actions you would otherwise issue fr
   workflow, or **manual** to run only the saved task selection from the Tasks
   view. Manual mode requires at least one selected task.
 - **Reset changed tasks for review**: after feature reconciliation, resets completed or skipped tasks whose contracts changed back to pending. Review the changed task IDs before using this action.
-- **Launch \<harness\> CLI**: opens the project's harness CLI (opencode/copilot/claude) in a new terminal from the project folder, so you can watch the live run and take over manually. Also available on the Tasks header. The **Terminal** view provides an in-browser session as well.
+- **Launch \<harness\> CLI**: opens the project's harness CLI (opencode/copilot/claude) in a new terminal from the project folder, so you can watch the live run and take over manually. Also available on the **All tasks** header. The **Terminal** view provides an in-browser session as well.
 
 Execution preferences — **auto-commit after each task**, **log harness
 activity**, **concurrency**, and **task timeouts** — are set in the
@@ -227,11 +232,11 @@ such a task; `--yes` cannot approve it.
 
 #### Approve from the Console
 
-1. Open **Tasks** and select the task. It reads **Human review required** only
-   once its prerequisites are complete; before that it reads **Human review
-   blocked** and lists the tasks it is waiting on, with no approval action. A
-   review attests to delivered work, so the form cannot be submitted early - the
-   API and the `approve-task` command both refuse it and name the prerequisites.
+1. Open the focused **Tasks** queue and find the review. It reads **Ready for
+   human review** only once its prerequisites are complete; otherwise it shows
+   the blocker and who is responsible for clearing it, with no approval action.
+   The Task remains visible after approval with its evidence location. The
+   technical **All tasks** table remains available for full diagnostics.
 2. Read its ordered, task-specific procedure in the description, plus its
    requirements, acceptance criteria, constraints, and references. The task
    author should supply the steps and pass/fail checks; reviewers should not have
@@ -419,7 +424,7 @@ model plan or agent overrides explicitly.
 For a targeted run before the first build starts, enable the **Manual build**
 checkbox in the Overview pipeline card and click **Create manifest**. The
 manifest is created without starting the engine. Then use the checkboxes or
-range picker in **Tasks**, click **Save selection**, switch the Overview
+range picker in **All tasks**, click **Save selection**, switch the Overview
 **Controls** panel to **manual**, and click **Run selected**. The engine expands
 selected tasks to include unmet dependencies while leaving unselected tasks
 untouched.
@@ -437,10 +442,10 @@ manifest.
 The Manifest panel shows preserved, new, changed, and removed task IDs. Stable
 task IDs preserve completed work. Review changed contracts, use **Reset changed
 tasks for review** when those tasks need to run again, and select new pending
-tasks in **Tasks** before a targeted run.
+tasks in **All tasks** before a targeted run.
 
 **Reset changed tasks for review** sits in the Manifest panel, next to the
-reconciliation it acts on, and lists each changed task with a link into **Tasks**.
+reconciliation it acts on, and lists each changed task with a link into **All tasks**.
 The reset is behind a confirmation naming every task it will discard, because it
 clears their recorded outputs, artifacts and timings so they run again.
 
@@ -486,11 +491,11 @@ Authoring** (where the model selectors now live) rather than on these cards.
 
 The console can edit task timeouts without leaving the UI:
 
-- open a task in the **Tasks** view,
+- open a task in the **All tasks** view,
 - change the timeout value (entered in minutes, decimals allowed),
 - and replay the task.
 
-You can also set the same timeout for every task at once from the Tasks header or the Settings view (Execution section). These values are stored in the manifest and engine config files so the run can be retried with a larger budget. Completed tasks show their timeout read-only; failed, pending, and running tasks stay editable.
+You can also set the same timeout for every task at once from the **All tasks** header or the Settings view (Execution section). These values are stored in the manifest and engine config files so the run can be retried with a larger budget. Completed tasks show their timeout read-only; failed, pending, and running tasks stay editable.
 
 ---
 
@@ -529,7 +534,7 @@ bootstrap it again.
 - If the page does not open, check the terminal output for the local URL and try opening it manually.
 - If a build does not advance, confirm the current stage in Overview and look for blockers in the Logs view.
 - If a task keeps failing, bump its timeout and replay it.
-- If **Run selected** is disabled, switch to **Tasks**, select one or more
+- If **Run selected** is disabled, switch to **All tasks**, select one or more
   tasks, and click **Save selection**.
 - If a feature increment reports changed tasks, review the reconciliation in
   Manifest before running; reset changed tasks only when they should execute

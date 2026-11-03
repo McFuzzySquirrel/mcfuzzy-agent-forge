@@ -10,7 +10,7 @@ import { startConsoleServer } from "./console/server.ts";
 import { RunController, type SpawnOptions } from "./console/control.ts";
 import { inferEngineHarness, repoPaths } from "./console/paths.ts";
 import { actions, setModelOverride, summary, tasks } from "./console/repo.ts";
-import { humanReviewGate } from "./console/dashboard/views/tasks.ts";
+import { humanReviewGate, humanReviewQueueEntries } from "./console/dashboard/views/tasks.ts";
 import type { TaskRow } from "./console/types.ts";
 import { resolveResources } from "./resources.ts";
 import { currentJobForRepo } from "./console/jobs.ts";
@@ -107,6 +107,10 @@ test("human-review Console action records evidence and rejects non-review tasks"
   assert.equal((await post({ taskId: implementation.id, reviewer: "Reviewer", notes: "Approved" })).status, 400);
   implementation.contract = { ...implementation.contract, kind: "human-review", reviewFile: "docs/reviews/review.json" };
   fs.writeFileSync(manifestPath, `${JSON.stringify(manifest, null, 2)}\n`);
+  const unattended = await post({ taskId: implementation.id, agentApproval: true, unattended: true, approve: true, resume: false });
+  assert.equal(unattended.status, 400);
+  assert.match((await unattended.json()).message, /taskId, reviewer, and review notes are required/);
+  assert.equal(fs.existsSync(path.join(root, "docs", "reviews", "review.json")), false);
   const tooShort = await post({ taskId: implementation.id, reviewer: "Reviewer", notes: "Done", resume: false });
   assert.equal(tooShort.status, 400);
   assert.match((await tooShort.json()).message, /at least 40 characters/);
@@ -174,6 +178,30 @@ test("human-review rows withhold the approval action until their prerequisites a
     { state: "complete" },
     "a finished review keeps its completed state even if the state file lists late prerequisites",
   );
+
+  const queue = humanReviewQueueEntries([
+    ...tasks(repoPaths(root)),
+    blocked,
+    ready,
+    done,
+  ]);
+  assert.deepEqual(queue.map(({ task, state }) => [task.id, state]), [
+    ["REVIEW-1", "ready"],
+    ["REVIEW-1", "waiting"],
+    ["REVIEW-1", "ready"],
+    ["REVIEW-1", "complete"],
+  ]);
+  assert.equal(queue[1]!.blocker, "Prerequisite task API-1 is not complete.");
+  assert.equal(queue[1]!.nextResponsible, "Prerequisite task owners");
+  assert.equal(queue[2]!.blocker, "None — prerequisites are complete.");
+  assert.equal(queue[2]!.nextResponsible, "Human reviewer");
+  assert.equal(queue[3]!.blocker, "None — Task approval is recorded.");
+  assert.equal(queue[3]!.nextResponsible, "No action required");
+  const phaseQueueEntry = humanReviewQueueEntries([
+    { ...blocked, unmetPrerequisites: ["phase:P1"] },
+  ])[0]!;
+  assert.equal(phaseQueueEntry.blocker, "Phase completion gate P1 is not complete.");
+  assert.equal(phaseQueueEntry.nextResponsible, "Owners of prerequisite phases");
 });
 
 test("the approval API refuses a review whose prerequisites are unmet", async (t) => {
