@@ -6,7 +6,7 @@ The Project workspace and authoring progress remain resumable.
 
 **Blocked by:** None (can start immediately).
 
-**Status:** ready-for-agent
+**Status:** in_progress
 
 - [ ] Starting from the primary Home action creates a resumable Project
   workspace without requiring technical setup first.

@@ -6,7 +6,7 @@ provenance.
 
 **Blocked by:** None (can start immediately).
 
-**Status:** ready-for-agent
+**Status:** in_progress
 
 - [ ] The Project files destination foregrounds useful Project documents and
   deliverables in language that makes their purpose clear.

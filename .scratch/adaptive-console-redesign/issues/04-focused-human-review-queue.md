@@ -5,7 +5,7 @@ need human judgment without navigating the full technical Task table.
 
 **Blocked by:** None (can start immediately).
 
-**Status:** ready-for-agent
+**Status:** in_progress
 
 - [ ] The Basic Tasks destination focuses on Human review items and explains
   why each review is ready or waiting.

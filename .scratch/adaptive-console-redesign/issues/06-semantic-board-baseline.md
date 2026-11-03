@@ -6,7 +6,7 @@ access to Task details.
 
 **Blocked by:** None (can start immediately).
 
-**Status:** ready-for-agent
+**Status:** in_progress
 
 - [ ] Kanban foregrounds workflow state; Gantt adds timeline information such
   as actual and forecast duration and the critical path.
