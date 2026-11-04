@@ -14,6 +14,7 @@ const STATUSES: Array<{ value: BoardStatusFilter; label: string }> = [
 ];
 const MODES: Array<[BoardMode, string]> = [["kanban", "Kanban"], ["gantt", "Gantt"]];
 const STALE_AFTER_MS = 5 * 60 * 1000;
+const STATUS_CHANGE_ANIMATION_MS = 700;
 
 let container: HTMLElement | null = null;
 let boardShell: HTMLElement | null = null;
@@ -41,6 +42,8 @@ let unsubscribe: (() => void) | null = null;
 let focusAfterRender: string | null = null;
 let returnFocusKey: string | null = null;
 let staleNoticeActive = false;
+let statusChangeTimer: number | undefined;
+const statusChangeTimes = new Map<string, number>();
 
 function currentProject(): string {
   return store.projectKey();
@@ -141,11 +144,29 @@ function taskStatusLabel(task: BoardTaskSummary): string {
   return STATUSES.find((status) => status.value === task.status)?.label ?? task.status;
 }
 
+function taskStatusBadge(task: BoardTaskSummary): HTMLElement {
+  const badge = statusBadge(taskStatusLabel(task));
+  badge.classList.add(`board-task-badge-${task.attention ?? task.status}`);
+  return badge;
+}
+
+function applyStatusChangeAnimation(element: HTMLElement, taskId: string): void {
+  const changedAt = statusChangeTimes.get(taskId);
+  if (changedAt === undefined) return;
+  const elapsed = Date.now() - changedAt;
+  if (elapsed >= STATUS_CHANGE_ANIMATION_MS) {
+    statusChangeTimes.delete(taskId);
+    return;
+  }
+  element.classList.add("board-task-status-changed");
+}
+
 function taskControl(task: BoardTaskSummary, selectedId: string | null, statuses: readonly BoardStatusFilter[], focusKey = taskFocusKey(task.id)): HTMLElement {
   const control = el("button", {
     type: "button",
     className: [
       "board-task-control",
+      `board-task-status-${task.status}`,
       task.attention ? `board-task-attention-${task.attention}` : "",
       shouldDimBoardTask(task, statuses) ? "board-task-dimmed" : "",
     ].filter(Boolean).join(" "),
@@ -154,10 +175,11 @@ function taskControl(task: BoardTaskSummary, selectedId: string | null, statuses
     "aria-pressed": task.id === selectedId ? "true" : "false",
   }, [
     el("span", { className: "board-task-heading" }, [
-      statusBadge(taskStatusLabel(task)),
+      taskStatusBadge(task),
     ]),
     el("strong", { className: "board-task-title" }, task.title),
   ]);
+  applyStatusChangeAnimation(control, task.id);
   return control;
 }
 
@@ -298,6 +320,8 @@ function renderGanttBar(
     className: [
       "board-gantt-bar",
       bar.kind === "planned" ? "is-forecast" : "is-actual",
+      `board-task-status-${task.status}`,
+      task.attention ? `board-task-attention-${task.attention}` : "",
       bar.critical ? "is-critical" : "",
       bar.milestone ? "is-milestone" : "",
     ].filter(Boolean).join(" "),
@@ -308,6 +332,7 @@ function renderGanttBar(
   });
   button.style.left = `${left}%`;
   button.style.width = `${width}%`;
+  applyStatusChangeAnimation(button, task.id);
   track.appendChild(button);
   return track;
 }
@@ -422,7 +447,7 @@ function renderDetails(task: BoardTaskSummary): HTMLElement {
         "aria-label": "Close Task details",
       }, "Close"),
     ]),
-    statusBadge(taskStatusLabel(task)),
+    taskStatusBadge(task),
     el("h3", null, task.title),
     el("p", { className: "board-details-summary" }, task.summary),
     task.attentionCue ? el("p", { className: `board-details-cue board-details-cue-${task.attention}` }, task.attentionCue) : null,
@@ -561,6 +586,24 @@ function renderBoardUi(): void {
   }
 
   boardShell?.replaceChildren(root);
+  if (!window.matchMedia("(prefers-reduced-motion: reduce)").matches) {
+    const now = Date.now();
+    for (const element of boardShell?.querySelectorAll<HTMLElement>(".board-task-status-changed") ?? []) {
+      const taskId = element.dataset.boardTaskId;
+      const changedAt = taskId ? statusChangeTimes.get(taskId) : undefined;
+      if (!taskId || changedAt === undefined) continue;
+      const elapsed = now - changedAt;
+      if (elapsed >= STATUS_CHANGE_ANIMATION_MS) {
+        statusChangeTimes.delete(taskId);
+        element.classList.remove("board-task-status-changed");
+        continue;
+      }
+      element.animate([
+        { boxShadow: "0 0 0 3px color-mix(in srgb, var(--board-status-color, var(--blue)) 42%, transparent)" },
+        { boxShadow: "0 0 0 0 transparent" },
+      ], { duration: STATUS_CHANGE_ANIMATION_MS, delay: -elapsed, easing: "ease-out" });
+    }
+  }
   if (restorePosition && scrollHost) {
     scrollHost.scrollTop = restorePosition.top;
     if (horizontalScrollHost) horizontalScrollHost.scrollLeft = restorePosition.left;
@@ -595,6 +638,29 @@ async function refreshBoard(): Promise<void> {
   try {
     const taskSummaries = summarizeBoardTasks(await api.tasks());
     if (tasksLoaded) {
+      const previousBoardState = new Map(tasks.map((task) => [task.id, {
+        status: task.status,
+        attention: task.attention,
+      }]));
+      const changedTaskIds = taskSummaries.filter((task) => {
+        const previous = previousBoardState.get(task.id);
+        return previous !== undefined && (previous.status !== task.status || previous.attention !== task.attention);
+      }).map((task) => task.id);
+      if (changedTaskIds.length > 0) {
+        const changedAt = Date.now();
+        for (const taskId of changedTaskIds) statusChangeTimes.set(taskId, changedAt);
+        if (statusChangeTimer !== undefined) window.clearTimeout(statusChangeTimer);
+        statusChangeTimer = window.setTimeout(() => {
+          statusChangeTimer = undefined;
+          const now = Date.now();
+          for (const [taskId, startedAt] of statusChangeTimes) {
+            if (now - startedAt >= STATUS_CHANGE_ANIMATION_MS) statusChangeTimes.delete(taskId);
+          }
+          for (const element of boardShell?.querySelectorAll<HTMLElement>(".board-task-status-changed") ?? []) {
+            element.classList.remove("board-task-status-changed");
+          }
+        }, STATUS_CHANGE_ANIMATION_MS);
+      }
       const changeAnnouncement = boardTaskChangeAnnouncement(tasks, taskSummaries);
       if (changeAnnouncement) announce(changeAnnouncement);
     }
@@ -699,6 +765,9 @@ function handleKeyDown(event: KeyboardEvent): void {
 export function unmountBoard(): void {
   if (refreshTimer !== undefined) window.clearTimeout(refreshTimer);
   refreshTimer = undefined;
+  if (statusChangeTimer !== undefined) window.clearTimeout(statusChangeTimer);
+  statusChangeTimer = undefined;
+  statusChangeTimes.clear();
   if (resizeRestoreFrame !== undefined) window.cancelAnimationFrame(resizeRestoreFrame);
   if (resizeReleaseFrame !== undefined) window.cancelAnimationFrame(resizeReleaseFrame);
   resizeRestoreFrame = undefined;

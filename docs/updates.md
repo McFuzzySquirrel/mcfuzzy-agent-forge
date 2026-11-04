@@ -4,6 +4,19 @@ Detailed release and change notes for MyForge.
 
 ---
 
+## November 2026 - v3.126
+
+### Explain ownership warnings and improve Board status feedback
+
+- Build status now explains duplicate file ownership warnings, points to the
+  responsibility matrix and source Feature task contracts, and gives the
+  re-derive action.
+- Board cards, badges, and Gantt bars color-code workflow and attention states.
+  A subtle pulse marks real status or attention changes only and is disabled
+  for reduced motion.
+
+---
+
 ## November 2026 - v3.125
 
 ### Keep Board task cards concise

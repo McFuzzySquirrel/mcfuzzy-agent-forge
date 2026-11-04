@@ -778,13 +778,23 @@ body[data-view="board"] #view { max-width: none; padding: 12px clamp(12px, 2vw, 
 .board-kanban-phase strong, .board-kanban-phase span { display: block; overflow-wrap: anywhere; }
 .board-kanban-cell { min-width: 225px; border-radius: 8px; background: var(--surface-deep); }
 .board-empty-cell { display: block; padding: 6px; color: var(--text-dim); text-align: center; }
-.board-task-control { display: grid; gap: 6px; width: 100%; padding: 10px; border: 1px solid var(--panel-border-soft); border-radius: 8px; background: var(--surface); color: var(--text); text-align: left; cursor: pointer; font: inherit; }
-.board-task-control:hover, .board-task-control[aria-pressed="true"] { border-color: var(--accent-ink); background: var(--active); }
+.board-task-status-pending { --board-status-color: var(--text-dim); }
+.board-task-status-running { --board-status-color: var(--blue); }
+.board-task-status-complete { --board-status-color: var(--green); }
+.board-task-status-failed { --board-status-color: var(--red); }
+.board-task-status-skipped { --board-status-color: var(--accent-ink); }
+.board-task-attention-blocked { --board-status-color: var(--accent-ink); }
+.board-task-attention-human-review { --board-status-color: var(--blue); }
+.board-task-control { display: grid; gap: 6px; width: 100%; padding: 10px; border: 1px solid var(--panel-border-soft); border-left: 3px solid var(--board-status-color, var(--panel-border-soft)); border-radius: 8px; background: var(--surface); color: var(--text); text-align: left; cursor: pointer; font: inherit; }
+.board-task-control:hover, .board-task-control[aria-pressed="true"] { border-color: var(--accent-ink); border-left-color: var(--board-status-color, var(--accent-ink)); background: var(--active); }
+.board-task-badge-pending { background: color-mix(in srgb, var(--text-dim) 18%, transparent); color: var(--text-dim); }
+.board-task-badge-running, .board-task-badge-human-review { background: color-mix(in srgb, var(--blue) 16%, transparent); color: var(--blue); }
+.board-task-badge-complete { background: color-mix(in srgb, var(--green) 16%, transparent); color: var(--green); }
+.board-task-badge-failed { background: color-mix(in srgb, var(--red) 18%, transparent); color: var(--red); }
+.board-task-badge-skipped, .board-task-badge-blocked { background: color-mix(in srgb, var(--accent-ink) 16%, transparent); color: var(--accent-ink); }
 .board-task-heading { flex-wrap: wrap; }
 .board-task-title { overflow-wrap: anywhere; }
 .board-attention-label, .board-critical-tag { padding: 2px 6px; border-radius: 999px; background: var(--surface-deep); color: var(--text-soft); font-size: 10px; white-space: nowrap; }
-.board-task-attention-failed { border-left: 3px solid var(--red); }
-.board-task-attention-blocked, .board-task-attention-human-review { border-left: 3px solid var(--accent-ink); }
 .board-task-dimmed { opacity: .46; }
 .board-gantt-table { width: 100%; min-width: 1260px; border-collapse: separate; border-spacing: 0; table-layout: fixed; }
 .board-gantt-table th, .board-gantt-table td { padding: 8px; border-bottom: 1px solid var(--panel-border-soft); text-align: left; vertical-align: middle; }
@@ -804,10 +814,10 @@ body[data-view="board"] #view { max-width: none; padding: 12px clamp(12px, 2vw, 
 .board-gantt-tick::before { position: absolute; bottom: 15px; left: 50%; height: 9px; border-left: 1px solid var(--panel-border); content: ""; }
 .board-gantt-tick.day-boundary::before { height: 14px; border-color: var(--accent-ink); }
 .board-gantt-track { height: 28px; border-radius: 4px; background: repeating-linear-gradient(90deg, transparent 0, transparent calc(20% - 1px), var(--panel-border-soft) calc(20% - 1px), var(--panel-border-soft) 20%); }
-.board-gantt-bar { position: absolute; top: 5px; min-width: 3px; height: 18px; padding: 0; border: 1px solid var(--blue); border-radius: 5px; background: color-mix(in srgb, var(--blue) 68%, transparent); cursor: pointer; }
-.board-gantt-bar.is-forecast { border-style: dashed; background: color-mix(in srgb, var(--blue) 12%, transparent); }
+.board-gantt-bar { position: absolute; top: 5px; min-width: 3px; height: 18px; padding: 0; border: 1px solid var(--board-status-color, var(--blue)); border-radius: 5px; background: color-mix(in srgb, var(--board-status-color, var(--blue)) 68%, transparent); cursor: pointer; }
+.board-gantt-bar.is-forecast { border-style: dashed; background: color-mix(in srgb, var(--board-status-color, var(--blue)) 12%, transparent); }
 .board-gantt-bar.is-critical { border-color: var(--accent-ink); box-shadow: inset 0 0 0 1px var(--accent-ink); }
-.board-gantt-bar.is-milestone { top: 8px; width: 12px !important; height: 12px; min-width: 12px; border-color: var(--accent-ink); border-radius: 1px; background: var(--accent-ink); transform: rotate(45deg); }
+.board-gantt-bar.is-milestone { top: 8px; width: 12px !important; height: 12px; min-width: 12px; border-color: var(--board-status-color, var(--accent-ink)); border-radius: 1px; background: var(--board-status-color, var(--accent-ink)); transform: rotate(45deg); }
 .board-critical-summary { margin: 10px; color: var(--text-soft); font-size: 12px; }
 .board-critical-tag { border: 1px solid var(--accent-ink); }
 .board-timeline-unavailable, .board-message { display: grid; gap: 8px; padding: 18px; border: 1px solid var(--panel-border); border-radius: var(--radius); background: var(--panel-bg); }
@@ -826,6 +836,7 @@ body[data-view="board"] #view { max-width: none; padding: 12px clamp(12px, 2vw, 
 .board-details-summary { margin: 0; color: var(--text-soft); font-size: 13px; }
 .board-details-cue { margin: 0; padding: 8px; border-left: 3px solid var(--accent-ink); background: var(--surface); font-size: 12px; }
 .board-details-cue-failed { border-color: var(--red); }
+.board-details-cue-human-review { border-color: var(--blue); }
 .board-details dl { display: grid; grid-template-columns: minmax(88px, .7fr) minmax(0, 1.3fr); gap: 8px 10px; margin: 0; font-size: 12px; }
 .board-details dt { color: var(--text-dim); }
 .board-details dd { margin: 0; overflow-wrap: anywhere; }

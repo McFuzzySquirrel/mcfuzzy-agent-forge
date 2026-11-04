@@ -25,8 +25,10 @@ Projects view. No authoring or workflow process is launched by these captures.
 > 721–1050px, and a labeled **Menu** drawer at 720px or below. The drawer stays
 > below the Project context bar.
 >
-> The Board captures show the semantic HTML/CSS baseline. Board-only capture
-> refreshes Board images and thumbnails without rebuilding the walkthrough GIF.
+> The Board captures show the semantic HTML/CSS baseline, including workflow
+> and attention colors. Status-change pulses are transient, so static images do
+> not depict the animation. Board-only capture refreshes Board images and
+> thumbnails without rebuilding the walkthrough GIF.
 
 ---
 
@@ -86,13 +88,14 @@ focus into details and Close restores it.
 
 **Kanban** — Tasks grouped by phase and workflow status. Cards show only status
 and title; select a card to see its summary, responsibility, and
-attention/next-action details.
+attention/next-action details. Status colors distinguish pending, running,
+complete, failed, blocked, skipped, and Human review Tasks.
 
 ![Board - kanban](images/forge-console/03-board.png)
 
 **Gantt** — concise Task labels against time. Actual and forecast durations
 are distinguished, Human review Tasks are milestones, and the critical path is
-highlighted.
+highlighted. Bar colors match the workflow status and attention cues.
 
 ![Board - gantt](images/forge-console/03b-board-gantt.png)
 

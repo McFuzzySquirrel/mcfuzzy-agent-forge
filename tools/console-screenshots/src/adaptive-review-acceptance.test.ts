@@ -754,3 +754,284 @@ test("Board task controls stay concise until selected", async () => {
     else process.env.FORGE_HOME = previousHome;
   }
 });
+
+test("duplicate file ownership warnings explain how to resolve them", async () => {
+  const fixture = await createFixture("team-validation-guidance");
+  const previousHome = process.env.FORGE_HOME;
+  const manifestPath = join(fixture.repoRoot, "docs", "EXECUTION-MANIFEST.json");
+  let server: ConsoleServer | undefined;
+  let browser: Browser | undefined;
+  let page: Page | undefined;
+  try {
+    rmSync(join(fixture.repoRoot, "docs", "WORKFLOW-STATE.json"), { force: true });
+    const manifest = JSON.parse(readFileSync(manifestPath, "utf8")) as Record<string, unknown>;
+    const warnings = Array.isArray(manifest.warnings)
+      ? manifest.warnings.filter((warning): warning is string => typeof warning === "string")
+      : [];
+    warnings.push(
+      "Team validation: file 'src/App.tsx' is owned by multiple agents (api-engineer, ui-engineer).",
+      "Team validation: file 'src/styles.css' is owned by multiple agents (api-engineer, ui-engineer).",
+    );
+    manifest.warnings = warnings;
+    writeFileSync(manifestPath, `${JSON.stringify(manifest, null, 2)}\n`);
+
+    ({ server, browser, page } = await startBrowserConsole(fixture));
+    await page.evaluate((repoRoot) => {
+      localStorage.setItem(`forge-console:guided-authoring:${repoRoot}`, "ready");
+      location.hash = "#/overview";
+    }, fixture.repoRoot);
+    await page.waitForSelector(".project-prepared-plan", { timeout: 10000 });
+
+    const planText = await page.$eval(".prepared-plan-content", (panel) => panel.textContent ?? "");
+    assert.match(planText, /src\/App\.tsx/);
+    assert.match(planText, /src\/styles\.css/);
+    assert.match(planText, /Agent responsibility matrix/);
+    assert.match(planText, /source Feature task contracts/i);
+    assert.match(planText, /one owning Task\/agent/i);
+    assert.match(planText, /Re-derive team & skills/);
+    assert.ok(await page.$('.prepared-plan-content a[href="#/project-files"]'));
+  } finally {
+    if (page) await page.close();
+    if (browser) await browser.close();
+    if (server) await server.stop();
+    fixture.cleanup();
+    rmSync(join(WORK_ROOT, "team-validation-guidance"), { recursive: true, force: true });
+    if (previousHome === undefined) delete process.env.FORGE_HOME;
+    else process.env.FORGE_HOME = previousHome;
+  }
+});
+
+test("the Board color-codes workflow states and animates real status changes", async () => {
+  const fixture = await createFixture("board-status-motion");
+  const previousHome = process.env.FORGE_HOME;
+  const manifestPath = join(fixture.repoRoot, "docs", "EXECUTION-MANIFEST.json");
+  const workflowStatePath = join(fixture.repoRoot, "docs", "WORKFLOW-STATE.json");
+  let server: ConsoleServer | undefined;
+  let browser: Browser | undefined;
+  let page: Page | undefined;
+  try {
+    const manifest = JSON.parse(readFileSync(manifestPath, "utf8")) as {
+      phases: Array<{
+        id: string;
+        dependencies: string[];
+        tasks: Array<{ id: string; dependencies: string[]; contract: { kind: string } }>;
+      }>;
+    };
+    const reviewTask = manifest.phases.flatMap((phase) => phase.tasks).find((task) => task.id === "3.3");
+    if (!reviewTask) throw new Error("The Board fixture is missing the release-validation Task.");
+    reviewTask.contract.kind = "human-review";
+    reviewTask.dependencies = [];
+    for (const phase of manifest.phases) {
+      if (phase.id === "2" || phase.id === "3") phase.dependencies = [];
+    }
+    writeFileSync(manifestPath, `${JSON.stringify(manifest, null, 2)}\n`);
+
+    const workflow = JSON.parse(readFileSync(workflowStatePath, "utf8")) as {
+      tasks: Record<string, { status: string; startedAt?: string | null; completedAt?: string | null }>;
+    };
+    workflow.tasks["1.1"] = {
+      ...workflow.tasks["1.1"]!,
+      status: "pending",
+      startedAt: null,
+      completedAt: null,
+    };
+    writeFileSync(workflowStatePath, `${JSON.stringify(workflow, null, 2)}\n`);
+
+    ({ server, browser, page } = await startBrowserConsole(fixture));
+    await page.emulateMediaFeatures([{ name: "prefers-reduced-motion", value: "no-preference" }]);
+    await click(page, "#nav .nav-category button", "Project");
+    await click(page, '#nav a[href="#/board"]', "Board");
+    await page.waitForFunction(() => {
+      const task = document.querySelector('.board-viewport .board-task-control[data-board-task-id="3.3"]');
+      return task?.textContent?.includes("Needs your review") ?? false;
+    }, { timeout: 10000 });
+
+    const initialStyles = await page.evaluate(() => {
+      const probe = document.createElement("span");
+      document.body.appendChild(probe);
+      probe.style.color = "var(--text-dim)";
+      const pendingColor = getComputedStyle(probe).color;
+      probe.style.color = "var(--blue)";
+      const runningColor = getComputedStyle(probe).color;
+      probe.style.color = "var(--green)";
+      const completeColor = getComputedStyle(probe).color;
+      probe.style.color = "var(--red)";
+      const failedColor = getComputedStyle(probe).color;
+      probe.style.color = "var(--accent-ink)";
+      const attentionColor = getComputedStyle(probe).color;
+      probe.remove();
+      const pending = document.querySelector<HTMLElement>('.board-viewport .board-task-control[data-board-task-id="1.1"]');
+      const running = document.querySelector<HTMLElement>('.board-viewport .board-task-control[data-board-task-id="2.2"]');
+      const complete = document.querySelector<HTMLElement>('.board-viewport .board-task-control[data-board-task-id="2.1"]');
+      const failed = document.querySelector<HTMLElement>('.board-viewport .board-task-control[data-board-task-id="3.1"]');
+      const blocked = document.querySelector<HTMLElement>('.board-viewport .board-task-control[data-board-task-id="3.2"]');
+      const review = document.querySelector<HTMLElement>('.board-viewport .board-task-control[data-board-task-id="3.3"]');
+      if (!pending || !running || !complete || !failed || !blocked || !review) {
+        throw new Error("The Board did not render all status and attention examples.");
+      }
+      const pendingBadge = pending.querySelector<HTMLElement>(".badge");
+      const runningBadge = running.querySelector<HTMLElement>(".badge");
+      const completeBadge = complete.querySelector<HTMLElement>(".badge");
+      const failedBadge = failed.querySelector<HTMLElement>(".badge");
+      const blockedBadge = blocked.querySelector<HTMLElement>(".badge");
+      const reviewBadge = review.querySelector<HTMLElement>(".badge");
+      if (!pendingBadge || !runningBadge || !completeBadge || !failedBadge || !blockedBadge || !reviewBadge) {
+        throw new Error("The Board is missing a status or attention badge.");
+      }
+      return {
+        pending: { borderColor: getComputedStyle(pending).borderLeftColor, badgeColor: getComputedStyle(pendingBadge).color, label: pendingBadge.textContent?.trim() ?? "" },
+        running: { borderColor: getComputedStyle(running).borderLeftColor, badgeColor: getComputedStyle(runningBadge).color, label: runningBadge.textContent?.trim() ?? "" },
+        complete: { borderColor: getComputedStyle(complete).borderLeftColor, badgeColor: getComputedStyle(completeBadge).color, label: completeBadge.textContent?.trim() ?? "" },
+        failed: { borderColor: getComputedStyle(failed).borderLeftColor, badgeColor: getComputedStyle(failedBadge).color, label: failedBadge.textContent?.trim() ?? "" },
+        blocked: { borderColor: getComputedStyle(blocked).borderLeftColor, badgeColor: getComputedStyle(blockedBadge).color, label: blockedBadge.textContent?.trim() ?? "" },
+        review: { borderColor: getComputedStyle(review).borderLeftColor, badgeColor: getComputedStyle(reviewBadge).color, label: reviewBadge.textContent?.trim() ?? "" },
+        tokens: {
+          pending: pendingColor,
+          running: runningColor,
+          complete: completeColor,
+          failed: failedColor,
+          blocked: attentionColor,
+          review: runningColor,
+        },
+      };
+    });
+    for (const [status, style] of Object.entries(initialStyles.tokens)) {
+      const task = initialStyles[status as "pending" | "running" | "complete" | "failed" | "blocked" | "review"];
+      assert.equal(task.borderColor, style, `${status} Tasks should use the matching Board status color.`);
+      assert.equal(task.badgeColor, style, `${status} Task badges should use the matching status color.`);
+    }
+    assert.equal(initialStyles.pending.label, "To do");
+    assert.equal(initialStyles.running.label, "In progress");
+    assert.equal(initialStyles.complete.label, "Done");
+    assert.equal(initialStyles.failed.label, "Failed");
+    assert.equal(initialStyles.blocked.label, "Blocked");
+    assert.equal(initialStyles.review.label, "Needs your review");
+
+    workflow.tasks["1.1"] = {
+      ...workflow.tasks["1.1"]!,
+      status: "running",
+      startedAt: "2026-09-22T14:10:00.000Z",
+    };
+    writeFileSync(workflowStatePath, `${JSON.stringify(workflow, null, 2)}\n`);
+    await page.waitForFunction(() => {
+      const refresh = document.querySelector<HTMLButtonElement>('.board-heading [data-board-refresh="true"]');
+      return Boolean(refresh && !refresh.disabled);
+    }, { timeout: 10000 });
+    await page.click('.board-heading [data-board-refresh="true"]');
+    await page.waitForFunction(() => {
+      const task = document.querySelector('.board-viewport .board-task-control[data-board-task-id="1.1"]');
+      return Boolean(task?.textContent?.includes("In progress") && task.getAnimations().length > 0);
+    }, { timeout: 10000 });
+    const kanbanAnimation = await page.$eval(
+      '.board-viewport .board-task-control[data-board-task-id="1.1"]',
+      (task) => task.getAnimations()[0]?.effect?.getTiming().duration ?? null,
+    );
+    assert.equal(kanbanAnimation, 700, "A real Kanban status change should use the subtle pulse.");
+
+    await page.click('.board-mode-tabs [data-board-mode="gantt"]');
+    await page.waitForFunction(() => document.querySelector('.board-gantt-bar[data-board-task-id="1.1"]') !== null, { timeout: 10000 });
+    await page.waitForFunction(() => {
+      const bar = document.querySelector<HTMLElement>('.board-gantt-bar[data-board-task-id="1.1"]');
+      return Boolean(bar && bar.getAnimations().length > 0);
+    }, { timeout: 10000 });
+    await page.waitForSelector('.board-gantt-bar[data-board-task-id="3.3"]', { timeout: 10000 });
+    const reviewGanttColors = await page.$eval(
+      '.board-gantt-bar[data-board-task-id="3.3"]',
+      (bar) => ({
+        borderColor: getComputedStyle(bar).borderColor,
+        backgroundColor: getComputedStyle(bar).backgroundColor,
+        milestone: bar.classList.contains("is-milestone"),
+      }),
+    );
+    assert.equal(reviewGanttColors.milestone, true, "The Human review example should remain a Gantt milestone.");
+    assert.equal(reviewGanttColors.borderColor, initialStyles.tokens.review);
+    assert.equal(reviewGanttColors.backgroundColor, initialStyles.tokens.review);
+    const ganttRunningColor = await page.$eval(
+      '.board-gantt-bar[data-board-task-id="1.1"]',
+      (bar) => {
+        const probe = document.createElement("span");
+        probe.style.color = getComputedStyle(bar).getPropertyValue("--board-status-color").trim();
+        document.body.appendChild(probe);
+        const color = getComputedStyle(probe).color;
+        probe.remove();
+        return color;
+      },
+    );
+    assert.equal(ganttRunningColor, initialStyles.tokens.running, "Gantt bars should use the Task's workflow status color.");
+
+    workflow.tasks["3.1"] = {
+      ...workflow.tasks["3.1"]!,
+      status: "complete",
+      completedAt: "2026-09-22T14:15:00.000Z",
+    };
+    writeFileSync(workflowStatePath, `${JSON.stringify(workflow, null, 2)}\n`);
+    await page.waitForFunction(() => {
+      const refresh = document.querySelector<HTMLButtonElement>('.board-heading [data-board-refresh="true"]');
+      return Boolean(refresh && !refresh.disabled);
+    }, { timeout: 10000 });
+    await page.click('.board-heading [data-board-refresh="true"]');
+    await page.waitForFunction(() => {
+      const task = document.querySelector<HTMLElement>('.board-viewport .board-task-control[data-board-task-id="3.2"]');
+      return Boolean(task?.textContent?.includes("To do") && task.getAnimations().length > 0);
+    }, { timeout: 10000 });
+    assert.equal(
+      await page.$eval('.board-viewport .board-task-control[data-board-task-id="3.2"]', (task) => task.classList.contains("board-task-attention-blocked")),
+      false,
+      "A task unblocked without a status change should move out of attention and animate.",
+    );
+
+    await new Promise((resolvePromise) => setTimeout(resolvePromise, 750));
+    await page.waitForFunction(() => {
+      const bar = document.querySelector<HTMLElement>('.board-gantt-bar[data-board-task-id="1.1"]');
+      return Boolean(bar && !bar.classList.contains("board-task-status-changed"));
+    }, { timeout: 10000 });
+    await page.waitForFunction(() => {
+      const refresh = document.querySelector<HTMLButtonElement>('.board-heading [data-board-refresh="true"]');
+      return Boolean(refresh && !refresh.disabled);
+    }, { timeout: 10000 });
+    await page.click('.board-heading [data-board-refresh="true"]');
+    await page.waitForFunction(() => {
+      const bar = document.querySelector<HTMLElement>('.board-gantt-bar[data-board-task-id="1.1"]');
+      return Boolean(bar && document.querySelector(".semantic-board")?.getAttribute("aria-busy") === "false");
+    }, { timeout: 10000 });
+    assert.equal(
+      await page.$eval('.board-gantt-bar[data-board-task-id="1.1"]', (bar) => bar.getAnimations().length),
+      0,
+      "A routine refresh without a status change should not animate.",
+    );
+
+    await page.emulateMediaFeatures([{ name: "prefers-reduced-motion", value: "reduce" }]);
+    workflow.tasks["1.1"] = {
+      ...workflow.tasks["1.1"]!,
+      status: "complete",
+      completedAt: "2026-09-22T14:20:00.000Z",
+    };
+    writeFileSync(workflowStatePath, `${JSON.stringify(workflow, null, 2)}\n`);
+    await page.waitForFunction(() => {
+      const refresh = document.querySelector<HTMLButtonElement>('.board-heading [data-board-refresh="true"]');
+      return Boolean(refresh && !refresh.disabled);
+    }, { timeout: 10000 });
+    await page.click('.board-heading [data-board-refresh="true"]');
+    await page.waitForFunction(() => {
+      const bar = document.querySelector<HTMLElement>('.board-gantt-bar[data-board-task-id="1.1"]');
+      return bar?.classList.contains("board-task-status-complete") ?? false;
+    }, { timeout: 10000 });
+    const reducedMotion = await page.$eval(
+      '.board-gantt-bar[data-board-task-id="1.1"]',
+      (bar) => ({
+        preferred: matchMedia("(prefers-reduced-motion: reduce)").matches,
+        animationCount: bar.getAnimations().length,
+      }),
+    );
+    assert.equal(reducedMotion.preferred, true);
+    assert.equal(reducedMotion.animationCount, 0, "Reduced motion should disable the Board pulse.");
+  } finally {
+    if (page) await page.close();
+    if (browser) await browser.close();
+    if (server) await server.stop();
+    fixture.cleanup();
+    rmSync(join(WORK_ROOT, "board-status-motion"), { recursive: true, force: true });
+    if (previousHome === undefined) delete process.env.FORGE_HOME;
+    else process.env.FORGE_HOME = previousHome;
+  }
+});

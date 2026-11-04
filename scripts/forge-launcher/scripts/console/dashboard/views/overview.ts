@@ -1401,6 +1401,14 @@ function renderPreparedPlan(container: HTMLElement, summary: Summary): HTMLEleme
         el("h4", null, "Items needing attention"),
         el("ul", null, manifest.warnings.map((warning) => el("li", null, warning))),
       ]));
+      if (manifest.warnings.some((warning) => /file .+ is owned by multiple agents/i.test(warning))) {
+        sections.push(el("p", { className: "dim small" }, [
+          el("strong", null, "How to fix: "),
+          "The same file is listed as an expected output by Tasks assigned to different agents. Open ",
+          el("a", { href: "#/project-files" }, "Project files"),
+          " and read the Agent responsibility matrix (docs/agent-responsibility-matrix.md) to identify them. Edit the source Feature task contracts in docs/features/ so each file has one owning Task/agent, or split the expected outputs across Tasks. Then return to Build status and choose Re-derive team & skills.",
+        ]));
+      }
     } else {
       sections.push(el("p", { className: "dim small" }, "No additional preparation warnings were reported."));
     }

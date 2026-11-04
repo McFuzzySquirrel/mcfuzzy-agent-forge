@@ -110,6 +110,14 @@ New Project authoring:
 5. Approval authorizes preparation only. The Console prepares the team, project guidance, and Build plan as one guided background step; it does not start execution. Progress and failures remain visible, with retry and Logs actions.
 6. When preparation is complete, review the major phases, assumptions, and warnings in the prepared plan. Choose **Start build** explicitly to begin execution. Project brief approval is separate from approving a runtime Human review Task.
 
+If a warning says a file is owned by multiple agents, the same path is listed as
+an expected output by Tasks assigned to different agents. Open **Project files**
+and read `docs/agent-responsibility-matrix.md` to identify them. Edit the source
+`forge-task` definitions in `docs/features/*.md` so the file has one owning
+Task/agent, or split distinct outputs between Tasks, then return to Build status
+and choose **Re-derive team & skills**. Do not edit the generated matrix or
+manifest.
+
 The existing pipeline actions remain available for Projects outside the guided
 authoring path. A Build is a separate action from authoring, review, and
 preparation.
@@ -186,6 +194,12 @@ Once the build starts, switch between the views to follow the work:
     prerequisites, artifact inputs and outputs, and changed files. These
     relationships are structured text, not pointer-only links or extra focus
     stops; open **All tasks** for full diagnostics.
+  - Status badges, card edges, and Gantt bars show the workflow state and
+    attention at a glance: pending is muted, running and Human review are blue,
+    complete is green, failed is red, and blocked or skipped is amber. A subtle
+    pulse marks an observed status or attention change, including work moving
+    out of the attention list; routine refreshes do not animate Tasks, and
+    reduced-motion preferences disable the pulse.
   - Status filters dim rather than hide Tasks, keeping the full workflow shape
     visible. Selection and filters persist per Project, and each view retains
     its own scroll position across refreshes, view switches, and responsive

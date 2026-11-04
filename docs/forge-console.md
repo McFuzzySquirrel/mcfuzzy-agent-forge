@@ -208,6 +208,14 @@ does not launch the workflow engine. For a guided Project, only the explicit
 **view-only** in the console - review them in **Plan & Team** and edit them in
 your editor.
 
+If prepared-plan warnings say a file is owned by multiple agents, multiple
+Tasks assigned to different agents list that path as an expected output. Open
+**Project files** and inspect `docs/agent-responsibility-matrix.md` to identify
+the Tasks. Edit the source `forge-task` definitions in `docs/features/*.md` so
+each file has one owning Task/agent, or split distinct outputs between Tasks;
+then return to Build status and choose **Re-derive team & skills**. The matrix
+and execution manifest are generated outputs and should not be edited directly.
+
 Requirements stages are different: the PRD and feature documents are authored in
 an interactive session, not a background job. The Console can stop a browser PTY
 session, but cannot pause or report on the authoring operation; completion is
@@ -397,6 +405,13 @@ while it remains available. The Board announces failures, newly ready Human
 reviews, and cleared blockers, but not routine progress. Status filters dim
 rather than hide Tasks, so workflow shape remains visible. Loading, empty,
 failed, and stale-data states explain what happened and offer a next step.
+
+Status badges, card edges, and Gantt bars use the same workflow and attention
+colors: pending is muted, running and Human review are blue, complete is green,
+failed is red, and blocked or skipped is amber. A subtle pulse marks an observed
+status or attention change, including work moving out of the attention list;
+routine refreshes do not animate Tasks, and the pulse is disabled when reduced
+motion is preferred.
 
 On narrow screens (720px and below), Kanban scrolls horizontally across status
 columns while keeping phase labels visible. Gantt keeps Task labels in view as
