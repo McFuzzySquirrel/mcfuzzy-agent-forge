@@ -371,12 +371,12 @@ the workflow engine's tested layout APIs. It does not load a canvas or require
 PixiJS. **Kanban** and **Gantt** are peer views; each Project remembers its
 selection and status filters, and each view remembers its own scroll position.
 
-**Kanban** groups Tasks into phase rows and workflow-status columns. Cards
-foreground the current state while keeping the phase label, Task summary,
-responsibility, attention cue, and next action together.
+**Kanban** groups Tasks into phase rows and workflow-status columns. Cards show
+only the Task status and title; selecting one opens its summary, attention cue,
+next responsible person, next action, and other details.
 
-**Gantt** uses the same Task summaries, attention cues, selection, and filters,
-and adds timeline information:
+**Gantt** uses the same concise Task labels, selection, and filters, and adds
+timeline information:
 
 - **Filled bars are measured; outlined bars are forecast.** Forecasts identify
   their source: observed attempts, the same agent's Tasks, or a default estimate.
@@ -387,8 +387,8 @@ and adds timeline information:
 - **The critical path** is highlighted: the longest chain of remaining work.
 
 Selecting a card or bar opens the same compact Task details: its summary,
-blocker, next responsible, next action, prerequisites, artifact inputs and
-outputs, and changed files. Relationships are structured text, not
+attention cue, blocker, next responsible, next action, prerequisites, artifact
+inputs and outputs, and changed files. Relationships are structured text, not
 pointer-only links or extra focus stops. Full diagnostics remain in **Tasks**.
 Every Task card and Gantt bar is a keyboard-focusable control; Enter or Space
 opens its details, and closing details returns focus to the originating

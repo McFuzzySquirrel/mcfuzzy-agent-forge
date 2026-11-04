@@ -4,6 +4,16 @@ Detailed release and change notes for MyForge.
 
 ---
 
+## November 2026 - v3.125
+
+### Keep Board task cards concise
+
+- Kanban and Gantt task controls show status and title; selecting a task opens
+  its summary, responsibility, attention cue, and next action in the details
+  panel.
+
+---
+
 ## November 2026 - v3.124
 
 ### Route completed authoring to its next action

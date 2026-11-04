@@ -678,3 +678,79 @@ test("Stop requires confirmation and only sends the stop action after approval",
     else process.env.FORGE_HOME = previousHome;
   }
 });
+
+test("Board task controls stay concise until selected", async () => {
+  const fixture = await createFixture("minimal-board-cards");
+  const previousHome = process.env.FORGE_HOME;
+  let server: ConsoleServer | undefined;
+  let browser: Browser | undefined;
+  let page: Page | undefined;
+  try {
+    ({ server, browser, page } = await startBrowserConsole(fixture));
+    await page.evaluate(() => { location.hash = "#/board"; });
+    await page.waitForSelector(".board-kanban-table .board-task-control");
+
+    const normalizeText = (value: string): string => value.replace(/\s+/g, " ").trim();
+    const compactControl = async (selector: string) => {
+      const control = await page!.$(selector);
+      assert.ok(control, `Expected a task control matching ${selector}.`);
+      const visibleText = await control.evaluate((button) =>
+        button instanceof HTMLElement ? button.innerText : button.textContent ?? "",
+      );
+      return { control, visibleText };
+    };
+    const selectedTaskDetails = async () => page!.$eval(".board-details", (panel) => {
+      const status = Array.from(panel.querySelectorAll("dt"))
+        .find((label) => label.textContent?.trim() === "Status")
+        ?.nextElementSibling?.textContent ?? "";
+      return {
+        status,
+        title: panel.querySelector("h3")?.textContent ?? "",
+        text: panel.textContent ?? "",
+        summary: panel.querySelector(".board-details-summary")?.textContent?.trim() ?? "",
+      };
+    });
+    const assertCompact = (cardText: string, status: string, title: string): void => {
+      assert.ok(status.trim(), "Selected Task details should expose its status.");
+      assert.ok(title.trim(), "Selected Task details should expose its title.");
+      assert.equal(
+        normalizeText(cardText).toLocaleLowerCase(),
+        normalizeText(`${status} ${title}`).toLocaleLowerCase(),
+      );
+    };
+
+    const kanbanCard = await compactControl(".board-kanban-table .board-task-control");
+    await kanbanCard.control.click();
+    await page.waitForSelector(".board-details .board-details-summary");
+    const kanbanDetails = await selectedTaskDetails();
+    assertCompact(kanbanCard.visibleText, kanbanDetails.status, kanbanDetails.title);
+    assert.match(kanbanDetails.text, /Next responsible/);
+    assert.match(kanbanDetails.text, /Next action/);
+    assert.ok(kanbanDetails.summary.length > 0);
+
+    const previousTitle = normalizeText(kanbanDetails.title);
+    await page.click('[data-board-mode="gantt"]');
+    await page.waitForFunction(() =>
+      document.querySelector('[data-board-mode="gantt"]')?.getAttribute("aria-selected") === "true",
+    );
+    const ganttCard = await compactControl(
+      ".board-gantt-table .board-task-control[aria-pressed='false'], .board-gantt-fallback-list .board-task-control[aria-pressed='false']",
+    );
+    await ganttCard.control.click();
+    await page.waitForFunction(
+      (title) => document.querySelector(".board-details h3")?.textContent?.trim() !== title,
+      { timeout: 10000 },
+      previousTitle,
+    );
+    const ganttDetails = await selectedTaskDetails();
+    assertCompact(ganttCard.visibleText, ganttDetails.status, ganttDetails.title);
+  } finally {
+    if (page) await page.close();
+    if (browser) await browser.close();
+    if (server) await server.stop();
+    fixture.cleanup();
+    rmSync(join(WORK_ROOT, "minimal-board-cards"), { recursive: true, force: true });
+    if (previousHome === undefined) delete process.env.FORGE_HOME;
+    else process.env.FORGE_HOME = previousHome;
+  }
+});

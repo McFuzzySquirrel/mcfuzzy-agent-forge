@@ -84,12 +84,13 @@ Task cards and Gantt bars are keyboard controls. Task details expose
 prerequisites and artifact relationships as structured text; selection moves
 focus into details and Close restores it.
 
-**Kanban** — Tasks grouped by phase and workflow status. Cards include their
-summary, responsibility, and attention/next-action cue.
+**Kanban** — Tasks grouped by phase and workflow status. Cards show only status
+and title; select a card to see its summary, responsibility, and
+attention/next-action details.
 
 ![Board - kanban](images/forge-console/03-board.png)
 
-**Gantt** — the same Task summaries against time. Actual and forecast durations
+**Gantt** — concise Task labels against time. Actual and forecast durations
 are distinguished, Human review Tasks are milestones, and the critical path is
 highlighted.
 

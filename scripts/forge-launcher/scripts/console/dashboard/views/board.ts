@@ -157,9 +157,6 @@ function taskControl(task: BoardTaskSummary, selectedId: string | null, statuses
       statusBadge(taskStatusLabel(task)),
     ]),
     el("strong", { className: "board-task-title" }, task.title),
-    el("span", { className: "board-task-summary" }, task.summary),
-    el("span", { className: "board-task-responsible" }, `Next responsible: ${task.nextResponsible}`),
-    el("span", { className: task.attentionCue ? "board-task-cue" : "board-task-next" }, task.attentionCue ?? task.nextAction),
   ]);
   return control;
 }

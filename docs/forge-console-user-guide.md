@@ -180,12 +180,12 @@ Once the build starts, switch between the views to follow the work:
   - **Gantt** plots the same run against time. Filled bars are measured, outlined
     hatched bars are forecast; Human reviews appear as milestone diamonds, and
     the engine-computed critical path and current-time marker are shown.
-  - Both views share Task summaries, responsibility, attention cues, selection,
-    status filters, and compact details. Selecting a card or bar opens the same
-    detail view with its blocker, next action, prerequisites, artifact inputs
-    and outputs, and changed files. These relationships are structured text,
-    not pointer-only links or extra focus stops; open **All tasks** for full
-    diagnostics.
+  - Task cards show only status and title. Both views share selection, status
+    filters, and the same details panel; selecting a card or bar reveals the
+    summary, attention cue, next responsible person, next action, blocker,
+    prerequisites, artifact inputs and outputs, and changed files. These
+    relationships are structured text, not pointer-only links or extra focus
+    stops; open **All tasks** for full diagnostics.
   - Status filters dim rather than hide Tasks, keeping the full workflow shape
     visible. Selection and filters persist per Project, and each view retains
     its own scroll position across refreshes, view switches, and responsive
