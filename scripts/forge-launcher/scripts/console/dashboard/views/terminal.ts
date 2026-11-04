@@ -3,7 +3,12 @@ import { api } from "../api.js";
 import { el } from "../render/dom.js";
 import { store } from "../state.js";
 import { getResolvedTheme, onThemeChange } from "../theme.js";
-import { recordGuidedAuthoringSessionExit } from "../project-authoring.js";
+import {
+  clearExternalAuthoringSession,
+  getGuidedAuthoringStep,
+  recordGuidedAuthoringSessionExit,
+  rememberExternalAuthoringSession,
+} from "../project-authoring.js";
 import { appendReplay } from "./terminal-replay.js";
 
 declare global {
@@ -299,12 +304,41 @@ export function renderTerminal(container: HTMLElement): void {
   });
 
   externalButton.addEventListener("click", () => {
-    const fallback = mode.value === "harness"
-      ? api.launchCli()
-      : api.startAuthoringSession(target.value as "idea" | "prd" | "feature-prd", prompt.value.trim() || undefined);
+    if (mode.value === "harness") {
+      void api.launchCli()
+        .then((result) => { setStatus(result.message ?? "External terminal requested."); })
+        .catch((error: unknown) => { setStatus(error instanceof Error ? error.message : "Could not open external terminal."); });
+      return;
+    }
+
+    const authoringTarget = target.value as "idea" | "prd" | "feature-prd";
+    const repoRoot = store.summary?.repoRoot ?? null;
+    const guidedStep = repoRoot ? getGuidedAuthoringStep(repoRoot) : null;
+    const guidedTarget = Boolean(repoRoot && (
+      authoringTarget === "idea" && guidedStep === "idea"
+      || authoringTarget === "prd" && guidedStep === "brief"
+    ));
+    const artifactPath = authoringTarget === "idea" ? "docs/IDEA.md" : "docs/PRD.md";
+    const sessionPrompt = prompt.value.trim() || undefined;
+    const launch = () => api.startAuthoringSession(authoringTarget, sessionPrompt);
+    const fallback = guidedTarget && repoRoot
+      ? api.docContent(artifactPath)
+        .then((file) => file.content)
+        .catch(() => null)
+        .then((baseline) => {
+          rememberExternalAuthoringSession(repoRoot, authoringTarget as "idea" | "prd", baseline);
+          return launch();
+        })
+      : launch();
     void fallback
-      .then((result) => { setStatus(result.message ?? "External terminal requested."); })
-      .catch((error: unknown) => { setStatus(error instanceof Error ? error.message : "Could not open external terminal."); });
+      .then((result) => {
+        if (!result.ok && guidedTarget && repoRoot) clearExternalAuthoringSession(repoRoot);
+        setStatus(result.message ?? "External terminal requested.");
+      })
+      .catch((error: unknown) => {
+        if (guidedTarget && repoRoot) clearExternalAuthoringSession(repoRoot);
+        setStatus(error instanceof Error ? error.message : "Could not open external terminal.");
+      });
   });
 
   container.appendChild(el("section", { className: "panel" }, [

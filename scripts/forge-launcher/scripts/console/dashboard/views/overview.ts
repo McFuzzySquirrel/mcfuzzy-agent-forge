@@ -7,7 +7,13 @@ import {
   featureTasksReviewed,
   markFeatureTaskReviewPending,
 } from "../feature-task-review.js";
-import { getGuidedAuthoringStep, setGuidedAuthoringStep, type GuidedAuthoringStep } from "../project-authoring.js";
+import {
+  getGuidedAuthoringStep,
+  pendingExternalAuthoringSession,
+  reconcileExternalAuthoringSession,
+  setGuidedAuthoringStep,
+  type GuidedAuthoringStep,
+} from "../project-authoring.js";
 import { Epoch, store } from "../state.js";
 import { el, fmtAgo, fmtDuration, fmtTime, fmtTokens, fmtUsd, statusBadge, toast } from "../render/dom.js";
 import { isTerminalSessionActive, onTerminalSessionChange } from "./terminal.js";
@@ -41,6 +47,20 @@ function stopPoll(): void {
   if (pollTimer !== undefined) {
     window.clearInterval(pollTimer);
     pollTimer = undefined;
+  }
+}
+
+async function reconcileExternalAuthoringProgress(summary: Summary): Promise<void> {
+  const pending = pendingExternalAuthoringSession(summary.repoRoot);
+  if (!pending) return;
+  const artifactReady = pending.target === "idea" ? summary.hasIdea : summary.hasPrd;
+  if (!artifactReady) return;
+  const path = pending.target === "idea" ? "docs/IDEA.md" : "docs/PRD.md";
+  try {
+    const file = await api.docContent(path);
+    reconcileExternalAuthoringSession(summary.repoRoot, pending.target, file.content);
+  } catch {
+    // A missing or unreadable artifact is not evidence that authoring completed.
   }
 }
 
@@ -96,6 +116,7 @@ export async function renderOverview(container: HTMLElement): Promise<void> {
     summary = store.summary;
     actions = { canRun: false, canResume: false, canPause: false, canStop: false, failedTasks: [] };
   }
+  if (summary) await reconcileExternalAuthoringProgress(summary);
   if (!renderEpoch.isCurrent(myGen)) return;
 
   if (!summary) {
@@ -147,6 +168,8 @@ async function refreshOverviewData(container: HTMLElement): Promise<void> {
   try {
     const [summary, actions, tasks] = await Promise.all([api.summary(), api.actions(), api.tasks()]);
     if (!renderEpoch.isCurrent(myGen) || overviewContainer !== container || !summary) return;
+    await reconcileExternalAuthoringProgress(summary);
+    if (!renderEpoch.isCurrent(myGen) || overviewContainer !== container) return;
     const update = (name: string, content: HTMLElement): void => {
       const host = container.querySelector<HTMLElement>(`[data-overview-region="${name}"]`);
       if (!host) return;
@@ -1324,11 +1347,15 @@ function isPreparationComplete(summary: Summary, step: GuidedAuthoringStep): boo
 
 function renderPreparedPlan(container: HTMLElement, summary: Summary): HTMLElement {
   const repoRoot = summary.repoRoot;
+  const featureTasks = featureTaskReviewIds(summary);
+  const taskReviewRequired = featureTasks.length > 0 && !featureTasksReviewed(summary);
   const status = el("p", {
     className: "dim small",
     role: "status",
     "aria-live": "polite",
-  }, store.getDraft(repoRoot, "buildStartError", "Preparation is complete. A Build has not started."));
+  }, taskReviewRequired
+    ? `Review the ${featureTasks.length} generated Task${featureTasks.length === 1 ? "" : "s"} before starting this Build.`
+    : store.getDraft(repoRoot, "buildStartError", "Preparation is complete. A Build has not started."));
   const start = el("button", {
     className: "btn btn-primary",
     type: "button",
@@ -1343,6 +1370,7 @@ function renderPreparedPlan(container: HTMLElement, summary: Summary): HTMLEleme
     status,
     el("div", { className: "actions" }, [
       start,
+      taskReviewRequired ? el("a", { className: "btn btn-primary", href: "#/tasks?feature-review=1" }, "Review new Tasks") : null,
       el("a", { className: "btn", href: "#/documents" }, "Project files"),
     ]),
   ]);
@@ -1421,6 +1449,12 @@ async function startPreparedBuild(
   status: HTMLElement,
 ): Promise<void> {
   const repoRoot = summary.repoRoot;
+  const featureTasks = featureTaskReviewIds(summary);
+  if (featureTasks.length > 0 && !featureTasksReviewed(summary)) {
+    status.className = "error-text small";
+    status.textContent = `Review the ${featureTasks.length} generated Task${featureTasks.length === 1 ? "" : "s"} before starting this Build.`;
+    return;
+  }
   if (!isPreparationComplete(summary, "ready") || summary.run) {
     status.className = "error-text small";
     status.textContent = "The prepared plan is no longer ready. Refresh and complete preparation before starting a Build.";

@@ -2,7 +2,7 @@ import { api } from "../api.js";
 import { store } from "../state.js";
 import { el, fmtAgo, fmtDuration, statusBadge } from "../render/dom.js";
 import type { BoardGanttBar, BoardGanttLayout, BoardLayout } from "../types.js";
-import { boardTaskChangeAnnouncement, shouldDimBoardTask, summarizeBoardTasks, type BoardTaskSummary } from "./board-model.js";
+import { boardTaskChangeAnnouncement, boardTaskTitlesById, shouldDimBoardTask, summarizeBoardTasks, type BoardTaskSummary } from "./board-model.js";
 import { BoardPreferences, type BoardMode, type BoardStatusFilter } from "./board-preferences.js";
 
 const STATUSES: Array<{ value: BoardStatusFilter; label: string }> = [
@@ -339,7 +339,7 @@ function renderGantt(statuses: readonly BoardStatusFilter[], selectedId: string 
   }
 
   const barByTask = new Map(gantt.bars.map((bar) => [bar.taskId, bar]));
-  const titleById = new Map(tasks.map((task) => [task.id, task.title]));
+  const titleById = boardTaskTitlesById(tasks);
   const criticalTasks = gantt.criticalPath.map((id) => titleById.get(id) ?? id);
   const table = el("table", { className: "board-gantt-table", "aria-label": "Task timeline and duration" });
   table.appendChild(el("caption", { className: "sr-only" }, "Gantt timeline with actual and forecast durations."));
@@ -381,7 +381,7 @@ function renderGantt(statuses: readonly BoardStatusFilter[], selectedId: string 
 }
 
 function renderDetails(task: BoardTaskSummary): HTMLElement {
-  const titleById = new Map(tasks.map((entry) => [entry.id, entry.title]));
+  const titleById = boardTaskTitlesById(tasks);
   const dependencies = task.dependencies.map((id) => titleById.get(id) ?? id);
   const heading = el("h2", {
     id: "board-details-title",

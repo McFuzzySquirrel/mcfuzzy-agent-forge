@@ -23,8 +23,12 @@ export interface BoardTaskSummary {
   outputFiles: string[];
 }
 
+export function boardTaskTitlesById(tasks: readonly Pick<BoardTaskSummary, "id" | "title">[]): Map<string, string> {
+  return new Map(tasks.map(({ id, title }) => [id, title]));
+}
+
 export function summarizeBoardTasks(tasks: readonly TaskRow[]): BoardTaskSummary[] {
-  const titles = new Map(tasks.map((task) => [task.id, task.title]));
+  const titles = boardTaskTitlesById(tasks);
   return tasks.map((task) => {
     const prerequisites = task.unmetPrerequisites.map((id) => titles.get(id) ?? id);
     const failed = task.status === "failed";

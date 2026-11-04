@@ -17,6 +17,7 @@ need human judgment without navigating the full technical Task table.
   does not imply that an agent or unattended flag can approve it.
 - [x] Review state and Project context remain clear after approval or when the
   review is blocked.
-- [x] Affected Console documentation reflects the delivered queue. The current
-  capture harness only supports regenerating the full set, so no captures were
-  refreshed for this ticket.
+- [x] Affected Console documentation reflects the delivered queue. At ticket
+  04 implementation, the capture harness only supported regenerating the full
+  set, so captures were not refreshed then. The harness later gained Board-only
+  capture support, and the full set was refreshed with later tickets.
