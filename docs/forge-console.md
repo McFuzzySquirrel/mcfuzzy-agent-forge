@@ -442,6 +442,13 @@ table, Logs, Timeline, Terminal, Plan & Team, Artifacts, and Settings; Advanced
 is a navigation group, not a separate product mode. Hovering a group opens its
 list, and selecting it pins the list open for touch.
 
+The shell adapts to the available width: wide screens above 1050px keep the full
+top navigation; medium screens from 721–1050px use a compact left navigation
+rail; narrow screens at 720px or below use the labeled **Menu** drawer. The
+drawer opens below the context bar so the Project switcher, identity, harness,
+and Live/Idle status remain visible. Project and Advanced groups keep their
+destinations available in every layout.
+
 The persistent Project context bar remains visible on every destination, with
 the current Project name, harness, Live/Idle state, and switcher. Navigating
 between destinations never changes the selected Project; switching Projects is
@@ -451,7 +458,8 @@ state. `#/project-brief` opens the Project brief directly. If a saved destinatio
 is retired or a Project destination is unavailable, the Console explains the
 fallback and routes to Build status or Projects as appropriate.
 
-Content uses the full browser width, with only long-form prose capped for
+Resizing the browser preserves the active destination and selected Project.
+Content uses the available browser width, with only long-form prose capped for
 readability.
 
 | View | What it shows |

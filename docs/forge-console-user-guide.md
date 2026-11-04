@@ -147,6 +147,12 @@ Timeline, Terminal, Plan & Team, Artifacts, and Settings. Hover a group to open
 its list, or select it to pin the list open on touch; Advanced is not a
 separate product mode.
 
+The shell keeps full top navigation above 1050px, changes to a compact left
+navigation rail from 721–1050px, and uses the labeled **Menu** drawer at 720px
+or below. In the drawer, open **Project** or **Advanced** to reach its
+destinations. It opens below the context bar, keeping the Project identity,
+switcher, harness, and Live/Idle status visible.
+
 The Project context bar and switcher remain available on every destination.
 Following a link or bookmark never changes the selected Project; switching is
 explicit. Existing routes—including `#/overview`, `#/tasks?task=…`, and
@@ -155,6 +161,8 @@ explicit. Existing routes—including `#/overview`, `#/tasks?task=…`, and
 editable review and approval actions. If a saved destination has been retired
 or a Project destination is unavailable, the Console explains the fallback and
 routes to Build status or Projects as appropriate.
+Resizing between layouts preserves both the active destination and selected
+Project.
 
 Choose **Project files** from **Project** to read the Project idea, Project
 brief, build progress, and feature documents in the Console. Delivered files

@@ -21,6 +21,10 @@ Projects view. No authoring or workflow process is launched by these captures.
 > content, run-level token/cost stats, the Tasks **Tokens** column, and the
 > consolidated **Settings** view.
 >
+> The shell uses full top navigation above 1050px, a compact left rail from
+> 721–1050px, and a labeled **Menu** drawer at 720px or below. The drawer stays
+> below the Project context bar.
+>
 > The Board captures show the semantic HTML/CSS baseline. Board-only capture
 > refreshes Board images and thumbnails without rebuilding the walkthrough GIF.
 
@@ -232,6 +236,17 @@ full browser width.
 
 ![Navigation - category dropdown](images/forge-console/16-nav-menu.png)
 
+### Responsive layouts
+
+The compact rail at 1024px keeps Home, Projects, Project, and Advanced visible;
+opening a group exposes its destinations. At 720px, the **Menu** drawer opens
+below the Project context bar, leaving the project switcher, identity, and
+status visible. Resizing preserves the active destination and Project.
+
+![Medium layout - compact navigation rail at 1024px](images/forge-console/current/home-1024.png)
+
+![Narrow layout - labeled navigation drawer at 720px](images/forge-console/current/nav-drawer-720.png)
+
 ## 17. Project files
 
 Project files foregrounds the idea, brief, progress, and feature documents, then
@@ -260,9 +275,11 @@ evidence, blockers, and next action.
 ## Responsive current captures
 
 The checked-in build was captured at 1440px, 1024px, 720px, 390px, and 320px for
-its routes. Detail-state captures (expanded task, rendered PRD, rendered
-feature, Project brief, artifact detail, and audit log) are also included in
-`images/forge-console/current/`.
+its routes. The navigation shell ranges are wide above 1050px, medium from
+721–1050px, and narrow at 720px or below; browser acceptance also checks the
+1051px, 1050px, 721px, and 720px boundaries. Detail-state captures (expanded
+task, rendered PRD, rendered feature, Project brief, artifact detail, and audit
+log) are also included in `images/forge-console/current/`.
 
 | View | 1024px | 720px | 390px | 320px |
 | --- | --- | --- | --- | --- |

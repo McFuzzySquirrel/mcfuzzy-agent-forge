@@ -113,6 +113,20 @@ function renderNav(activeId: string): void {
   }
 }
 
+function setNavigationDrawerOpen(open: boolean, returnFocus = false): void {
+  const app = document.querySelector<HTMLElement>("#app");
+  const toggle = document.querySelector<HTMLButtonElement>("#nav-toggle");
+  app?.classList.toggle("nav-open", open);
+  toggle?.setAttribute("aria-expanded", open ? "true" : "false");
+  if (open) {
+    const contextbar = document.querySelector<HTMLElement>("#contextbar");
+    const top = contextbar?.getBoundingClientRect().bottom ?? 0;
+    document.documentElement.style.setProperty("--nav-drawer-top", `${Math.ceil(top)}px`);
+  } else if (returnFocus) {
+    toggle?.focus();
+  }
+}
+
 /** Closes any category flyouts that were pinned open by a click. */
 function closeNavMenus(): void {
   const nav = document.querySelector<HTMLElement>("#nav");
@@ -127,14 +141,6 @@ function setNavExpanded(category: HTMLElement, expanded: boolean): void {
   category.querySelector<HTMLElement>(".nav-category-btn")?.setAttribute("aria-expanded", expanded ? "true" : "false");
 }
 
-/** On narrow screens the flyout is fixed; anchor it under its category button. */
-function positionNavMenu(category: HTMLElement): void {
-  const button = category.querySelector<HTMLElement>(".nav-category-btn");
-  if (!button) return;
-  const rect = button.getBoundingClientRect();
-  document.documentElement.style.setProperty("--nav-menu-top", `${Math.round(rect.bottom + 6)}px`);
-}
-
 /**
  * Wires the category navigation once. The bar is rebuilt on every route change,
  * so the handlers are delegated from the persistent `#nav` element: hover and
@@ -144,9 +150,19 @@ function wireNav(): void {
   const nav = document.querySelector<HTMLElement>("#nav");
   if (!nav || nav.dataset.wired === "true") return;
   nav.dataset.wired = "true";
+  const toggle = document.querySelector<HTMLButtonElement>("#nav-toggle");
+  toggle?.addEventListener("click", () => {
+    setNavigationDrawerOpen(toggle.getAttribute("aria-expanded") !== "true");
+  });
 
   nav.addEventListener("click", (event) => {
-    const button = (event.target as HTMLElement).closest<HTMLElement>(".nav-category-btn");
+    const target = event.target as HTMLElement;
+    if (target.closest("a")) {
+      closeNavMenus();
+      setNavigationDrawerOpen(false);
+      return;
+    }
+    const button = target.closest<HTMLElement>(".nav-category-btn");
     if (!button || button.classList.contains("nav-direct")) return;
     event.preventDefault();
     const category = button.closest<HTMLElement>(".nav-category");
@@ -156,14 +172,12 @@ function wireNav(): void {
     if (willOpen) {
       category.classList.add("open");
       setNavExpanded(category, true);
-      positionNavMenu(category);
     }
   });
 
   nav.addEventListener("pointerover", (event) => {
     const category = (event.target as HTMLElement).closest<HTMLElement>(".nav-category");
     if (!category) return;
-    positionNavMenu(category);
     setNavExpanded(category, true);
   });
   nav.addEventListener("pointerout", (event) => {
@@ -182,10 +196,20 @@ function wireNav(): void {
   });
 
   document.addEventListener("click", (event) => {
-    if (!nav.contains(event.target as Node)) closeNavMenus();
+    const target = event.target as Node;
+    if (nav.contains(target)) return;
+    closeNavMenus();
+    if (!toggle?.contains(target)) setNavigationDrawerOpen(false);
   });
   document.addEventListener("keydown", (event) => {
-    if (event.key === "Escape") closeNavMenus();
+    if (event.key === "Escape") {
+      closeNavMenus();
+      if (toggle?.getAttribute("aria-expanded") === "true") setNavigationDrawerOpen(false, true);
+    }
+  });
+  window.addEventListener("resize", () => {
+    if (window.innerWidth > 720) setNavigationDrawerOpen(false);
+    else if (toggle?.getAttribute("aria-expanded") === "true") setNavigationDrawerOpen(true);
   });
 }
 
@@ -320,6 +344,7 @@ function renderJobsBadge(summary: JobsSummary): void {
 // ─── Routing ──────────────────────────────────────────────────────────────────
 
 function render(): void {
+  setNavigationDrawerOpen(false);
   const id = currentRouteId();
   const view = views.find((v) => v.id === id);
   if (!view) {

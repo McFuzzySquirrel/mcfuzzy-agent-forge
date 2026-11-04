@@ -18,6 +18,10 @@ It:
 No model or external authoring runs: every timestamp and artifact in the fixture
 is fixed, so captures are stable across runs.
 
+The full capture also runs browser acceptance against the Console at the wide
+(1051px), medium (721px), and narrow (720px) ranges, including destination
+discovery, Project context, and route/project preservation while resizing.
+
 ## Usage
 
 ```bash
@@ -46,6 +50,8 @@ npm run typecheck
 ## Notes
 
 - The Console Board uses semantic HTML/CSS and does not require PixiJS.
+- The responsive shell includes a medium navigation rail and a narrow drawer
+  capture at `docs/images/forge-console/current/nav-drawer-720.png`.
 - `--board-only` skips unrelated captures and the walkthrough GIF.
 - The **Overview** capture is full-page (viewport resized to the content height)
   so the **Controls** panel, including the **Log harness activity** toggle, is

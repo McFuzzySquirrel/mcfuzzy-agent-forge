@@ -112,13 +112,28 @@ function detailTargets(): CaptureTarget[] {
       viewport: WIDE,
       prepare: async (page) => { await openNavMenu(page, "Advanced"); },
     },
+    {
+      name: "nav-drawer-720",
+      route: "overview",
+      viewport: TABLET,
+      prepare: async (page) => {
+        await clickByText(page, "#nav-toggle", "Menu");
+        await page.waitForFunction(() =>
+          document.querySelector("#nav-toggle")?.getAttribute("aria-expanded") === "true");
+        await openNavMenu(page, "Project");
+        await page.waitForFunction(() => Array.from(document.querySelectorAll<HTMLButtonElement>("button"))
+          .find((button) => button.textContent?.trim().startsWith("Project"))?.getAttribute("aria-expanded") === "true");
+        assert.equal(await page.evaluate(() => location.hash), "#/overview",
+          "Opening the Project group in the drawer should not change the active destination.");
+      },
+    },
   ];
 }
 
 /** Opens a top-nav category flyout by clicking its button. */
 async function openNavMenu(page: Awaited<ReturnType<Browser["newPage"]>>, label: string): Promise<void> {
   await page.evaluate((name) => {
-    const button = Array.from(document.querySelectorAll<HTMLElement>(".nav-category-btn"))
+    const button = Array.from(document.querySelectorAll<HTMLButtonElement>("button.nav-category-btn"))
       .find((node) => (node.textContent ?? "").includes(name));
     button?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
   }, label);
@@ -443,10 +458,133 @@ async function assertNavigationAcceptance(browser: Browser, baseUrl: string): Pr
 export async function captureAll(browser: Browser, baseUrl: string, currentDir: string): Promise<string[]> {
   await assertBoardKeyboardContract(browser, baseUrl);
   await assertNavigationAcceptance(browser, baseUrl);
+  await assertResponsiveShellAcceptance(browser, baseUrl);
   const names = await captureTargets(browser, baseUrl, currentDir, [...routeTargets(), ...detailTargets()]);
   names.push(...await captureProjectLifecycle(browser, baseUrl, currentDir));
   names.push(...await captureProjectBriefLifecycle(browser, baseUrl, currentDir));
   return names;
+}
+
+async function assertResponsiveShellAcceptance(browser: Browser, baseUrl: string): Promise<void> {
+  const page = await openRoute(browser, baseUrl, "overview", { width: 1051, height: 900 });
+  const destinations = [
+    ["Project", [["Build status", "overview"], ["Board", "board"], ["Project brief", "project-brief"], ["Project files", "project-files"], ["Human review", "review-queue"]]],
+    ["Advanced", [["All tasks", "tasks"], ["Logs", "logs"], ["Timeline", "timeline"], ["Terminal", "terminal"], ["Plan & Team", "documents"], ["Artifacts", "artifacts"], ["Settings", "settings"]]],
+  ] as const;
+  const layouts = [
+    { name: "wide", width: 1051, menu: false },
+    { name: "medium", width: 721, menu: false },
+    { name: "narrow", width: 720, menu: true },
+  ] as const;
+
+  try {
+    const selectedProject = await page.$eval('select[aria-label="Switch project"]', (select) => select.value);
+    assert.ok(selectedProject, "The responsive-shell fixture should begin with a selected Project.");
+
+    const assertProjectContext = async (layout: string): Promise<void> => {
+      assert.equal(await page.$eval('select[aria-label="Switch project"]', (select) => select.value), selectedProject,
+        `${layout} navigation must not switch the selected Project.`);
+      assert.match(await page.$eval('header[aria-label="Project context"]', (header) => header.innerText), /ledgerly/i,
+        `${layout} should keep the selected Project identity visible.`);
+      assert.match(await page.$eval('header[aria-label="Project context"]', (header) => header.innerText), /\b(?:Live|Idle)\b/,
+        `${layout} should keep the Project status visible.`);
+      const switcherVisible = await page.$eval('select[aria-label="Switch project"]', (switcher) =>
+        switcher.getClientRects().length > 0 && getComputedStyle(switcher).visibility !== "hidden");
+      assert.equal(switcherVisible, true, `${layout} should keep the Project switcher discoverable.`);
+    };
+
+    const ensureMenuOpen = async (menu: boolean): Promise<void> => {
+      if (!menu) return;
+      const state = await page.$eval("body", (body) => {
+        const button = Array.from(body.querySelectorAll<HTMLButtonElement>("button"))
+          .find((element) => element.textContent?.trim() === "Menu");
+        return button?.getAttribute("aria-expanded") ?? null;
+      });
+      if (state === null) throw new Error("Narrow screens should expose a labeled navigation menu.");
+      if (state !== "true") {
+        await page.$eval("body", (body) => {
+          const button = Array.from(body.querySelectorAll<HTMLButtonElement>("button"))
+            .find((element) => element.textContent?.trim() === "Menu");
+          button?.click();
+        });
+        await page.waitForFunction(() => {
+          const button = Array.from(document.querySelectorAll<HTMLButtonElement>("button"))
+            .find((element) => element.textContent?.trim() === "Menu");
+          return button?.getAttribute("aria-expanded") === "true";
+        });
+      }
+    };
+
+    const activateLink = async (label: string, route: string, menu: boolean): Promise<void> => {
+      await ensureMenuOpen(menu);
+      const visible = await page.$eval('nav[aria-label="Main"]', (nav, text) => {
+        const link = Array.from(nav.querySelectorAll<HTMLAnchorElement>("a"))
+          .find((element) => element.textContent?.trim() === text);
+        if (!link || link.getClientRects().length === 0 || getComputedStyle(link).visibility === "hidden") return false;
+        link.click();
+        return true;
+      }, label);
+      assert.equal(visible, true, `${label} should be discoverable in the responsive navigation.`);
+      await page.waitForFunction((expected) => location.hash.split("?")[0] === expected, { timeout: 10000 }, `#/${route}`);
+      await settle(page);
+    };
+
+    for (const layout of layouts) {
+      const activeRoute = await page.evaluate(() => location.hash);
+      await page.setViewport({ width: layout.width, height: 900, deviceScaleFactor: 1 });
+      await settle(page);
+      assert.equal(await page.evaluate(() => location.hash), activeRoute,
+        `Resizing to ${layout.name} should preserve the active destination.`);
+      await assertProjectContext(layout.name);
+
+      if (layout.menu) {
+        const menuVisible = await page.$eval("body", (body) => {
+          const button = Array.from(body.querySelectorAll<HTMLButtonElement>("button"))
+            .find((element) => element.textContent?.trim() === "Menu");
+          return Boolean(button && button.getClientRects().length && getComputedStyle(button).visibility !== "hidden");
+        });
+        assert.equal(menuVisible, true, "Narrow screens should expose a labeled navigation menu.");
+        await ensureMenuOpen(true);
+        await page.keyboard.press("Escape");
+        const drawerClosed = await page.$eval("#nav-toggle", (button) =>
+          button.getAttribute("aria-expanded") === "false" && document.activeElement === button);
+        assert.equal(drawerClosed, true, "Escape should close the narrow navigation and return focus to Menu.");
+      }
+
+      for (const label of ["Home", "Projects"]) {
+        await activateLink(label, label.toLowerCase(), layout.menu);
+        await assertProjectContext(layout.name);
+      }
+
+      for (const [group, links] of destinations) {
+        for (const [label, route] of links) {
+          await ensureMenuOpen(layout.menu);
+          const opened = await page.$eval('nav[aria-label="Main"]', (nav, name) => {
+            const button = Array.from(nav.querySelectorAll<HTMLButtonElement>("button"))
+              .find((element) => element.textContent?.trim().startsWith(name));
+            if (!button || button.getClientRects().length === 0 || getComputedStyle(button).visibility === "hidden") return false;
+            button.click();
+            return true;
+          }, group);
+          assert.equal(opened, true, `${group} should remain discoverable on ${layout.name} screens.`);
+          await activateLink(label, route, layout.menu);
+          await assertProjectContext(layout.name);
+        }
+      }
+    }
+
+    for (const width of [1051, 1050, 721, 720]) {
+      const route = await page.evaluate(() => location.hash);
+      await page.setViewport({ width, height: 900, deviceScaleFactor: 1 });
+      await settle(page);
+      assert.equal(await page.evaluate(() => location.hash), route,
+        `Resizing to ${width}px should preserve the active destination.`);
+      await assertProjectContext(`${width}px`);
+    }
+    process.stdout.write("  Checking responsive navigation at 1051px, 721px, and 720px\n");
+  } finally {
+    await page.close();
+  }
 }
 
 async function captureProjectLifecycle(browser: Browser, baseUrl: string, currentDir: string): Promise<string[]> {
