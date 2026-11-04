@@ -65,6 +65,34 @@ export function renderProjectFiles(container: HTMLElement): void {
     });
 }
 
+export function renderProjectBrief(container: HTMLElement): void {
+  unmountProjectFiles();
+  container.replaceChildren(
+    el("h2", null, "Project brief"),
+    el("p", { className: "dim" }, "Read the Project brief and return to Build status when you need to review or approve it."),
+    el("p", { className: "panel hint" }, [
+      "Project brief approval is separate from build execution. ",
+      el("a", { href: "#/overview" }, "Open Build status"),
+    ]),
+    el("div", { className: "md", role: "status" }, "Loading Project brief…"),
+  );
+  const myGeneration = generation;
+  const body = container.querySelector<HTMLElement>(".md")!;
+  void api.docContent("docs/PRD.md")
+    .then((file) => {
+      if (myGeneration !== generation) return;
+      body.removeAttribute("role");
+      body.replaceChildren(el("div", { html: renderMarkdown(file.content) }));
+    })
+    .catch(() => {
+      if (myGeneration !== generation) return;
+      body.replaceChildren(el("p", { role: "status" }, [
+        "The Project brief is not available yet or has been removed. ",
+        el("a", { href: "#/overview" }, "Open Build status for the current Project's next action."),
+      ]));
+    });
+}
+
 function renderDocuments(host: HTMLElement, documents: ProjectDocument[]): void {
   host.textContent = "";
   if (documents.length === 0) {

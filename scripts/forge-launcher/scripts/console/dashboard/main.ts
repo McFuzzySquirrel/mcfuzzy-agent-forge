@@ -11,7 +11,7 @@ import { renderHumanReviewQueue, renderTasks, unmountTasks } from "./views/tasks
 import { renderLogs, unmountLogs } from "./views/logs.js";
 import { refreshDocuments, renderDocuments, unmountDocuments } from "./views/documents.js";
 import { renderArtifacts, unmountArtifacts } from "./views/artifacts.js";
-import { renderProjectFiles, unmountProjectFiles } from "./views/project-files.js";
+import { renderProjectBrief, renderProjectFiles, unmountProjectFiles } from "./views/project-files.js";
 import { renderTimeline, unmountTimeline } from "./views/timeline.js";
 import { refreshProjectList, renderProjects, unmountProjects } from "./views/projects.js";
 import { renderNew, unmountNew } from "./views/new.js";
@@ -30,31 +30,28 @@ interface View {
 }
 
 const views: View[] = [
-  { id: "home", label: "Home", group: "Start", render: renderHome, unmount: unmountHome },
-  { id: "projects", label: "Projects", group: "Start", render: renderProjects, unmount: unmountProjects },
-  { id: "project-files", label: "Project files", group: "Start", render: renderProjectFiles, unmount: unmountProjectFiles },
-  { id: "overview", label: "Overview", group: "Pipeline", render: renderOverview, unmount: unmountOverview, refresh: refreshOverview },
-  { id: "board", label: "Board", group: "Monitor", render: renderBoard, unmount: unmountBoard },
-  { id: "review-queue", label: "Human review", group: "Tasks", render: renderHumanReviewQueue, unmount: unmountTasks },
-  { id: "tasks", label: "All tasks", group: "Monitor", render: renderTasks, unmount: unmountTasks },
-  { id: "logs", label: "Logs", group: "Monitor", render: renderLogs, unmount: unmountLogs },
-  { id: "timeline", label: "Timeline", group: "Monitor", render: renderTimeline, unmount: unmountTimeline },
-  { id: "documents", label: "Plan & Team", group: "Review", render: renderDocuments, unmount: unmountDocuments, refresh: refreshDocuments },
-  { id: "artifacts", label: "Artifacts", group: "Review", render: renderArtifacts, unmount: unmountArtifacts },
-  { id: "terminal", label: "Terminal", group: "Review", render: renderTerminal, unmount: unmountTerminal },
-  { id: "settings", label: "Settings", group: "Settings", render: renderSettings, unmount: unmountSettings, refresh: refreshSettings },
+  { id: "home", label: "Home", group: "", render: renderHome, unmount: unmountHome },
+  { id: "projects", label: "Projects", group: "", render: renderProjects, unmount: unmountProjects },
+  { id: "overview", label: "Build status", group: "Project", render: renderOverview, unmount: unmountOverview, refresh: refreshOverview },
+  { id: "board", label: "Board", group: "Project", render: renderBoard, unmount: unmountBoard },
+  { id: "project-brief", label: "Project brief", group: "Project", render: renderProjectBrief, unmount: unmountProjectFiles },
+  { id: "project-files", label: "Project files", group: "Project", render: renderProjectFiles, unmount: unmountProjectFiles },
+  { id: "review-queue", label: "Human review", group: "Project", render: renderHumanReviewQueue, unmount: unmountTasks },
+  { id: "tasks", label: "All tasks", group: "Advanced", render: renderTasks, unmount: unmountTasks },
+  { id: "logs", label: "Logs", group: "Advanced", render: renderLogs, unmount: unmountLogs },
+  { id: "timeline", label: "Timeline", group: "Advanced", render: renderTimeline, unmount: unmountTimeline },
+  { id: "terminal", label: "Terminal", group: "Advanced", render: renderTerminal, unmount: unmountTerminal },
+  { id: "documents", label: "Plan & Team", group: "Advanced", render: renderDocuments, unmount: unmountDocuments, refresh: refreshDocuments },
+  { id: "artifacts", label: "Artifacts", group: "Advanced", render: renderArtifacts, unmount: unmountArtifacts },
+  { id: "settings", label: "Settings", group: "Advanced", render: renderSettings, unmount: unmountSettings, refresh: refreshSettings },
   { id: "new", label: "New project", group: "", render: renderNew, unmount: unmountNew },
 ];
 
-/** Sidebar sections in display order; the "new" wizard is intentionally absent. */
-const NAV_GROUPS: Array<[string, string[]]> = [
-  ["Start", ["home", "projects", "project-files"]],
-  ["Tasks", ["review-queue"]],
-  ["Pipeline", ["overview"]],
-  ["Monitor", ["board", "tasks", "logs", "timeline"]],
-  ["Review", ["documents", "artifacts", "terminal"]],
-  ["Settings", ["settings"]],
-];
+/** Project navigation and technical destinations; Home and Projects stay global. */
+const NAV_GROUPS: Array<[string, string[]]> = ["Project", "Advanced"].map((group): [string, string[]] => [
+  group,
+  views.filter((view) => view.group === group).map((view) => view.id),
+]);
 
 // Views that make sense without a selected repo (the landing surface).
 const NO_REPO_ROUTES = new Set(["home", "new", "projects"]);
@@ -62,6 +59,7 @@ const NO_REPO_ROUTES = new Set(["home", "new", "projects"]);
 let active: View | null = null;
 let activeProject = "none";
 let unsubscribeStore: (() => void) | undefined;
+let navigationNotice: { message: string; destination: string } | null = null;
 
 function currentRouteId(): string {
   const raw = location.hash.replace(/^#\/?/, "").split("?")[0]!;
@@ -74,6 +72,17 @@ function renderNav(activeId: string): void {
   nav.textContent = "";
   const terminalRunning = isTerminalSessionActive();
 
+  for (const id of ["home", "projects"]) {
+    const view = views.find((item) => item.id === id);
+    if (!view) continue;
+    const link = document.createElement("a");
+    link.href = `#/${view.id}`;
+    link.textContent = view.label;
+    link.className = `nav-category-btn nav-direct${view.id === activeId ? " active" : ""}`;
+    if (view.id === activeId) link.setAttribute("aria-current", "page");
+    nav.appendChild(link);
+  }
+
   for (const [group, ids] of NAV_GROUPS) {
     const groupViews = ids
       .map((id) => views.find((view) => view.id === id))
@@ -81,18 +90,6 @@ function renderNav(activeId: string): void {
     if (groupViews.length === 0) continue;
     const active = groupViews.some((view) => view.id === activeId);
     const dot = terminalRunning && groupViews.some((view) => view.id === "terminal");
-
-    // A single-item category (Settings) is a direct link, not a dropdown.
-    if (groupViews.length === 1) {
-      const view = groupViews[0]!;
-      const link = document.createElement("a");
-      link.href = `#/${view.id}`;
-      link.textContent = dot ? `${group} ●` : group;
-      if (dot) link.title = "A terminal session is running in the background.";
-      link.className = `nav-category-btn nav-direct${active ? " active" : ""}`;
-      nav.appendChild(link);
-      continue;
-    }
 
     const category = el("div", { className: "nav-category" });
     const button = el("button", {
@@ -108,6 +105,7 @@ function renderNav(activeId: string): void {
       link.textContent = view.id === "terminal" && terminalRunning ? `${view.label} ●` : view.label;
       link.setAttribute("role", "menuitem");
       if (view.id === activeId) link.setAttribute("aria-current", "page");
+      if (view.id === "terminal" && terminalRunning) link.title = "A terminal session is running in the background.";
       menu.appendChild(link);
     }
     category.append(button, menu);
@@ -323,7 +321,21 @@ function renderJobsBadge(summary: JobsSummary): void {
 
 function render(): void {
   const id = currentRouteId();
-  const view = views.find((v) => v.id === id) ?? views[0]!;
+  const view = views.find((v) => v.id === id);
+  if (!view) {
+    const destination = store.summary ? "overview" : "projects";
+    setNavigationFallback(
+      destination,
+      `The saved destination “${id}” is no longer available. ${store.summary ? "Build status is the next useful Project destination." : "Choose a Project to continue."}`,
+    );
+    return;
+  }
+  if (!store.summary && !NO_REPO_ROUTES.has(id)) {
+    setNavigationFallback("projects", `The “${view.label}” destination is unavailable because its Project context could not be loaded. Choose a Project to continue.`);
+    return;
+  }
+  if (navigationNotice && location.hash !== `#/${navigationNotice.destination}`) navigationNotice = null;
+  renderNavigationNotice();
   active?.unmount();
   active = view;
   renderNav(view.id);
@@ -334,6 +346,31 @@ function render(): void {
   container.textContent = "";
   view.render(container);
   activeProject = store.projectKey();
+}
+
+function setNavigationFallback(destination: string, message: string): void {
+  navigationNotice = { message, destination };
+  renderNavigationNotice();
+  const fallback = `#/${destination}`;
+  if (location.hash === fallback) {
+    render();
+  } else {
+    location.hash = fallback;
+  }
+}
+
+function renderNavigationNotice(): void {
+  const host = document.querySelector<HTMLElement>("#navigation-notice");
+  if (!host) return;
+  host.replaceChildren();
+  host.hidden = !navigationNotice;
+  if (!navigationNotice) return;
+  const view = views.find((item) => item.id === navigationNotice?.destination);
+  const label = view?.label ?? "Projects";
+  host.append(
+    el("span", null, navigationNotice.message),
+    el("a", { className: "btn btn-sm", href: `#/${navigationNotice.destination}` }, `Open ${label}`),
+  );
 }
 
 function connectEvents(): void {
@@ -376,7 +413,11 @@ async function init(): Promise<void> {
     renderContextBar();
     const route = currentRouteId();
     if (!store.summary && !NO_REPO_ROUTES.has(route)) {
-      location.hash = "#/home";
+      const target = views.find((view) => view.id === route);
+      setNavigationFallback(
+        "projects",
+        `The “${target?.label ?? route}” destination is unavailable because its Project context could not be loaded. Choose a Project to continue.`,
+      );
       return;
     }
     if (store.projectKey() !== activeProject) {

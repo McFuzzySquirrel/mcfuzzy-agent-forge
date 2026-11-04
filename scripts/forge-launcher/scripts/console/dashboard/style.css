@@ -150,6 +150,20 @@ a:hover { text-decoration: underline; }
   flex-shrink: 0;
 }
 
+.navigation-notice:not([hidden]) {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 12px;
+  margin: 10px 16px 0;
+  padding: 10px 12px;
+  border: 1px solid var(--panel-border);
+  border-radius: var(--radius);
+  background: var(--panel-bg);
+  color: var(--text);
+}
+
 .context-project {
   display: flex;
   flex-direction: column;

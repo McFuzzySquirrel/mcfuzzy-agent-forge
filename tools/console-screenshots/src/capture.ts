@@ -20,7 +20,7 @@ const TABLET: Viewport = { width: 720, height: 1100 };
 const MOBILE_L: Viewport = { width: 390, height: 900 };
 const MOBILE_S: Viewport = { width: 320, height: 900 };
 
-const ROUTES = ["home", "overview", "board", "review-queue", "tasks", "logs", "documents", "artifacts", "project-files", "timeline", "projects", "new", "settings"] as const;
+const ROUTES = ["home", "overview", "board", "project-brief", "project-files", "review-queue", "tasks", "logs", "documents", "artifacts", "timeline", "projects", "new", "settings"] as const;
 const VIEWPORTS: Array<[label: string, viewport: Viewport]> = [
   ["1440", WIDE],
   ["1024", MEDIUM],
@@ -110,7 +110,7 @@ function detailTargets(): CaptureTarget[] {
       name: "nav-menu-1440",
       route: "overview",
       viewport: WIDE,
-      prepare: async (page) => { await openNavMenu(page, "Monitor"); },
+      prepare: async (page) => { await openNavMenu(page, "Advanced"); },
     },
   ];
 }
@@ -313,8 +313,136 @@ async function captureTargets(browser: Browser, baseUrl: string, currentDir: str
   return written;
 }
 
+async function assertNavigationAcceptance(browser: Browser, baseUrl: string): Promise<void> {
+  const page = await openRoute(browser, baseUrl, "home", WIDE);
+  try {
+    const selectedProject = await page.$eval('select[aria-label="Switch project"]', (select) => select.value);
+    assert.ok(selectedProject, "The fixture should begin with a selected Project.");
+
+    const assertProjectContext = async (): Promise<void> => {
+      assert.equal(await page.$eval('select[aria-label="Switch project"]', (select) => select.value), selectedProject,
+        "Navigation must not switch the selected Project implicitly.");
+      assert.match(await page.$eval('header[aria-label="Project context"]', (header) => header.innerText), /ledgerly/i,
+        "The selected Project context should remain visible on every destination.");
+    };
+    const clickNavItem = async (kind: "button" | "a", label: string): Promise<void> => {
+      const found = await page.$eval("nav[aria-label='Main']", (nav, args) => {
+        const [tagName, text] = args as [string, string];
+        const elements = Array.from(nav.querySelectorAll<HTMLElement>(tagName));
+        const item = elements.find((element) => element.textContent?.trim().startsWith(text));
+        if (!item) return false;
+        const style = getComputedStyle(item);
+        const visible = Boolean(item.getClientRects().length) && style.display !== "none" && style.visibility !== "hidden";
+        if (!visible && tagName === "a") return false;
+        item.click();
+        return true;
+      }, [kind, label]);
+      assert.equal(found, true, `${label} should be visible in the navigation.`);
+      await settle(page);
+    };
+    const openDestination = async (group: string, label: string, route: string): Promise<void> => {
+      process.stdout.write(`  Checking navigation: ${label}\n`);
+      await clickNavItem("button", group);
+      await clickNavItem("a", label);
+      try {
+        await page.waitForFunction((expected) => location.hash.split("?")[0] === expected, { timeout: 15000 }, route);
+      } catch {
+        throw new Error(`${label} did not open its expected destination ${route}; the browser is at ${await page.evaluate(() => location.hash)}.`);
+      }
+      await settle(page);
+      if (label === "Project brief") {
+        await page.waitForFunction(() => document.body.innerText.includes("Ledgerly gives a small company"),
+          { timeout: 10000 });
+      }
+      await assertProjectContext();
+    };
+
+    for (const label of ["Home", "Projects"]) {
+      await page.$eval("nav[aria-label='Main']", (nav, text) => {
+        const link = Array.from(nav.querySelectorAll<HTMLAnchorElement>("a"))
+          .find((element) => element.textContent?.trim() === text);
+        if (!link || !link.getClientRects().length) throw new Error(`${text} should remain a visible global destination.`);
+      }, label);
+    }
+    await page.$eval("nav[aria-label='Main']", (nav) => {
+      for (const text of ["Project", "Advanced"]) {
+        const button = Array.from(nav.querySelectorAll<HTMLButtonElement>("button"))
+          .find((element) => element.textContent?.trim().startsWith(text));
+        if (!button || !button.getClientRects().length) throw new Error(`${text} should be a visible navigation group.`);
+      }
+    });
+
+    await clickNavItem("a", "Projects");
+    await page.waitForFunction(() => location.hash === "#/projects");
+    await assertProjectContext();
+    await clickNavItem("a", "Home");
+    await page.waitForFunction(() => location.hash === "#/home");
+    await assertProjectContext();
+
+    for (const [label, route] of [
+      ["Build status", "#/overview"],
+      ["Board", "#/board"],
+      ["Project brief", "#/project-brief"],
+      ["Project files", "#/project-files"],
+      ["Human review", "#/review-queue"],
+    ] as const) {
+      await openDestination("Project", label, route);
+    }
+
+    for (const [label, route] of [
+      ["All tasks", "#/tasks"],
+      ["Logs", "#/logs"],
+      ["Timeline", "#/timeline"],
+      ["Terminal", "#/terminal"],
+      ["Plan & Team", "#/documents"],
+      ["Artifacts", "#/artifacts"],
+      ["Settings", "#/settings"],
+    ] as const) {
+      await openDestination("Advanced", label, route);
+    }
+
+    const taskBookmark = "#/tasks?task=EXP-2&feature-review=1";
+    await page.goto(`${baseUrl}/${taskBookmark}`, { waitUntil: "load" });
+    await settle(page);
+    assert.equal(await page.evaluate(() => location.hash), taskBookmark,
+      "A bookmarked Task destination should retain its applicable query state.");
+    assert.match(await page.$eval("body", (body) => body.innerText), /Approval routing/,
+      "A bookmarked Task link should open the intended Task.");
+    await assertProjectContext();
+
+    const stageBookmark = "#/documents?stage=team";
+    process.stdout.write("  Checking bookmarked destinations\n");
+    await page.goto(`${baseUrl}/${stageBookmark}`, { waitUntil: "load" });
+    await settle(page);
+    assert.equal(await page.evaluate(() => location.hash), stageBookmark,
+      "A Plan & Team stage bookmark should retain its query state.");
+    await assertProjectContext();
+
+    for (const bookmark of ["#/terminal?authoring=prd", "#/projects?bootstrap=1"]) {
+      await page.goto(`${baseUrl}/${bookmark}`, { waitUntil: "load" });
+      await settle(page);
+      assert.equal(await page.evaluate(() => location.hash), bookmark,
+        `The ${bookmark} bookmark should retain its destination and query state.`);
+      await assertProjectContext();
+    }
+
+    process.stdout.write("  Checking retired destination fallback\n");
+    await page.goto(`${baseUrl}/#/retired-diagnostics?task=EXP-2`, { waitUntil: "load" });
+    await page.waitForFunction(() => location.hash === "#/overview", { timeout: 15000 });
+    await page.waitForFunction(() => document.body.innerText.includes("retired-diagnostics"), { timeout: 10000 });
+    assert.match(await page.$eval("body", (body) => body.innerText), /no longer available|retired/i,
+      "A retired destination fallback should explain why it could not be opened.");
+    assert.equal(await page.evaluate(() => location.hash), "#/overview",
+      "A retired Project destination should route to Build status without selecting another Project.");
+    await assertProjectContext();
+  } finally {
+    await page.close();
+  }
+}
+
 export async function captureAll(browser: Browser, baseUrl: string, currentDir: string): Promise<string[]> {
   await assertBoardKeyboardContract(browser, baseUrl);
+  await assertNavigationAcceptance(browser, baseUrl);
   const names = await captureTargets(browser, baseUrl, currentDir, [...routeTargets(), ...detailTargets()]);
   names.push(...await captureProjectLifecycle(browser, baseUrl, currentDir));
   names.push(...await captureProjectBriefLifecycle(browser, baseUrl, currentDir));

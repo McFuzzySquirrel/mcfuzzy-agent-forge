@@ -67,9 +67,10 @@ page with an at-a-glance summary.
 
 ---
 
-## 3. Drive the pipeline from Overview
+## 3. Drive the pipeline from Build status
 
-The Overview is the main control center for a project. It shows:
+Build status (the existing Overview route) is the main control center for a
+Project. It shows:
 
 - the run header (Live/Idle indicator, harness badge, and control state),
 - progress counters,
@@ -137,19 +138,29 @@ review or other approval rules.
 
 ---
 
-## 4. Monitor a build in the main views
+## 4. Navigate the Project and Advanced views
 
-Navigation is grouped under top categories (**Start / Pipeline / Monitor /
-Review / Settings**); hovering a category opens its list, and selecting it pins
-the list open. A persistent project context bar below the menu shows the current
-project name, harness, and Live/Idle state, and its switcher changes projects
-from any view.
+**Home** and **Projects** are global destinations. The **Project** group offers
+Build status, Board, Project brief, Project files, and Human review for the
+selected Project. The visible **Advanced** group contains All tasks, Logs,
+Timeline, Terminal, Plan & Team, Artifacts, and Settings. Hover a group to open
+its list, or select it to pin the list open on touch; Advanced is not a
+separate product mode.
 
-Choose **Project files** from **Start** to read the Project idea, Project brief,
-build progress, and feature documents in the Console. Delivered files are
-listed separately with an explicit **Open externally** action. This view does
-not edit or remove repository content; Task-by-Task artifact history remains in
-**Artifacts**.
+The Project context bar and switcher remain available on every destination.
+Following a link or bookmark never changes the selected Project; switching is
+explicit. Existing routes—including `#/overview`, `#/tasks?task=…`, and
+`#/documents?stage=…`—keep their destination and applicable query state.
+`#/project-brief` opens the readable brief directly; use Build status for its
+editable review and approval actions. If a saved destination has been retired
+or a Project destination is unavailable, the Console explains the fallback and
+routes to Build status or Projects as appropriate.
+
+Choose **Project files** from **Project** to read the Project idea, Project
+brief, build progress, and feature documents in the Console. Delivered files
+are listed separately with an explicit **Open externally** action. This view
+does not edit or remove repository content; Task-by-Task artifact history
+remains in **Advanced → Artifacts**.
 
 Once the build starts, switch between the views to follow the work:
 
@@ -175,24 +186,24 @@ Once the build starts, switch between the views to follow the work:
   - The Board announces failures, newly ready Human reviews, and cleared
     blockers, but not routine progress. Loading, empty, failed, and stale data
     states offer a next step.
-- **Tasks**: a focused queue containing only Human review Tasks. Each entry
+- **Human review**: a focused queue containing only Human review Tasks. Each entry
   shows why it is ready or waiting, its Task-specific criteria and references,
   the blocker, and who acts next. A Human review is separate from Project
   brief approval and requires a person's findings and explicit Task-bound
   approval; agent or unattended flags cannot approve it.
-- **All tasks**: the sortable, filterable technical Task table with a detail
+- **All tasks (Advanced)**: the sortable, filterable technical Task table with a detail
   drawer. The **Tokens** column and drawer show harness-reported token and
   cost usage (or an explicit "not reported"); the Overview run stats show the
   run totals.
-- **Logs**: the engine and authoring log tail plus the live audit event stream.
-- **Plan & Team**: the technical project documents as a table (kind, title, path, status)
+- **Logs (Advanced)**: the engine and authoring log tail plus the live audit event stream.
+- **Plan & Team (Advanced)**: the technical project documents as a table (kind, title, path, status)
   and the generated agent/skill files. Selecting a document opens it in a wide
   popup with an **Open externally** button; `forge-requirement` and `forge-task`
   blocks render as tables instead of code. Skills are shown as cards grouped
   into **Forge skills** and **Project skills**; the authoring stage cards and
   re-derivation footer live here too.
-- **Artifacts**: the detailed outputs and provenance for each Task.
-- **Settings**: Appearance (System/Light/Dark theme), authoring models, execution preferences (build mode, concurrency, auto-commit, harness logging, task timeouts), and per-agent model overrides in one place.
+- **Artifacts (Advanced)**: the detailed outputs and provenance for each Task.
+- **Settings (Advanced)**: Appearance (System/Light/Dark theme), authoring models, execution preferences (build mode, concurrency, auto-commit, harness logging, task timeouts), and per-agent model overrides in one place.
 
 The Console uses the selected harness root for team, report, and model-override
 operations. It does not merge agents with the same identity from other harness
@@ -200,7 +211,9 @@ roots, so a skills-only directory cannot silently replace the generated team.
 For an existing compiled manifest, the manifest's `harnessRoot` is preferred
 over automatic detection. If that path is stale, update the selected root and
 recompile the manifest explicitly; the Console will not silently switch roots.
-- **Timeline**: a chronological record of important events and failures.
+- **Timeline (Advanced)**: a chronological record of important events and failures.
+- **Terminal (Advanced)**: an interactive browser session for the selected
+  harness CLI or an existing authoring target.
 
 The most useful combination for day-to-day work is usually Overview + Board + Logs.
 

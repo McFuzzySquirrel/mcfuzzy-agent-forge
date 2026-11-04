@@ -16,10 +16,10 @@ Projects view. No authoring or workflow process is launched by these captures.
 
 > See [forge-console.md](forge-console.md) for the full reference.
 >
-> **Capture note (v3.112):** these captures show the top category navigation
-> (hover or select a category for its dropdown), the persistent project context
-> bar, full-width content, run-level token/cost stats, the Tasks **Tokens**
-> column, and the consolidated **Settings** view.
+> These captures show global **Home / Projects** links, the **Project** and
+> **Advanced** navigation groups, the persistent Project context bar, full-width
+> content, run-level token/cost stats, the Tasks **Tokens** column, and the
+> consolidated **Settings** view.
 >
 > The Board captures show the semantic HTML/CSS baseline. Board-only capture
 > refreshes Board images and thumbnails without rebuilding the walkthrough GIF.
@@ -223,9 +223,12 @@ A single view for project configuration plus system-level defaults:
 
 ## 16. Navigation menu
 
-Navigation is a top bar of categories. Hovering a category opens its views, and
-selecting it pins the list open for touch; the category that owns the current
-view keeps the amber underline. The page content uses the full browser width.
+Home and Projects remain global links. The Project group contains the direct
+Project destinations, while the visible Advanced group keeps the full
+technical surfaces available without a separate product mode. Hovering a group
+opens its views, and selecting it pins the list open for touch; the group that
+owns the current view keeps the amber underline. The page content uses the
+full browser width.
 
 ![Navigation - category dropdown](images/forge-console/16-nav-menu.png)
 
@@ -239,6 +242,13 @@ lists delivered files separately from Task-by-Task history.
 Selecting **Read Project brief** opens its rendered Markdown in the Console.
 
 ![Project files - rendered brief](images/forge-console/17b-project-files-detail.png)
+
+### Project brief destination
+
+The Project group also opens the readable Project brief directly. Build status
+remains the place for the editable review and approval actions.
+
+![Project brief - direct destination](images/forge-console/current/project-brief-1440.png)
 
 ## 18. Human review
 
@@ -266,6 +276,7 @@ feature, Project brief, artifact detail, and audit log) are also included in
 | Human review | [image](images/forge-console/current/review-queue-1024.png) | [image](images/forge-console/current/review-queue-720.png) | [image](images/forge-console/current/review-queue-390.png) | [image](images/forge-console/current/review-queue-320.png) |
 | Timeline | [image](images/forge-console/current/timeline-1024.png) | [image](images/forge-console/current/timeline-720.png) | [image](images/forge-console/current/timeline-390.png) | [image](images/forge-console/current/timeline-320.png) |
 | Projects | [image](images/forge-console/current/projects-1024.png) | [image](images/forge-console/current/projects-720.png) | [image](images/forge-console/current/projects-390.png) | [image](images/forge-console/current/projects-320.png) |
+| Project brief | [image](images/forge-console/current/project-brief-1024.png) | [image](images/forge-console/current/project-brief-720.png) | [image](images/forge-console/current/project-brief-390.png) | [image](images/forge-console/current/project-brief-320.png) |
 | New project | [image](images/forge-console/current/new-1024.png) | [image](images/forge-console/current/new-720.png) | [image](images/forge-console/current/new-390.png) | [image](images/forge-console/current/new-320.png) |
 | Settings | [image](images/forge-console/current/settings-1024.png) | [image](images/forge-console/current/settings-720.png) | [image](images/forge-console/current/settings-390.png) | [image](images/forge-console/current/settings-320.png) |
 

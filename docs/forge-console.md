@@ -46,7 +46,7 @@ The server prints a `http://127.0.0.1:4300` URL and opens your default browser.
 From there:
 
 1. **Create a project** (New Project wizard) or **open an existing one**.
-2. On the **Overview**, click **Continue** to advance the pipeline one stage at a
+2. On **Build status**, click **Continue** to advance the pipeline one stage at a
    time - open interactive PRD authoring, generate the agent team, generate
    project skills, compile the manifest, then start the build.
 3. Watch it live on the **Board** / **Tasks** / **Logs** views, and use
@@ -94,7 +94,7 @@ Projects and existing-application setup remain available as secondary choices.
   selected. A non-Git folder requires the explicit **Initialize git if needed**
   option.
 
-The **Projects** tab shows project name, state, and last accessed date/time,
+The global **Projects** destination shows project name, state, and last accessed date/time,
 without filesystem paths in the list. Use a row's **Open** action to switch
 projects. Opening follows the Project's current lifecycle: new and partially
 authored Projects open at interactive authoring, Projects needing review open at
@@ -435,28 +435,41 @@ the exact command to run manually.
 
 ## Views
 
-The views are grouped under top categories (**Start / Tasks / Pipeline / Monitor /
-Review / Settings**); hovering a category opens its list, and selecting it pins
-the list open (for touch). A persistent project context bar below the menu shows
-the current project name, harness, Live/Idle state, a project switcher, and the
-Help button + connection status. Content uses the full browser width, with only
-long-form prose capped for readability.
+**Home** and **Projects** are global destinations. The **Project** group offers
+Build status, Board, Project brief, Project files, and Human review for the
+currently selected Project. A visible **Advanced** group exposes the full Tasks
+table, Logs, Timeline, Terminal, Plan & Team, Artifacts, and Settings; Advanced
+is a navigation group, not a separate product mode. Hovering a group opens its
+list, and selecting it pins the list open for touch.
+
+The persistent Project context bar remains visible on every destination, with
+the current Project name, harness, Live/Idle state, and switcher. Navigating
+between destinations never changes the selected Project; switching Projects is
+an explicit action. Existing destination URLs such as `#/overview`,
+`#/tasks?task=…`, and `#/documents?stage=…` remain valid and keep their query
+state. `#/project-brief` opens the Project brief directly. If a saved destination
+is retired or a Project destination is unavailable, the Console explains the
+fallback and routes to Build status or Projects as appropriate.
+
+Content uses the full browser width, with only long-form prose capped for
+readability.
 
 | View | What it shows |
 |---|---|
 | **Home** | create a new project or open an existing one (landing), including live status labels for detached work. |
-| **Projects** | switch projects, add a folder, or remove one or more projects from Forge. |
-| **Project files** | read the Project idea, Project brief, progress, and feature documents, and open delivered files without Task-by-Task history. |
-| **Overview** | run status, progress + counts, blockers, the pipeline next-step card with a **Manual build** checkbox, background-job status, run controls (Run/Resume/Pause/Stop, Replay, build mode), and a **Launch \<harness\> CLI** button. Also the **Re-derive team & skills** panel when authoring is stale, and manifest reconciliation with a confirmed **Reset changed tasks for review**. |
-| **Terminal** | interactive browser session for the selected harness or an existing authoring target, with PTY input/output, resize, stop, and external-terminal fallback. |
+| **Projects** | global destination to switch projects, add a folder, or remove one or more projects from Forge. |
+| **Build status** | Project run status, progress + counts, blockers, the pipeline next-step card with a **Manual build** checkbox, background-job status, run controls (Run/Resume/Pause/Stop, Replay, build mode), and a **Launch \<harness\> CLI** button. Also the **Re-derive team & skills** panel when authoring is stale, and manifest reconciliation with a confirmed **Reset changed tasks for review**. |
 | **Board** | the semantic HTML/CSS Board in **Kanban** or **Gantt** mode, with shared Task summaries and details, attention cues, status filters, and per-view scroll positions. |
-| **Tasks** | a focused queue of Human review Tasks, with each Task's criteria, references, blocker, next responsible action, and explicit review control. This is separate from Project brief approval. |
-| **All tasks** | every Task in a filterable/sortable table with a detail drawer, editable per-task timeout, explicit/range selection controls for manual mode, and a **Launch \<harness\> CLI** button. |
-| **Logs** | `docs/engine-run.log` tail + the audit event stream (live via SSE). |
-| **Plan & Team** | authoring stage cards — always actionable, each stating why it is stale — plus the re-derivation footer, technical project documents, and agents and skills in collapsible card sections. Requirement and task blocks render as tables. |
-| **Artifacts** | Task-produced files and records (`docs/artifacts/`), browsable by type and Task with their detailed provenance. |
-| **Timeline** | chronological audit events, failures highlighted. |
-| **Settings** | Appearance (System/Light/Dark theme), authoring models (runner + stage models), execution preferences (build mode, concurrency, auto-commit, harness logging, task timeouts), and per-agent model overrides + the model planning terminal. |
+| **Project brief** | the Project's readable PRD, with a link back to Build status for the editable review and approval actions. |
+| **Project files** | read the Project idea, Project brief, progress, and feature documents, and open delivered files without Task-by-Task history. |
+| **Human review** | focused queue of Human review Tasks, with each Task's criteria, references, blocker, next responsible action, and explicit review control. This is separate from Project brief approval. |
+| **All tasks (Advanced)** | every Task in a filterable/sortable table with a detail drawer, editable per-task timeout, explicit/range selection controls for manual mode, and a **Launch \<harness\> CLI** button. |
+| **Logs (Advanced)** | `docs/engine-run.log` tail + the audit event stream (live via SSE). |
+| **Timeline (Advanced)** | chronological audit events, failures highlighted. |
+| **Terminal (Advanced)** | interactive browser session for the selected harness or an existing authoring target, with PTY input/output, resize, stop, and external-terminal fallback. |
+| **Plan & Team (Advanced)** | authoring stage cards — always actionable, each stating why it is stale — plus the re-derivation footer, technical project documents, and agents and skills in collapsible card sections. Requirement and task blocks render as tables. |
+| **Artifacts (Advanced)** | Task-produced files and records (`docs/artifacts/`), browsable by type and Task with their detailed provenance. |
+| **Settings (Advanced)** | Appearance (System/Light/Dark theme), authoring models (runner + stage models), execution preferences (build mode, concurrency, auto-commit, harness logging, task timeouts), and per-agent model overrides + the model planning terminal. |
 
 A **Help** button (in the context bar) explains the UI, the pipeline, each view,
 and key terms.
