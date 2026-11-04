@@ -105,7 +105,7 @@ function quickHelp(): HTMLElement {
       "Before a manifest exists, enable Manual build if you want the pipeline to stop at Create manifest instead of starting the full workflow.",
       "After the manifest exists, Controls offers auto (full workflow) or manual (selected tasks). Manual mode requires a saved task selection from All tasks; dependencies are expanded automatically.",
       dl([
-        ["Run / Resume", "start or continue the workflow; manual mode uses Run selected / Resume selected."],
+        ["Run / Resume", "Run selected and Resume selected require a Build that has already been explicitly started from the prepared plan on Build status."],
         ["Pause / Stop", "Pause waits for the current task to finish; Stop asks for confirmation before terminating the running engine."],
         ["Replay failed", "retry a selected failed task."],
       ]),

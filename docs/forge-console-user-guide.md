@@ -471,13 +471,15 @@ approved in the terminal rather than bypassed.
 The assistant is not applied automatically. Review its changes and update the
 model plan or agent overrides explicitly.
 
-For a targeted run before the first build starts, enable the **Manual build**
-checkbox in the Build status pipeline card and click **Create manifest**. The
-manifest is created without starting the engine. Then use the checkboxes or
-range picker in **All tasks**, click **Save selection**, switch to Build status
-**Controls** panel to **manual**, and click **Run selected**. The engine expands
-selected tasks to include unmet dependencies while leaving unselected tasks
-untouched.
+For a targeted first Build, enable **Manual build** in the Build status
+pipeline card before clicking **Create manifest**. The manifest is created
+without starting the engine. Use the checkboxes or range picker in **All
+tasks**, then click **Save selection**. When the prepared plan is ready, return
+to **Build status** and choose **Start build**; it honors the saved manual mode
+and selection. **Run selected** and **Resume selected** in **All tasks** become
+available after that first Build has started. Before then, they send no run or
+resume request and direct you to **Build status**. The engine expands selected
+tasks to include unmet dependencies while leaving unselected tasks untouched.
 
 ---
 

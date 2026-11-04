@@ -543,6 +543,12 @@ should behave:
   **All tasks** view. The primary button text changes to **Run selected** /
   **Resume selected**.
 
+Before a Project has a Build run, **Run selected** and **Resume selected** in
+**All tasks** do not send a run or resume request. They direct the user to
+**Build status** to review the prepared plan and choose **Start build**
+explicitly. A saved manual selection and mode still apply to that first Build;
+after it has started, manual task execution remains available from **All tasks**.
+
 Manual selections are stored in `docs/engine-config.json` with the run mode, the
 selection scope (`single`, `range`, or `list`), and the selected task IDs. The
 engine expands dependencies automatically when a selected task needs them, so

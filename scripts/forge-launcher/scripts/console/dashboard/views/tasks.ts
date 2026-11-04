@@ -29,6 +29,7 @@ let rangeStartControl: HTMLSelectElement | null = null;
 let rangeEndControl: HTMLSelectElement | null = null;
 let taskViewContainer: HTMLElement | null = null;
 let featureReviewHost: HTMLElement | null = null;
+let runSelectionStatus: HTMLElement | null = null;
 let explicitFeatureReview = false;
 let runSelectionControl: HTMLButtonElement | null = null;
 let resumeSelectionControl: HTMLButtonElement | null = null;
@@ -51,6 +52,7 @@ export function unmountTasks(): void {
   rangeEndControl = null;
   taskViewContainer = null;
   featureReviewHost = null;
+  runSelectionStatus = null;
   explicitFeatureReview = false;
   runSelectionControl = null;
   resumeSelectionControl = null;
@@ -168,6 +170,7 @@ async function renderTaskView(container: HTMLElement, mode: "all" | "review-queu
   const clearSelection = el("button", { className: "btn btn-sm" }, "Clear");
   const runSelection = el("button", { className: "btn btn-sm btn-primary" }, "Run selected");
   const resumeSelection = el("button", { className: "btn btn-sm" }, "Resume selected");
+  runSelectionStatus = el("p", { className: "dim small", role: "status", "aria-live": "polite" });
   runSelectionControl = runSelection as HTMLButtonElement;
   resumeSelectionControl = resumeSelection as HTMLButtonElement;
   syncFeatureTaskReviewGate();
@@ -193,6 +196,7 @@ async function renderTaskView(container: HTMLElement, mode: "all" | "review-queu
         runSelection,
         resumeSelection,
       ]),
+      runSelectionStatus,
       el("div", { className: "row gap", style: "margin:0 0 8px" }, [
         el("span", { className: "dim small" }, "Set every task's timeout:"),
         allTimeoutInput,
@@ -518,7 +522,25 @@ async function runSelectionAction(action: "run" | "resume"): Promise<void> {
     syncFeatureTaskReviewPanel();
     return;
   }
-  const mode = store.summary?.executionMode ?? "auto";
+  const summary = await api.summary().catch(() => null);
+  if (!summary) {
+    runSelectionStatus?.replaceChildren(
+      "Build status could not be confirmed. ",
+      el("a", { href: "#/overview" }, "Open Build status"),
+      " and refresh before running selected tasks.",
+    );
+    return;
+  }
+  if (!summary?.run && !(summary?.job?.type === "engine-run" && summary.job.status === "running")) {
+    runSelectionStatus?.replaceChildren(
+      "This Project's Build has not started. ",
+      el("a", { href: "#/overview" }, "Open Build status"),
+      " to review the prepared plan and choose Start build.",
+    );
+    return;
+  }
+  if (runSelectionStatus) runSelectionStatus.textContent = "";
+  const mode = summary?.executionMode ?? "auto";
   const ids = allTasks.map((task) => task.id).filter((id) => selectedIds.has(id));
   if (ids.length === 0) {
     toast(mode === "manual"

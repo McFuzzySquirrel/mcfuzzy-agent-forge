@@ -250,6 +250,117 @@ test("the prepared-plan Start build action routes pending feature Tasks to revie
   }
 });
 
+test("All tasks directs an unstarted Project to Start build before running a selection", async () => {
+  const fixture = await createFixture("unstarted-build-run-gate");
+  const previousHome = process.env.FORGE_HOME;
+  const workflowStatePath = join(fixture.repoRoot, "docs", "WORKFLOW-STATE.json");
+  const workflowState = readFileSync(workflowStatePath, "utf8");
+  rmSync(workflowStatePath, { force: true });
+  let server: ConsoleServer | undefined;
+  let browser: Browser | undefined;
+  let page: Page | undefined;
+  const controlActions: string[] = [];
+  const runRequests: string[] = [];
+  try {
+    ({ server, browser, page } = await startBrowserConsole(fixture));
+    await page.setRequestInterception(true);
+    page.on("request", (request) => {
+      const url = new URL(request.url());
+      if (request.method() === "GET" && url.pathname === "/api/actions") {
+        void request.respond({
+          status: 200,
+          contentType: "application/json",
+          body: JSON.stringify({ canRun: true, canResume: false, canPause: false, canStop: false, failedTasks: [] }),
+        }).catch(() => {});
+        return;
+      }
+      if (request.method() === "POST" && url.pathname === "/api/control") {
+        const action = (JSON.parse(request.postData() ?? "{}") as { action?: string }).action ?? "";
+        controlActions.push(action);
+        if (action === "run") {
+          runRequests.push(action);
+          if (runRequests.length === 1) writeFileSync(workflowStatePath, workflowState);
+          void request.respond({
+            status: 200,
+            contentType: "application/json",
+            body: JSON.stringify({
+              ok: true,
+              message: "Build started.",
+              job: {
+                id: `acceptance-build-${runRequests.length}`,
+                type: "engine-run",
+                repoPath: fixture.repoRoot,
+                startedAt: "2026-11-04T00:00:00.000Z",
+                updatedAt: "2026-11-04T00:00:00.000Z",
+                status: "running",
+                message: "Build started.",
+              },
+            }),
+          }).catch(() => {});
+          return;
+        }
+      }
+      void request.continue().catch(() => {});
+    });
+
+    await page.evaluate((repoRoot) => {
+      localStorage.setItem(`forge-console:guided-authoring:${repoRoot}`, "ready");
+    }, fixture.repoRoot);
+    await click(page, "#nav .nav-category button", "Project");
+    await click(page, '#nav a[href="#/overview"]', "Build status");
+    await page.waitForSelector(".project-prepared-plan", { timeout: 10000 });
+    assert.deepEqual(
+      await page.$$eval("#view button", (buttons) => buttons.map((button) => button.textContent?.trim() ?? "")
+        .filter((label) => ["Run", "Run selected", "Resume", "Resume selected"].includes(label))),
+      [],
+      "Build status should expose Start build, not generic first-run controls.",
+    );
+    await click(page, "#nav .nav-category button", "Advanced");
+    await click(page, '#nav a[href="#/tasks"]', "All tasks");
+    await page.waitForSelector('#view input[aria-label^="Select task "]', { timeout: 10000 });
+    await page.click('#view input[aria-label^="Select task "]');
+    await click(page, "#view button", "Run selected");
+    await new Promise((resolvePromise) => setTimeout(resolvePromise, 200));
+
+    assert.deepEqual(controlActions, [], "All tasks must not start or resume a Build before the user chooses Start build.");
+    const gateGuidance = await page.$eval("#view", (view) => view.textContent ?? "");
+    assert.match(gateGuidance, /This Project's Build has not started/i,
+      "All tasks should explain that the Build must be started first.");
+    assert.match(gateGuidance, /choose Start build/i, "The guidance should name the explicit Build-start action.");
+    assert.ok(await page.$('#view a[href="#/overview"]'), "All tasks should link to Build status.");
+    await click(page, "#view button", "Resume selected");
+    await new Promise((resolvePromise) => setTimeout(resolvePromise, 200));
+    assert.deepEqual(controlActions, [], "All tasks must not resume a Build that has never started.");
+
+    await click(page, "#nav .nav-category button", "Project");
+    await click(page, '#nav a[href="#/overview"]', "Build status");
+    await page.waitForSelector(".project-prepared-plan", { timeout: 10000 });
+    await click(page, ".project-prepared-plan button", "Start build");
+    await new Promise((resolvePromise) => setTimeout(resolvePromise, 200));
+    assert.deepEqual(runRequests, ["run"], "The prepared-plan Start build action should authorize the first run.");
+    assert.deepEqual(controlActions, ["run"]);
+    await page.waitForFunction(() => document.querySelector("#view")?.textContent?.includes("run-2026-09-22") ?? false,
+      { timeout: 10000 });
+
+    await click(page, "#nav .nav-category button", "Advanced");
+    await click(page, '#nav a[href="#/tasks"]', "All tasks");
+    await page.waitForSelector('#view input[aria-label^="Select task "]', { timeout: 10000 });
+    await page.click('#view input[aria-label^="Select task "]');
+    await click(page, "#view button", "Run selected");
+    await new Promise((resolvePromise) => setTimeout(resolvePromise, 200));
+    assert.deepEqual(runRequests, ["run", "run"], "Manual task execution should remain available after Start build.");
+    assert.deepEqual(controlActions, ["run", "run"]);
+  } finally {
+    if (page) await page.close();
+    if (browser) await browser.close();
+    if (server) await server.stop();
+    fixture.cleanup();
+    rmSync(join(WORK_ROOT, "unstarted-build-run-gate"), { recursive: true, force: true });
+    if (previousHome === undefined) delete process.env.FORGE_HOME;
+    else process.env.FORGE_HOME = previousHome;
+  }
+});
+
 test("the Project switcher and Projects list open a completed Project on Project files", async () => {
   const fixture = await createFixture("completed-project-switcher");
   const previousHome = process.env.FORGE_HOME;
