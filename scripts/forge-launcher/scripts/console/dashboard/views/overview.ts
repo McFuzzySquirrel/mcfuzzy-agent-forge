@@ -866,7 +866,9 @@ function activeGuidedStep(summary: Summary): GuidedAuthoringStep | null {
 
   const step = getGuidedAuthoringStep(summary.repoRoot);
   if (step) {
-    if ((step === "idea" || step === "brief") && summary.hasManifest) return null;
+    if ((step === "idea" || step === "brief") && summary.hasManifest) {
+      return isPreparationComplete(summary, "ready") ? "ready" : "preparing";
+    }
     if (step === "review" && summary.hasManifest) {
       return isPreparationComplete(summary, "ready") ? "ready" : "preparing";
     }

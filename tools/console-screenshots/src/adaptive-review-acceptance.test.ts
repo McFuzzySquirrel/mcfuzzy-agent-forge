@@ -361,6 +361,69 @@ test("All tasks directs an unstarted Project to Start build before running a sel
   }
 });
 
+test("stale Idea and brief progress retain the explicit Start build gate", async () => {
+  const fixture = await createFixture("stale-guided-build-gate");
+  const previousHome = process.env.FORGE_HOME;
+  const workflowStatePath = join(fixture.repoRoot, "docs", "WORKFLOW-STATE.json");
+  rmSync(workflowStatePath, { force: true });
+  let server: ConsoleServer | undefined;
+  let browser: Browser | undefined;
+  let page: Page | undefined;
+  try {
+    ({ server, browser, page } = await startBrowserConsole(fixture));
+    await page.setRequestInterception(true);
+    page.on("request", (request) => {
+      const url = new URL(request.url());
+      if (request.method() === "GET" && url.pathname === "/api/actions") {
+        void request.respond({
+          status: 200,
+          contentType: "application/json",
+          body: JSON.stringify({ canRun: true, canResume: false, canPause: false, canStop: false, failedTasks: [] }),
+        }).catch(() => {});
+        return;
+      }
+      void request.continue().catch(() => {});
+    });
+
+    for (const [index, step] of (["idea", "brief"] as const).entries()) {
+      await page.evaluate(({ repoRoot, savedStep }) => {
+        localStorage.setItem(`forge-console:guided-authoring:${repoRoot}`, savedStep);
+      }, { repoRoot: fixture.repoRoot, savedStep: step });
+      if (index === 0) {
+        await click(page, "#nav .nav-category button", "Project");
+        await click(page, '#nav a[href="#/overview"]', "Build status");
+      } else {
+        await page.reload({ waitUntil: "load" });
+        await settle(page);
+      }
+      await page.waitForSelector("#view", { timeout: 10000 });
+      assert.ok(
+        await page.$(".project-prepared-plan"),
+        `A stale ${step} marker should route to the prepared plan; got: ${await page.$eval("#view", (view) => view.textContent ?? "")}`,
+      );
+      assert.deepEqual(
+        await page.$$eval("#view button", (buttons) => buttons.map((button) => button.textContent?.trim() ?? "")
+          .filter((label) => ["Run", "Run selected", "Resume", "Resume selected"].includes(label))),
+        [],
+        `A stale ${step} marker must not expose generic first-run controls.`,
+      );
+      assert.equal(
+        await page.$eval(".project-prepared-plan button", (button) => button.textContent?.trim()),
+        "Start build",
+        "The explicit Start build action should remain available.",
+      );
+    }
+  } finally {
+    if (page) await page.close();
+    if (browser) await browser.close();
+    if (server) await server.stop();
+    fixture.cleanup();
+    rmSync(join(WORK_ROOT, "stale-guided-build-gate"), { recursive: true, force: true });
+    if (previousHome === undefined) delete process.env.FORGE_HOME;
+    else process.env.FORGE_HOME = previousHome;
+  }
+});
+
 test("the Project switcher and Projects list open a completed Project on Project files", async () => {
   const fixture = await createFixture("completed-project-switcher");
   const previousHome = process.env.FORGE_HOME;

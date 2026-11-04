@@ -4,6 +4,15 @@ Detailed release and change notes for MyForge.
 
 ---
 
+## November 2026 - v3.123
+
+### Preserve explicit Build start for stale authoring progress
+
+- Route Projects with leftover Idea or brief progress through the prepared-plan
+  Start build gate instead of exposing generic Run controls.
+
+---
+
 ## November 2026 - v3.122
 
 ### Deliver the adaptive Forge Console
