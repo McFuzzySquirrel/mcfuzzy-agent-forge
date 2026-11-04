@@ -1,6 +1,7 @@
 // ─── Home: landing with create/open choices + recent projects ────────────────
 
 import { api } from "../api.js";
+import { selectProjectDestination } from "../project-navigation.js";
 import { el, fmtTime, toast } from "../render/dom.js";
 import type { ProjectsIndex } from "../types.js";
 
@@ -40,10 +41,12 @@ function renderRecent(): HTMLElement {
   const select = el("select", { className: "project-select", "aria-label": "Choose a recent Project" });
   const open = el("button", { className: "btn", disabled: true }, "Open");
   const meta = el("div", { className: "dim small" });
+  let projectIndex: ProjectsIndex | null = null;
 
   select.appendChild(el("option", { value: "" }, "Loading projects…"));
 
   void api.projects().then((index: ProjectsIndex) => {
+    projectIndex = index;
     select.textContent = "";
     if (index.projects.length === 0) {
       select.appendChild(el("option", { value: "" }, "No projects yet"));
@@ -53,7 +56,7 @@ function renderRecent(): HTMLElement {
     }
     for (const project of index.projects) {
       select.appendChild(
-        el("option", { value: project.path }, `${project.name} — ${project.stage}`),
+        el("option", { value: project.path }, `${project.name} — ${project.lifecycleState ?? project.stage}`),
       );
     }
     open.removeAttribute("disabled");
@@ -69,11 +72,12 @@ function renderRecent(): HTMLElement {
 
   open.addEventListener("click", () => {
     const path = (select as HTMLSelectElement).value;
-    if (!path) return;
-    void api.selectRepo(path).then((res) => {
-      if (res.ok) location.hash = "#/overview";
-      else toast(res.message ?? "open failed");
-    });
+    if (!path || !projectIndex) return;
+    const project = projectIndex.projects.find((entry) => entry.path === path);
+    if (!project) return;
+    void selectProjectDestination(path, project.lifecycleState)
+      .then((destination) => { location.hash = destination; })
+      .catch((error: unknown) => toast(error instanceof Error ? error.message : "open failed"));
   });
 
   return el("section", { className: "panel home-support-card", "aria-labelledby": "home-recent-heading" }, [

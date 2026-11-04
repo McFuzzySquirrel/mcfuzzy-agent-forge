@@ -260,6 +260,100 @@ test("open errors are handled and late responses cannot navigate or replace a ne
   assert.doesNotMatch(ui.container.textContent, /Alpha/);
 });
 
+test("opening each lifecycle state routes to its next action without changing execution or history", async (t) => {
+  const ui = fixture(t);
+  let project: ProjectsIndex["projects"][number] = {
+    name: "New",
+    path: "/projects/new",
+    stage: "ready",
+    lifecycleState: "new",
+  };
+  t.mock.method(api, "projects", async () => ({ current: null, projects: [project] }));
+  const select = t.mock.method(api, "selectRepo", async (repoRoot: string) => ({ ok: true, repoRoot }));
+  const summary = t.mock.method(api, "summary", async () => ({ repoRoot: project.path, run: null } as Summary));
+  const control = t.mock.method(api, "control", async () => ({ ok: true, message: "unexpected" }));
+  const remove = t.mock.method(api, "removeProjects", async () => ({ current: null, results: [] }));
+
+  const states = [
+    ["new", "overview"],
+    ["partially-authored", "overview"],
+    ["needs-review", "overview"],
+    ["preparing", "overview"],
+    ["ready-to-start", "overview"],
+    ["running", "overview"],
+    ["blocked", "overview"],
+    ["failed", "overview"],
+    ["completed", "project-files"],
+  ] as const;
+  for (const [state, destination] of states) {
+    project = {
+      name: state,
+      path: `/projects/${state}`,
+      stage: state,
+      lifecycleState: state,
+    };
+    ui.location.hash = "#/projects";
+    ui.render();
+    await flush();
+    ui.byLabel(`Open ${state}`).fire();
+    await flush();
+
+    assert.equal(ui.location.hash, `#/${destination}`, `${state} should open its next action`);
+    assert.equal(select.mock.calls.at(-1)?.arguments[0], project.path);
+    assert.equal(summary.mock.callCount(), states.indexOf(states.find((entry) => entry[0] === state)!) + 1);
+    assert.ok(ui.container.textContent.includes(state), `${state} should remain visible in Project history`);
+  }
+
+  assert.equal(control.mock.callCount(), 0, "Opening a Project must not start, resume, pause, or stop execution");
+  assert.equal(remove.mock.callCount(), 0, "Opening a Project must preserve its registry and history");
+});
+
+test("uses the selected Project's current run before a stale completed registry state", async (t) => {
+  const ui = fixture(t);
+  const project = {
+    name: "Ledgerly",
+    path: "/projects/ledgerly",
+    stage: "completed",
+    lifecycleState: "completed" as const,
+  };
+  t.mock.method(api, "projects", async () => ({ current: null, projects: [project] }));
+  t.mock.method(api, "selectRepo", async (repoRoot: string) => ({ ok: true, repoRoot }));
+  t.mock.method(api, "summary", async () => ({
+    repoRoot: project.path,
+    run: { status: "running" },
+  } as Summary));
+  ui.render();
+  await flush();
+
+  ui.byLabel("Open Ledgerly").fire();
+  await flush();
+
+  assert.equal(ui.location.hash, "#/overview", "a Project that resumed after list refresh should open its active Build");
+});
+
+test("unavailable Projects stay listed with a reconnect action and history-preserving recovery guidance", async (t) => {
+  const ui = fixture(t);
+  const project = {
+    name: "Archived",
+    path: "/projects/archived",
+    stage: "unavailable",
+    lifecycleState: "unavailable" as const,
+  };
+  t.mock.method(api, "projects", async () => ({ current: null, projects: [project] }));
+  const select = t.mock.method(api, "selectRepo", async () => { throw new Error("not a Forge repo"); });
+  ui.render();
+  await flush();
+
+  ui.byLabel("Reconnect Archived").fire();
+  await flush();
+
+  assert.equal(select.mock.callCount(), 1);
+  assert.equal(ui.container.querySelector("tbody")?.children.length, 1);
+  assert.ok(ui.container.textContent.includes("Archived"));
+  assert.match(ui.container.textContent, /history remains on record/i);
+  assert.ok(ui.byLabel("Reconnect Archived"));
+});
+
 test("bootstrap still refreshes projects and unmount clears timers and ignores pending removal", async (t) => {
   const ui = fixture(t);
   t.mock.method(api, "projects", async () => index());

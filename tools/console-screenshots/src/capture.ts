@@ -316,8 +316,487 @@ async function captureTargets(browser: Browser, baseUrl: string, currentDir: str
 export async function captureAll(browser: Browser, baseUrl: string, currentDir: string): Promise<string[]> {
   await assertBoardKeyboardContract(browser, baseUrl);
   const names = await captureTargets(browser, baseUrl, currentDir, [...routeTargets(), ...detailTargets()]);
+  names.push(...await captureProjectLifecycle(browser, baseUrl, currentDir));
   names.push(...await captureProjectBriefLifecycle(browser, baseUrl, currentDir));
   return names;
+}
+
+async function captureProjectLifecycle(browser: Browser, baseUrl: string, currentDir: string): Promise<string[]> {
+  const page = await browser.newPage();
+  const controlActions: string[] = [];
+  let state = "new";
+  let featureGenerated = false;
+  const states: Array<{
+    state: string;
+    guide?: string;
+    expected: string;
+    screenshot?: string;
+  }> = [
+    { state: "new", expected: "Author PRD (interactive)" },
+    { state: "partially-authored", guide: "brief", expected: "Author the Project brief" },
+    { state: "needs-review", guide: "review", expected: "Review your Project brief" },
+    { state: "preparing", guide: "preparing", expected: "Preparing your Build", screenshot: "project-state-preparing-1440" },
+    { state: "ready-to-start", guide: "ready", expected: "Start build", screenshot: "project-state-ready-to-start-1440" },
+    { state: "running", expected: "Build is running.", screenshot: "project-state-running-1440" },
+    { state: "blocked", expected: "Action blocking progress", screenshot: "project-state-blocked-1440" },
+    { state: "failed", expected: "Build execution failed", screenshot: "project-state-failed-1440" },
+    { state: "completed", expected: "Project files", screenshot: "project-state-completed-1440" },
+  ];
+  page.setDefaultTimeout(20000);
+  await page.setViewport({ width: 1440, height: 1100, deviceScaleFactor: 1 });
+  await page.emulateMediaFeatures([{ name: "prefers-reduced-motion", value: "reduce" }]);
+
+  try {
+    await page.goto(`${baseUrl}/#/home`, { waitUntil: "load" });
+    await settle(page);
+    const fixture = await page.evaluate(async () => {
+      const [summaryResponse, tasksResponse, manifestResponse] = await Promise.all([
+        fetch("/api/summary"),
+        fetch("/api/tasks"),
+        fetch("/api/manifest"),
+      ]);
+      return {
+        summary: await summaryResponse.json() as Record<string, unknown> | null,
+        tasks: await tasksResponse.json() as unknown,
+        manifest: await manifestResponse.json() as Record<string, unknown> | null,
+      };
+    });
+    const fixtureSummary = fixture.summary;
+    if (!fixtureSummary || typeof fixtureSummary.repoRoot !== "string" || !fixtureSummary.repoRoot) {
+      throw new Error("The Project lifecycle acceptance fixture has no selected Project.");
+    }
+    const repoRoot = fixtureSummary.repoRoot;
+    const fixtureTasks = Array.isArray(fixture.tasks) ? fixture.tasks as Array<Record<string, unknown>> : [];
+    const featureTask: Record<string, unknown> = {
+      id: "9.1",
+      title: "Export the audit trail",
+      description: "Add an export path for the Project audit trail.",
+      phaseId: "feature",
+      phaseTitle: "Feature additions",
+      ownerAgent: "Engineer",
+      effectiveModel: null,
+      effectiveFallbackModel: null,
+      status: "pending",
+      attempt: 0,
+      startedAt: null,
+      completedAt: null,
+      durationMs: null,
+      outputFiles: [],
+      errorMessage: null,
+      artifactId: null,
+      inputs: [],
+      produces: null,
+      dependencies: [],
+      expectedOutputs: ["docs/engine-run.log"],
+      validationCommands: [],
+      timeoutMs: null,
+      approvalRequired: false,
+      usage: null,
+      requirements: ["FR-9.1"],
+      acceptanceCriteria: ["A user can download the Project audit trail."],
+      constraints: [],
+      references: [],
+      validationGaps: [],
+    };
+    const featureManifest = fixture.manifest
+      ? {
+        ...fixture.manifest,
+        generatedAt: "2026-03-01T00:00:00.000Z",
+        reconciliation: {
+          previousGeneratedAt: "2026-02-28T00:00:00.000Z",
+          preservedTaskIds: [],
+          newTaskIds: ["9.1"],
+          removedTaskIds: [],
+          changedTaskIds: [],
+        },
+      }
+      : null;
+    const baseManifestSummary = fixtureSummary.manifest && typeof fixtureSummary.manifest === "object"
+      ? fixtureSummary.manifest as Record<string, unknown>
+      : { version: "1.0", generatedAt: "2026-02-28T00:00:00.000Z", phases: 3, tasks: 8 };
+    const unrelatedManifestUpdate = {
+      ...baseManifestSummary,
+      reconciliation: {
+        previousGeneratedAt: "2026-02-27T00:00:00.000Z",
+        preservedTaskIds: [],
+        newTaskIds: ["8.1"],
+        removedTaskIds: [],
+        changedTaskIds: [],
+      },
+    };
+
+    await page.evaluate((root) => {
+      localStorage.removeItem(`forge-console:guided-authoring:${root}`);
+    }, repoRoot);
+    await page.setRequestInterception(true);
+    const respond = (request: HTTPRequest, body: unknown, status = 200): void => {
+      void request.respond({ status, contentType: "application/json", body: JSON.stringify(body) }).catch(() => {});
+    };
+    const waitForButton = async (label: string): Promise<void> => {
+      await page.waitForFunction((text) => Array.from(document.querySelectorAll("button"))
+        .some((button) => button.textContent?.trim() === text), { timeout: 15000 }, label);
+    };
+    const runSummary = (runState: string, blockers: string[] = []): Record<string, unknown> => {
+      const source = fixtureSummary.run && typeof fixtureSummary.run === "object"
+        ? fixtureSummary.run as Record<string, unknown>
+        : {};
+      return {
+        ...source,
+        runId: "capture-run",
+        status: runState,
+        startedAt: "2026-02-28T00:00:00.000Z",
+        lastUpdatedAt: "2026-03-01T00:00:00.000Z",
+        completedDurationMs: 120000,
+        currentPhase: "build",
+        currentPhaseTitle: "Build execution",
+        counts: { pending: 2, running: runState === "running" ? 1 : 0, complete: 3, failed: runState === "failed" ? 1 : 0, skipped: 0 },
+        total: 6,
+        blockers,
+        usage: source.usage ?? {
+          inputTokens: 0, outputTokens: 0, cacheReadTokens: 0, cacheWriteTokens: 0,
+          reasoningTokens: 0, costUsd: 0, credits: 0, tasksWithUsage: 0, tasksTotal: 0,
+        },
+      };
+    };
+    const summaryForState = (): Record<string, unknown> => {
+      const current = state as typeof states[number]["state"] | "unavailable";
+      const hasIdea = current !== "new";
+      const hasPrd = ["needs-review", "preparing", "ready-to-start", "running", "blocked", "failed", "completed"].includes(current);
+      const hasTeam = ["ready-to-start", "running", "blocked", "failed", "completed"].includes(current);
+      const hasManifest = ["ready-to-start", "running", "blocked", "failed", "completed"].includes(current);
+      const run = current === "running"
+        ? runSummary("running", ["Review Task 2.2's access policy while the other Tasks continue."])
+        : current === "blocked"
+          ? runSummary("paused", ["Approve Task 2.2's access policy before resuming the Build."])
+          : current === "failed"
+            ? runSummary("failed")
+            : current === "completed" ? runSummary("complete") : null;
+      const job = current === "preparing"
+        ? { id: "capture-preparation", type: "rederive", repoPath: repoRoot, startedAt: "2026-03-01T00:00:00.000Z", updatedAt: "2026-03-01T00:00:01.000Z", status: "running", message: "Preparing the Project." }
+        : current === "failed"
+          ? { id: "capture-build", type: "engine-run", repoPath: repoRoot, startedAt: "2026-02-28T00:00:00.000Z", updatedAt: "2026-03-01T00:00:00.000Z", status: "failed", message: "Task 2.2 failed during Build execution: its required dependency is unavailable." }
+          : null;
+      const base = {
+        ...fixtureSummary,
+        repoName: "Ledgerly",
+        hasIdea,
+        hasPrd,
+        hasVision: false,
+        hasFeatures: true,
+        hasTeam,
+        hasManifest,
+        manifest: hasManifest
+          ? featureGenerated
+            ? featureManifest
+            : current === "completed"
+              ? unrelatedManifestUpdate
+              : fixtureSummary.manifest
+          : null,
+        run,
+        live: current === "running",
+        control: null,
+        job,
+        authoringReady: true,
+        authoringBlocker: null,
+        authoringStages: [],
+        rederive: current === "preparing"
+          ? {
+            runId: "capture-preparation", active: true, currentStep: "team", failedStep: null, complete: false,
+            steps: [
+              { id: "team", label: "Team", status: "running" },
+              { id: "skills", label: "Project skills", status: "pending" },
+              { id: "manifest", label: "Build plan", status: "pending" },
+            ],
+          }
+          : current === "ready-to-start"
+            ? {
+              runId: "capture-preparation", active: false, currentStep: null, failedStep: null, complete: true,
+              steps: [
+                { id: "team", label: "Team", status: "complete" },
+                { id: "skills", label: "Project skills", status: "complete" },
+                { id: "manifest", label: "Build plan", status: "complete" },
+              ],
+            }
+            : null,
+      };
+      return base;
+    };
+
+    page.on("request", (request) => {
+      const url = new URL(request.url());
+      if (url.pathname === "/api/events") {
+        const snapshot = {
+          summary: summaryForState(),
+          manifest: fixture.manifest,
+          state: null,
+          layout: null,
+        };
+        void request.respond({
+          status: 200,
+          contentType: "text/event-stream",
+          headers: { "Cache-Control": "no-cache", Connection: "keep-alive" },
+          body: `event: snapshot\ndata: ${JSON.stringify(snapshot)}\n\n`,
+        }).catch(() => {});
+        return;
+      }
+      if (url.pathname === "/api/projects") {
+        respond(request, {
+          projects: [{
+            path: repoRoot,
+            name: "Ledgerly",
+            stage: state,
+            lifecycleState: state,
+            lastOpenedAt: "2026-03-01T00:00:00.000Z",
+          }],
+          current: null,
+        });
+        return;
+      }
+      if (request.method() === "POST" && url.pathname === "/api/projects/select") {
+        respond(request, state === "unavailable"
+          ? { ok: false, message: "The saved Project location is unavailable." }
+          : { ok: true, repoRoot });
+        return;
+      }
+      if (url.pathname === "/api/summary") {
+        respond(request, summaryForState());
+        return;
+      }
+      if (url.pathname === "/api/actions") {
+        respond(request, {
+          canRun: ["ready-to-start", "completed"].includes(state) || (state === "completed" && featureGenerated),
+          canResume: ["running", "blocked", "failed"].includes(state),
+          canPause: state === "running",
+          canStop: state === "running",
+          failedTasks: state === "failed" ? ["2.2"] : [],
+        });
+        return;
+      }
+      if (url.pathname === "/api/tasks") {
+        respond(request, featureGenerated
+          ? [...fixtureTasks, featureTask]
+          : fixtureTasks);
+        return;
+      }
+      if (url.pathname === "/api/manifest") {
+        respond(request, fixture.manifest);
+        return;
+      }
+      if (url.pathname === "/api/jobs") {
+        respond(request, { jobs: [], active: 0, failed: 0 });
+        return;
+      }
+      if (request.method() === "POST" && url.pathname === "/api/control") {
+        const action = (JSON.parse(request.postData() ?? "{}") as { action?: string }).action ?? "";
+        controlActions.push(action);
+        if (action === "feature-increment-continue") {
+          featureGenerated = true;
+          respond(request, { ok: true, message: "Feature Tasks are ready for review." });
+          return;
+        }
+        if (action === "run" && state === "completed" && featureGenerated) {
+          state = "running";
+          respond(request, {
+            ok: true,
+            message: "Build started.",
+            job: {
+              id: "capture-build", type: "engine-run", repoPath: repoRoot,
+              startedAt: "2026-03-01T00:00:00.000Z", updatedAt: "2026-03-01T00:00:00.000Z",
+              status: "running", message: "Build started.",
+            },
+          });
+          return;
+        }
+        respond(request, { ok: false, message: `Unexpected control action: ${action}` });
+        return;
+      }
+      void request.continue().catch(() => {});
+    });
+
+    await page.reload({ waitUntil: "load" });
+    await settle(page);
+    for (const entry of states) {
+      state = entry.state;
+      featureGenerated = false;
+      process.stdout.write(`  Checking Project state: ${entry.state}\n`);
+      await page.evaluate(({ root, step }) => {
+        if (step) localStorage.setItem(`forge-console:guided-authoring:${root}`, step);
+        else localStorage.removeItem(`forge-console:guided-authoring:${root}`);
+        location.hash = "#/projects";
+      }, { root: repoRoot, step: entry.guide });
+      await page.waitForSelector('button[aria-label="Open Ledgerly"]', { timeout: 15000 });
+      await page.click('button[aria-label="Open Ledgerly"]');
+      if (entry.state === "completed") {
+        await page.waitForFunction(() => location.hash.startsWith("#/project-files"), { timeout: 15000 });
+      } else {
+        await page.waitForFunction(() => location.hash.startsWith("#/overview"), { timeout: 15000 });
+      }
+      try {
+        await page.waitForFunction((text) => document.querySelector("#view")?.textContent?.includes(text) ?? false, { timeout: 20000 }, entry.expected);
+      } catch {
+        const detail = await page.evaluate(() => ({
+          hash: location.hash,
+          text: document.querySelector("#view")?.textContent?.trim().slice(0, 1200) ?? "",
+        }));
+        throw new Error(`Project state "${entry.state}" did not show "${entry.expected}" at ${detail.hash}. View text: ${detail.text}`);
+      }
+      const stateText = await page.$eval("#view", (view) => view.textContent ?? "");
+      if (entry.state === "running"
+        && (!stateText.includes("Review Task 2.2's access policy while the other Tasks continue.")
+          || !stateText.includes("The Project remains Running while work can continue."))) {
+        throw new Error("A Running Project must retain its state while showing the exact action needed to unblock remaining work.");
+      }
+      if (entry.state === "blocked"
+        && (!stateText.includes("Approve Task 2.2's access policy before resuming the Build.")
+          || !stateText.includes("Completed Tasks and Project history are preserved.")
+          || !stateText.includes("Resume after resolving the blocker"))) {
+        throw new Error("A blocked Project must name the required action and confirm its completed history is preserved.");
+      }
+      if (entry.state === "failed"
+        && (!stateText.includes("Build execution failed")
+          || !stateText.includes("Task 2.2 failed during Build execution")
+          || !stateText.includes("Completed work and Project history are preserved.")
+          || !stateText.includes("Resume Build"))) {
+        throw new Error("A failed Project must name its failed stage, explain the failure, and preserve completed work and history.");
+      }
+      if (entry.screenshot) {
+        await expandToContent(page, { width: 1440, height: 1100 });
+        await page.screenshot({ path: join(currentDir, `${entry.screenshot}.png`), type: "png" });
+      }
+    }
+    if (controlActions.length > 0) {
+      throw new Error(`Opening or routing Projects must not change execution state; observed control actions: ${controlActions.join(", ")}.`);
+    }
+
+    state = "unavailable";
+    await page.evaluate(() => { location.hash = "#/projects"; });
+    await page.waitForSelector('button[aria-label="Reconnect Ledgerly"]', { timeout: 15000 });
+    await page.click('button[aria-label="Reconnect Ledgerly"]');
+    await page.waitForFunction(() => document.querySelector("#view")?.textContent?.includes("history remains on record") ?? false, { timeout: 15000 });
+    await page.waitForFunction(() => location.hash.startsWith("#/projects"), { timeout: 10000 });
+    if (!(await page.$('button[aria-label="Reconnect Ledgerly"]'))) {
+      throw new Error("An unavailable Project must remain in the Projects list after a failed reconnect.");
+    }
+    await expandToContent(page, { width: 1440, height: 1100 });
+    await page.screenshot({ path: join(currentDir, "project-state-unavailable-1440.png"), type: "png" });
+
+    state = "completed";
+    featureGenerated = false;
+    await page.evaluate((root) => {
+      localStorage.removeItem(`forge-console:guided-authoring:${root}`);
+      location.hash = "#/overview";
+    }, repoRoot);
+    await page.waitForSelector('textarea[aria-label="Feature description"]', { timeout: 15000 });
+    await page.waitForFunction(() => document.querySelector("#view")?.textContent?.includes("Add a feature") ?? false);
+    await waitForButton("Author feature PRD (interactive)");
+    if (await page.$(".feature-task-review-gate")) {
+      throw new Error("An unrelated manifest update must not trigger the Add a feature review gate.");
+    }
+    await page.$eval('textarea[aria-label="Feature description"]', (node) => {
+      const input = node as HTMLTextAreaElement;
+      input.value = "Add an export for the Project audit trail";
+      input.dispatchEvent(new Event("input", { bubbles: true }));
+    });
+    await clickByText(page, "button", "Author feature PRD (interactive)");
+    await page.waitForFunction(() => location.hash.includes("authoring=feature-prd") && location.hash.includes("prompt="), { timeout: 10000 });
+    await settle(page);
+    await page.evaluate(() => { location.hash = "#/overview"; });
+    await waitForButton("Continue after authoring");
+    const continueRequest = page.waitForRequest((request) => {
+      if (request.method() !== "POST" || new URL(request.url()).pathname !== "/api/control") return false;
+      return (JSON.parse(request.postData() ?? "{}") as { action?: string }).action === "feature-increment-continue";
+    }, { timeout: 10000 });
+    await clickByText(page, "button", "Continue after authoring");
+    await continueRequest;
+    await page.reload({ waitUntil: "load" });
+    await settle(page);
+    await page.waitForSelector('a[href="#/tasks?feature-review=1"]', { timeout: 15000 });
+    const prematureExecution = controlActions.filter((action) => ["run", "resume", "replay"].includes(action));
+    if (prematureExecution.length > 0) {
+      throw new Error(`Feature Tasks must not execute before review; observed: ${prematureExecution.join(", ")}.`);
+    }
+    const gate = await page.$eval(".feature-task-review-gate", (node) => node.textContent ?? "").catch(() => "");
+    if (!gate.includes("Review generated Tasks before execution")) {
+      throw new Error("New feature Tasks must gate execution until they are reviewed.");
+    }
+    const continueDisabled = await page.$$eval("#view button", (buttons) =>
+      buttons.some((button) => button.textContent?.trim() === "Continue after authoring" && button.disabled));
+    if (!continueDisabled) {
+      throw new Error("Another feature increment must wait until the current generated Tasks are reviewed.");
+    }
+    state = "failed";
+    await page.reload({ waitUntil: "load" });
+    await settle(page);
+    await page.waitForSelector(".feature-task-review-gate", { timeout: 15000 });
+    const failedFeatureView = await page.$eval("#view", (view) => view.textContent ?? "");
+    const failedFeatureButtons = await page.$$eval("#view button", (buttons) => buttons.map((button) => button.textContent?.trim()));
+    if (!failedFeatureView.includes("Review generated Tasks")
+      || failedFeatureButtons.includes("Resume Build")) {
+      throw new Error("A failed Build must keep Resume gated until the generated feature Tasks are reviewed.");
+    }
+    state = "completed";
+    await page.reload({ waitUntil: "load" });
+    await settle(page);
+    await page.waitForSelector(".feature-task-review-gate", { timeout: 15000 });
+
+    await page.click('a[href="#/tasks?feature-review=1"]');
+    await page.waitForSelector(".feature-task-review", { timeout: 15000 });
+    await page.waitForFunction(() => document.querySelector(".feature-task-review")?.textContent?.includes("A user can download the Project audit trail.") ?? false);
+    await page.evaluate(() => { location.hash = "#/tasks"; });
+    await page.waitForSelector(".feature-task-review", { timeout: 15000 });
+    await page.click('input[aria-label="Select task 9.1"]');
+    const selectionControls = await page.$$eval("#view button", (buttons) =>
+      buttons.filter((button) => ["Run selected", "Resume selected"].includes(button.textContent?.trim() ?? ""))
+        .map((button) => ({ label: button.textContent?.trim(), disabled: button.disabled })));
+    if (selectionControls.length !== 2 || selectionControls.some((button) => !button.disabled)) {
+      throw new Error("Run selected and Resume selected must stay disabled until generated Tasks are reviewed.");
+    }
+    const executionActionsBefore = controlActions.filter((action) => ["run", "resume", "replay"].includes(action)).length;
+    await page.$$eval("#view button", (buttons) => {
+      for (const button of buttons) {
+        if (["Run selected", "Resume selected"].includes(button.textContent?.trim() ?? "")) button.disabled = false;
+      }
+    });
+    await clickByText(page, "button", "Run selected");
+    await clickByText(page, "button", "Resume selected");
+    await settle(page);
+    if (controlActions.filter((action) => ["run", "resume", "replay"].includes(action)).length !== executionActionsBefore) {
+      throw new Error("Task selection handlers must refuse Run and Resume until generated Tasks are reviewed.");
+    }
+    await page.$$eval("#view button", (buttons) => {
+      for (const button of buttons) {
+        if (["Run selected", "Resume selected"].includes(button.textContent?.trim() ?? "")) button.disabled = true;
+      }
+    });
+    await expandToContent(page, { width: 1440, height: 1100 });
+    await page.screenshot({ path: join(currentDir, "feature-task-review-1440.png"), type: "png" });
+    await clickByText(page, "button", "I reviewed these Tasks");
+    await page.waitForFunction(() => location.hash.startsWith("#/overview"), { timeout: 10000 });
+    await page.waitForFunction(() => {
+      const button = document.querySelector<HTMLButtonElement>('[data-overview-region="overview-actions"] button.btn-primary');
+      return button?.textContent?.trim() === "Run" && !button.disabled;
+    }, { timeout: 15000 });
+    if (controlActions.some((action) => ["run", "resume", "replay"].includes(action))) {
+      throw new Error("Reviewing generated Tasks must not itself start or resume execution.");
+    }
+    const runRequest = page.waitForRequest((request) => {
+      if (request.method() !== "POST" || new URL(request.url()).pathname !== "/api/control") return false;
+      return (JSON.parse(request.postData() ?? "{}") as { action?: string }).action === "run";
+    }, { timeout: 10000 });
+    await page.click('[data-overview-region="overview-actions"] button.btn-primary');
+    await runRequest;
+    if (controlActions.filter((action) => ["run", "resume", "replay"].includes(action)).join("|") !== "run") {
+      throw new Error(`Only explicit Run after review may start execution; observed: ${controlActions.join(", ")}`);
+    }
+
+    return [
+      ...states.map((entry) => entry.screenshot).filter((name): name is string => Boolean(name)),
+      "project-state-unavailable-1440",
+      "feature-task-review-1440",
+    ];
+  } finally {
+    await page.close();
+  }
 }
 
 async function captureProjectBriefLifecycle(browser: Browser, baseUrl: string, currentDir: string): Promise<string[]> {

@@ -565,7 +565,12 @@ export async function startConsoleServer(options: ConsoleServerOptions = {}): Pr
           case "/api/projects": {
             repo.refreshJobs();
             const projects = loadRegistry()
-              .map((pr) => ({ ...pr, stage: repo.projectDisplayStage(pr.path), job: repo.projectInfo(pr.path).job }))
+              .map((pr) => ({
+                ...pr,
+                stage: repo.projectDisplayStage(pr.path),
+                lifecycleState: repo.projectLifecycleState(pr.path),
+                job: repo.projectInfo(pr.path).job,
+              }))
               .sort((a, b) => (b.lastOpenedAt ?? "").localeCompare(a.lastOpenedAt ?? ""));
             return sendJson(res, 200, { projects, current: currentRepo });
           }

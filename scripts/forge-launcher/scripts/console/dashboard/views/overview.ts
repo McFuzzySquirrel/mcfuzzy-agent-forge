@@ -1,6 +1,12 @@
 // ─── Overview: run header, progress, actions, pipeline guidance ─────────────
 
 import { api } from "../api.js";
+import {
+  clearFeatureTaskReviewPending,
+  featureTaskReviewIds,
+  featureTasksReviewed,
+  markFeatureTaskReviewPending,
+} from "../feature-task-review.js";
 import { getGuidedAuthoringStep, setGuidedAuthoringStep, type GuidedAuthoringStep } from "../project-authoring.js";
 import { Epoch, store } from "../state.js";
 import { el, fmtAgo, fmtDuration, fmtTime, fmtTokens, fmtUsd, statusBadge, toast } from "../render/dom.js";
@@ -112,7 +118,7 @@ export async function renderOverview(container: HTMLElement): Promise<void> {
     region("overview-run", renderRun(summary.run)),
     region("overview-manifest", guided ? el("div") : renderManifest(summary)),
     region("overview-actions", renderActions(container, summary, actions, tasks)),
-    region("overview-feature", guided ? el("div") : summary.hasPrd && summary.hasTeam ? renderFeatureIncrement(container) : renderFeaturePrd(container)),
+    region("overview-feature", guided ? el("div") : summary.hasPrd && summary.hasTeam ? renderFeatureIncrement(container, summary) : renderFeaturePrd(container)),
   );
   syncRederiveRegion(container, summary);
   announce(`Opened ${summary.repoName}.`);
@@ -164,7 +170,7 @@ async function refreshOverviewData(container: HTMLElement): Promise<void> {
     update("overview-run", renderRun(summary.run));
     update("overview-manifest", guided ? el("div") : renderManifest(summary));
     update("overview-actions", renderActions(container, summary, actions, tasks));
-    const feature = guided ? el("div") : summary.hasPrd && summary.hasTeam ? renderFeatureIncrement(container) : renderFeaturePrd(container);
+    const feature = guided ? el("div") : summary.hasPrd && summary.hasTeam ? renderFeatureIncrement(container, summary) : renderFeaturePrd(container);
     update("overview-feature", feature);
     announce(`Status updated: ${summary.run?.status ?? "pipeline ready"}.`);
   } catch (error) {
@@ -314,26 +320,54 @@ function syncRederiveRegion(container: HTMLElement, summary: Summary): void {
   container.insertBefore(region("overview-rederive", content), anchor);
 }
 
-function renderFeatureIncrement(container: HTMLElement): HTMLElement {
+function renderFeatureIncrement(container: HTMLElement, summary: Summary): HTMLElement {
   const project = store.projectKey();
   const input = el("textarea", { rows: "3", placeholder: "Describe the feature to add…", "aria-label": "Feature description" });
   input.textContent = store.getDraft(project, "featurePrompt", "");
   input.addEventListener("input", () => store.setDraft(project, "featurePrompt", (input as HTMLTextAreaElement).value));
+  const taskIds = featureTaskReviewIds(summary);
+  const reviewRequired = taskIds.length > 0 && !featureTasksReviewed(summary);
   const interactive = el("button", { className: "btn btn-primary" }, "Author feature PRD (interactive)");
-  const continueButton = el("button", { className: "btn" }, "Continue after authoring");
+  const continueButton = el("button", { className: "btn", disabled: reviewRequired ? true : null }, "Continue after authoring");
   interactive.addEventListener("click", () => {
     const prompt = (input as HTMLTextAreaElement).value.trim();
     if (!prompt) { toast("Describe the feature first."); return; }
     void startSession(container, "feature-prd", prompt);
   });
   continueButton.addEventListener("click", () => {
+    const attempt = markFeatureTaskReviewPending(summary.repoRoot);
+    if (!attempt) {
+      toast("Task review could not be saved in this browser; the feature increment was not started.");
+      return;
+    }
     continueButton.setAttribute("disabled", "");
     void api.continueFeatureIncrement()
-      .then((r) => toast(r.message))
-      .catch((e) => toast(e instanceof Error ? e.message : "feature increment continuation failed"))
-      .finally(() => continueButton.removeAttribute("disabled"));
+      .then((r) => {
+        toast(r.message);
+        if (!r.ok) clearFeatureTaskReviewPending(summary.repoRoot, attempt);
+        if (r.job?.status === "running") startPoll(container);
+      })
+      .catch((e) => {
+        clearFeatureTaskReviewPending(summary.repoRoot, attempt);
+        toast(e instanceof Error ? e.message : "feature increment continuation failed");
+      })
+      .finally(() => {
+        continueButton.removeAttribute("disabled");
+        void renderOverview(container);
+      });
   });
-  return el("div", { className: "panel" }, [el("h4", null, "Increment the project"), el("p", { className: "dim small" }, "Author the feature PRD interactively, then continue to update affected agents and recompile the manifest. Review the new tasks before running them."), input, el("div", { className: "actions" }, [interactive, continueButton])]);
+  return el("div", { className: "panel" }, [
+    el("h4", null, "Add a feature"),
+    el("p", { className: "dim small" }, "Author the feature requirements in an interactive session, then continue to update affected agents and recompile the manifest. New Tasks must be reviewed before they can run."),
+    input,
+    taskIds.length > 0 && !featureTasksReviewed(summary)
+      ? el("p", { className: "dim small" }, [
+          `${taskIds.length} generated Task${taskIds.length === 1 ? "" : "s"} need review before execution. `,
+          el("a", { href: "#/tasks?feature-review=1" }, "Review new Tasks"),
+        ])
+      : null,
+    el("div", { className: "actions" }, [interactive, continueButton]),
+  ]);
 }
 
 function renderAuthoringStatus(summary: Summary): HTMLElement {
@@ -707,6 +741,11 @@ function renderGuidance(container: HTMLElement, summary: Summary, actions: Actio
     return renderGuidedAuthoring(container, summary, guidedStep);
   }
 
+  const recovery = renderFailureGuidance(container, summary, actions);
+  if (recovery) return recovery;
+  const blocked = renderBlockedGuidance(container, summary, actions);
+  if (blocked) return blocked;
+
   const step = nextStep(summary, actions);
   const working = summary.job?.status === "running";
 
@@ -720,6 +759,8 @@ function renderGuidance(container: HTMLElement, summary: Summary, actions: Actio
     text = "Generate the agent team.";
   } else if (!summary.hasManifest && summary.executionMode === "manual") {
     text = "Manual build enabled — create the manifest first.";
+  } else if (summary.run?.status === "running") {
+    text = "Build is running.";
   } else if (actions.canRun) {
     text = "Ready to build.";
   } else if (actions.canResume) {
@@ -755,7 +796,9 @@ function renderGuidance(container: HTMLElement, summary: Summary, actions: Actio
   } else if (!summary.hasPrd && !summary.hasIdea) {
     hint = "Add docs/IDEA.md to describe the project idea, then come back.";
   } else if (summary.hasManifest) {
-    hint = "Use the Controls panel below to choose tasks, run, resume, or stop the build.";
+    hint = summary.run?.status === "running"
+      ? "The Project remains Running. Review the action above while other work continues."
+      : "Use the Controls panel below to choose tasks, run, resume, or stop the build.";
   } else {
     hint = "Pipeline setup is complete.";
   }
@@ -774,6 +817,10 @@ function renderGuidance(container: HTMLElement, summary: Summary, actions: Actio
     children.push(el("p", { className: "dim small" }, ["Working in the background — watch the ", el("a", { href: "#/logs" }, "Logs"), " tab."]));
   }
 
+  if (summary.run?.status === "running" && summary.run.blockers.length > 0) {
+    children.push(renderRunBlockers(summary.run.blockers, true));
+  }
+
   if (summary.job && summary.job.status !== "running") {
     children.push(el("p", { className: summary.job.status === "failed" ? "error-text" : "dim" }, [
       `${jobLabel(summary.job)} `,
@@ -786,12 +833,185 @@ function renderGuidance(container: HTMLElement, summary: Summary, actions: Actio
 }
 
 function activeGuidedStep(summary: Summary): GuidedAuthoringStep | null {
+  if (summary.run) return null;
+  const preparationJob = summary.job?.type === "rederive" || summary.job?.type === "compile-manifest"
+    || summary.job?.type === "draft-team" || summary.job?.type === "draft-skills"
+    || summary.job?.type === "feature-increment";
+  if (preparationJob && (summary.job?.status === "running" || summary.job?.status === "failed")
+    || summary.rederive?.active) return "preparing";
+  if (summary.job?.status === "failed" || summary.authoringStages?.some((stage) => stage.status === "failed")) return null;
+
   const step = getGuidedAuthoringStep(summary.repoRoot);
-  if (!step || summary.run) return null;
-  if (step === "idea" || step === "brief") {
-    return !summary.hasTeam && !summary.hasManifest ? step : null;
+  if (step) {
+    if ((step === "idea" || step === "brief") && summary.hasManifest) return null;
+    if (step === "review" && summary.hasManifest) {
+      return isPreparationComplete(summary, "ready") ? "ready" : "preparing";
+    }
+    if (step === "preparing" || step === "ready") {
+      return isPreparationComplete(summary, "ready") ? "ready" : "preparing";
+    }
+    return step;
   }
-  return step;
+  if (!summary.hasPrd && summary.hasIdea && !summary.hasManifest) return "idea";
+  if (summary.hasPrd && !summary.hasManifest && !summary.run) return "review";
+  if (summary.hasManifest && summary.authoringReady !== false
+    && !summary.rederive?.active && !summary.rederive?.failedStep
+    && staleDerivationStages(summary).length === 0) return "ready";
+  return null;
+}
+
+function renderBlockedGuidance(container: HTMLElement, summary: Summary, actions: Actions): HTMLElement | null {
+  if (summary.run?.status === "running") return null;
+  const paused = summary.run?.status === "paused" || summary.run?.status === "blocked"
+    || summary.job?.status === "paused";
+  const blockers = [
+    ...(summary.run?.blockers ?? []),
+    ...(!summary.run?.blockers.length && summary.authoringBlocker ? [summary.authoringBlocker] : []),
+  ];
+  if (!paused && blockers.length === 0) return null;
+  const taskReviewRequired = featureTaskReviewIds(summary).length > 0 && !featureTasksReviewed(summary);
+
+  const children: HTMLElement[] = [
+    el("h3", null, paused ? "Project needs your attention" : "What is blocking progress"),
+    blockers.length > 0
+      ? renderRunBlockers(blockers, false)
+      : el("p", { className: "dim" }, "The Project is paused. Review the current state and choose Resume when you are ready."),
+  ];
+  if (paused && summary.run) {
+    children.push(el("p", { className: "dim small" }, "Completed Tasks and Project history are preserved. Resolve the blocking action before choosing Resume."));
+  }
+  children.push(el("div", { className: "actions" }, [
+    !summary.hasPrd ? sessionButton(container, "prd", "Continue interactive Project brief authoring") : null,
+    el("a", { className: "btn", href: "#/tasks" }, "Review Tasks"),
+    el("a", { className: "btn", href: "#/logs" }, "Open logs"),
+    taskReviewRequired ? el("a", { className: "btn btn-primary", href: "#/tasks?feature-review=1" }, "Review generated Tasks") : null,
+    paused && actions.canResume && !taskReviewRequired ? resumeRecoveryButton(container, "Resume after resolving the blocker") : null,
+  ].filter(Boolean) as HTMLElement[]));
+  return el("section", { className: "panel hint project-blocked", "aria-labelledby": "project-blocked-heading" }, [
+    el("h2", { id: "project-blocked-heading" }, paused ? "Blocked" : "Needs your action"),
+    ...children,
+  ]);
+}
+
+function renderRunBlockers(blockers: string[], continuing: boolean): HTMLElement {
+  return el("section", { className: "project-blockers", "aria-label": "Blocking actions" }, [
+    el("h4", null, continuing ? "Action needed while work continues" : "Action blocking progress"),
+    continuing
+      ? el("p", { className: "dim small" }, "The Project remains Running while work can continue.")
+      : null,
+    el("ul", null, blockers.map((blocker) => el("li", null, blocker))),
+  ]);
+}
+
+function renderFailureGuidance(container: HTMLElement, summary: Summary, actions: Actions): HTMLElement | null {
+  const failedStage = summary.job?.status === "failed" ? failedJobStage(summary)
+    : summary.run && ["failed", "error"].includes(summary.run.status) ? "Build execution"
+      : summary.authoringStages?.find((stage) => stage.status === "failed")?.stage ?? null;
+  if (!failedStage) return null;
+
+  const runFailed = summary.run && ["failed", "error"].includes(summary.run.status);
+  const taskReviewRequired = featureTaskReviewIds(summary).length > 0 && !featureTasksReviewed(summary);
+  const details = runFailed
+    ? summary.job?.status === "failed" && summary.job.message
+      ? summary.job.message
+      : `Build failed during ${summary.run?.currentPhaseTitle ?? summary.run?.currentPhase ?? "execution"}.`
+    : summary.job?.message || summary.authoringStages?.find((stage) => stage.status === "failed")?.reason;
+  const children: HTMLElement[] = [
+    el("h2", null, `${failedStage} failed`),
+    el("p", { className: "error-text", role: "alert" }, details || `The ${failedStage.toLowerCase()} stage did not finish.`),
+  ];
+
+  if (runFailed) {
+    children.push(
+      el("p", { className: "dim small" }, "Review the failed Tasks, then Resume or Replay the failed Task. Completed work and Project history are preserved."),
+      el("div", { className: "actions" }, [
+        el("a", { className: "btn btn-primary", href: "#/tasks" }, "Review failed Tasks"),
+        el("a", { className: "btn", href: "#/logs" }, "Open logs"),
+        taskReviewRequired ? el("a", { className: "btn btn-primary", href: "#/tasks?feature-review=1" }, "Review generated Tasks") : null,
+        actions.canResume && !taskReviewRequired ? resumeRecoveryButton(container, "Resume Build") : null,
+      ].filter(Boolean) as HTMLElement[]),
+    );
+  } else {
+    const retry = retryFailedStage(container, summary);
+    children.push(
+      el("p", { className: "dim small" }, "Retry the failed stage only. Completed Project work and history are preserved."),
+      el("div", { className: "actions" }, [
+        retry,
+        el("a", { className: "btn", href: "#/logs" }, "Open logs"),
+      ]),
+    );
+  }
+  return el("section", { className: "panel hint project-failed", "aria-labelledby": "project-failed-heading" }, [
+    el("h2", { id: "project-failed-heading" }, `${failedStage} failed`),
+    ...children.slice(1),
+  ]);
+}
+
+function resumeRecoveryButton(container: HTMLElement, label: string): HTMLButtonElement {
+  const button = el("button", { className: "btn", type: "button" }, label) as HTMLButtonElement;
+  button.addEventListener("click", () => {
+    button.disabled = true;
+    void api.control("resume")
+      .then((result) => {
+        toast(result.message || (result.ok ? "Build resumed." : "Build could not be resumed."));
+        if (result.job?.status === "running") startPoll(container);
+        void renderOverview(container);
+      })
+      .catch((error: unknown) => toast(error instanceof Error ? error.message : "Build could not be resumed."))
+      .finally(() => { button.disabled = false; });
+  });
+  return button;
+}
+
+function failedJobStage(summary: Summary): string {
+  const job = summary.job!;
+  if (job.type === "rederive") {
+    const failed = summary.rederive?.failedStep;
+    return failed ? `${failed[0]!.toUpperCase()}${failed.slice(1)} preparation` : "Project preparation";
+  }
+  if (job.type === "compile-manifest") return "Build plan preparation";
+  if (job.type === "engine-run" || job.type === "engine-resume" || job.type === "engine-replay") return "Build execution";
+  if (job.type === "draft-prd" || job.type === "draft-existing-prd") return "Project brief authoring";
+  if (job.type === "draft-team") return "Team preparation";
+  if (job.type === "draft-skills") return "Project guidance preparation";
+  if (job.type === "feature-prd") return "Feature authoring";
+  if (job.type === "feature-increment") return "Feature preparation";
+  return job.type === "bootstrap" ? "Existing Project setup" : "Project setup";
+}
+
+function retryFailedStage(container: HTMLElement, summary: Summary): HTMLButtonElement {
+  const job = summary.job;
+  const authoringStage = summary.authoringStages?.find((stage) => stage.status === "failed")?.stage;
+  let label = "Retry preparation";
+  const retry = el("button", { className: "btn btn-primary", type: "button" }, label) as HTMLButtonElement;
+  retry.addEventListener("click", () => {
+    retry.disabled = true;
+    if (job?.type === "draft-prd" || job?.type === "draft-existing-prd" || authoringStage === "prd") {
+      retry.textContent = "Opening interactive authoring…";
+      startSession(container, "prd");
+      return;
+    }
+    if (job?.type === "feature-prd") {
+      retry.textContent = "Opening interactive authoring…";
+      startSession(container, "feature-prd");
+      return;
+    }
+    if (job?.type === "compile-manifest") {
+      label = "Retry Build plan preparation";
+      void api.control("compile-manifest").then((result) => toast(result.message)).catch((error: unknown) =>
+        toast(error instanceof Error ? error.message : "Build plan preparation failed"));
+    } else {
+      const step = summary.rederive?.failedStep
+        ?? (authoringStage === "team" ? "team" : authoringStage === "skills" ? "skills" : undefined);
+      void api.rederive(step).then((result) => {
+        toast(result.message);
+        if (result.job?.status === "running") startPoll(container);
+      }).catch((error: unknown) => toast(error instanceof Error ? error.message : "preparation retry failed"));
+    }
+    retry.textContent = label;
+    window.setTimeout(() => { retry.disabled = false; }, 1000);
+  });
+  return retry;
 }
 
 function renderGuidedAuthoring(
@@ -1257,6 +1477,14 @@ function renderActions(container: HTMLElement, summary: Summary, actions: Action
       el("p", { className: "dim small" }, "This Project's Build has not started. Complete preparation, then choose Start build when you are ready."),
     ]);
   }
+  const featureTasks = featureTaskReviewIds(summary);
+  if (featureTasks.length > 0 && !featureTasksReviewed(summary) && (actions.canRun || actions.canResume)) {
+    return el("div", { className: "panel controls-disabled feature-task-review-gate" }, [
+      el("h4", null, "Review generated Tasks before execution"),
+      el("p", { className: "dim small" }, `Review the ${featureTasks.length} Task${featureTasks.length === 1 ? "" : "s"} added or changed by this feature before starting or resuming a Build. Existing execution history remains intact.`),
+      el("a", { className: "btn btn-primary", href: "#/tasks?feature-review=1" }, "Review new Tasks"),
+    ]);
+  }
   if (!summary.hasManifest) {
     return el("div", { className: "panel controls-disabled" }, [
       el("h4", null, "Controls"),
@@ -1278,8 +1506,9 @@ function renderActions(container: HTMLElement, summary: Summary, actions: Action
 
   const authoringBlocked = summary.authoringReady === false;
   const manualNeedsSelection = summary.executionMode === "manual" && summary.selectedTaskCount === 0;
+  const runFailed = summary.run !== null && ["failed", "error"].includes(summary.run.status);
   const buttons = [
-    el("button", { className: "btn btn-primary", disabled: !authoringBlocked && actions.canRun && !manualNeedsSelection ? null : true }, summary.executionMode === "manual" ? "Run selected" : "Run"),
+    el("button", { className: "btn btn-primary", disabled: !runFailed && !authoringBlocked && actions.canRun && !manualNeedsSelection ? null : true }, summary.executionMode === "manual" ? "Run selected" : "Run"),
     el("button", { className: "btn", disabled: !authoringBlocked && actions.canResume && !manualNeedsSelection ? null : true }, summary.executionMode === "manual" ? "Resume selected" : "Resume"),
     el("button", { className: "btn", disabled: actions.canPause ? null : true }, "Pause"),
     el("button", { className: "btn btn-danger", disabled: actions.canStop ? null : true }, "Stop"),
@@ -1315,6 +1544,9 @@ function renderActions(container: HTMLElement, summary: Summary, actions: Action
       : null,
     authoringBlocked
       ? el("p", { className: "error-text small", role: "alert" }, [summary.authoringBlocker || "Authoring stages are incomplete.", " ", el("a", { href: "#/documents" }, "Review authoring stages")])
+      : null,
+    runFailed
+      ? el("p", { className: "dim small" }, "To preserve completed work, choose Resume or Replay failed instead of starting a fresh run.")
       : null,
     replay,
     el("p", { className: "dim small" }, ["Execution settings (timeouts, concurrency, auto-commit, harness logging) now live in ", el("a", { href: "#/settings" }, "Settings"), "."]),

@@ -20,6 +20,7 @@ import type {
   LogsResponse,
   ManifestSummary,
   ProjectInfo,
+  ProjectLifecycleState,
   RunSummary,
   SkillInfo,
   Summary,
@@ -901,11 +902,60 @@ export function projectDisplayStage(repoPath: string): string {
   return "ready";
 }
 
+export function projectLifecycleState(repoPath: string): ProjectLifecycleState {
+  try {
+    if (!fs.existsSync(repoPath) || !fs.statSync(repoPath).isDirectory()
+      || !fs.existsSync(path.join(repoPath, "docs"))) {
+      return "unavailable";
+    }
+  } catch {
+    return "unavailable";
+  }
+
+  const job = currentJob(repoPath);
+  if (job?.status === "running") {
+    if (job.type === "engine-run" || job.type === "engine-resume" || job.type === "engine-replay") return "running";
+    if (job.type === "rederive" || job.type === "compile-manifest" || job.type === "draft-team"
+      || job.type === "draft-skills" || job.type === "feature-increment") return "preparing";
+    return "partially-authored";
+  }
+  if (job?.status === "paused") return "blocked";
+  if (job?.status === "failed") return "failed";
+
+  switch (projectStage(repoPath)) {
+    case "complete":
+    case "completed":
+      return "completed";
+    case "running":
+      return "running";
+    case "paused":
+    case "blocked":
+      return "blocked";
+    case "failed":
+      return "failed";
+    case "manifest":
+      return "ready-to-start";
+    case "team":
+      return "preparing";
+    case "prd":
+      return "needs-review";
+    case "idea": {
+      const p = repoPaths(repoPath);
+      return fs.existsSync(p.ideaPath) || fs.existsSync(path.join(repoPath, "IDEA.md"))
+        ? "partially-authored"
+        : "new";
+    }
+    default:
+      return "new";
+  }
+}
+
 export function projectInfo(repoPath: string): ProjectInfo {
   return {
     path: repoPath,
     name: path.basename(repoPath),
     stage: projectDisplayStage(repoPath),
+    lifecycleState: projectLifecycleState(repoPath),
     job: currentJob(repoPath),
   };
 }

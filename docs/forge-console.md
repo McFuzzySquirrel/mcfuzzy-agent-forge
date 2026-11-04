@@ -96,8 +96,30 @@ Projects and existing-application setup remain available as secondary choices.
 
 The **Projects** tab shows project name, state, and last accessed date/time,
 without filesystem paths in the list. Use a row's **Open** action to switch
-projects. Individual selection checkboxes and the header select-all checkbox
-occupy the same column.
+projects. Opening follows the Project's current lifecycle: new and partially
+authored Projects open at interactive authoring, Projects needing review open at
+the brief review, preparation and ready-to-start Projects return to their
+guided progress or prepared plan, and active, blocked, or failed Projects open
+their Overview. Completed Projects open **Project files**. Existing
+repositories enter the same lifecycle at the state their files and run history
+indicate; they are not assigned a separate "existing" state.
+
+The Overview names the exact action blocking a Project. A blocker that does
+not stop other work is shown while the Project remains **Running**. A failed
+Project identifies the failed stage and offers recovery for that stage; Build
+recovery links to failed Tasks and Logs and keeps completed work and history.
+An unavailable Project stays listed with **Reconnect** and recovery guidance.
+Reconnect retries its saved location; if the folder moved, add its current
+folder without removing the old registration or its recorded history.
+
+**Add a feature** remains on an existing Project's Overview. Feature
+requirements are authored interactively; after the generated Tasks are
+available, review their descriptions and acceptance criteria in **Tasks** and
+confirm that review before starting or resuming execution. This review gate
+does not reset existing Tasks or change the workflow engine's approval rules.
+
+Individual selection checkboxes and the header select-all checkbox occupy the
+same column.
 
 ### Remove from Forge
 

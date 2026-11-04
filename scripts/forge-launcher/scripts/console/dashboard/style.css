@@ -332,6 +332,15 @@ h4 { font-size: 12px; text-transform: uppercase; letter-spacing: 0.6px; color: v
 .project-brief-highlight:last-child { border-bottom: 0; padding-bottom: 0; }
 .project-brief-highlight p { margin: 4px 0 0; white-space: pre-wrap; overflow-wrap: anywhere; }
 .project-preparation, .project-prepared-plan { padding-top: 4px; }
+.project-blockers { margin-top: 10px; padding: 10px 12px; border-left: 3px solid var(--accent-ink); background: var(--surface); }
+.project-blockers ul { margin: 6px 0; padding-left: 20px; }
+.project-failed { border-left-color: var(--red); }
+.feature-task-review { margin-bottom: 16px; }
+.feature-task-review-list { display: grid; gap: 10px; }
+.feature-task-review-item { padding: 12px; border: 1px solid var(--panel-border); border-radius: 8px; }
+.feature-task-review-item h3 { margin: 0 0 6px; }
+.feature-task-review-item p { margin: 6px 0; }
+.feature-task-review-gate { border-left: 3px solid var(--accent-ink); }
 .prepared-plan-content { display: grid; gap: 10px; }
 .prepared-plan-phases { display: grid; gap: 8px; margin: 0; padding-left: 22px; }
 .prepared-plan-phases p { margin: 2px 0 0; }

@@ -1,6 +1,7 @@
 // ─── Tasks: filterable/sortable table with expandable detail ────────────────
 
 import { api } from "../api.js";
+import { featureTaskReviewIds, featureTasksReviewed, recordFeatureTaskReview } from "../feature-task-review.js";
 import { store } from "../state.js";
 import { el, fmtDuration, fmtTime, minutesToTimeoutMs, statusBadge, timeoutToMinutes, toast } from "../render/dom.js";
 import { formatUsage, usageCell } from "../render/usage.js";
@@ -26,6 +27,11 @@ let selectionScope: SelectionScope | null = null;
 let refreshGeneration = 0;
 let rangeStartControl: HTMLSelectElement | null = null;
 let rangeEndControl: HTMLSelectElement | null = null;
+let taskViewContainer: HTMLElement | null = null;
+let featureReviewHost: HTMLElement | null = null;
+let explicitFeatureReview = false;
+let runSelectionControl: HTMLButtonElement | null = null;
+let resumeSelectionControl: HTMLButtonElement | null = null;
 
 export function unmountTasks(): void {
   for (const u of unsub) u();
@@ -43,6 +49,11 @@ export function unmountTasks(): void {
   selectionScope = null;
   rangeStartControl = null;
   rangeEndControl = null;
+  taskViewContainer = null;
+  featureReviewHost = null;
+  explicitFeatureReview = false;
+  runSelectionControl = null;
+  resumeSelectionControl = null;
   refreshGeneration += 1;
 }
 
@@ -62,6 +73,7 @@ export async function renderHumanReviewQueue(container: HTMLElement): Promise<vo
 async function renderTaskView(container: HTMLElement, mode: "all" | "review-queue"): Promise<void> {
   unmountTasks();
   taskViewMode = mode;
+  taskViewContainer = container;
   container.textContent = "";
   const myGen = ++gen;
   unsub.push(store.subscribe(() => {
@@ -72,6 +84,13 @@ async function renderTaskView(container: HTMLElement, mode: "all" | "review-queu
   if (fromHash) {
     search = fromHash;
     expandedId = fromHash;
+  }
+
+  explicitFeatureReview = mode === "all" && new URLSearchParams(location.hash.split("?")[1] ?? "").get("feature-review") === "1";
+  featureReviewHost = null;
+  if (explicitFeatureReview || featureTaskReviewRequired()) {
+    featureReviewHost = el("div", { className: "feature-task-review-host" });
+    container.appendChild(featureReviewHost);
   }
 
   countLine = el("div", { className: "dim small" });
@@ -149,6 +168,9 @@ async function renderTaskView(container: HTMLElement, mode: "all" | "review-queu
   const clearSelection = el("button", { className: "btn btn-sm" }, "Clear");
   const runSelection = el("button", { className: "btn btn-sm btn-primary" }, "Run selected");
   const resumeSelection = el("button", { className: "btn btn-sm" }, "Resume selected");
+  runSelectionControl = runSelection as HTMLButtonElement;
+  resumeSelectionControl = resumeSelection as HTMLButtonElement;
+  syncFeatureTaskReviewGate();
 
   const launch = el("button", { className: "btn btn-sm" }, `Launch ${store.summary?.harness ?? "harness"} CLI`);
   launch.addEventListener("click", () => void launchCli());
@@ -208,6 +230,97 @@ async function renderTaskView(container: HTMLElement, mode: "all" | "review-queu
   await loadInitialTasks(myGen);
 }
 
+function renderFeatureTaskReview(): HTMLElement {
+  const summary = store.summary;
+  if (!summary) {
+    return el("section", { className: "panel error-text", role: "alert" }, "Project status is unavailable. Refresh before reviewing generated Tasks.");
+  }
+  const ids = featureTaskReviewIds(summary);
+  if (ids.length === 0) {
+    return el("section", { className: "panel hint" }, [
+      el("h2", null, "No feature Tasks need review"),
+      el("p", { className: "dim small" }, "This Project has no pending feature Task review."),
+      el("a", { className: "btn", href: "#/overview" }, "Return to Build status"),
+    ]);
+  }
+
+  const tasks = ids.map((id) => allTasks.find((task) => task.id === id)).filter((task): task is TaskRow => Boolean(task));
+  const missing = ids.filter((id) => !allTasks.some((task) => task.id === id));
+  const alreadyReviewed = featureTasksReviewed(summary);
+  const status = el("p", { className: "dim small", role: "status", "aria-live": "polite" }, alreadyReviewed
+    ? "This generated Task review has been recorded."
+    : missing.length > 0
+      ? "Some generated Tasks are unavailable. Refresh the Task list before confirming review."
+      : "Review the generated Task descriptions and acceptance criteria before confirming.");
+  const confirm = el("button", {
+    className: "btn btn-primary",
+    type: "button",
+    disabled: alreadyReviewed || missing.length > 0 ? true : null,
+  }, "I reviewed these Tasks") as HTMLButtonElement;
+  confirm.addEventListener("click", () => {
+    if (missing.length > 0 || featureTasksReviewed(summary)) return;
+    recordFeatureTaskReview(summary);
+    if (featureTasksReviewed(summary)) {
+      status.textContent = "Task review recorded. Build execution is now available.";
+      location.hash = "#/overview";
+    } else {
+      status.className = "error-text small";
+      status.textContent = "The review could not be saved in this browser. Execution remains gated.";
+    }
+  });
+
+  return el("section", { className: "panel feature-task-review", "aria-labelledby": "feature-task-review-heading" }, [
+    el("h2", { id: "feature-task-review-heading" }, "Review generated Tasks"),
+    el("p", { className: "dim" }, "Check that the additive feature work matches what you authored. These Tasks cannot run until you confirm this review."),
+    missing.length > 0
+      ? el("p", { className: "error-text", role: "alert" }, `Unavailable Tasks: ${missing.join(", ")}.`)
+      : null,
+    el("div", { className: "feature-task-review-list" }, tasks.map((task) => el("article", { className: "feature-task-review-item" }, [
+      el("h3", null, `${task.id} · ${task.title}`),
+      task.phaseTitle ? el("p", { className: "dim small" }, task.phaseTitle) : null,
+      task.description ? el("p", null, task.description) : null,
+      task.acceptanceCriteria.length > 0
+        ? el("div", null, [
+            el("strong", null, "Acceptance criteria"),
+            el("ul", null, task.acceptanceCriteria.map((criterion) => el("li", null, criterion))),
+          ])
+        : el("p", { className: "dim small" }, "No acceptance criteria are recorded for this Task."),
+    ]))),
+    status,
+    el("div", { className: "actions" }, [
+      confirm,
+      el("a", { className: "btn", href: "#/overview" }, "Return to Build status"),
+    ]),
+  ]);
+}
+
+function featureTaskReviewRequired(): boolean {
+  const summary = store.summary;
+  return Boolean(summary && featureTaskReviewIds(summary).length > 0 && !featureTasksReviewed(summary));
+}
+
+function syncFeatureTaskReviewGate(): void {
+  const required = featureTaskReviewRequired();
+  if (runSelectionControl) runSelectionControl.disabled = required;
+  if (resumeSelectionControl) resumeSelectionControl.disabled = required;
+}
+
+function syncFeatureTaskReviewPanel(): void {
+  syncFeatureTaskReviewGate();
+  if (taskViewMode !== "all" || !taskViewContainer) return;
+
+  if (!explicitFeatureReview && !featureTaskReviewRequired()) {
+    featureReviewHost?.remove();
+    featureReviewHost = null;
+    return;
+  }
+  if (!featureReviewHost) {
+    featureReviewHost = el("div", { className: "feature-task-review-host" });
+    taskViewContainer.prepend(featureReviewHost);
+  }
+  featureReviewHost.replaceChildren(renderFeatureTaskReview());
+}
+
 async function loadInitialTasks(myGen: number): Promise<void> {
   const request = ++refreshGeneration;
   try {
@@ -219,6 +332,7 @@ async function loadInitialTasks(myGen: number): Promise<void> {
   syncRangeOptions();
   if (myGen !== gen) return;
   renderCurrentTasks();
+  syncFeatureTaskReviewPanel();
 }
 
 function chip(label: string, active: boolean, onClick: () => void): HTMLElement {
@@ -248,6 +362,7 @@ async function refresh(): Promise<void> {
   }
   syncRangeOptions();
   renderCurrentTasks();
+  syncFeatureTaskReviewPanel();
 }
 
 function renderCurrentTasks(): void {
@@ -398,6 +513,11 @@ async function persistSelection(): Promise<void> {
 }
 
 async function runSelectionAction(action: "run" | "resume"): Promise<void> {
+  if (featureTaskReviewRequired()) {
+    toast("Review generated Tasks before starting or resuming execution.");
+    syncFeatureTaskReviewPanel();
+    return;
+  }
   const mode = store.summary?.executionMode ?? "auto";
   const ids = allTasks.map((task) => task.id).filter((id) => selectedIds.has(id));
   if (ids.length === 0) {

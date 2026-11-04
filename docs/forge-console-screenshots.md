@@ -7,10 +7,12 @@ stable numbered filenames below. The complete desktop and responsive capture
 set is archived under `images/forge-console/current/`. Start with
 `forge-launcher console`.
 
-The Project brief review captures also run a browser acceptance path with
+The Project brief and lifecycle captures also run browser acceptance paths with
 deterministic API responses: approval is checked to request preparation only,
-and the Build request is observed only after **Start build**. No authoring or
-workflow process is launched by this capture.
+the Build request is observed only after **Start build**, and a feature's
+generated Tasks must be reviewed before a Build can run. Lifecycle states,
+recovery guidance, and unavailable-Project reconnect are checked through the
+Projects view. No authoring or workflow process is launched by these captures.
 
 > See [forge-console.md](forge-console.md) for the full reference.
 >
@@ -50,6 +52,26 @@ harness-activity logging now live in **Settings → Execution**. (The Overview
 capture is full-page so the Controls are visible.)
 
 ![Overview - run status + pipeline + controls](images/forge-console/current/overview-1024.png)
+
+Opening a Project routes to its current action. Work can remain **Running**
+while a blocker is surfaced; a blocked Project names the required user action,
+and a failed Project identifies its failed stage and recovery. Unavailable
+Projects remain in the list with reconnect guidance. A completed Project opens
+Project files.
+
+![Project preparation remains visible while work continues](images/forge-console/current/project-state-preparing-1440.png)
+
+![Prepared Project with the explicit Start build gate](images/forge-console/current/project-state-ready-to-start-1440.png)
+
+![Running Project with a blocker](images/forge-console/current/project-state-running-1440.png)
+
+![Blocked Project with the required action](images/forge-console/current/project-state-blocked-1440.png)
+
+![Failed Build with stage-specific recovery](images/forge-console/current/project-state-failed-1440.png)
+
+![Unavailable Project with reconnect guidance](images/forge-console/current/project-state-unavailable-1440.png)
+
+![Completed Project opens Project files](images/forge-console/current/project-state-completed-1440.png)
 
 ## 3. Board
 
@@ -167,6 +189,14 @@ the separate **Start build** action.
 ![Preparing a Build - guided progress](images/forge-console/current/project-preparing-1440.png)
 
 ![Prepared plan - explicit Start build action](images/forge-console/current/prepared-plan-1440.png)
+
+### Feature Task review
+
+After interactive feature authoring and manifest reconciliation, the additive
+Tasks are shown with their descriptions and acceptance criteria. Confirming
+review is required before execution becomes available.
+
+![Generated feature Tasks requiring user review](images/forge-console/current/feature-task-review-1440.png)
 
 ## 14. Help
 

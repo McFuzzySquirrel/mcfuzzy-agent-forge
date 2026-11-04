@@ -125,12 +125,15 @@ application files are preserved, and Forge files are overwritten only when
 picking one saves it into the repository's `docs/authoring-config.json`.
 
 After a build completes, use **Add a feature** on Overview and choose **Author
-Feature PRD (interactive)**. The terminal session interviews you and writes an
+feature PRD (interactive)**. The terminal session interviews you and writes an
 additive document under `docs/features/`, leaving the original PRD intact. Once
 the feature document is saved, choose **Continue after authoring** to update
-affected agents and reconcile the manifest. Review the new tasks before running
-them; stable task IDs preserve completed work, and changed contracts are called
-out for review.
+affected agents and reconcile the manifest. Before running or resuming, open
+**Review new Tasks** and inspect the generated descriptions and acceptance
+criteria, then confirm **I reviewed these Tasks**. Until confirmed, execution is
+gated. Stable Task IDs preserve completed work, and changed contracts are
+called out for review; this additive review does not change runtime Human
+review or other approval rules.
 
 ---
 
@@ -523,6 +526,21 @@ If you are working across several repos, use the **Projects** view or the projec
 
 The Projects list shows **project name**, **state**, and **last accessed**
 date/time, not filesystem paths. Click **Open** in the desired row.
+
+Opening a Project takes you to the action for its current state: interactive
+authoring for a new or partially authored Project, brief review when approval
+is needed, guided preparation or the prepared plan while setup advances, and
+Overview for a running, blocked, or failed Build. A completed Project opens
+**Project files**. Existing repositories join this same lifecycle according to
+their files and run history.
+
+The Overview explains the precise action stopping progress. If a blocker does
+not prevent other work, the Project remains **Running** and shows the blocker
+alongside its active state. A failure names its stage and offers stage-specific
+recovery; completed Tasks and execution history remain intact. Missing folders
+remain in **Projects** with **Reconnect** and recovery guidance. Reconnect
+retries the saved location; if the folder moved, add its current folder rather
+than removing the old registration.
 
 ### Remove one or more projects from Forge
 

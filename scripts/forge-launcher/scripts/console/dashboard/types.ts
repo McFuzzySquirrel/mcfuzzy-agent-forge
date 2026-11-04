@@ -160,6 +160,7 @@ export interface ManifestSummary {
   phases: number;
   tasks: number;
   reconciliation?: {
+    previousGeneratedAt?: string;
     preservedTaskIds: string[];
     newTaskIds: string[];
     removedTaskIds: string[];
@@ -466,8 +467,21 @@ export interface ProjectInfo {
   createdAt?: string;
   lastOpenedAt?: string;
   stage: string;
+  lifecycleState?: ProjectLifecycleState;
   job?: BackgroundJob | null;
 }
+
+export type ProjectLifecycleState =
+  | "new"
+  | "partially-authored"
+  | "needs-review"
+  | "preparing"
+  | "ready-to-start"
+  | "running"
+  | "blocked"
+  | "failed"
+  | "completed"
+  | "unavailable";
 
 export interface ProjectsIndex {
   projects: ProjectInfo[];
