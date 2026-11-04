@@ -4,6 +4,21 @@ Detailed release and change notes for MyForge.
 
 ---
 
+## November 2026 - v3.122
+
+### Deliver the adaptive Forge Console
+
+- Added guided Idea and Project brief authoring, explicit brief approval,
+  preparation, and a separate **Start build** action.
+- Routed Projects to actionable next steps with stage-specific recovery, and
+  added Project files and a focused Human review queue.
+- Reorganized navigation around Project outcomes and Advanced, with a
+  responsive shell and an accessible semantic Board for Kanban and Gantt.
+- Refreshed the Console guides and visual captures for the new workflows and
+  responsive layouts.
+
+---
+
 ## November 2026 - v3.121
 
 ### Make Home's first step clear
