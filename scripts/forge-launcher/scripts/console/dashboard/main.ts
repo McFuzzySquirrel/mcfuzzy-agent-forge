@@ -1,6 +1,7 @@
 // ─── Forge Console entry point: hash router + SSE wiring ────────────────────
 
 import { api } from "./api.js";
+import { selectProjectDestination } from "./project-navigation.js";
 import { store, type Snapshot } from "./state.js";
 import { el, toast } from "./render/dom.js";
 import type { AuditEvent, JobsSummary, ProjectsIndex } from "./types.js";
@@ -270,14 +271,11 @@ function renderContextBar(): void {
     switcher.addEventListener("change", () => {
       const path = switcher.value;
       if (!path) return;
-      void api.selectRepo(path)
-        .then((res) => {
-          if (res.ok) {
-            projectsCache = null;
-            location.hash = "#/overview";
-          } else {
-            toast(res.message ?? "switch failed");
-          }
+      const project = projectsCache?.projects.find((entry) => entry.path === path);
+      void selectProjectDestination(path, project?.lifecycleState)
+        .then((destination) => {
+          projectsCache = null;
+          location.hash = destination;
         })
         .catch((err) => toast(err instanceof Error ? err.message : "switch failed"));
     });

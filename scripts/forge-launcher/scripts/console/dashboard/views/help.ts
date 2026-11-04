@@ -92,8 +92,8 @@ function quickHelp(): HTMLElement {
       "Forge Console is a local web UI that fronts forge-launcher and the workflow engine. It lets you create a project, start interactive PRD authoring, generate the agent team, run the build, and monitor/control it - all from your browser, without remembering terminal commands. The Terminal view runs OpenCode, Copilot, Claude, or an interactive authoring session inside the browser; external-terminal launch remains available as a fallback. It is served on 127.0.0.1 and reads the same files the terminal tools write.",
     ]),
     helpSection("The pipeline", [
-      "Projects flow through four stages: Idea → PRD → Agent team → Build.",
-      "The Continue button on the Overview page advances one stage at a time. PRD and feature requirements open an interactive authoring session; use the Terminal view to keep it in the browser, or choose the external-terminal fallback. Downstream team, skills, manifest, and build stages can run from the Console after you review the requirements. Nothing runs until you click it.",
+      "New Projects follow a guided path: explore an Idea, author a Project brief interactively, review it, approve preparation, then choose Start build after the prepared plan is ready. Brief approval never starts execution. Existing Projects enter at their current lifecycle state; non-completed Projects return to their next action on Build status, while completed Projects open Project files.",
+      "Requirements authoring stays interactive. Team, project guidance, and Build-plan preparation follow review; runtime Human review remains a separate Task-bound decision. Use the Terminal view to keep an authoring session in the browser, or choose the external-terminal fallback.",
       dl([
         ["Idea", "your project description in docs/IDEA.md."],
         ["Requirements", "reviewed docs/PRD.md plus docs/features/*.md, required for every solution."],
@@ -106,7 +106,7 @@ function quickHelp(): HTMLElement {
       "After the manifest exists, Controls offers auto (full workflow) or manual (selected tasks). Manual mode requires a saved task selection from All tasks; dependencies are expanded automatically.",
       dl([
         ["Run / Resume", "start or continue the workflow; manual mode uses Run selected / Resume selected."],
-        ["Pause / Stop", "pause after the current task or terminate the running engine."],
+        ["Pause / Stop", "Pause waits for the current task to finish; Stop asks for confirmation before terminating the running engine."],
         ["Replay failed", "retry a selected failed task."],
       ]),
       "Execution preferences — timeouts, concurrency, auto-commit, and harness-activity logging — are set in the Settings view.",
@@ -117,22 +117,27 @@ function quickHelp(): HTMLElement {
       "Review preserved, new, changed, and removed task IDs in Manifest. Reset changed tasks for review only when changed completed tasks should run again.",
     ]),
     helpSection("Views", [
-      "Navigation is grouped into top categories (Start / Tasks / Pipeline / Monitor / Review / Settings); hover a category, or select it to pin its list open. A persistent project context bar below the menu shows the current project and a switcher.",
-      dl([
-        ["Home", "create a new project or open an existing one."],
-        ["Projects", "switch to a different project or add a folder."],
-        ["Project files", "read the Project idea, Project brief, progress, and feature documents, and open delivered files without Task-by-Task history."],
-        ["Overview", "run status, manifest/reconciliation, pipeline steps, feature authoring, and run controls."],
+      "Home and Projects are global destinations. Project destinations belong to the selected Project, while Advanced keeps the full technical views available. Hover a group to open its destinations, or select it to pin the list open on touch. The persistent Project context bar shows the selected Project and switcher; switching follows the same lifecycle entry as the Projects list, and ordinary links never change Projects.",
+      helpSection("Global", [dl([
+        ["Home", "start a Project from an Idea, open a recent Project, or set up an existing application."],
+        ["Projects", "open or switch Projects, add a folder, and manage the local Project list."],
+      ])]),
+      helpSection("Current Project", [dl([
+        ["Build status", "the selected Project's next action, guided brief review and preparation, prepared plan, blockers, and run controls. Completed Projects open Project files."],
         ["Board", "semantic Kanban and Gantt views with shared Task summaries, attention cues, and compact details."],
+        ["Project brief", "read the selected Project's brief. Use Build status for the editable review and approval actions."],
+        ["Project files", "read the Project idea, brief, progress, and feature documents, and open delivered files without Task-by-Task history."],
         ["Human review", "focused queue for explicit Task-bound reviews, separate from Project brief approval."],
-        ["All tasks", "filterable, sortable Task table with detail, timeout editing, and saved single/range/list selection."],
+      ])]),
+      helpSection("Advanced", [dl([
+        ["All tasks", "filterable, sortable Task table with details, timeout editing, and saved task selection."],
         ["Logs", "engine and authoring output plus audit and lifecycle event streams."],
-        ["Timeline", "chronological audit events, failures highlighted."],
-        ["Plan & Team", "authoring stages, technical project documents, agents, and skills."],
-        ["Artifacts", "Task-produced files and records with their detailed provenance."],
-        ["Terminal", "run the harness CLI or an interactive authoring session in the browser."],
-        ["Settings", "authoring models, execution preferences (build mode, concurrency, auto-commit, harness logging, timeouts), and per-agent model overrides."],
-      ]),
+        ["Timeline", "chronological audit events, with failures highlighted."],
+        ["Terminal", "run the selected harness CLI or an interactive authoring session in the browser."],
+        ["Plan & Team", "authoring stages, technical Project documents, agents, and skills."],
+        ["Artifacts", "Task-produced files and records with detailed provenance."],
+        ["Settings", "authoring models, execution preferences, timeouts, and per-agent model overrides."],
+      ])]),
     ]),
     helpSection("Key terms", [dl([
       ["Project brief", "the agreed outcome and scope reviewed before preparation."],

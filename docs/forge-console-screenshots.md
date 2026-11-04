@@ -45,17 +45,17 @@ coding tool. Optional technical settings stay collapsed under **Advanced setup**
 
 ![New Project - idea-first setup](images/forge-console/current/new-1024.png)
 
-## 2. Overview
+## 2. Build status
 
 The dashboard puts project identity, the next pipeline action, and blockers
 first. PRD, team, and project-skill authoring have separate status summaries.
 The run stats include the harness-reported **Tokens** (in/out) and **Cost**
 (plus credits where a harness reports them). The **Controls** panel keeps the
 run controls and build mode; timeouts, concurrency, auto-commit, and
-harness-activity logging now live in **Settings → Execution**. (The Overview
+harness-activity logging now live in **Settings → Execution**. (The Build status
 capture is full-page so the Controls are visible.)
 
-![Overview - run status + pipeline + controls](images/forge-console/current/overview-1024.png)
+![Build status - run status + pipeline + controls](images/forge-console/current/overview-1024.png)
 
 Opening a Project routes to its current action. Work can remain **Running**
 while a blocker is surfaced; a blocked Project names the required user action,
@@ -182,7 +182,7 @@ Chronological audit events, with failures highlighted.
 
 The **New Project** wizard (`#/new`) collects project details, supported text
 documents, and three optional authoring model choices. The wizard does not
-auto-draft requirements; after creation, PRD authoring starts from Overview in
+auto-draft requirements; after creation, PRD authoring starts from Build status in
 an interactive terminal session.
 Selecting an existing PRD skips drafting it. Failed uploads or saves keep
 the draft available rather than silently starting with missing inputs.
@@ -292,7 +292,7 @@ log) are also included in `images/forge-console/current/`.
 
 | View | 1024px | 720px | 390px | 320px |
 | --- | --- | --- | --- | --- |
-| Overview | [image](images/forge-console/current/overview-1024.png) | [image](images/forge-console/current/overview-720.png) | [image](images/forge-console/current/overview-390.png) | [image](images/forge-console/current/overview-320.png) |
+| Build status | [image](images/forge-console/current/overview-1024.png) | [image](images/forge-console/current/overview-720.png) | [image](images/forge-console/current/overview-390.png) | [image](images/forge-console/current/overview-320.png) |
 | Board | [image](images/forge-console/current/board-1024.png) | [image](images/forge-console/current/board-720.png) | [image](images/forge-console/current/board-390.png) | [image](images/forge-console/current/board-320.png) |
 | Tasks | [image](images/forge-console/current/tasks-1024.png) | [image](images/forge-console/current/tasks-720.png) | [image](images/forge-console/current/tasks-390.png) | [image](images/forge-console/current/tasks-320.png) |
 | Logs | [image](images/forge-console/current/logs-1024.png) | [image](images/forge-console/current/logs-720.png) | [image](images/forge-console/current/logs-390.png) | [image](images/forge-console/current/logs-320.png) |
@@ -316,12 +316,15 @@ model or external authoring runs; every timestamp in the fixture is fixed.
 ```bash
 cd tools/console-screenshots
 npm install         # first time; installs puppeteer-core (no bundled browser)
+npm run acceptance  # browser acceptance against deterministic Console fixtures; does not write screenshots
 npm run capture     # builds the launcher, captures, then writes images + GIF
 npm run capture -- --board-only # refreshes only Board images and thumbnails
 ```
 
 Requirements: `google-chrome` (or set `CHROME_PATH`), `ffmpeg` on `PATH`, and
-Node 18+. Board captures also run deterministic keyboard, focus-restoration,
+Node 18+. The browser acceptance command needs Chrome and Node 18+, but not
+`ffmpeg`; it builds the launcher and checks Console behavior without rewriting
+images. Board captures also run deterministic keyboard, focus-restoration,
 filter/view-continuity, and structured-relationship assertions. The tool writes
 the responsive set to
 `docs/images/forge-console/current/`, derives the numbered tour images and the

@@ -69,8 +69,7 @@ page with an at-a-glance summary.
 
 ## 3. Drive the pipeline from Build status
 
-Build status (the existing Overview route) is the main control center for a
-Project. It shows:
+Build status (`#/overview`) is the main control center for a Project. It shows:
 
 - the run header (Live/Idle indicator, harness badge, and control state),
 - progress counters,
@@ -80,7 +79,7 @@ Project. It shows:
 - the pipeline status,
 - and the run controls.
 
-For a new Project, the Overview shows the saved guided authoring, review, and
+For a new Project, Build status shows the saved guided authoring, review, and
 preparation phase rather than a technical pipeline action. Existing Projects
 continue to use their pipeline actions, and the Console shows generated
 artifacts before later work moves forward.
@@ -88,7 +87,7 @@ artifacts before later work moves forward.
 For a new Project, follow the **Explore your Idea** and **Author your Project
 brief** phases on the Project guide in order. Both are interactive; neither is
 silently skipped when source documents are supplied. Existing Projects without
-a guided setup use the **interactive** authoring action on Overview. There is
+a guided setup use the **interactive** authoring action on Build status. There is
 no headless requirements-authoring alternative. Use the **Terminal** view to
 run a session in the browser, or choose **Open in external terminal** there.
 
@@ -104,7 +103,7 @@ New Project authoring:
 
 1. **Explore your Idea**: the Project guide opens `forge-grill-idea` for an interactive exploration.
 2. **Author your Project brief**: the guide opens `forge-build-prd` for interactive authoring; assumptions and open questions remain visible in the resulting brief.
-3. **Review the Project brief**: edit the brief in Overview and use the at-a-glance summary to check its outcome, scope, success criteria, assumptions, and open questions.
+3. **Review the Project brief**: edit the brief in Build status and use the at-a-glance summary to check its outcome, scope, success criteria, assumptions, and open questions.
 4. Choose **Request changes** to save the edits and return to interactive brief authoring, or choose **Approve** as a separate decision.
 5. Approval authorizes preparation only. The Console prepares the team, project guidance, and Build plan as one guided background step; it does not start execution. Progress and failures remain visible, with retry and Logs actions.
 6. When preparation is complete, review the major phases, assumptions, and warnings in the prepared plan. Choose **Start build** explicitly to begin execution. Project brief approval is separate from approving a runtime Human review Task.
@@ -114,7 +113,7 @@ authoring path. A Build is a separate action from authoring, review, and
 preparation.
 
 The console polls for state changes and updates the button label as each stage
-completes. When a detached step finishes or fails, Overview keeps the result
+completes. When a detached step finishes or fails, Build status keeps the result
 visible and links you straight to **Logs**.
 
 To use MyForge with an application that already exists, open **Projects** and
@@ -125,7 +124,7 @@ application files are preserved, and Forge files are overwritten only when
 **Authoring runner**, which defaults to inheriting the runner from the harness;
 picking one saves it into the repository's `docs/authoring-config.json`.
 
-After a build completes, use **Add a feature** on Overview and choose **Author
+After a build completes, use **Add a feature** on Build status and choose **Author
 feature PRD (interactive)**. The terminal session interviews you and writes an
 additive document under `docs/features/`, leaving the original PRD intact. Once
 the feature document is saved, choose **Continue after authoring** to update
@@ -155,7 +154,9 @@ switcher, harness, and Live/Idle status visible.
 
 The Project context bar and switcher remain available on every destination.
 Following a link or bookmark never changes the selected Project; switching is
-explicit. Existing routes—including `#/overview`, `#/tasks?task=…`, and
+explicit. The switcher uses the same lifecycle destination as **Open** in
+Projects: completed Projects open **Project files**, while other states open
+Build status at the next meaningful action. Existing routes—including `#/overview`, `#/tasks?task=…`, and
 `#/documents?stage=…`—keep their destination and applicable query state.
 `#/project-brief` opens the readable brief directly; use Build status for its
 editable review and approval actions. If a saved destination has been retired
@@ -207,7 +208,7 @@ Once the build starts, switch between the views to follow the work:
   approval; agent or unattended flags cannot approve it.
 - **All tasks (Advanced)**: the sortable, filterable technical Task table with a detail
   drawer. The **Tokens** column and drawer show harness-reported token and
-  cost usage (or an explicit "not reported"); the Overview run stats show the
+  cost usage (or an explicit "not reported"); Build status run stats show the
   run totals.
 - **Logs (Advanced)**: the engine and authoring log tail plus the live audit event stream.
 - **Plan & Team (Advanced)**: the technical project documents as a table (kind, title, path, status)
@@ -229,7 +230,7 @@ recompile the manifest explicitly; the Console will not silently switch roots.
 - **Terminal (Advanced)**: an interactive browser session for the selected
   harness CLI or an existing authoring target.
 
-The most useful combination for day-to-day work is usually Overview + Board + Logs.
+The most useful combination for day-to-day work is usually Build status + Board + Logs.
 
 Authoring lifecycle records use the `FORGE_EVENT {json}` prefix in
 `docs/engine-run.log` and are also sent as `authoring` SSE events. Ordinary
@@ -241,10 +242,11 @@ the lifecycle failure record and the command output in the same log.
 
 ## 5. Prepare and control a build
 
-The Overview controls panel offers the same actions you would otherwise issue from the CLI:
+The **Controls** panel on Build status offers the same actions you would otherwise issue from the CLI:
 
 - **Pause**: stop after the current task completes.
-- **Stop**: terminate the running engine.
+- **Stop**: confirm before terminating the running engine. Canceling leaves the
+  run untouched and sends no stop request.
 - **Resume**: continue the run from the saved state.
 - **Replay**: retry a failed task.
 - **Manual build**: before a manifest exists, prevent the team → build step from
@@ -257,7 +259,7 @@ The Overview controls panel offers the same actions you would otherwise issue fr
 
 Execution preferences — **auto-commit after each task**, **log harness
 activity**, **concurrency**, and **task timeouts** — are set in the
-**Settings** view rather than the Overview Controls panel. They are stored in
+**Settings** view rather than the Build status Controls panel. They are stored in
 `docs/engine-config.json` (and the manifest for timeouts) and applied to
 subsequently started runs. For concurrency above `1`, the working tree must be
 clean (see [ADR-056](adr/056-parallel-execution-task-sandboxes.md),
@@ -470,9 +472,9 @@ The assistant is not applied automatically. Review its changes and update the
 model plan or agent overrides explicitly.
 
 For a targeted run before the first build starts, enable the **Manual build**
-checkbox in the Overview pipeline card and click **Create manifest**. The
+checkbox in the Build status pipeline card and click **Create manifest**. The
 manifest is created without starting the engine. Then use the checkboxes or
-range picker in **All tasks**, click **Save selection**, switch the Overview
+range picker in **All tasks**, click **Save selection**, switch to Build status
 **Controls** panel to **manual**, and click **Run selected**. The engine expands
 selected tasks to include unmet dependencies while leaving unselected tasks
 untouched.
@@ -481,7 +483,7 @@ untouched.
 
 ## 6. Review incremental changes
 
-After a project has a PRD and agent team, **Add a feature** on Overview opens an
+After a project has a PRD and agent team, **Add a feature** on Build status opens an
 interactive authoring session for an additive Feature PRD under `docs/features/`.
 It does not replace the original PRD or start the engine. After authoring, choose
 **Continue after authoring** to prepare the affected team and recompile the
@@ -501,7 +503,7 @@ clears their recorded outputs, artifacts and timings so they run again.
 
 Editing a PRD or feature document makes the team and project skills stale. The
 Console tells you which one and why — "*Inputs changed after this stage
-completed: docs/PRD.md*, changed 3h ago" — on Overview and in **Plan & Team**.
+completed: docs/PRD.md*, changed 3h ago" — on Build status and in **Plan & Team**.
 
 **Re-derive team & skills** then runs the whole fix as one background job:
 
@@ -557,11 +559,11 @@ date/time, not filesystem paths. Click **Open** in the desired row.
 Opening a Project takes you to the action for its current state: interactive
 authoring for a new or partially authored Project, brief review when approval
 is needed, guided preparation or the prepared plan while setup advances, and
-Overview for a running, blocked, or failed Build. A completed Project opens
+Build status for a running, blocked, or failed Build. A completed Project opens
 **Project files**. Existing repositories join this same lifecycle according to
 their files and run history.
 
-The Overview explains the precise action stopping progress. If a blocker does
+Build status explains the precise action stopping progress. If a blocker does
 not prevent other work, the Project remains **Running** and shows the blocker
 alongside its active state. A failure names its stage and offers stage-specific
 recovery; completed Tasks and execution history remain intact. Missing folders
@@ -595,7 +597,7 @@ bootstrap it again.
 ## 9. Troubleshoot common issues
 
 - If the page does not open, check the terminal output for the local URL and try opening it manually.
-- If a build does not advance, confirm the current stage in Overview and look for blockers in the Logs view.
+- If a build does not advance, confirm the current stage in Build status and look for blockers in the Logs view.
 - If a task keeps failing, bump its timeout and replay it.
 - If **Run selected** is disabled, switch to **All tasks**, select one or more
   tasks, and click **Save selection**.

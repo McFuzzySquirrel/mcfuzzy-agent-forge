@@ -26,6 +26,7 @@ discovery, Project context, and route/project preservation while resizing.
 
 ```bash
 npm install     # first time; installs puppeteer-core (no bundled browser download)
+npm run acceptance # builds the launcher and runs browser acceptance; does not refresh screenshots
 npm run capture # builds the launcher, then captures
 npm run capture -- --board-only # refreshes only responsive Board captures and tour images
 npm run capture -- --headed   # watch the browser while it captures
@@ -37,6 +38,11 @@ npm run typecheck
 - `google-chrome` on `PATH`, or `CHROME_PATH` pointing at a Chrome/Chromium binary.
 - `ffmpeg` on `PATH` (thumbnails and the GIF).
 - Node 18+.
+
+`npm run acceptance` runs the deterministic browser acceptance suite against
+the actual Console server and fixture Projects. It checks user-visible Project
+navigation, lifecycle destinations, review links, and stop confirmation without
+rewriting any screenshot assets. It requires Chrome but not `ffmpeg`.
 
 ## What it writes
 
@@ -53,7 +59,7 @@ npm run typecheck
 - The responsive shell includes a medium navigation rail and a narrow drawer
   capture at `docs/images/forge-console/current/nav-drawer-720.png`.
 - `--board-only` skips unrelated captures and the walkthrough GIF.
-- The **Overview** capture is full-page (viewport resized to the content height)
+- The **Build status** capture (`overview-1024.png`) is full-page (viewport resized to the content height)
   so the **Controls** panel, including the **Log harness activity** toggle, is
   visible.
 - The `tools/console-screenshots/` source is not covered by the launcher's

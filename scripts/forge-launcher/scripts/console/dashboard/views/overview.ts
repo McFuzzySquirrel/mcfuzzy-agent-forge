@@ -1211,7 +1211,7 @@ function renderBriefReview(container: HTMLElement, summary: Summary): HTMLElemen
     el("div", { className: "actions" }, [
       requestChanges,
       approve,
-      el("a", { className: "btn", href: "#/documents" }, "Project files"),
+      el("a", { className: "btn", href: "#/project-files" }, "Project files"),
     ]),
   ]);
 
@@ -1371,7 +1371,7 @@ function renderPreparedPlan(container: HTMLElement, summary: Summary): HTMLEleme
     el("div", { className: "actions" }, [
       start,
       taskReviewRequired ? el("a", { className: "btn btn-primary", href: "#/tasks?feature-review=1" }, "Review new Tasks") : null,
-      el("a", { className: "btn", href: "#/documents" }, "Project files"),
+      el("a", { className: "btn", href: "#/project-files" }, "Project files"),
     ]),
   ]);
   void Promise.all([loadProjectBrief(repoRoot), api.manifest()]).then(([brief, manifest]) => {
@@ -1550,7 +1550,10 @@ function renderActions(container: HTMLElement, summary: Summary, actions: Action
   buttons[0]!.addEventListener("click", () => ctl("run"));
   buttons[1]!.addEventListener("click", () => ctl("resume"));
   buttons[2]!.addEventListener("click", () => ctl("pause"));
-  buttons[3]!.addEventListener("click", () => ctl("stop"));
+  buttons[3]!.addEventListener("click", () => {
+    if (!window.confirm("Stop this Build now? The current Build will be stopped.")) return;
+    ctl("stop");
+  });
 
   let replay: HTMLElement | null = null;
   if (actions.failedTasks.length > 0) {
