@@ -101,6 +101,15 @@ and a link to full diagnostics in All tasks.
 
 ![Board - Task details](images/forge-console/03c-board-detail.png)
 
+At narrow widths, Kanban keeps the phase labels visible while status columns
+scroll horizontally, and Gantt keeps Task labels visible while the timeline is
+panned. Task details become a full-screen overlay; closing it returns focus to
+the originating Task.
+
+![Board - narrow Gantt with Task labels beside the pannable timeline](images/forge-console/current/board-gantt-390.png)
+
+![Board - narrow full-screen Task details](images/forge-console/current/board-detail-390.png)
+
 ## 4. Tasks
 
 Every task appears in a sortable, filterable table with status chips, search,

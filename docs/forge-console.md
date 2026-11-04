@@ -394,6 +394,13 @@ reviews, and cleared blockers, but not routine progress. Status filters dim
 rather than hide Tasks, so workflow shape remains visible. Loading, empty,
 failed, and stale-data states explain what happened and offer a next step.
 
+On narrow screens (720px and below), Kanban scrolls horizontally across status
+columns while keeping phase labels visible. Gantt keeps Task labels in view as
+the timeline pans. Task details use a side panel on wide screens, flow below the
+Board on medium screens, and fill the screen on narrow screens. Closing details
+returns focus to the originating Task; Project selection, filters, and each
+view's position remain available across resizing and refresh.
+
 The standalone `workflow-engine run --viz` dashboard remains available
 separately and may use PixiJS; it does not affect the Console Board.
 

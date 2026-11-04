@@ -101,9 +101,41 @@ function detailTargets(): CaptureTarget[] {
       prepare: async (page) => { await setBoardMode(page, "gantt"); },
     },
     {
+      name: "board-gantt-390",
+      route: "board",
+      viewport: MOBILE_L,
+      prepare: async (page) => {
+        await setBoardMode(page, "gantt");
+        await clickByText(page, '[role="group"][aria-label="Filter Tasks by status"] button', "All");
+        await page.$eval('[aria-label="Gantt Board content"]', (board) => board.scrollIntoView({ block: "start" }));
+        const timeline = await page.evaluate(() => {
+          const table = document.querySelector<HTMLTableElement>('table[aria-label="Task timeline and duration"]');
+          const row = table?.tBodies[0]?.rows[0];
+          const cell = row?.cells[1];
+          row?.scrollIntoView({ block: "center", inline: "nearest" });
+          if (!cell) return null;
+          const rect = cell.getBoundingClientRect();
+          return {
+            x: Math.max(rect.left + 2, Math.min(window.innerWidth - 16, rect.right - 12)),
+            y: rect.top + rect.height / 2,
+          };
+        });
+        if (timeline) {
+          await page.mouse.move(timeline.x, timeline.y);
+          await page.mouse.wheel({ deltaX: 240, deltaY: 0 });
+        }
+      },
+    },
+    {
       name: "board-detail-1440",
       route: "board",
       viewport: WIDE,
+      prepare: async (page) => { await openBoardDetails(page); },
+    },
+    {
+      name: "board-detail-390",
+      route: "board",
+      viewport: MOBILE_L,
       prepare: async (page) => { await openBoardDetails(page); },
     },
     {
@@ -254,6 +286,263 @@ async function assertBoardKeyboardContract(browser: Browser, baseUrl: string): P
       }
       for (const key of keys) window.localStorage.removeItem(key);
     });
+  } finally {
+    await page.close();
+  }
+}
+
+async function assertNarrowGanttKeepsTaskLabelsVisible(browser: Browser, baseUrl: string): Promise<void> {
+  const page = await openRoute(browser, baseUrl, "board", MOBILE_L);
+  try {
+    await waitForBoard(page);
+    await setBoardMode(page, "gantt");
+    const before = await page.evaluate(() => {
+      const table = document.querySelector<HTMLTableElement>('table[aria-label="Task timeline and duration"]');
+      const row = table ? Array.from(table.tBodies[0]?.rows ?? []).find((candidate) => candidate.querySelector("button")) : null;
+      const label = row?.cells[0]?.querySelector("button");
+      const timeline = row?.cells[1];
+      if (!label || !timeline) return null;
+      row?.scrollIntoView({ block: "center", inline: "nearest" });
+      const labelRect = label.getBoundingClientRect();
+      const timelineRect = timeline.getBoundingClientRect();
+      return {
+        labelLeft: labelRect.left,
+        timelineLeft: timelineRect.left,
+        timelineX: Math.max(timelineRect.left + 2, Math.min(window.innerWidth - 16, timelineRect.right - 12)),
+        timelineY: timelineRect.top + timelineRect.height / 2,
+      };
+    });
+    assert.ok(before, "Gantt should expose Task labels and a timeline for its Tasks");
+
+    await page.mouse.move(before.timelineX, before.timelineY);
+    await page.mouse.wheel({ deltaX: 240, deltaY: 0 });
+    await page.waitForFunction((initialTimelineLeft) => {
+      const table = document.querySelector<HTMLTableElement>('table[aria-label="Task timeline and duration"]');
+      const row = table ? Array.from(table.tBodies[0]?.rows ?? []).find((candidate) => candidate.querySelector("button")) : null;
+      const timeline = row?.cells[1];
+      return timeline !== undefined && timeline.getBoundingClientRect().left < initialTimelineLeft - 100;
+    }, { timeout: 10000 }, before.timelineLeft);
+
+    const labelLeft = await page.$eval(
+      'table[aria-label="Task timeline and duration"] tbody tr td:first-child button',
+      (label) => label.getBoundingClientRect().left,
+    );
+    assert.ok(Math.abs(labelLeft - before.labelLeft) < 2,
+      "Panning the Gantt timeline should keep its Task label visible in the same position.");
+  } finally {
+    await page.close();
+  }
+}
+
+async function assertNarrowKanbanKeepsPhaseLabelsVisible(browser: Browser, baseUrl: string): Promise<void> {
+  const page = await openRoute(browser, baseUrl, "board", MOBILE_L);
+  try {
+    await waitForBoard(page);
+    await setBoardMode(page, "kanban");
+    const before = await page.evaluate(() => {
+      const table = document.querySelector<HTMLTableElement>('table[aria-label="Tasks by phase and workflow status"]');
+      const phaseRow = table?.tBodies[0]?.rows[0];
+      const phaseLabel = phaseRow?.querySelector("th[scope='row']");
+      const firstStatusCell = phaseRow?.cells[1];
+      const inProgress = table?.tHead?.rows[0]
+        ? Array.from(table.tHead.rows[0].cells).find((cell) => cell.textContent?.trim() === "In progress")
+        : null;
+      if (!phaseLabel || !firstStatusCell || !inProgress) return null;
+      phaseRow?.scrollIntoView({ block: "center", inline: "nearest" });
+      const phaseRect = phaseLabel.getBoundingClientRect();
+      const statusRect = inProgress.getBoundingClientRect();
+      const scrollTarget = firstStatusCell.getBoundingClientRect();
+      return {
+        phaseLeft: phaseRect.left,
+        statusLeft: statusRect.left,
+        scrollX: Math.max(scrollTarget.left + 2, Math.min(window.innerWidth - 16, scrollTarget.right - 12)),
+        scrollY: scrollTarget.top + scrollTarget.height / 2,
+      };
+    });
+    assert.ok(before, "Kanban should expose its phase labels and workflow-status columns");
+
+    await page.mouse.move(before.scrollX, before.scrollY);
+    await page.mouse.wheel({ deltaX: 240, deltaY: 0 });
+    await page.waitForFunction((initialStatusLeft) => {
+      const table = document.querySelector<HTMLTableElement>('table[aria-label="Tasks by phase and workflow status"]');
+      const inProgress = table?.tHead?.rows[0]
+        ? Array.from(table.tHead.rows[0].cells).find((cell) => cell.textContent?.trim() === "In progress")
+        : null;
+      return inProgress !== null && inProgress !== undefined
+        && inProgress.getBoundingClientRect().left < initialStatusLeft - 100;
+    }, { timeout: 10000 }, before.statusLeft);
+    const after = await page.$eval('table[aria-label="Tasks by phase and workflow status"] tbody th[scope="row"]', (phase) =>
+      phase.getBoundingClientRect().left);
+    assert.ok(Math.abs(after - before.phaseLeft) < 2,
+      "Horizontally panning Kanban status columns should keep each phase label visible.");
+  } finally {
+    await page.close();
+  }
+}
+
+async function assertKanbanContextSurvivesResponsiveChanges(browser: Browser, baseUrl: string): Promise<void> {
+  const page = await openRoute(browser, baseUrl, "board", MOBILE_L);
+  try {
+    await waitForBoard(page);
+    await setBoardMode(page, "kanban");
+    assert.equal(await clickByText(page, '[role="group"][aria-label="Filter Tasks by status"] button', "In progress"), true);
+    await page.waitForFunction(() =>
+      Array.from(document.querySelectorAll<HTMLButtonElement>('[role="group"][aria-label="Filter Tasks by status"] button'))
+        .some((button) => button.textContent?.trim() === "In progress" && button.getAttribute("aria-pressed") === "true"));
+
+    const before = await page.evaluate(() => {
+      const table = document.querySelector<HTMLTableElement>('table[aria-label="Tasks by phase and workflow status"]');
+      const phaseRow = table?.tBodies[0]?.rows[0];
+      const firstStatusCell = phaseRow?.cells[1];
+      const inProgress = table?.tHead?.rows[0]
+        ? Array.from(table.tHead.rows[0].cells).find((cell) => cell.textContent?.trim() === "In progress")
+        : null;
+      if (!phaseRow || !firstStatusCell || !inProgress) return null;
+      phaseRow.scrollIntoView({ block: "center", inline: "nearest" });
+      const cellRect = firstStatusCell.getBoundingClientRect();
+      return {
+        statusLeft: inProgress.getBoundingClientRect().left,
+        scrollX: Math.max(cellRect.left + 2, Math.min(window.innerWidth - 16, cellRect.right - 12)),
+        scrollY: cellRect.top + cellRect.height / 2,
+      };
+    });
+    assert.ok(before, "Kanban should expose its phase labels and workflow-status columns");
+
+    await page.mouse.move(before.scrollX, before.scrollY);
+    await page.mouse.wheel({ deltaX: 240, deltaY: 0 });
+    await page.waitForFunction((initialStatusLeft) => {
+      const table = document.querySelector<HTMLTableElement>('table[aria-label="Tasks by phase and workflow status"]');
+      const inProgress = table?.tHead?.rows[0]
+        ? Array.from(table.tHead.rows[0].cells).find((cell) => cell.textContent?.trim() === "In progress")
+        : null;
+      return inProgress !== null && inProgress !== undefined
+        && inProgress.getBoundingClientRect().left < initialStatusLeft - 100;
+    }, { timeout: 10000 }, before.statusLeft);
+    const taskId = await page.evaluate(() =>
+      Array.from(document.querySelectorAll<HTMLButtonElement>('table[aria-label="Tasks by phase and workflow status"] button'))
+        .find((button) => button.textContent?.includes("Approval routing"))?.getAttribute("data-board-task-id"));
+    assert.ok(taskId, "The fixture should include the Approval routing Task.");
+    await page.focus(`table[aria-label="Tasks by phase and workflow status"] button[data-board-task-id="${taskId}"]`);
+    await page.keyboard.press("Enter");
+    await page.waitForFunction(() =>
+      document.querySelector('[role="region"][aria-labelledby="board-details-title"] h3')?.textContent === "Approval routing");
+    const expectedStatusLeft = await page.evaluate(() => {
+      const table = document.querySelector<HTMLTableElement>('table[aria-label="Tasks by phase and workflow status"]');
+      return Array.from(table?.tHead?.rows[0]?.cells ?? [])
+        .find((cell) => cell.textContent?.trim() === "In progress")?.getBoundingClientRect().left ?? 0;
+    });
+
+    const narrowDetails = await page.$eval('[role="region"][aria-labelledby="board-details-title"]', (details) => {
+      const rect = details.getBoundingClientRect();
+      return { left: rect.left, top: rect.top, width: rect.width, height: rect.height, viewportWidth: innerWidth, viewportHeight: innerHeight };
+    });
+    assert.ok(narrowDetails.left <= 1 && narrowDetails.top <= 1
+      && narrowDetails.width >= narrowDetails.viewportWidth - 1
+      && narrowDetails.height >= narrowDetails.viewportHeight - 1,
+    "Narrow Task details should fill the screen.");
+
+    await page.setViewport({ width: 1440, height: MOBILE_L.height, deviceScaleFactor: 1 });
+    const wideDetails = await page.$eval('[role="region"][aria-labelledby="board-details-title"]', (details) => {
+      const rect = details.getBoundingClientRect();
+      const board = document.querySelector<HTMLElement>('[aria-label="Kanban Board content"]')?.getBoundingClientRect();
+      return { left: rect.left, width: rect.width, boardRight: board?.right ?? 0 };
+    });
+    assert.ok(wideDetails.left >= wideDetails.boardRight - 1 && wideDetails.width < 400,
+      `Wide Task details should sit beside the Board as a side panel (${JSON.stringify(wideDetails)}).`);
+
+    await page.setViewport({ width: MOBILE_L.width, height: MOBILE_L.height, deviceScaleFactor: 1 });
+    await page.reload({ waitUntil: "load" });
+    await settle(page);
+    await waitForBoard(page);
+    await page.waitForFunction(() =>
+      document.querySelector('[role="region"][aria-labelledby="board-details-title"] h3')?.textContent === "Approval routing");
+    assert.equal(await page.evaluate(() =>
+      Array.from(document.querySelectorAll<HTMLButtonElement>('[role="group"][aria-label="Filter Tasks by status"] button'))
+        .find((button) => button.textContent?.trim() === "In progress")?.getAttribute("aria-pressed")), "true",
+    "The selected status filter should survive a refresh.");
+
+    await page.focus('button[aria-label="Close Task details"]');
+    await page.keyboard.press("Enter");
+    await page.waitForFunction((key) => document.activeElement?.getAttribute("data-board-focus") === key, { timeout: 10000 }, `task:${encodeURIComponent(taskId)}`);
+    const restoredStatusLeft = await page.evaluate(() => {
+      const table = document.querySelector<HTMLTableElement>('table[aria-label="Tasks by phase and workflow status"]');
+      return Array.from(table?.tHead?.rows[0]?.cells ?? [])
+        .find((cell) => cell.textContent?.trim() === "In progress")?.getBoundingClientRect().left ?? 0;
+    });
+    assert.ok(Math.abs(restoredStatusLeft - expectedStatusLeft) < 2,
+      `Closing details after resizing and refresh should return to the same Board position (${expectedStatusLeft} → ${restoredStatusLeft}).`);
+  } finally {
+    await page.close();
+  }
+}
+
+async function assertBoardKeepsIndependentViewPositions(browser: Browser, baseUrl: string): Promise<void> {
+  const page = await openRoute(browser, baseUrl, "board", MOBILE_L);
+  try {
+    await waitForBoard(page);
+    await setBoardMode(page, "kanban");
+    const kanbanStatusLeft = await page.evaluate(() => {
+      const table = document.querySelector<HTMLTableElement>('table[aria-label="Tasks by phase and workflow status"]');
+      return Array.from(table?.tHead?.rows[0]?.cells ?? [])
+        .find((cell) => cell.textContent?.trim() === "In progress")?.getBoundingClientRect().left ?? 0;
+    });
+
+    await setBoardMode(page, "gantt");
+    const before = await page.evaluate(() => {
+      const table = document.querySelector<HTMLTableElement>('table[aria-label="Task timeline and duration"]');
+      const row = table ? Array.from(table.tBodies[0]?.rows ?? []).find((candidate) => candidate.querySelector("button")) : null;
+      const axis = table?.tHead?.rows[0]?.cells[1]?.querySelector('[aria-label="Timeline"]');
+      const timelineCell = row?.cells[1];
+      if (!axis || !timelineCell || !row) return null;
+      row.scrollIntoView({ block: "center", inline: "nearest" });
+      const timelineRect = timelineCell.getBoundingClientRect();
+      return {
+        axisLeft: axis.getBoundingClientRect().left,
+        timelineLeft: timelineRect.left,
+        scrollX: Math.max(timelineRect.left + 2, Math.min(window.innerWidth - 16, timelineRect.right - 12)),
+        scrollY: timelineRect.top + timelineRect.height / 2,
+      };
+    });
+    assert.ok(before, "Gantt should expose its Task timeline and axis");
+    await page.mouse.move(before.scrollX, before.scrollY);
+    await page.mouse.wheel({ deltaX: 240, deltaY: 0 });
+    await page.waitForFunction((initialTimelineLeft) => {
+      const table = document.querySelector<HTMLTableElement>('table[aria-label="Task timeline and duration"]');
+      const cell = Array.from(table?.tBodies[0]?.rows ?? []).find((row) => row.querySelector("button"))?.cells[1];
+      return cell !== undefined && cell.getBoundingClientRect().left < initialTimelineLeft - 100;
+    }, { timeout: 10000 }, before.timelineLeft);
+    const ganttAxisLeft = await page.$eval(
+      'table[aria-label="Task timeline and duration"] thead th[scope="col"]:nth-child(2) [aria-label="Timeline"]',
+      (axis) => axis.getBoundingClientRect().left,
+    );
+
+    await setBoardMode(page, "kanban");
+    const restoredKanbanStatusLeft = await page.evaluate(() => {
+      const table = document.querySelector<HTMLTableElement>('table[aria-label="Tasks by phase and workflow status"]');
+      return Array.from(table?.tHead?.rows[0]?.cells ?? [])
+        .find((cell) => cell.textContent?.trim() === "In progress")?.getBoundingClientRect().left ?? 0;
+    });
+    assert.ok(Math.abs(restoredKanbanStatusLeft - kanbanStatusLeft) < 2,
+      "Switching Board views should restore Kanban's independent horizontal position.");
+
+    await setBoardMode(page, "gantt");
+    const restoredGanttAxisLeft = await page.$eval(
+      'table[aria-label="Task timeline and duration"] thead th[scope="col"]:nth-child(2) [aria-label="Timeline"]',
+      (axis) => axis.getBoundingClientRect().left,
+    );
+    assert.ok(Math.abs(restoredGanttAxisLeft - ganttAxisLeft) < 2,
+      "Switching Board views should restore Gantt's independent horizontal position.");
+
+    await page.reload({ waitUntil: "load" });
+    await settle(page);
+    await waitForBoard(page);
+    await page.waitForSelector('table[aria-label="Task timeline and duration"]', { timeout: 10000 });
+    const refreshedGanttAxisLeft = await page.$eval(
+      'table[aria-label="Task timeline and duration"] thead th[scope="col"]:nth-child(2) [aria-label="Timeline"]',
+      (axis) => axis.getBoundingClientRect().left,
+    );
+    assert.ok(Math.abs(refreshedGanttAxisLeft - ganttAxisLeft) < 2,
+      "Refreshing the Board should restore Gantt's saved horizontal position.");
   } finally {
     await page.close();
   }
@@ -1295,6 +1584,10 @@ async function captureProjectBriefLifecycle(browser: Browser, baseUrl: string, c
 
 export async function captureBoard(browser: Browser, baseUrl: string, currentDir: string): Promise<string[]> {
   await assertBoardKeyboardContract(browser, baseUrl);
+  await assertNarrowKanbanKeepsPhaseLabelsVisible(browser, baseUrl);
+  await assertKanbanContextSurvivesResponsiveChanges(browser, baseUrl);
+  await assertBoardKeepsIndependentViewPositions(browser, baseUrl);
+  await assertNarrowGanttKeepsTaskLabelsVisible(browser, baseUrl);
   const targets = [
     ...routeTargets().filter((target) => target.route === "board"),
     ...detailTargets().filter((target) => target.name.startsWith("board-")),

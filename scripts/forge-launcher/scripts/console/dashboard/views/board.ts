@@ -20,6 +20,7 @@ let boardShell: HTMLElement | null = null;
 let liveRegion: HTMLElement | null = null;
 let originalAriaLive: string | null = null;
 let scrollHost: HTMLElement | null = null;
+let horizontalScrollHost: HTMLElement | null = null;
 let scrollHostMode: BoardMode | null = null;
 let preferences: BoardPreferences | null = null;
 let tasks: BoardTaskSummary[] = [];
@@ -32,6 +33,10 @@ let layoutError: string | null = null;
 let lastRefreshedAt: number | null = null;
 let refreshGeneration = 0;
 let refreshTimer: number | undefined;
+let resizeRestoreFrame: number | undefined;
+let resizeReleaseFrame: number | undefined;
+let restoringResponsivePosition = false;
+let lastViewportSize: { width: number; height: number } | null = null;
 let unsubscribe: (() => void) | null = null;
 let focusAfterRender: string | null = null;
 let returnFocusKey: string | null = null;
@@ -66,10 +71,46 @@ function taskFocusKey(taskId: string): string {
   return `task:${encodeURIComponent(taskId)}`;
 }
 
+function restoreResponsivePosition(): void {
+  const size = { width: window.innerWidth, height: window.innerHeight };
+  if (lastViewportSize?.width === size.width && lastViewportSize.height === size.height) return;
+  lastViewportSize = size;
+  restoringResponsivePosition = true;
+  if (resizeRestoreFrame !== undefined) window.cancelAnimationFrame(resizeRestoreFrame);
+  if (resizeReleaseFrame !== undefined) window.cancelAnimationFrame(resizeReleaseFrame);
+  resizeRestoreFrame = window.requestAnimationFrame(() => {
+    resizeRestoreFrame = undefined;
+    if (scrollHost && scrollHostMode && preferences) {
+      const position = preferences.get().positions[scrollHostMode];
+      scrollHost.scrollTop = position.top;
+      if (horizontalScrollHost) horizontalScrollHost.scrollLeft = position.left;
+      else scrollHost.scrollLeft = position.left;
+    }
+    resizeReleaseFrame = window.requestAnimationFrame(() => {
+      resizeReleaseFrame = undefined;
+      restoringResponsivePosition = false;
+    });
+  });
+}
+
+function preferredHorizontalPosition(mode: BoardMode, viewport: HTMLElement, horizontal: HTMLElement | null): number {
+  const current = horizontal?.scrollLeft ?? viewport.scrollLeft;
+  const saved = preferences?.get().positions[mode].left ?? 0;
+  const maximum = horizontal
+    ? Math.max(0, horizontal.scrollWidth - horizontal.clientWidth)
+    : Math.max(0, viewport.scrollWidth - viewport.clientWidth);
+  return saved > current && current >= maximum - 1 ? saved : current;
+}
+
 function saveScrollPosition(): void {
   if (!scrollHost || !scrollHostMode || !preferences) return;
+  if (restoringResponsivePosition || lastViewportSize?.width !== window.innerWidth
+    || lastViewportSize.height !== window.innerHeight) {
+    restoreResponsivePosition();
+    return;
+  }
   preferences.setPosition(scrollHostMode, {
-    left: scrollHost.scrollLeft,
+    left: preferredHorizontalPosition(scrollHostMode, scrollHost, horizontalScrollHost),
     top: scrollHost.scrollTop,
   });
 }
@@ -435,6 +476,8 @@ function renderBoardUi(): void {
   const focusKey = focusAfterRender ?? activeFocusKey();
   focusAfterRender = null;
   saveScrollPosition();
+  let savePosition: (() => void) | null = null;
+  let restorePosition: { left: number; top: number } | null = null;
   const state = currentPreferences();
   const selected = taskById(state.selectedTaskId);
   const root = el("section", {
@@ -496,25 +539,40 @@ function renderBoardUi(): void {
       tabindex: "0",
       "aria-label": state.mode === "kanban" ? "Kanban Board content" : "Gantt Board content",
     });
-    viewport.addEventListener("scroll", () => {
-      if (!preferences) return;
-      preferences.setPosition(state.mode, { left: viewport.scrollLeft, top: viewport.scrollTop });
-    });
-    viewport.appendChild(state.mode === "kanban"
+    const content = state.mode === "kanban"
       ? renderKanban(state.statuses, state.selectedTaskId)
-      : renderGantt(state.statuses, state.selectedTaskId));
+      : renderGantt(state.statuses, state.selectedTaskId);
+    viewport.appendChild(content);
+    const horizontalContent = content.matches(".board-kanban-scroll, .board-gantt-scroll")
+      ? content
+      : content.querySelector<HTMLElement>(".board-kanban-scroll, .board-gantt-scroll");
+    horizontalScrollHost = horizontalContent;
+    savePosition = (): void => {
+      if (!preferences) return;
+      preferences.setPosition(state.mode, {
+        left: preferredHorizontalPosition(state.mode, viewport, horizontalContent),
+        top: viewport.scrollTop,
+      });
+    };
     root.appendChild(el("div", { className: selected ? "board-body has-details" : "board-body" }, [
       viewport,
       selected ? renderDetails(selected) : null,
     ]));
     scrollHost = viewport;
     scrollHostMode = state.mode;
-    const position = state.positions[state.mode];
-    viewport.scrollLeft = position.left;
-    viewport.scrollTop = position.top;
+    restorePosition = state.positions[state.mode];
   }
 
   boardShell?.replaceChildren(root);
+  if (restorePosition && scrollHost) {
+    scrollHost.scrollTop = restorePosition.top;
+    if (horizontalScrollHost) horizontalScrollHost.scrollLeft = restorePosition.left;
+    else scrollHost.scrollLeft = restorePosition.left;
+  }
+  if (savePosition) {
+    scrollHost?.addEventListener("scroll", savePosition);
+    horizontalScrollHost?.addEventListener("scroll", savePosition);
+  }
   focusByKey(root, focusKey);
 }
 
@@ -644,6 +702,13 @@ function handleKeyDown(event: KeyboardEvent): void {
 export function unmountBoard(): void {
   if (refreshTimer !== undefined) window.clearTimeout(refreshTimer);
   refreshTimer = undefined;
+  if (resizeRestoreFrame !== undefined) window.cancelAnimationFrame(resizeRestoreFrame);
+  if (resizeReleaseFrame !== undefined) window.cancelAnimationFrame(resizeReleaseFrame);
+  resizeRestoreFrame = undefined;
+  resizeReleaseFrame = undefined;
+  restoringResponsivePosition = false;
+  lastViewportSize = null;
+  window.removeEventListener("resize", restoreResponsivePosition);
   unsubscribe?.();
   unsubscribe = null;
   const previousContainer = container;
@@ -656,6 +721,7 @@ export function unmountBoard(): void {
   liveRegion = null;
   originalAriaLive = null;
   scrollHost = null;
+  horizontalScrollHost = null;
   scrollHostMode = null;
   preferences = null;
   tasks = [];
@@ -681,6 +747,8 @@ export function renderBoard(host: HTMLElement): void {
   liveRegion = el("div", { className: "sr-only", "aria-live": "polite", "aria-atomic": "true" });
   container.replaceChildren(boardShell, liveRegion);
   preferences = new BoardPreferences(boardStorage(), currentProject());
+  lastViewportSize = { width: window.innerWidth, height: window.innerHeight };
+  window.addEventListener("resize", restoreResponsivePosition);
   container.addEventListener("click", handleClick);
   container.addEventListener("keydown", handleKeyDown);
   unsubscribe = store.subscribe(scheduleRefresh);

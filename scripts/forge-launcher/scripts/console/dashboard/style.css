@@ -795,6 +795,8 @@ body[data-view="board"] #view { max-width: none; padding: 12px clamp(12px, 2vw, 
 .board-gantt-table th:nth-child(3), .board-gantt-table td:nth-child(3) { width: 230px; }
 .board-gantt-table th:nth-child(4), .board-gantt-table td:nth-child(4) { width: 145px; }
 .board-gantt-table thead th { position: sticky; z-index: 2; top: 0; background: var(--panel-bg); }
+.board-gantt-table thead th:first-child { left: 0; z-index: 3; }
+.board-gantt-table tbody tr:not(.board-gantt-phase) td:first-child { position: sticky; z-index: 1; left: 0; background: var(--panel-bg); }
 .board-gantt-table .board-gantt-phase th { background: var(--surface-deep); }
 .board-gantt-duration { color: var(--text-soft); font-size: 12px; }
 .board-gantt-row.is-dimmed { opacity: .48; }

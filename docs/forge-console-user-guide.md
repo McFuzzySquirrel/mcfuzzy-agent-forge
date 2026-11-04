@@ -185,7 +185,13 @@ Once the build starts, switch between the views to follow the work:
     diagnostics.
   - Status filters dim rather than hide Tasks, keeping the full workflow shape
     visible. Selection and filters persist per Project, and each view retains
-    its own scroll position across refreshes and view switches.
+    its own scroll position across refreshes, view switches, and responsive
+    resizing. On narrow screens, Kanban keeps phase labels visible while status
+    columns scroll horizontally; Gantt keeps Task labels in view while its
+    timeline pans.
+  - Task details open beside the Board on wide screens, below it on medium
+    screens, and full-screen on narrow screens. Closing details returns focus
+    to the originating Task.
   - The Board is semantic HTML/CSS and works without PixiJS. Every Task card
     and Gantt bar is a keyboard-focusable control; Enter or Space opens its
     details, and closing details returns focus to the originating control.
