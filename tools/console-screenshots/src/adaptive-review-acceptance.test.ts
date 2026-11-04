@@ -148,6 +148,68 @@ test("external authoring advances the Project guide only after its document is w
   }
 });
 
+test("a completed Idea and Project brief route overview to brief review", async () => {
+  const fixture = await createFixture("completed-idea-brief-next-action");
+  const previousHome = process.env.FORGE_HOME;
+  const manifestPath = join(fixture.repoRoot, "docs", "EXECUTION-MANIFEST.json");
+  const workflowStatePath = join(fixture.repoRoot, "docs", "WORKFLOW-STATE.json");
+  rmSync(manifestPath, { force: true });
+  rmSync(workflowStatePath, { force: true });
+  writeFileSync(join(fixture.repoRoot, "docs", "IDEA.md"), "# Weather helper\n\nHelp young readers plan for weather.\n");
+  writeFileSync(join(fixture.repoRoot, "docs", "PRD.md"), "# Weather helper\n\n## Outcome\nHelp young readers plan for weather.\n");
+  mkdirSync(join(fixture.repoRoot, "docs", "features"), { recursive: true });
+  writeFileSync(join(fixture.repoRoot, "docs", "features", "weather.md"), "# Weather planning\n\nHelp readers prepare for local weather.\n");
+  let server: ConsoleServer | undefined;
+  let browser: Browser | undefined;
+  let page: Page | undefined;
+  try {
+    ({ server, browser, page } = await startBrowserConsole(fixture));
+    const summaryResponse = page.waitForResponse((response) =>
+      new URL(response.url()).pathname === "/api/summary" && response.ok());
+    await page.evaluate((repoRoot) => {
+      localStorage.setItem(`forge-console:guided-authoring:${repoRoot}`, "idea");
+      location.hash = "#/overview";
+    }, fixture.repoRoot);
+    const summary = await (await summaryResponse).json() as { hasIdea: boolean; hasPrd: boolean; hasManifest: boolean };
+    assert.deepEqual(
+      { hasIdea: summary.hasIdea, hasPrd: summary.hasPrd, hasManifest: summary.hasManifest },
+      { hasIdea: true, hasPrd: true, hasManifest: false },
+      "The fixture must represent a completed Idea and brief awaiting review.",
+    );
+    await settle(page);
+    const overviewText = await page.$eval("#view", (view) => view.textContent ?? "");
+    assert.match(
+      overviewText,
+      /Review your Project brief/,
+      `Completed Idea and brief documents should route to brief review, not the stale Idea step. Overview showed: ${overviewText}`,
+    );
+    assert.doesNotMatch(overviewText, /First: explore your Idea/i, "Overview must not keep presenting Idea exploration as the next action.");
+    assert.equal(
+      await page.evaluate((repoRoot) => localStorage.getItem(`forge-console:guided-authoring:${repoRoot}`), fixture.repoRoot),
+      "review",
+      "Completed brief progress should replace the stale saved Idea step.",
+    );
+    await page.evaluate((repoRoot) => {
+      localStorage.setItem(`forge-console:guided-authoring:${repoRoot}`, "brief");
+    }, fixture.repoRoot);
+    await page.reload({ waitUntil: "load" });
+    await settle(page);
+    assert.match(
+      await page.$eval("#view", (view) => view.textContent ?? ""),
+      /Review your Project brief/,
+      "A stale saved brief step should also advance to review when the complete brief exists.",
+    );
+  } finally {
+    if (page) await page.close();
+    if (browser) await browser.close();
+    if (server) await server.stop();
+    fixture.cleanup();
+    rmSync(join(WORK_ROOT, "completed-idea-brief-next-action"), { recursive: true, force: true });
+    if (previousHome === undefined) delete process.env.FORGE_HOME;
+    else process.env.FORGE_HOME = previousHome;
+  }
+});
+
 test("the prepared-plan Start build action routes pending feature Tasks to review", async () => {
   const fixture = await createFixture("prepared-plan-review");
   const previousHome = process.env.FORGE_HOME;

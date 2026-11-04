@@ -869,6 +869,10 @@ function activeGuidedStep(summary: Summary): GuidedAuthoringStep | null {
     if ((step === "idea" || step === "brief") && summary.hasManifest) {
       return isPreparationComplete(summary, "ready") ? "ready" : "preparing";
     }
+    if ((step === "idea" || step === "brief") && summary.hasPrd) {
+      setGuidedAuthoringStep(summary.repoRoot, "review");
+      return "review";
+    }
     if (step === "review" && summary.hasManifest) {
       return isPreparationComplete(summary, "ready") ? "ready" : "preparing";
     }

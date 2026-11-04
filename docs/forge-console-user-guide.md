@@ -61,9 +61,11 @@ After creation, choose **Open your Project guide** when setup is ready. The guid
 shows two distinct phases: **Explore your Idea** and **Author your Project
 brief**. Each opens the supported interactive session in the Console Terminal;
 the session continues while you move between Console views, and the guide
-returns to the same Project and saved phase. The completed Project brief,
-including its assumptions and open questions, is shown in an editable review
-page with an at-a-glance summary.
+returns to the same Project and saved phase, reconciled with the current
+Project files. If the brief is already complete, the guide advances to its
+editable review page instead of repeating Idea exploration or brief authoring.
+The review includes an at-a-glance summary of the outcome, assumptions, and
+open questions.
 
 ---
 

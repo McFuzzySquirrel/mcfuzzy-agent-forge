@@ -4,6 +4,15 @@ Detailed release and change notes for MyForge.
 
 ---
 
+## November 2026 - v3.124
+
+### Route completed authoring to its next action
+
+- When a Project brief is complete, Build status now advances stale saved Idea
+  or brief progress to review instead of repeating Idea exploration.
+
+---
+
 ## November 2026 - v3.123
 
 ### Preserve explicit Build start for stale authoring progress
