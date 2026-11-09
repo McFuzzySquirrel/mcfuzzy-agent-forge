@@ -7,7 +7,7 @@ categories: personal update
 
 # The Story of MyForge, Part 2: From Framework to Factory
 
-> *Part 1 ended with a methodology, a growing component library, and ten principles. Part 2 is about what happened when those foundations were stress-tested: when users wanted better quality gates, fewer manual steps, a one-command start, and - ultimately - a build pipeline that could run itself.*
+> *Part 1 ended with a methodology, a growing component library, and ten principles. Part 2 is about what happened when those foundations were stress-tested: when users wanted better quality gates, fewer manual steps, a one-command start, and a build pipeline that could run itself.*
 
 If Part 1 was about learning *how to design* agent teams, Part 2 is about learning *how to ship them faster and more reliably* - and then realizing that the framework itself needed to become an autonomous actor.
 
@@ -19,7 +19,7 @@ After the v2 harness migration had settled, an uncomfortable question surfaced. 
 
 The `forge-optimize-skills` audit could tell you what was wrong after the fact. And the agent template had strong conventions. But the creation process itself had no quality gate. A skill could be written, accepted, and handed to agents without anyone - human or AI - ever verifying that it met a minimum standard.
 
-The consequence was subtle but damaging. A skill that scored below 2.0 on the quality rubric didn't *fail* visibly. It just produced inconsistent results. Agents following it would sometimes get lost, sometimes skip steps, sometimes produce outputs that didn't match expectations. The problem was hard to diagnose because it looked like agent misbehaviour, not a skill quality problem.
+The consequence was subtle but damaging. A skill that scored below 2.0 on the quality rubric didn't *fail* visibly. It produced inconsistent results. Agents following it would sometimes get lost, sometimes skip steps, sometimes produce outputs that didn't match expectations. The problem was hard to diagnose because it looked like agent misbehaviour, not a skill quality problem.
 
 The answer was already sitting in a companion repository: **[skill-forge](https://github.com/McFuzzySquirrel/skill-forge)**.
 
@@ -33,7 +33,7 @@ The integration decision (ADR-008) had two parts. First: bring all three skills 
 
 The `forge-build-agent-team` skill gained a mandatory `skill-creator` gate: for every reusable skill it identified, it now had to run `skill-creator` and then pass `skill-review` scoring every axis ≥ 2.0 *before* handing the skill to any agent. If `skill-creator` wasn't present in the repository, the team builder stopped and said so explicitly - no silent fallback.
 
-The result was a framework that had grown a conscience about its own output quality. Skills weren't just *created*; they were *validated*. And the validation wasn't optional.
+The result was a framework that checked its own output before shipping it. Skills were validated before any agent could depend on them, and the validation was not optional.
 
 ### The Takeaway for Builders
 
@@ -51,7 +51,7 @@ The standard flow was:
 3. Optionally run `forge-assign-models` - review the assignments
 4. Run the `project-orchestrator` - approve each phase
 
-Four separate commands. Three or four explicit approval gates. For a project with a clear, well-understood scope, those gates added no value - they just slowed the user down.
+Four separate commands. Three or four explicit approval gates. For a project with a clear, well-understood scope, those gates added no value and slowed the user down.
 
 `forge-bootstrap-project` (introduced in ADR-004) had partially addressed this by chaining PRD generation and team building with mandatory review gates between them. But it deliberately stopped before build execution, because phase-by-phase review was considered the safe default.
 
@@ -84,7 +84,7 @@ Before you could run any skill, you needed:
 
 Five steps of prerequisite knowledge, all undocumented in a single place, all requiring the user to know what they were doing before the framework could help them.
 
-This wasn't a documentation problem. It was an **onboarding problem**. And the right solution to an onboarding problem isn't more docs - it's a guided experience.
+More docs wouldn't fix it. The problem was **onboarding**, and onboarding needs a guided experience.
 
 That became `forge-launcher` (ADR-010).
 
@@ -106,7 +106,7 @@ Step 6 deserves a note. The `forge-build-prd` skill had always supported startin
 
 It was also non-interactive from the start. Set environment variables (`FORGE_HARNESS_CHOICE`, `FORGE_REPO_NAME`, `FORGE_IDEA`, etc.) and pass `--non-interactive`, and the entire nine-step flow ran unattended. That made it testable in CI, and a functional test script (`test-forge-launcher.sh`) verified the expected directory layout for every harness.
 
-One harness required an extra fix (ADR-015): the opencode bootstrap path had been writing templates to `.agents/` instead of `.opencode/`. A small but important correction - because if your skills land in the wrong directory, your harness can't find them, and the whole point of harness selection evaporates.
+One harness required an extra fix (ADR-015): the opencode bootstrap path had been writing templates to `.agents/` instead of `.opencode/`. The fix mattered, because if your skills land in the wrong directory, your harness can't find them, and the whole point of harness selection evaporates.
 
 ### The Takeaway for Builders
 
@@ -124,7 +124,7 @@ The problem was structural. MyForge's execution model was *conversational*: an o
 
 What was missing was a **neutral contract** - a machine-readable document that described the build graph in a way any system could understand.
 
-That became `forge-execution-adapter` (ADR-011): a portable TypeScript tool that compiled `docs/EXECUTION-MANIFEST.json` from the existing forge artifacts.
+`forge-execution-adapter` (ADR-011) was the result: a portable TypeScript tool that compiled `docs/EXECUTION-MANIFEST.json` from the existing forge artifacts.
 
 The manifest captured everything an external runner needed to know:
 - Every phase and task
@@ -145,7 +145,7 @@ The design decision that made this useful was keeping it *separate from authorin
 
 ## Chapter 18: The Autonomy Problem - "Who Drives the Manifest?"
 
-The execution manifest existed. The adapter could compile it. But there was a gap that the manifest itself made visible by existing: *something still needed to actually read it, drive the execution, and do so without a human in the loop*.
+The execution manifest existed. The adapter could compile it. But something still needed to read it, drive the execution, and do so without a human in the loop.
 
 The existing paths all terminated at a conversational instruction. `forge-auto-build` was autonomous *within a chat session* - but a chat session was still a human-supervised environment where the harness could ask follow-up questions, and where the session ending meant the work stopped. The manifest was a machine-readable document sitting in a repository, pointed at nothing.
 
@@ -159,9 +159,9 @@ Three gaps defined the problem (ADR-014):
 
 The solution was `forge-workflow-engine` (v3.5): a Node.js skill that read the manifest, built a live task DAG, and drove execution to completion.
 
-The engine's most important design choice was what it was called: **dark orchestration**.
+The engine's most important design choice was full unattended execution, which the project called **dark orchestration**.
 
-The term needed explaining, and it got a clear one in the testing guide: *dark orchestration means background execution with no human in the loop*. Once the pre-run gate is accepted, the workflow engine dispatches agent invocations, waits for results, retries failures, and advances the task graph on its own. You do not need to approve each step. Think of it the same way you would a CI/CD pipeline: it runs "in the dark" (unattended) until it finishes or hits a blocker that genuinely needs human input.
+The testing guide defines it plainly: *dark orchestration means background execution with no human in the loop*. Once the pre-run gate is accepted, the workflow engine dispatches agent invocations, waits for results, retries failures, and advances the task graph on its own. You do not need to approve each step. Think of it the same way you would a CI/CD pipeline: it runs "in the dark" (unattended) until it finishes or hits a blocker that genuinely needs human input.
 
 That is the explicit opposite of the conversational `project-orchestrator` flow. Both are valid. The difference is one pre-flight gate versus a gate at every phase boundary.
 
@@ -171,7 +171,7 @@ Resume was a first-class feature from day one. Kill the engine mid-run, restart 
 
 The engine was deliberately scoped to *start where `forge-execution-adapter` ended*. It did not do PRD authoring, team generation, or model assignment. In the either/or auto-build flow it handles Stage 4 execution after the manifest is compiled; outside that flow it can still be run directly. It does not replace the prompt-driven path - it is the autonomous alternative when a user wants the build run by a real harness.
 
-The testing guide added to this release made the distinction concrete: a step-by-step manual verification protocol covering skill quality gates, manifest compilation, the pre-run gate, autonomous execution, state sync, resume, retry, and replay - and, critically, a Part 3 that combined `forge-launcher` with dark orchestration into a single end-to-end test: from zero to autonomous build in one terminal session.
+The testing guide added to this release made the distinction concrete: a step-by-step manual verification protocol covering skill quality gates, manifest compilation, the pre-run gate, autonomous execution, state sync, resume, retry, and replay, plus a Part 3 that combined `forge-launcher` with dark orchestration into a single end-to-end test: from zero to autonomous build in one terminal session.
 
 ### The Takeaway for Builders
 
@@ -180,8 +180,6 @@ The testing guide added to this release made the distinction concrete: a step-by
 ---
 
 ## Chapter 19: The Whole Picture - What MyForge Became
-
-Let's zoom out again, the way Part 1 did.
 
 Part 1 ended with MyForge as a **framework**: a set of principles, skills, and agents that turned ideas into coordinated agent teams. Part 2 added a **factory**: the automation, onboarding, quality gates, integration contracts, and autonomous runtime that make the framework work at scale.
 
@@ -255,7 +253,7 @@ Part 1 ended with ten principles. Part 2 adds to them.
 
 ## Epilogue for Part 2: The Framework That Builds Itself
 
-There's a recursive dimension to everything in Part 2 that's worth naming explicitly.
+Part 2 is recursive in a way Part 1 was not.
 
 MyForge v3.x uses `skill-creator` and `skill-review` to build and validate the skills that `forge-build-agent-team` generates. Those skills were themselves created and validated by the same tools. The `forge-workflow-engine` that drives autonomous builds was bootstrapped by the same `forge-launcher` experience it is now part of. The testing guide that verifies dark orchestration was written to cover the same workflow it describes.
 

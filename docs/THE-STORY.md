@@ -7,22 +7,22 @@ categories: personal update
 
 # The Story of MyForge: Building an AI Development Team from Scratch
 
-> *How a simple question: "What if AI could work like a real team?", became a framework that turns ideas into coordinated agent teams.*
+> *How the question "What if AI could work like a real team?" became a framework that turns ideas into coordinated agent teams.*
 
 
 ## The Spark
 
-It started with a frustration that every person who is working with agentic AI knows.
+It started with a frustration anyone who works with agentic AI knows.
 
-You're sitting with GitHub Copilot, this incredibly powerful AI assistant, and you ask it to build something complex. A web application, maybe. Authentication, database layer, API endpoints, frontend components, testing, an awesome game. The AI dives in, and it's impressive… at least for a while. But then you notice the cracks. It forgets the authentication approach it chose when it moves to the API layer. It makes frontend decisions that conflict with the backend architecture it just created. It's like asking one person to be the architect, the plumber, the electrician, the interior designer and the architect all at once. They *can* do all of those things, but not with the same depth and consistency as specialists who coordinate.
+You ask GitHub Copilot to build something complex. A web application, maybe: authentication, a database layer, API endpoints, frontend components, tests, a game. The AI dives in, and it's impressive for a while. Then you notice the cracks. It forgets the authentication approach it chose when it moves to the API layer. It makes frontend decisions that conflict with the backend architecture it just created. It's like asking one person to be the architect, the plumber, the electrician, and the interior designer all at once. They *can* do all of those things, but not with the same depth and consistency as specialists who coordinate.
 
-That frustration led to a question that changed everything:
+That frustration became a question:
 
 **"What if, instead of one AI doing everything, we had a *team* of AI specialists, each an expert in their domain, working together like a real development team?"**
 
-A practical one: *Can we actually build this, today, with the tools we have?*
+The practical version: *can we build this today, with the tools we have?*
 
-We know the answer is yes, beacuse orchestrated multi-agent systems are in place and there are many ways people, and systems are doing this today. The journey to get there, after exploring all the options out there, and expanding on that, is what this document is about.
+Yes. Orchestrated multi-agent systems exist, and people are already building them in several ways. This document is about the journey from that question to MyForge: exploring the options that were out there, then expanding on them.
 
 ---
 
@@ -30,49 +30,49 @@ We know the answer is yes, beacuse orchestrated multi-agent systems are in place
 
 The first instinct was to jump straight into code. Build some agents, wire them together, see what happens. But experience whispers: *that's how you build something that works for the demo but falls apart in the real world.*
 
-Instead, the process started with a deliberate step back, and one I believe is the constant in this ever-changing world. Before writing a single line of agent definition, three questions needed answers:
+Instead, the process started with a deliberate step back, which I think is the one move that always pays off. Before writing a single line of agent definition, three questions needed answers:
 
-1. **What does a "team" actually mean in the context of AI agents?** A team isn't just multiple agents: it's agents with clear roles, defined boundaries, and a way to coordinate. A frontend specialist shouldn't be writing database migrations. A QA engineer shouldn't be designing the API schema.
+1. **What does a "team" actually mean in the context of AI agents?** A team is not just multiple agents. It is agents with clear roles, defined boundaries, and a way to coordinate. A frontend specialist shouldn't be writing database migrations. A QA engineer shouldn't be designing the API schema.
 
 2. **How do real development teams organize?** They start with **requirements**. Someone figures out *what* to build (the product manager, the PRD). Someone decides *who* builds *what* (the tech lead, the team structure). And someone coordinates the work (the project manager, the execution plan). That's three distinct phases: requirements -> team -> execution.
 
-3. **What already exists that we can build on?** Most systems like GitHub Copilot, Claude, etc. already supports custom agents (markdown files in `.agents/agents/`) and skills (reusable process files in `.agents/skills/`). The infrastructure was there. What was missing was the *system* for creating and coordinating them.
+3. **What already exists that we can build on?** Most systems, like GitHub Copilot and Claude, already support custom agents (markdown files in `.agents/agents/`) and skills (reusable process files in `.agents/skills/`). The infrastructure was there. What was missing was the *system* for creating and coordinating them.
 
-These three questions became the blueprint. Not a technical specification: a *way of thinking* about the problem.
+These three questions became the blueprint. They described a way of thinking about the problem, not a technical specification.
 
 ### The Takeaway for Builders
 
-> **Don't start with "what should I build?" Start with "what problem am I actually solving?" and "how do humans already solve this?"** The best frameworks mirror real-world processes that already work. AI agent teams work because real development teams work, we just translated the pattern.
+> **Don't start with "what should I build?" Start with "what problem am I actually solving?" and "how do humans already solve this?"** The best frameworks mirror real-world processes that already work. AI agent teams work because real development teams work; we translated the pattern.
 
 
 
 ## Chapter 2: The PRD-First Epiphany
 
-Here's where the first major design decision happened, and it's one that shaped everything that followed.
+The first major design decision shaped everything that followed.
 
-The initial temptation was to build agents that could figure out what to build on their own. Give them a vague description, let them decompose it, and watch them go. It sounds cool. It's also a terrible idea.
+The initial temptation was to build agents that could figure out what to build on their own. Give them a vague description, let them decompose it, and watch them go. It sounds appealing. It's also a terrible idea.
 
-Why? Because **AI agents follow instructions faithfully**. If the instructions are vague, the output is vague. If the requirements are ambiguous, the agents will resolve that ambiguity in ways you can't predict,nand different agents will resolve it differently. You end up with a frontend that expects data the API doesn't provide, tests that validate the wrong behavior, and an architecture that no one actually agreed on.
+**AI agents follow instructions faithfully**. If the instructions are vague, the output is vague. If the requirements are ambiguous, the agents will resolve that ambiguity in ways you can't predict, and different agents will resolve it differently. You end up with a frontend that expects data the API doesn't provide, tests that validate the wrong behavior, and an architecture that no one actually agreed on.
 
-The solution was both obvious: **start with a Product Requirements Document (PRD)**, this has been the start long before agentic AI and agents became a thing. 
+The solution was obvious: **start with a Product Requirements Document (PRD)**. That has been the starting point of software work since long before agentic AI.
 
-Not because PRDs are trendy. Because a PRD is a *single source of truth* that every agent can reference. When the API engineer needs to know what endpoints to build, they check the PRD. When the frontend specialist needs to know what data to display, they check the PRD. When the QA engineer needs to know what "correct" means, they check the PRD. No ambiguity. No conflicting interpretations.
+Not because PRDs are trendy, but because a PRD is a *single source of truth* that every agent can reference. When the API engineer needs to know what endpoints to build, they check the PRD. When the frontend specialist needs to know what data to display, they check the PRD. When the QA engineer needs to know what "correct" means, they check the PRD. No ambiguity. No conflicting interpretations.
 
-Now some people do start this way, and sometimes its called a **Specification (Spec)** but a lot of people never have, they may have the all the research, but they get lost on how to structure it.
+Some people already work this way and call it a **specification (spec)**. Many others have all the research but no idea how to structure it.
 
-So I came to a second realization that made this even more powerful: if you dont already have a PRD, then there should at least be an option where **the PRD itself could be built by an AI agent, through a structured conversation with the human.**
+That led to a second realization: if you don't already have a PRD, **an AI agent could build one through a structured conversation with you.**
 
 This became the first skill: `forge-build-prd`. Not a template you fill in. A *process*: an AI-guided interview that asks you the right questions across ten categories (scope, functional requirements, technical constraints, security, accessibility, design, testing, delivery, risks, dependencies), synthesizes your answers, and produces a comprehensive PRD.
 
-But here comes the cool part, if you already have one, you can point it to that, if you have a whole bunch of research and notes, you can also point it at that, you dont need to start from scratch if you have already done most of the work.
+If you already have a PRD, point the skill at it. If you have a pile of research and notes, point it at those too. You don't need to start from scratch when you've already done most of the work.
 
-Now the experience of building this first skill taught me a crucial lesson:
+Building this first skill taught me something:
 
 > **Skills are processes, not templates.** A template says "fill in section 3." A process says "let me ask you about section 3, challenge your assumptions, research whether your tech choices are current, and *then* write section 3." The difference is enormous.
 
 ### The Takeaway for Builders
 
-> **Give your AI agents a single source of truth before you let them do anything.** The quality of your agents' output is directly proportional to the quality of their input. A PRD isn't bureaucracy, it's the foundation that prevents your agent team from building six different interpretations of the same project.
+> **Give your AI agents a single source of truth before you let them do anything.** Vague input produces vague agents. A PRD is not bureaucracy. It is what stops your agent team from building six different interpretations of the same project.
 
 
 
@@ -89,28 +89,28 @@ The design process involved studying how real technical leads decompose projects
 - **Every distinct feature domain gets an owner**: Authentication is different from payments is different from notifications. Each deserves focused attention.
 - **Cross-cutting concerns become specialists when they're substantial**: If security is a checkbox, the architect handles it. If security is a core requirement (healthcare, finance), it gets its own agent.
 
-These heuristics were encoded into the `forge-build-agent-team` skill: a detailed process that the `forge-team-builder` agent follows. The skill doesn't just create agents; it *validates* the team. Every PRD requirement must map to exactly one agent. No gaps (requirements no one owns). No overlaps (requirements two agents fight over).
+These heuristics were encoded into the `forge-build-agent-team` skill: a detailed process that the `forge-team-builder` agent follows. The skill creates agents, then *validates* the team. Every PRD requirement must map to exactly one agent. No gaps (requirements no one owns). No overlaps (requirements two agents fight over).
 
-The most important design decision in the team builder was the **collaboration section** in each agent's definition. Every agent explicitly declares:
+The team builder's most consequential choice was the **collaboration section** in each agent's definition. Every agent explicitly declares:
 - **Dependencies**: What it needs from other agents before it can work
 - **Handoffs**: Where its work ends and another agent's begins
 - **Coordination points**: What needs to be synchronized
 
-This isn't just documentation, this is the contract that makes multi-agent coordination actually work. When the project orchestrator needs to decide what order to call agents in, it reads these collaboration sections. The dependencies become the execution graph.
+This is not documentation. It is the contract that makes multi-agent coordination actually work. When the project orchestrator needs to decide what order to call agents in, it reads these collaboration sections. The dependencies become the execution graph.
 
 ### The Takeaway for Builders
 
-> **Don't just create agents: design a team.** The value isn't in individual agents; it's in how they coordinate. Explicit boundaries and collaboration contracts prevent the chaos that comes from multiple AI agents working in the same codebase without clear ownership.
+> **Don't create agents. Design a team.** The value isn't in individual agents; it's in how they coordinate. Explicit boundaries and collaboration contracts prevent the chaos that comes from multiple AI agents working in the same codebase without clear ownership.
 
 
 
 ## Chapter 4: The Orchestrator - Conducting the Symphony
 
-This is cricital: Individual agents can do individual tasks. But who decides *what* to build *when*? Who makes sure the database schema exists before the API engineer tries to query it? Who verifies that Phase 1 is actually complete before Phase 2 begins?
+Individual agents can do individual tasks, but who decides *what* to build *when*? Who makes sure the database schema exists before the API engineer tries to query it? Who verifies that Phase 1 is actually complete before Phase 2 begins?
 
 Enter the `project-orchestrator`: the project manager of the agent team.
 
-Building the orchestrator revealed something interesting about AI coordination: **the hard part isn't making agents do work, it's making them do work in the right order, with the right context, and knowing when to stop.**
+Building the orchestrator made one thing clear. Getting agents to do work is easy, but getting them to do it in the right order, with the right context, and knowing when to stop is hard.
 
 The orchestrator's process is deceptively simple:
 
@@ -122,11 +122,11 @@ The orchestrator's process is deceptively simple:
 
 But within that simplicity are subtle design choices:
 
-- **The orchestrator never does implementation work itself.** It coordinates, delegates, and validates. The the actual code, tests, and configuration come from specialist agents. This separation of concerns mirrors how the best project managers operate: they don't write code, they ensure the right people write the right code at the right time.
+- **The orchestrator never does implementation work itself.** It coordinates, delegates, and validates. The actual code, tests, and configuration come from specialist agents. This separation of concerns mirrors how the best project managers operate: they don't write code, they ensure the right people write the right code at the right time.
 
 - **Verification before progression.** The orchestrator doesn't blindly move from Phase 1 to Phase 2. It checks that deliverables actually exist and meet acceptance criteria. This catches problems early, before they cascade.
 
-- **Error handling is explicit.** When something goes wrong (as they usually do) an agent can't complete a task, requirements are ambiguous, dependencies are missing, the orchestrator stops and reports. It doesn't silently push through hoping things work out.
+- **Error handling is explicit.** When something goes wrong, whether an agent can't complete a task, requirements are ambiguous, or dependencies are missing, the orchestrator stops and reports. It doesn't silently push through hoping things work out.
 
 ### The Takeaway for Builders
 
@@ -142,11 +142,11 @@ The framework worked. You could describe an idea or give it your existing work, 
 
 The first surprise was subtle but dangerous. An agent generating a Next.js application confidently used the Pages Router, **which was the standard approach during its training data cutoff**, when the App Router had been the recommended approach for months. Another agent installed a library version with known security vulnerabilities. The PRD said "use React" but didn't specify a version, and the agent used patterns from 2024!
 
-This wasn't a bug in any individual component. It was a *systemic gap*: **the framework had no mechanism for ensuring agents used current information.**
+This wasn't a bug in any individual component. The framework had no mechanism for ensuring agents used current information.
 
-The instinct was to add "always search for the latest version of everything" to every agent. But that would be noisy, slow, and counterproductive: agents would spend half their time searching and second-guessing the PRD's deliberate choices.
+The instinct was to add "always search for the latest version of everything" to every agent. But that would be noisy, slow, and counterproductive, because agents would spend half their time searching and second-guessing the PRD's deliberate choices.
 
-Instead, a research document was created: `latest-information-strategy.md`: that systematically analyzed:
+Instead, the work started with a research document, `latest-information-strategy.md`, which analyzed:
 - Where in the workflow does outdated information cause the most damage?
 - What existing mitigations already help? (Human review, LLM knowledge, Copilot's web access)
 - Where should we add targeted freshness checks?
@@ -159,7 +159,7 @@ The answer was four surgical additions:
 
 Four small changes across four files. No structural modifications. But they closed a gap that could have led to entire projects being built on deprecated foundations.
 
-### The Takeaway for a Builder
+### The Takeaway for Builders
 
 
 > **Use your own framework. The gaps you find in real use are the ones that matter most.** And when you find a gap, don't patch it everywhere: analyze where the fix has the highest impact with the lowest noise. Surgical fixes beat sledgehammer fixes every time.
@@ -179,7 +179,7 @@ The naive solutions were all problematic:
 - **Just call individual agents directly?** That works for small changes but doesn't scale. How does a cross-cutting feature like "real-time notifications", which touches the frontend, the API, and needs new WebSocket expertise get coordinated?
 - **Create a whole new PRD from scratch?** That ignores everything already built. The new PRD would have no awareness of existing agents, existing architecture, or completed phases.
 
-This wasn't a missing feature, it was a missing *workflow*. The solution required thinking through the entire lifecycle, not just adding a skill.
+This wasn't a missing feature. It was a missing *workflow*. The solution required thinking through the entire lifecycle, not just adding a skill.
 
 Another research document was created: `feature-prd-strategy.md`, and this one was more complex. It identified six fundamental challenges:
 
@@ -200,13 +200,13 @@ Feature workflow:   Feature Idea -> Feature PRD -> Team Update -> Feature Build
 
 Each component was designed to be *context-aware*:
 
-- The **Feature PRD Builder** (`forge-build-feature-prd`) reads the original PRD, scans existing agents, and examines the codebase before asking a single question. It knows what exists. Its output includes an "Agent Impact Assessment": a section that explicitly maps the feature's impact onto the existing team.
+- The **Feature PRD Builder** (`forge-build-feature-prd`) reads the original PRD, scans existing agents, and examines the codebase before asking a single question. It knows what exists. Its output includes an "Agent Impact Assessment" section that maps the feature's impact onto the existing team.
 
 - The **Team Builder** gained an incremental mode. It auto-detects whether it's looking at a full PRD or a Feature PRD. In feature mode, it doesn't regenerate the team: it extends existing agents with new responsibilities, creates new agents only when needed, and leaves unaffected agents completely untouched. Changes are presented as diffs, not replacements.
 
 - The **Orchestrator** gained a feature execution mode. It reads both the original PRD and the Feature PRD, understands which phases are already complete, and executes only the new F-prefixed feature phases. It never re-executes original phases.
 
-The most important design decision was using **prefixed IDs** everywhere: `FT-US-01` for feature user stories, `FT-FR-01` for feature requirements, `Phase F1` for feature phases. This simple convention prevents the collision that would happen when Feature PRD requirement `FR-01` conflicts with the original PRD's `FR-01`.
+The design decision that mattered most was using **prefixed IDs** everywhere: `FT-US-01` for feature user stories, `FT-FR-01` for feature requirements, `Phase F1` for feature phases. This simple convention prevents the collision that would happen when Feature PRD requirement `FR-01` conflicts with the original PRD's `FR-01`.
 
 ### The Takeaway for Builders
 
@@ -238,21 +238,21 @@ It served three practical purposes:
 
 ### The Takeaway for Builders
 
-> **Write the research document before you write the code.** Even if "research document" is just a page of notes in a markdown file. The act of writing down *what exists*, *what's missing*, *what could go wrong*, and *what specifically changes* will save you from building the wrong thing. It's not slower, it's faster, because you don't have to undo mistakes.
+> **Write the research document before you write the code.** Even if "research document" is just a page of notes in a markdown file. The act of writing down *what exists*, *what's missing*, *what could go wrong*, and *what specifically changes* will save you from building the wrong thing. It's faster, because you don't have to undo mistakes.
 
 
 
 ## Chapter 8: The Meta-Lesson - Building Tools That Build Tools
 
-Here's the most interesting thing about MyForge: **it's a framework that uses AI to create AI teams that build software**. That recursion isn't accidental, it's the whole point.
+MyForge is unusual because **it's a framework that uses AI to create AI teams that build software**. That recursion is the whole point.
 
-- The PRD Builder skill doesn't fill in a template. It conducts an intelligent interview, challenges assumptions, and researches technology currency. 
-- The Team Builder doesn't just slot agents into predefined roles. It analyzes the specific requirements, identifies the right specialization boundaries, and validates coverage. 
-- The Orchestrator doesn't just call agents in a fixed order. It reads the dependency graph and adapts.
+- The PRD Builder skill conducts an interview, challenges assumptions, and researches technology currency instead of filling in a template.
+- The Team Builder analyzes the specific requirements, finds the right specialization boundaries, and validates coverage instead of slotting agents into predefined roles.
+- The Orchestrator reads the dependency graph and adapts instead of calling agents in a fixed order.
 
 At every layer, the principle is the same: **give the AI enough structure to be effective, but enough freedom to adapt to the specific situation.**
 
-This balance: structure versus freedom, is the hardest thing to get right. Too much structure and your framework only works for one type of project. Too little and agents go off in unpredictable directions.
+Balancing structure against freedom is the hardest thing to get right. Too much structure and your framework only works for one type of project. Too little and agents go off in unpredictable directions.
 
 The sweet spot, as discovered through building MyForge, is:
 - **Structure the *process*, not the *output*.** Tell agents *how* to think about a problem (analyze requirements -> identify roles -> validate coverage), not *what* to produce (always create exactly 6 agents with these exact names).
@@ -263,9 +263,9 @@ The sweet spot, as discovered through building MyForge, is:
 
 ## Chapter 9: Your Turn - A Framework for Building Frameworks
 
-This story isn't just about MyForge. It's about a *process* for building any framework that coordinates AI agents, or, really, any complex system where multiple components need to work together.
+The process here applies beyond MyForge, to any framework that coordinates AI agents, or any complex system where multiple components need to work together.
 
-Here's the process, distilled:
+The process, distilled:
 
 ### Step 1: Identify the Real Problem
 Don't start with the technology. Start with the frustration. What are you actually trying to make better? For MyForge, it was: "One AI can't be an expert in everything simultaneously." Your problem will be different, but the approach is the same: name the pain clearly.
@@ -289,7 +289,7 @@ Ship the first version. Use it on a real project. Document the gaps you find: no
 Your V1 will handle the greenfield case. Eventually, you'll need to handle the "what now?" case: new features, changed requirements, evolved capabilities. When that happens, follow the same research-first approach: understand the existing state, identify the specific challenges, and design an additive solution that doesn't break what's working.
 
 ### Step 8: Document the Journey
-You're reading this document because someone decided the *process* was as valuable as the *product*. Every research document, every design decision, every rejected alternative: these aren't just artifacts. They're the knowledge that lets other people build on your work, learn from your mistakes, and create their own versions of what you've built.
+You're reading this document because someone decided the *process* was as valuable as the *product*. Every research document, design decision, and rejected alternative is knowledge that lets other people build on your work, learn from your mistakes, and create their own versions of what you've built.
 
 
 
@@ -299,7 +299,7 @@ After the initial framework was working and the research-driven approach had pro
 
 The agent file was around 144 lines. The skill file was detailed and comprehensive. And between them, Steps 1 through 6 of the team-building process were duplicated, almost word for word. It was the kind of problem that doesn't hurt you immediately, but slowly poisons everything. Change the process in the skill? Better remember to change the agent too. Forget? Now they disagree, and the behavior depends on which one the AI happens to read more carefully.
 
-This wasn't just a maintenance nuisance. It was an identity crisis. **What is an agent, and what is a skill?**
+The maintenance nuisance was also an identity crisis: **what is an agent, and what is a skill?**
 
 The research that followed (captured in ADR-001) led to a clean answer:
 
@@ -308,11 +308,11 @@ The research that followed (captured in ADR-001) led to a clean answer:
 
 With that clarity, the forge-team-builder agent was slimmed from 144 lines to about 64. All the duplicated procedural steps were removed. What remained was pure identity: who this agent is, what it's an expert in, and where it sends people. It became a **smart router**, not a procedure manual. Need a PRD? Go to `forge-build-prd`. Need to decompose a monolithic PRD? Go to `forge-decompose-prd`. Need to add a feature? Go to `forge-build-feature-prd`. Need a team generated? The `forge-build-agent-team` skill has the process, I'll follow it.
 
-But ADR-001 surfaced something else, something deeper. While examining the agent template (the template used to *generate* new specialist agents), a gap appeared: **generated agents had zero guidance on how to commit work, verify changes, or report progress**. The orchestrator had recently learned to track progress and make incremental commits, but the specialists it coordinated? They were still winging it. The orchestra was conducting, but the musicians didn't know they were supposed to follow the conductor.
+ADR-001 also exposed a gap in the agent template (the template used to *generate* new specialist agents): **generated agents had zero guidance on how to commit work, verify changes, or report progress**. The orchestrator had recently learned to track progress and make incremental commits, but the specialists it coordinated? They were still winging it. The orchestra was conducting, but the musicians didn't know they were supposed to follow the conductor.
 
-The fix was elegant: a new "Process and Workflow" section was added to the agent template. Every specialist agent generated from that point forward would follow a five-step workflow: *understand the task → implement → verify → commit → report*. Three new constraints were added requiring agents to commit after verification, follow orchestrator instructions, and report status. And for existing agents that had already been generated? The Feature Increment Mode was updated to retroactively add the Process section when it modified older agents, bringing them up to current standards.
+The fix was a new "Process and Workflow" section in the agent template. Every specialist agent generated from that point forward would follow a five-step workflow: *understand the task → implement → verify → commit → report*. Three new constraints were added requiring agents to commit after verification, follow orchestrator instructions, and report status. And for existing agents that had already been generated? The Feature Increment Mode was updated to retroactively add the Process section when it modified older agents, bringing them up to current standards.
 
-A 55% reduction in agent file size. Zero loss of capability. And every future specialist agent, regardless of project, would now follow the same professional practices.
+The agent file shrank by 55% with no loss of capability. And every future specialist agent, regardless of project, would now follow the same professional practices.
 
 ### The Takeaway for Builders
 
@@ -330,9 +330,9 @@ Two changes fixed this, and together they transformed the orchestrator from an e
 
 **First: incremental commits.** Before this change, if the orchestrator delegated three tasks to specialist agents, those agents might produce working code, but it all sat uncommitted in the working directory. If the session ended after the second task, there was no clean checkpoint to return to. The fix was straightforward: after each task, once builds and tests pass, commit with a descriptive message referencing the phase and task. At the end of each phase, commit any remaining work. The commit messages became the version control history: `Phase 1, Task 1.2: Initialize Next.js framework`. Small commits, each representing a verified unit of work.
 
-**Second: the progress tracking file.** This was the bigger innovation. The orchestrator now creates a `docs/PROGRESS.md` file at the start of orchestration and updates it after every single task. It records the current phase, completed tasks (with which agent handled them and which files were modified), the current in-progress task, remaining work, and any blockers. Critically, this file is included in every commit. It survives across sessions, across machines, across time.
+**Second: the progress tracking file.** This was the bigger innovation. The orchestrator now creates a `docs/PROGRESS.md` file at the start of orchestration and updates it after every single task. It records the current phase, completed tasks (with which agent handled them and which files were modified), the current in-progress task, remaining work, and any blockers. The file is included in every commit. It survives across sessions, across machines, across time.
 
-The result? A new command that actually works: **"Resume from last checkpoint."** The orchestrator reads `PROGRESS.md`, understands exactly where things left off, and picks up from the next incomplete task. Clone the repo on a different machine, run the orchestrator, and it knows what's done and what's next. It's the difference between a project manager who keeps everything in their head and one who maintains a project board that anyone can walk up to and understand.
+The result is a command that works: **"Resume from last checkpoint."** The orchestrator reads `PROGRESS.md`, understands exactly where things left off, and picks up from the next incomplete task. Clone the repo on a different machine, run the orchestrator, and it knows what's done and what's next. It's the difference between a project manager who keeps everything in their head and one who maintains a project board that anyone can walk up to and understand.
 
 ### The Takeaway for Builders
 
@@ -353,7 +353,7 @@ The monolithic PRD started showing cracks:
 
 The existing Feature PRD system (designed for post-V1 additions) had already solved some of these problems for *new* features. But it assumed the initial build was complete. It couldn't help during the *first* build.
 
-The research document (leading to ADR-002) explored the fundamental question: **what if feature-level decomposition was available from day one, not just after the project ships?**
+The research document (leading to ADR-002) asked a bigger question: **what if feature-level decomposition was available from day one, not just after the project ships?**
 
 The answer was a new skill: `forge-decompose-prd`. It takes a monolithic PRD and breaks it into two types of documents:
 
@@ -365,13 +365,13 @@ The decomposition process itself follows seven steps: analyze the PRD, identify 
 
 But creating new documents wasn't enough. The entire downstream pipeline needed to understand them.
 
-The **Feature PRD Builder** gained a greenfield mode. It auto-detects whether it's looking at a project that's already been built (post-project mode, the original behavior) or one that's still being planned (greenfield mode, where a PRD exists but no specialist agents do yet). In greenfield mode, it drops the sections about existing system state and agent impact assessment, because there's no existing system to assess.
+The **Feature PRD Builder** added a greenfield mode. It auto-detects whether it's looking at a project that's already been built (post-project mode, the original behavior) or one that's still being planned (greenfield mode, where a PRD exists but no specialist agents do yet). In greenfield mode, it drops the sections about existing system state and agent impact assessment, because there's no existing system to assess.
 
-The **Team Builder** gained a Vision + Features Mode. Instead of reading one monolithic PRD, it reads the PRD plus all Feature documents, aggregates every requirement across every feature, and then applies the same team design heuristics. The result is a team that understands the entire project holistically, with each agent's definition referencing the specific PRD and Feature documents relevant to its role.
+The **Team Builder** got a Vision + Features Mode. Instead of reading one monolithic PRD, it reads the PRD plus all Feature documents, aggregates every requirement across every feature, and then applies the same team design heuristics. The result is a team that understands the entire project holistically, with each agent's definition referencing the specific PRD and Feature documents relevant to its role.
 
-The **Orchestrator** gained feature-based execution. It reads dependency declarations from feature documents, validates the dependency graph is acyclic, and determines a safe execution order. New commands appeared: `Execute all features`, `Execute feature docs/features/auth.md`, `Execute features in order`, `Execute next feature`. The progress tracking file extended to show feature-level status alongside phase-level status.
+Feature-based execution landed in the **Orchestrator**. It reads dependency declarations from feature documents, validates the dependency graph is acyclic, and determines a safe execution order. New commands appeared: `Execute all features`, `Execute feature docs/features/auth.md`, `Execute features in order`, `Execute next feature`. The progress tracking file extended to show feature-level status alongside phase-level status.
 
-The most important design decision was making decomposition **optional and additive**. The monolithic approach remains the default. It works perfectly for small-to-medium projects. Decomposition is there when you need it, a tool you reach for when the project outgrows a single document. And if you start monolithic and realize halfway through planning that you need decomposition? Run `forge-decompose-prd` on your existing PRD. Nothing is lost, everything is transformed.
+Making decomposition **optional and additive** was the key decision. The monolithic approach remains the default. It works perfectly for small-to-medium projects. Decomposition is there when you need it, a tool you reach for when the project outgrows a single document. And if you start monolithic and realize halfway through planning that you need decomposition? Run `forge-decompose-prd` on your existing PRD. Nothing is lost, everything is transformed.
 
 ```
 Monolithic:   Idea → PRD → Agent Team → Orchestrated Build
@@ -403,7 +403,7 @@ This wasn't invented all at once. It *emerged* from doing the work. The freshnes
 
 The realization that this methodology was itself worth documenting led to the AI Research Workflow document, a guide not to the framework, but to the *process of evolving* the framework.
 
-There's a recursive beauty here that's worth noting. MyForge uses AI to build teams of AI agents. The methodology uses AI to research how to improve MyForge, which makes the AI agents it produces better at their work. The tools improve the tools. The process improves the process. And at every layer, the forcing function is the same: **write it down**. Research documents force clarity before complexity. ADRs force rationale alongside decisions. The act of writing is the act of thinking.
+The recursion is real. MyForge uses AI to build teams of AI agents. The methodology uses AI to research how to improve MyForge, which makes the AI agents it produces better at their work. The tools improve the tools. The process improves the process. And at every layer, the forcing function is the same: **write it down**. Research documents force clarity before complexity. ADRs force rationale alongside decisions. The act of writing is the act of thinking.
 
 ### The Takeaway for Builders
 
@@ -412,8 +412,6 @@ There's a recursive beauty here that's worth noting. MyForge uses AI to build te
 
 
 ## Epilogue: What We Actually Built
-
-Let's zoom out and see the whole picture.
 
 **MyForge** is a template repository that takes an idea and turns it into a coordinated team of AI specialists. Two paths, one framework:
 
@@ -467,7 +465,6 @@ The components:
 | `forge-build-agent-team` skill | Transforms PRDs into agent team definitions (3 modes) | Manual agent creation doesn't scale or validate |
 | `forge-bootstrap-project` skill | Meta-skill that chains PRD → review → team → review → optional model assignment from a one-liner idea | Removes copy-paste between steps without removing the human review gates |
 | `forge-assign-models` skill | Discovers available models (cloud + local Ollama) and recommends/applies a per-agent model assignment | Lightweight agents shouldn't default to the most expensive model |
-| `forge-build-agent-framework-solution` skill | Scaffolds a runnable Microsoft Agent Framework solution (.NET or Python) when the PRD selects it | Specialist agents need a real codebase to build on, not an empty repo |
 | `forge-team-builder` agent | Routes users and delegates to the right skill | Smart coordination beats duplicated procedures |
 | `project-orchestrator` agent | Coordinates agents with commits, progress tracking, and feature-based execution | Specialists without coordination produce chaos |
 | Architecture Decision Records | Capture decisions with rationale and alternatives | "Why" matters as much as "what" |
@@ -502,11 +499,11 @@ If you take nothing else from this story, take these:
 
 10. **Name your process.** If something works repeatedly, write it down. The difference between an ad-hoc approach and a methodology is one document.
 
-And thats the story, **and here is the repo**: https://github.com/McFuzzySquirrel/mcfuzzy-agent-forge
+That's the story, **and here is the repo**: https://github.com/McFuzzySquirrel/mcfuzzy-agent-forge
 
 ---
 
-*This is the story of how my MyForge came to be. But more importantly, it's a playbook. Take it. Adapt it. Build your own version. The patterns work whether you're building AI agent teams, data pipelines, content systems, or anything else where multiple specialized components need to work together toward a shared goal.*
+*This is how MyForge came to be. More importantly, it's a playbook. Take it. Adapt it. Build your own version. The patterns work whether you're building AI agent teams, data pipelines, content systems, or anything else where multiple specialized components need to work together toward a shared goal.*
 
 *The tools will change. The process won't.*
 
