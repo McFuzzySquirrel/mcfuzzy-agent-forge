@@ -249,6 +249,37 @@ async function withServer<T>(
   }
 }
 
+test("external origin is advertised while the Console remains loopback-bound", async () => {
+  const repo = makeRepo();
+  const logs: string[] = [];
+  const server = await startConsoleServer({
+    repoRoot: repo,
+    port: nextPort(),
+    externalOrigin: "https://forge.example.ts.net/",
+    open: false,
+    onLog: (message) => logs.push(message),
+  });
+  try {
+    assert.equal(server.externalUrl, "https://forge.example.ts.net");
+    assert.match(server.url, /^http:\/\/127\.0\.0\.1:/);
+    assert.ok(logs.includes("  forge console: https://forge.example.ts.net"));
+    assert.equal((await getJson(`${server.url}/api/summary`)) !== undefined, true);
+  } finally {
+    await server.stop();
+  }
+});
+
+test("external origin rejects non-HTTPS URLs and paths", async () => {
+  await assert.rejects(
+    startConsoleServer({ port: nextPort(), externalOrigin: "http://forge.example.ts.net", open: false }),
+    /must be an HTTPS origin/,
+  );
+  await assert.rejects(
+    startConsoleServer({ port: nextPort(), externalOrigin: "https://forge.example.ts.net/console", open: false }),
+    /without credentials, path, query, or fragment/,
+  );
+});
+
 test("summary detects newly authored canonical requirements for team generation", async () => {
   await withServer(async (server, repo) => {
     renameSync(join(repo, ".agents", "agents"), join(repo, ".agents", "agents-backup"));

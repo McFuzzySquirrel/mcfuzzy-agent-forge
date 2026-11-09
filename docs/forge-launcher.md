@@ -109,7 +109,7 @@ npx forge-launcher@beta engine-run [--repo <path>] [--harness <h>] [--concurrenc
                               [--log-harness-activity|--no-log-harness-activity]
                               [--auto-commit|--no-auto-commit] [--commit-message-template <tmpl>]
 npx forge-launcher@beta resume [--repo <path>] [--non-interactive] [--dry-run]
-npx forge-launcher@beta console [--repo <path>] [--port <n>] [--no-open]
+npx forge-launcher@beta console [--repo <path>] [--port <n>] [--external-origin <https-origin>] [--no-open]
 npx forge-launcher@beta draft-prd --repo <path> [model flags]
 npx forge-launcher@beta draft-existing-prd --repo <path> [model flags]
 npx forge-launcher@beta draft-team --repo <path> [model flags]
@@ -158,6 +158,21 @@ npm install -g ./forge-launcher-1.0.0-beta.6.tgz   # global `forge-launcher`
 # dev alternative (once dist/ is built): global symlink
 npm run build && npm link
 ```
+
+If npm 11 reports unapproved install scripts, rerun the global install with
+explicit approval for the launcher's `node-pty` and `esbuild` scripts:
+
+```bash
+npm install -g --allow-scripts=node-pty,esbuild ./forge-launcher-1.0.0-beta.6.tgz
+```
+
+This one-time flag approves only these packages for this command; the package's
+`allowScripts` field cannot approve scripts for npm's global installation. To
+persist the approval for future global installs, run
+`npm config set allow-scripts=node-pty,esbuild --location=user` once; this
+user-level setting applies to future global installs. `esbuild` installs the
+platform binary used by `tsx`, and `node-pty` prepares the Console's native
+terminal backend.
 
 Remove either install with:
 
@@ -543,7 +558,7 @@ The **Forge Console** is a self-contained, loopback-only web UI that fronts the
 launcher and the workflow engine from one browser app:
 
 ```bash
-forge-launcher console [--repo <path>] [--port <n>] [--no-open]
+forge-launcher console [--repo <path>] [--port <n>] [--external-origin <https-origin>] [--no-open]
 ```
 
 From it you can pick or create a project, advance the pipeline one stage at a

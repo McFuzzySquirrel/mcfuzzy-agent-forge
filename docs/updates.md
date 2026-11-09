@@ -4,7 +4,7 @@ Detailed release and change notes for MyForge.
 
 ---
 
-## November 2026 - v3.126
+## November 2026 - v3.128
 
 ### Explain ownership warnings and improve Board status feedback
 
@@ -17,7 +17,7 @@ Detailed release and change notes for MyForge.
 
 ---
 
-## November 2026 - v3.125
+## November 2026 - v3.127
 
 ### Keep Board task cards concise
 
@@ -27,7 +27,7 @@ Detailed release and change notes for MyForge.
 
 ---
 
-## November 2026 - v3.124
+## November 2026 - v3.126
 
 ### Route completed authoring to its next action
 
@@ -36,7 +36,7 @@ Detailed release and change notes for MyForge.
 
 ---
 
-## November 2026 - v3.123
+## November 2026 - v3.125
 
 ### Preserve explicit Build start for stale authoring progress
 
@@ -45,7 +45,7 @@ Detailed release and change notes for MyForge.
 
 ---
 
-## November 2026 - v3.122
+## November 2026 - v3.124
 
 ### Deliver the adaptive Forge Console
 
@@ -60,13 +60,35 @@ Detailed release and change notes for MyForge.
 
 ---
 
-## November 2026 - v3.121
+## November 2026 - v3.123
 
 ### Make Home's first step clear
 
 - Give **Start with an idea** one prominent action on Console Home while
   preserving Recent Projects, opening a Project, and setting up an existing app
   as secondary paths.
+
+---
+
+## November 2026 - v3.122
+
+### Clarify npm 11 global install approvals
+
+- Documented npm 11's one-time `--allow-scripts=node-pty,esbuild` option for
+  global and `npx` launcher runs, plus the optional per-user npm setting. The
+  package's `allowScripts` field does not control global-install approvals.
+
+---
+
+## November 2026 - v3.121
+
+### Tailscale Serve access for Forge Console
+
+- Added `forge-launcher console --external-origin <https-origin>` for using the
+  loopback-only Console through Tailscale Serve or another trusted HTTPS proxy.
+  The browser terminal accepts only the explicitly configured origin; the
+  Console does not open a network listener or treat the setting as user
+  authentication.
 
 ---
 

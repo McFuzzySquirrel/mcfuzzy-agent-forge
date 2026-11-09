@@ -20,7 +20,7 @@ Usage:
   forge-launcher help
   forge-launcher bootstrap [TARGET_DIR] [--harness agents|github|claude|opencode] [--force] [--init-git]
                            [--runner copilot|opencode|claude|inherit]
-  forge-launcher console [--repo <path>] [--port <n>] [--no-open]
+  forge-launcher console [--repo <path>] [--port <n>] [--external-origin <https-origin>] [--no-open]
   forge-launcher engine-run [--repo <path>] [--harness <h>] [--granularity <fine|coarse>]
                             [--concurrency <n>] [--task-timeout-ms <ms>] [--max-retries <n>]
                             [--retry-delay-ms <ms>] [--heartbeat-ms <ms>] [--yes] [--dry-run]

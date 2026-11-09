@@ -46,6 +46,8 @@ export interface ConsoleServerOptions {
   /** Initial repo to open (optional; when absent the landing/picker shows). */
   repoRoot?: string;
   port?: number;
+  /** HTTPS origin used by browsers when the loopback server is behind a trusted proxy. */
+  externalOrigin?: string;
   open?: boolean;
   onLog?: (message: string) => void;
   /** Test overrides. */
@@ -61,6 +63,7 @@ export interface ConsoleServerOptions {
 
 export interface ConsoleServer {
   url: string;
+  externalUrl?: string;
   port: number;
   token: string;
   selectRepo(repoRoot: string): void;
@@ -70,6 +73,21 @@ export interface ConsoleServer {
 function boardDir(): string {
   const { templatesDir } = resolveResources();
   return path.join(templatesDir, "skills", "forge-workflow-engine", "scripts", "viz", "dashboard");
+}
+
+function normalizeExternalOrigin(value: string | undefined): string | undefined {
+  if (value === undefined) return undefined;
+  let parsed: URL;
+  try {
+    parsed = new URL(value);
+  } catch {
+    throw new Error("--external-origin must be an HTTPS origin, for example https://my-host.example.ts.net.");
+  }
+  if (parsed.protocol !== "https:" || parsed.username || parsed.password
+    || parsed.pathname !== "/" || parsed.search || parsed.hash) {
+    throw new Error("--external-origin must be an HTTPS origin without credentials, path, query, or fragment.");
+  }
+  return parsed.origin;
 }
 
 // ─── Board layout ─────────────────────────────────────────────────────────────
@@ -402,6 +420,7 @@ export async function startConsoleServer(options: ConsoleServerOptions = {}): Pr
 
   const port = await findFreePort(options.port ?? DEFAULT_PORT, onLog);
   const url = `http://127.0.0.1:${port}`;
+  const externalUrl = normalizeExternalOrigin(options.externalOrigin);
 
   // ── SSE clients ────────────────────────────────────────────────────────────
   type Send = (event: string, data: unknown) => void;
@@ -1019,7 +1038,7 @@ export async function startConsoleServer(options: ConsoleServerOptions = {}): Pr
 
   const terminalSessions = attachTerminalSession(server, {
     token,
-    origin: url,
+    origin: externalUrl ?? url,
     enabled: options.allowExternalOpen === true,
     currentRepo: () => currentRepo,
     resolveCommand: terminalCommand,
@@ -1027,16 +1046,17 @@ export async function startConsoleServer(options: ConsoleServerOptions = {}): Pr
 
   await new Promise<void>((resolve) => server.listen(port, "127.0.0.1", resolve));
 
-  onLog(`  forge console: ${url}`);
+  onLog(`  forge console: ${externalUrl ?? url}`);
 
   if (options.repoRoot && looksLikeForgeRepo(options.repoRoot)) {
     upsertProject({ path: options.repoRoot });
   }
 
-  if (options.open) openBrowser(url);
+  if (options.open) openBrowser(externalUrl ?? url);
 
   return {
     url,
+    externalUrl,
     port,
     token,
     selectRepo(repoRoot: string) {
