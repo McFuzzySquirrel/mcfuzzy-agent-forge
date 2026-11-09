@@ -1,9 +1,10 @@
 // ─── Projects: open, register, and remove existing projects ──────────────────
 
 import { api } from "../api.js";
+import { selectProjectDestination } from "../project-navigation.js";
 import { el, fmtTime, toast } from "../render/dom.js";
 import { AUTHORING_RUNNER_OPTIONS } from "../runners.js";
-import type { ProjectInfo, ProjectRemovalResult, ProjectsIndex } from "../types.js";
+import type { ProjectInfo, ProjectRemovalResult, ProjectsIndex, ProjectLifecycleState } from "../types.js";
 
 interface ProjectsView {
   container: HTMLElement;
@@ -180,12 +181,16 @@ async function openProject(view: ProjectsView, project: ProjectInfo): Promise<vo
   if (view.busy || activeView !== view) return;
   setBusy(view, true);
   try {
-    const res = await api.selectRepo(project.path);
+    const destination = await selectProjectDestination(project.path, project.lifecycleState);
     if (activeView !== view) return;
-    if (res.ok) location.hash = "#/overview";
-    else view.meta.textContent = `Could not open ${project.name}. Check that the folder is available and try again.`;
-  } catch {
-    if (activeView === view) view.meta.textContent = `Could not open ${project.name}. Check the Console connection and try again.`;
+    location.hash = destination;
+  } catch (error) {
+    if (activeView === view) {
+      const reconnect = isUnavailable(project);
+      view.meta.textContent = reconnect
+        ? `Could not reconnect ${project.name}. Its Project history remains on record. Restore the folder at its saved location and choose Reconnect again; if it moved, add its current folder below.`
+        : `Could not open ${project.name}. Check that the folder is available and try again.`;
+    }
   } finally {
     if (activeView === view) setBusy(view, false);
   }
@@ -220,14 +225,16 @@ function renderProjectRows(view: ProjectsView): void {
       else view.selected.delete(project.path);
       updateSelection(view);
     });
-    const open = el("button", { type: "button", className: "btn btn-primary", "aria-label": `Open ${project.name}` }, "Open");
+    const reconnect = isUnavailable(project);
+    const action = reconnect ? "Reconnect" : "Open";
+    const open = el("button", { type: "button", className: "btn btn-primary", "aria-label": `${action} ${project.name}` }, action);
     open.addEventListener("click", () => void openProject(view, project));
     const remove = el("button", { type: "button", className: "btn btn-danger", "aria-label": `Remove ${project.name} from Forge` }, "Remove from Forge");
     remove.addEventListener("click", () => void removeProjects(view, [project.path]));
     view.rows.appendChild(el("tr", null, [
       el("td", { className: "project-selection" }, checkbox),
       el("th", { scope: "row", className: "project-name" }, `${project.name}${project.path === view.index.current ? " (current)" : ""}`),
-      el("td", null, project.stage),
+      el("td", null, projectStateLabel(project.lifecycleState) ?? project.stage),
       el("td", null, project.lastOpenedAt
         ? el("time", { datetime: project.lastOpenedAt }, fmtTime(project.lastOpenedAt))
         : "Never opened"),
@@ -235,6 +242,26 @@ function renderProjectRows(view: ProjectsView): void {
     ]));
   }
   updateSelection(view);
+}
+
+function isUnavailable(project: ProjectInfo): boolean {
+  return project.lifecycleState === "unavailable" || project.stage === "unknown";
+}
+
+function projectStateLabel(state: ProjectLifecycleState | undefined): string | null {
+  if (!state) return null;
+  return ({
+    new: "New",
+    "partially-authored": "Partially authored",
+    "needs-review": "Needs review",
+    preparing: "Preparing",
+    "ready-to-start": "Ready to start",
+    running: "Running",
+    blocked: "Blocked",
+    failed: "Failed",
+    completed: "Completed",
+    unavailable: "Unavailable",
+  } satisfies Record<ProjectLifecycleState, string>)[state];
 }
 
 function updateSelection(view: ProjectsView): void {

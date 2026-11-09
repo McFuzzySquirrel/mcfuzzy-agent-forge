@@ -7,8 +7,9 @@ fixture. It is not published or part of any package build.
 It:
 
 1. builds the launcher (`dist/cli.js` + `resources/console/client`),
-2. writes a fixed fixture repository under `/tmp/ledgerly` with a seeded
-   `FORGE_HOME` project registry,
+2. writes a fixed fixture repository under
+   `.scratch/adaptive-console-redesign/board-capture-work` with a seeded
+   `FORGE_HOME` project registry, then removes the fixture,
 3. starts `forge-launcher console` against that fixture,
 4. drives the installed Chrome with `puppeteer-core`,
 5. writes the responsive captures, the numbered tour images, 640px thumbnails,
@@ -17,12 +18,18 @@ It:
 No model or external authoring runs: every timestamp and artifact in the fixture
 is fixed, so captures are stable across runs.
 
+The full capture also runs browser acceptance against the Console at the wide
+(1051px), medium (721px), and narrow (720px) ranges, including destination
+discovery, Project context, and route/project preservation while resizing.
+
 ## Usage
 
 ```bash
 npm install     # first time; installs puppeteer-core (no bundled browser download)
+npm run acceptance # builds the launcher and runs browser acceptance; does not refresh screenshots
 npm run capture # builds the launcher, then captures
-npm run capture -- --headed   # watch the run (useful if headless WebGL is blank)
+npm run capture -- --board-only # refreshes only responsive Board captures and tour images
+npm run capture -- --headed   # watch the browser while it captures
 npm run typecheck
 ```
 
@@ -31,6 +38,11 @@ npm run typecheck
 - `google-chrome` on `PATH`, or `CHROME_PATH` pointing at a Chrome/Chromium binary.
 - `ffmpeg` on `PATH` (thumbnails and the GIF).
 - Node 18+.
+
+`npm run acceptance` runs the deterministic browser acceptance suite against
+the actual Console server and fixture Projects. It checks user-visible Project
+navigation, lifecycle destinations, review links, and stop confirmation without
+rewriting any screenshot assets. It requires Chrome but not `ffmpeg`.
 
 ## What it writes
 
@@ -43,9 +55,11 @@ npm run typecheck
 
 ## Notes
 
-- Chrome is driven with `--enable-unsafe-swiftshader` so the PixiJS **Board**
-  renders under headless. If it ever comes out blank, re-run with `--headed`.
-- The **Overview** capture is full-page (viewport resized to the content height)
+- The Console Board uses semantic HTML/CSS and does not require PixiJS.
+- The responsive shell includes a medium navigation rail and a narrow drawer
+  capture at `docs/images/forge-console/current/nav-drawer-720.png`.
+- `--board-only` skips unrelated captures and the walkthrough GIF.
+- The **Build status** capture (`overview-1024.png`) is full-page (viewport resized to the content height)
   so the **Controls** panel, including the **Log harness activity** toggle, is
   visible.
 - The `tools/console-screenshots/` source is not covered by the launcher's

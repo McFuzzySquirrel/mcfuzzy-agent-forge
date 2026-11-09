@@ -1,16 +1,18 @@
 // ─── Forge Console entry point: hash router + SSE wiring ────────────────────
 
 import { api } from "./api.js";
+import { selectProjectDestination } from "./project-navigation.js";
 import { store, type Snapshot } from "./state.js";
 import { el, toast } from "./render/dom.js";
 import type { AuditEvent, JobsSummary, ProjectsIndex } from "./types.js";
 import { renderBoard, unmountBoard } from "./views/board.js";
 import { renderHome, unmountHome } from "./views/home.js";
 import { refreshOverview, renderOverview, unmountOverview } from "./views/overview.js";
-import { renderTasks, unmountTasks } from "./views/tasks.js";
+import { renderHumanReviewQueue, renderTasks, unmountTasks } from "./views/tasks.js";
 import { renderLogs, unmountLogs } from "./views/logs.js";
 import { refreshDocuments, renderDocuments, unmountDocuments } from "./views/documents.js";
 import { renderArtifacts, unmountArtifacts } from "./views/artifacts.js";
+import { renderProjectBrief, renderProjectFiles, unmountProjectFiles } from "./views/project-files.js";
 import { renderTimeline, unmountTimeline } from "./views/timeline.js";
 import { refreshProjectList, renderProjects, unmountProjects } from "./views/projects.js";
 import { renderNew, unmountNew } from "./views/new.js";
@@ -29,28 +31,28 @@ interface View {
 }
 
 const views: View[] = [
-  { id: "home", label: "Home", group: "Start", render: renderHome, unmount: unmountHome },
-  { id: "projects", label: "Projects", group: "Start", render: renderProjects, unmount: unmountProjects },
-  { id: "overview", label: "Overview", group: "Pipeline", render: renderOverview, unmount: unmountOverview, refresh: refreshOverview },
-  { id: "board", label: "Board", group: "Monitor", render: renderBoard, unmount: unmountBoard },
-  { id: "tasks", label: "Tasks", group: "Monitor", render: renderTasks, unmount: unmountTasks },
-  { id: "logs", label: "Logs", group: "Monitor", render: renderLogs, unmount: unmountLogs },
-  { id: "timeline", label: "Timeline", group: "Monitor", render: renderTimeline, unmount: unmountTimeline },
-  { id: "documents", label: "Plan & Team", group: "Review", render: renderDocuments, unmount: unmountDocuments, refresh: refreshDocuments },
-  { id: "artifacts", label: "Artifacts", group: "Review", render: renderArtifacts, unmount: unmountArtifacts },
-  { id: "terminal", label: "Terminal", group: "Review", render: renderTerminal, unmount: unmountTerminal },
-  { id: "settings", label: "Settings", group: "Settings", render: renderSettings, unmount: unmountSettings, refresh: refreshSettings },
+  { id: "home", label: "Home", group: "", render: renderHome, unmount: unmountHome },
+  { id: "projects", label: "Projects", group: "", render: renderProjects, unmount: unmountProjects },
+  { id: "overview", label: "Build status", group: "Project", render: renderOverview, unmount: unmountOverview, refresh: refreshOverview },
+  { id: "board", label: "Board", group: "Project", render: renderBoard, unmount: unmountBoard },
+  { id: "project-brief", label: "Project brief", group: "Project", render: renderProjectBrief, unmount: unmountProjectFiles },
+  { id: "project-files", label: "Project files", group: "Project", render: renderProjectFiles, unmount: unmountProjectFiles },
+  { id: "review-queue", label: "Human review", group: "Project", render: renderHumanReviewQueue, unmount: unmountTasks },
+  { id: "tasks", label: "All tasks", group: "Advanced", render: renderTasks, unmount: unmountTasks },
+  { id: "logs", label: "Logs", group: "Advanced", render: renderLogs, unmount: unmountLogs },
+  { id: "timeline", label: "Timeline", group: "Advanced", render: renderTimeline, unmount: unmountTimeline },
+  { id: "terminal", label: "Terminal", group: "Advanced", render: renderTerminal, unmount: unmountTerminal },
+  { id: "documents", label: "Plan & Team", group: "Advanced", render: renderDocuments, unmount: unmountDocuments, refresh: refreshDocuments },
+  { id: "artifacts", label: "Artifacts", group: "Advanced", render: renderArtifacts, unmount: unmountArtifacts },
+  { id: "settings", label: "Settings", group: "Advanced", render: renderSettings, unmount: unmountSettings, refresh: refreshSettings },
   { id: "new", label: "New project", group: "", render: renderNew, unmount: unmountNew },
 ];
 
-/** Sidebar sections in display order; the "new" wizard is intentionally absent. */
-const NAV_GROUPS: Array<[string, string[]]> = [
-  ["Start", ["home", "projects"]],
-  ["Pipeline", ["overview"]],
-  ["Monitor", ["board", "tasks", "logs", "timeline"]],
-  ["Review", ["documents", "artifacts", "terminal"]],
-  ["Settings", ["settings"]],
-];
+/** Project navigation and technical destinations; Home and Projects stay global. */
+const NAV_GROUPS: Array<[string, string[]]> = ["Project", "Advanced"].map((group): [string, string[]] => [
+  group,
+  views.filter((view) => view.group === group).map((view) => view.id),
+]);
 
 // Views that make sense without a selected repo (the landing surface).
 const NO_REPO_ROUTES = new Set(["home", "new", "projects"]);
@@ -58,6 +60,7 @@ const NO_REPO_ROUTES = new Set(["home", "new", "projects"]);
 let active: View | null = null;
 let activeProject = "none";
 let unsubscribeStore: (() => void) | undefined;
+let navigationNotice: { message: string; destination: string } | null = null;
 
 function currentRouteId(): string {
   const raw = location.hash.replace(/^#\/?/, "").split("?")[0]!;
@@ -70,6 +73,17 @@ function renderNav(activeId: string): void {
   nav.textContent = "";
   const terminalRunning = isTerminalSessionActive();
 
+  for (const id of ["home", "projects"]) {
+    const view = views.find((item) => item.id === id);
+    if (!view) continue;
+    const link = document.createElement("a");
+    link.href = `#/${view.id}`;
+    link.textContent = view.label;
+    link.className = `nav-category-btn nav-direct${view.id === activeId ? " active" : ""}`;
+    if (view.id === activeId) link.setAttribute("aria-current", "page");
+    nav.appendChild(link);
+  }
+
   for (const [group, ids] of NAV_GROUPS) {
     const groupViews = ids
       .map((id) => views.find((view) => view.id === id))
@@ -77,18 +91,6 @@ function renderNav(activeId: string): void {
     if (groupViews.length === 0) continue;
     const active = groupViews.some((view) => view.id === activeId);
     const dot = terminalRunning && groupViews.some((view) => view.id === "terminal");
-
-    // A single-item category (Settings) is a direct link, not a dropdown.
-    if (groupViews.length === 1) {
-      const view = groupViews[0]!;
-      const link = document.createElement("a");
-      link.href = `#/${view.id}`;
-      link.textContent = dot ? `${group} ●` : group;
-      if (dot) link.title = "A terminal session is running in the background.";
-      link.className = `nav-category-btn nav-direct${active ? " active" : ""}`;
-      nav.appendChild(link);
-      continue;
-    }
 
     const category = el("div", { className: "nav-category" });
     const button = el("button", {
@@ -104,10 +106,25 @@ function renderNav(activeId: string): void {
       link.textContent = view.id === "terminal" && terminalRunning ? `${view.label} ●` : view.label;
       link.setAttribute("role", "menuitem");
       if (view.id === activeId) link.setAttribute("aria-current", "page");
+      if (view.id === "terminal" && terminalRunning) link.title = "A terminal session is running in the background.";
       menu.appendChild(link);
     }
     category.append(button, menu);
     nav.appendChild(category);
+  }
+}
+
+function setNavigationDrawerOpen(open: boolean, returnFocus = false): void {
+  const app = document.querySelector<HTMLElement>("#app");
+  const toggle = document.querySelector<HTMLButtonElement>("#nav-toggle");
+  app?.classList.toggle("nav-open", open);
+  toggle?.setAttribute("aria-expanded", open ? "true" : "false");
+  if (open) {
+    const contextbar = document.querySelector<HTMLElement>("#contextbar");
+    const top = contextbar?.getBoundingClientRect().bottom ?? 0;
+    document.documentElement.style.setProperty("--nav-drawer-top", `${Math.ceil(top)}px`);
+  } else if (returnFocus) {
+    toggle?.focus();
   }
 }
 
@@ -125,14 +142,6 @@ function setNavExpanded(category: HTMLElement, expanded: boolean): void {
   category.querySelector<HTMLElement>(".nav-category-btn")?.setAttribute("aria-expanded", expanded ? "true" : "false");
 }
 
-/** On narrow screens the flyout is fixed; anchor it under its category button. */
-function positionNavMenu(category: HTMLElement): void {
-  const button = category.querySelector<HTMLElement>(".nav-category-btn");
-  if (!button) return;
-  const rect = button.getBoundingClientRect();
-  document.documentElement.style.setProperty("--nav-menu-top", `${Math.round(rect.bottom + 6)}px`);
-}
-
 /**
  * Wires the category navigation once. The bar is rebuilt on every route change,
  * so the handlers are delegated from the persistent `#nav` element: hover and
@@ -142,9 +151,19 @@ function wireNav(): void {
   const nav = document.querySelector<HTMLElement>("#nav");
   if (!nav || nav.dataset.wired === "true") return;
   nav.dataset.wired = "true";
+  const toggle = document.querySelector<HTMLButtonElement>("#nav-toggle");
+  toggle?.addEventListener("click", () => {
+    setNavigationDrawerOpen(toggle.getAttribute("aria-expanded") !== "true");
+  });
 
   nav.addEventListener("click", (event) => {
-    const button = (event.target as HTMLElement).closest<HTMLElement>(".nav-category-btn");
+    const target = event.target as HTMLElement;
+    if (target.closest("a")) {
+      closeNavMenus();
+      setNavigationDrawerOpen(false);
+      return;
+    }
+    const button = target.closest<HTMLElement>(".nav-category-btn");
     if (!button || button.classList.contains("nav-direct")) return;
     event.preventDefault();
     const category = button.closest<HTMLElement>(".nav-category");
@@ -154,14 +173,12 @@ function wireNav(): void {
     if (willOpen) {
       category.classList.add("open");
       setNavExpanded(category, true);
-      positionNavMenu(category);
     }
   });
 
   nav.addEventListener("pointerover", (event) => {
     const category = (event.target as HTMLElement).closest<HTMLElement>(".nav-category");
     if (!category) return;
-    positionNavMenu(category);
     setNavExpanded(category, true);
   });
   nav.addEventListener("pointerout", (event) => {
@@ -180,10 +197,20 @@ function wireNav(): void {
   });
 
   document.addEventListener("click", (event) => {
-    if (!nav.contains(event.target as Node)) closeNavMenus();
+    const target = event.target as Node;
+    if (nav.contains(target)) return;
+    closeNavMenus();
+    if (!toggle?.contains(target)) setNavigationDrawerOpen(false);
   });
   document.addEventListener("keydown", (event) => {
-    if (event.key === "Escape") closeNavMenus();
+    if (event.key === "Escape") {
+      closeNavMenus();
+      if (toggle?.getAttribute("aria-expanded") === "true") setNavigationDrawerOpen(false, true);
+    }
+  });
+  window.addEventListener("resize", () => {
+    if (window.innerWidth > 720) setNavigationDrawerOpen(false);
+    else if (toggle?.getAttribute("aria-expanded") === "true") setNavigationDrawerOpen(true);
   });
 }
 
@@ -244,14 +271,11 @@ function renderContextBar(): void {
     switcher.addEventListener("change", () => {
       const path = switcher.value;
       if (!path) return;
-      void api.selectRepo(path)
-        .then((res) => {
-          if (res.ok) {
-            projectsCache = null;
-            location.hash = "#/overview";
-          } else {
-            toast(res.message ?? "switch failed");
-          }
+      const project = projectsCache?.projects.find((entry) => entry.path === path);
+      void selectProjectDestination(path, project?.lifecycleState)
+        .then((destination) => {
+          projectsCache = null;
+          location.hash = destination;
         })
         .catch((err) => toast(err instanceof Error ? err.message : "switch failed"));
     });
@@ -318,8 +342,23 @@ function renderJobsBadge(summary: JobsSummary): void {
 // ─── Routing ──────────────────────────────────────────────────────────────────
 
 function render(): void {
+  setNavigationDrawerOpen(false);
   const id = currentRouteId();
-  const view = views.find((v) => v.id === id) ?? views[0]!;
+  const view = views.find((v) => v.id === id);
+  if (!view) {
+    const destination = store.summary ? "overview" : "projects";
+    setNavigationFallback(
+      destination,
+      `The saved destination “${id}” is no longer available. ${store.summary ? "Build status is the next useful Project destination." : "Choose a Project to continue."}`,
+    );
+    return;
+  }
+  if (!store.summary && !NO_REPO_ROUTES.has(id)) {
+    setNavigationFallback("projects", `The “${view.label}” destination is unavailable because its Project context could not be loaded. Choose a Project to continue.`);
+    return;
+  }
+  if (navigationNotice && location.hash !== `#/${navigationNotice.destination}`) navigationNotice = null;
+  renderNavigationNotice();
   active?.unmount();
   active = view;
   renderNav(view.id);
@@ -330,6 +369,31 @@ function render(): void {
   container.textContent = "";
   view.render(container);
   activeProject = store.projectKey();
+}
+
+function setNavigationFallback(destination: string, message: string): void {
+  navigationNotice = { message, destination };
+  renderNavigationNotice();
+  const fallback = `#/${destination}`;
+  if (location.hash === fallback) {
+    render();
+  } else {
+    location.hash = fallback;
+  }
+}
+
+function renderNavigationNotice(): void {
+  const host = document.querySelector<HTMLElement>("#navigation-notice");
+  if (!host) return;
+  host.replaceChildren();
+  host.hidden = !navigationNotice;
+  if (!navigationNotice) return;
+  const view = views.find((item) => item.id === navigationNotice?.destination);
+  const label = view?.label ?? "Projects";
+  host.append(
+    el("span", null, navigationNotice.message),
+    el("a", { className: "btn btn-sm", href: `#/${navigationNotice.destination}` }, `Open ${label}`),
+  );
 }
 
 function connectEvents(): void {
@@ -372,7 +436,11 @@ async function init(): Promise<void> {
     renderContextBar();
     const route = currentRouteId();
     if (!store.summary && !NO_REPO_ROUTES.has(route)) {
-      location.hash = "#/home";
+      const target = views.find((view) => view.id === route);
+      setNavigationFallback(
+        "projects",
+        `The “${target?.label ?? route}” destination is unavailable because its Project context could not be loaded. Choose a Project to continue.`,
+      );
       return;
     }
     if (store.projectKey() !== activeProject) {

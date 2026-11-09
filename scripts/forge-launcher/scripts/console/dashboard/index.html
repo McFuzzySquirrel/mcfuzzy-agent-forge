@@ -30,12 +30,14 @@
   <div id="app">
     <header id="topbar">
       <div class="brand">Forge Console</div>
+      <button id="nav-toggle" type="button" aria-controls="nav" aria-expanded="false">Menu</button>
       <nav id="nav" aria-label="Main"></nav>
     </header>
     <header id="contextbar" aria-label="Project context">
       <div id="contextbar-project"></div>
       <div id="contextbar-actions"></div>
     </header>
+    <div id="navigation-notice" class="navigation-notice" role="status" hidden></div>
     <div id="live-announcements" class="sr-only" aria-live="polite" aria-atomic="true"></div>
     <main id="view" aria-live="polite"></main>
   </div>

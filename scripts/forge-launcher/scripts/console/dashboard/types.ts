@@ -160,6 +160,7 @@ export interface ManifestSummary {
   phases: number;
   tasks: number;
   reconciliation?: {
+    previousGeneratedAt?: string;
     preservedTaskIds: string[];
     newTaskIds: string[];
     removedTaskIds: string[];
@@ -289,6 +290,34 @@ export interface TaskRow {
    * view must not offer its approval action.
    */
   unmetPrerequisites: string[];
+}
+
+export interface BoardGanttBar {
+  taskId: string;
+  kind: "actual" | "planned";
+  startMs: number;
+  endMs: number;
+  status: string;
+  critical: boolean;
+  milestone: boolean;
+  estimateSource: "actual" | "audit" | "owner" | "default";
+  durationMs: number;
+}
+
+export interface BoardGanttLayout {
+  bars: BoardGanttBar[];
+  criticalPath: string[];
+  axis: {
+    min: number;
+    max: number;
+    ticks: Array<{ at: number; label: string; dayBoundary: boolean }>;
+  };
+  phaseBars: Array<{ phaseId: string; row: number; startMs: number; endMs: number; critical: boolean }>;
+}
+
+export interface BoardLayout {
+  kanban: unknown;
+  gantt: BoardGanttLayout;
 }
 
 export interface ArtifactMeta {
@@ -438,8 +467,21 @@ export interface ProjectInfo {
   createdAt?: string;
   lastOpenedAt?: string;
   stage: string;
+  lifecycleState?: ProjectLifecycleState;
   job?: BackgroundJob | null;
 }
+
+export type ProjectLifecycleState =
+  | "new"
+  | "partially-authored"
+  | "needs-review"
+  | "preparing"
+  | "ready-to-start"
+  | "running"
+  | "blocked"
+  | "failed"
+  | "completed"
+  | "unavailable";
 
 export interface ProjectsIndex {
   projects: ProjectInfo[];

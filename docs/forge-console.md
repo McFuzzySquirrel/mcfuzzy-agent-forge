@@ -30,8 +30,8 @@ still takes priority. If the recorded root is stale, update the selection and
 recompile the manifest; Console will not silently switch to another harness
 root.
 
-It is TypeScript, compiled with `tsc` (no framework or bundler), and embeds the
-existing PixiJS **Forge Board** as one of its views.
+It is TypeScript, compiled with `tsc` (no framework or bundler). The Console
+Board uses semantic HTML/CSS; PixiJS is not required to use it.
 
 ---
 
@@ -46,9 +46,10 @@ The server prints a `http://127.0.0.1:4300` URL and opens your default browser.
 From there:
 
 1. **Create a project** (New Project wizard) or **open an existing one**.
-2. On the **Overview**, click **Continue** to advance the pipeline one stage at a
-   time - open interactive PRD authoring, generate the agent team, generate
-   project skills, compile the manifest, then start the build.
+2. On **Build status**, follow the guided Project lifecycle: author the Idea
+   and Project brief interactively, review and approve the brief to authorize
+   preparation, then review the prepared plan and choose **Start build**
+   explicitly. Existing Projects show their next stage-appropriate action.
 3. Watch it live on the **Board** / **Tasks** / **Logs** views, and use
    **Pause / Stop / Resume / Replay** to control a running build.
 
@@ -96,26 +97,52 @@ setting does not open a network listener or trust forwarded headers.
 
 Projects you create or open are remembered in a registry at
 `~/.myforge/projects.json` (honors `FORGE_HOME`, then `XDG_CONFIG_HOME`). The
-**Home** view lists recent projects (most-recent-first) and offers three actions:
+**Home** view emphasizes **Start with an idea** as its primary action. Recent
+Projects and existing-application setup remain available as secondary choices.
 
-- **Create a new project** - the New Project wizard collects a name, harness,
-  visibility, parent directory, and idea, then spawns
-  `forge-launcher --non-interactive` in the background. That run bootstraps and
-  stops with the interactive PRD handoff; it never authors requirements
-  (ADR-060). It also lets you **add an existing PRD and
-  research/seed documents** (see *Adding a PRD and research/seed documents*
-  below), mirroring the CLI's Step 6.
-- **Open an existing project** - a table of your projects plus an
+- **Start with an idea** - begin with an Idea, an editable suggested Project
+  name, and an **AI coding tool**. The configured default is selected when
+  available; without one, choose explicitly. Technical settings and optional
+  PRD/research source documents stay under **Advanced setup**. The Console
+  creates the workspace, then guides the user through interactive Idea
+  exploration and Project-brief authoring before presenting the brief for
+  review. Requirements are never authored headlessly (ADR-060).
+- **Open a Project** - a table of your projects plus an
   "Add folder" input for a forge repo you have on disk but haven't opened yet.
-- **Bootstrap an existing repo** - copies MyForge into an existing application
+- **Set up an app** - copies MyForge into an existing application
   repository. Existing files are preserved unless overwrite is explicitly
   selected. A non-Git folder requires the explicit **Initialize git if needed**
   option.
 
-The **Projects** tab shows project name, state, and last accessed date/time,
+The global **Projects** destination shows project name, state, and last accessed date/time,
 without filesystem paths in the list. Use a row's **Open** action to switch
-projects. Individual selection checkboxes and the header select-all checkbox
-occupy the same column.
+projects. Opening follows the Project's current lifecycle: new and partially
+authored Projects open at interactive authoring, Projects needing review open at
+the brief review, preparation and ready-to-start Projects return to their
+guided progress or prepared plan, and active, blocked, or failed Projects open
+Build status. Completed Projects open **Project files**. Existing
+repositories enter the same lifecycle at the state their files and run history
+indicate; they are not assigned a separate "existing" state.
+The persistent Project switcher in the context bar uses the same destination
+rule: completed Projects open **Project files**, while other states open Build
+status at their next meaningful action.
+
+Build status names the exact action blocking a Project. A blocker that does
+not stop other work is shown while the Project remains **Running**. A failed
+Project identifies the failed stage and offers recovery for that stage; Build
+recovery links to failed Tasks and Logs and keeps completed work and history.
+An unavailable Project stays listed with **Reconnect** and recovery guidance.
+Reconnect retries its saved location; if the folder moved, add its current
+folder without removing the old registration or its recorded history.
+
+**Add a feature** remains on an existing Project's Build status. Feature
+requirements are authored interactively; after the generated Tasks are
+available, review their descriptions and acceptance criteria in **Tasks** and
+confirm that review before starting or resuming execution. This review gate
+does not reset existing Tasks or change the workflow engine's approval rules.
+
+Individual selection checkboxes and the header select-all checkbox occupy the
+same column.
 
 ### Remove from Forge
 
@@ -168,36 +195,52 @@ preservation guarantee.
 
 ---
 
-## The pipeline (the Continue button)
+## The existing pipeline (the Continue button)
 
-Projects flow through five stages. The **Continue** button on the Overview
-advances one stage at a time, running the same steps the terminal launcher runs,
-so you can review each result and come back later:
+New Projects use interactive Idea and Project-brief authoring, followed by an
+editable review checkpoint. **Request changes** returns to interactive brief
+authoring; the separate **Approve** action authorizes preparation only. After
+the prepared plan is ready, the user explicitly chooses **Start build**.
+Projects outside that guided path retain the **Continue** actions on Build status,
+which advance their existing downstream stages one at a time:
 
 | Stage | Continue does | Produces |
 |---|---|---|
-| Idea (no PRD) | **Author PRD (interactive)** opens `forge-build-prd` in the Console Terminal view or an external terminal; there is no headless alternative (ADR-060). **Grill the idea first** runs `forge-grill-idea` the same way | `docs/PRD.md` + `docs/features/*.md` |
+| New Project | **Explore your Idea** opens `forge-grill-idea`, then **Author your Project brief** opens `forge-build-prd`; both are interactive and resumable, and source documents do not skip either phase | `docs/IDEA.md`, then `docs/PRD.md` + `docs/features/*.md` |
+| Project brief review | Edit the brief and at-a-glance summary; **Request changes** reopens interactive authoring, while **Approve** validates the brief and authorizes preparation only | Reviewed `docs/PRD.md`; no Build execution |
+| Approved Project brief | Prepare the team, project guidance, and Build plan in one guided background step; progress and failures remain actionable in Build status | agent files, project skills, and `docs/EXECUTION-MANIFEST.json`; no Build execution |
+| Prepared plan | Review major phases, assumptions, and warnings, then choose **Start build** explicitly | durable workflow-engine run |
+| Existing Project (no brief) | **Author PRD (interactive)** opens `forge-build-prd` in the Console Terminal view or an external terminal; there is no headless alternative (ADR-060). **Grill the idea first** remains available when an Idea exists | `docs/PRD.md` + `docs/features/*.md` |
 | PRD (no team) | **Generate team** (headless `forge-build-agent-team`) | agent files and ownership metadata |
 | Team (skills incomplete) | **Generate project skills** | project skill candidates and review result |
 | Skills ready (no manifest) | **Compile manifest** (`forge-execution-adapter`) | `docs/EXECUTION-MANIFEST.json` |
-| Manifest ready | **Start build** (`forge-launcher engine-run`) | durable workflow-engine run |
 | Paused/incomplete run | **Resume build** | engine resumes from `WORKFLOW-STATE.json` |
 
 The derivation steps run detached in the background (output is appended to
 `docs/engine-run.log`, visible in the **Logs** view). This includes bootstrap,
 team, skills, manifest-authoring jobs, and engine output. The console now tracks
-those detached jobs directly, so the Overview can show whether work is actively
+those detached jobs directly, so Build status can show whether work is actively
 creating the project, generating the team, running the build, paused, complete,
-or failed. Nothing runs until you click it, and the generated team and skills are
+or failed. Preparation generates the team, project skills, and manifest but
+does not launch the workflow engine. For a guided Project, only the explicit
+**Start build** action begins execution. The generated team and skills are
 **view-only** in the console - review them in **Plan & Team** and edit them in
 your editor.
+
+If prepared-plan warnings say a file is owned by multiple agents, multiple
+Tasks assigned to different agents list that path as an expected output. Open
+**Project files** and inspect `docs/agent-responsibility-matrix.md` to identify
+the Tasks. Edit the source `forge-task` definitions in `docs/features/*.md` so
+each file has one owning Task/agent, or split distinct outputs between Tasks;
+then return to Build status and choose **Re-derive team & skills**. The matrix
+and execution manifest are generated outputs and should not be edited directly.
 
 Requirements stages are different: the PRD and feature documents are authored in
 an interactive session, not a background job. The Console can stop a browser PTY
 session, but cannot pause or report on the authoring operation; completion is
 observed from the repository after the skill commits.
 
-Completed projects remain extensible. Use **Add a feature** on Overview to run
+Completed projects remain extensible. Use **Add a feature** on Build status to run
 `forge-build-feature-prd`. The skill inspects the existing codebase, PRD, and
 agent team and writes an additive document under `docs/features/`; it does not
 replace the original PRD or start the engine. It interviews you, because a
@@ -207,21 +250,33 @@ agents and recompile the manifest; review the resulting tasks before running the
 
 ### Interactive authoring
 
-The **Overview** pipeline card leads with the interactive interview that the
-pre-Console workflow was built around; these actions live only there. Use the
-**Terminal** view to run the project harness or start a PRD, idea, or Feature PRD
-session in the browser. It resolves the configured authoring runner and PRD-stage
-model, queues the approved skill prompt, and supports terminal input, output, and
-resizing. The **Open in external terminal** button remains available as a
-fallback. These interactive actions do not become headless jobs: the
-`draft-prd`, `draft-existing-prd`, and `feature-prd` control actions continue to
-report the interactive handoff.
+The New Project guide separates **Explore your Idea** from **Author your
+Project brief**. The first runs `forge-grill-idea`; the second runs
+`forge-build-prd`. Both use the configured authoring runner and PRD-stage model,
+remain interactive, and can be resumed at the saved phase. Source documents
+provide context but do not bypass either session. Existing Projects keep the
+interactive authoring action on Build status.
 
-- **Grill the idea first (interactive)** runs the `forge-grill-idea` skill,
-  which interviews you in rounds to sharpen `docs/IDEA.md` before PRD authoring,
-  then rewrites and commits it.
-- **Author PRD (interactive)** runs `forge-build-prd` (inspecting the existing
-  repository when one is present) with the interview enabled.
+Use the **Terminal** view to run the project tool or start a Project-brief,
+Idea, or Feature PRD session in the browser. The **Open in external terminal**
+button remains available as a fallback. These interactive actions do not become
+headless jobs: the `draft-prd`, `draft-existing-prd`, and `feature-prd` control
+actions continue to report the interactive handoff.
+
+- **Explore your Idea (interactive)** runs `forge-grill-idea`, which interviews
+  you in rounds to sharpen `docs/IDEA.md` before Project-brief authoring, then
+  rewrites and commits it.
+- **Author your Project brief (interactive)** runs `forge-build-prd` with the
+  interview enabled and displays the resulting brief, including assumptions
+  and open questions, for review.
+- **Review and approve the Project brief** provides an editable page and an
+  at-a-glance summary. **Request changes** saves edits and returns to
+  `forge-build-prd`; **Approve** validates the brief and authorizes team, skill,
+  and manifest preparation only. This is separate from Task-bound Human review
+  and its evidence contract in [ADR-049](adr/049-human-review-evidence-and-console-completion.md).
+- **Start build** appears only after preparation completes and the prepared plan
+  has been shown. It is the only guided-path action that starts workflow
+  execution.
 - **Validate PRD** runs the read-only `validate-prd` check and reports the
   result, for documents authored outside the Console. It appears on the pipeline
   card once a PRD exists.
@@ -288,7 +343,7 @@ and when it completed. When those no longer match, the Console compares each
 input file's modification time against the stage's completion time and reports
 the file — "*Inputs changed after this stage completed: docs/PRD.md*", *changed 3h
 ago*. A stage whose generated output was deleted, or edited after completion, is
-reported as such instead. The same detail appears on **Overview** and in
+reported as such instead. The same detail appears on **Build status** and in
 **Plan & Team → authoring settings**, and each stale stage links straight to its
 card (`#/documents?stage=team`).
 
@@ -326,60 +381,81 @@ forge-launcher rederive --repo <path> [--from team|skills|manifest]
 
 Stable task IDs preserve completed work across a recompile. When a task's
 *contract* changed, its record is stale and it must run again. **Reset changed
-tasks for review** lives in the Overview **Manifest** panel, beside the
+tasks for review** lives in the Build status **Manifest** panel, beside the
 reconciliation data it acts on: it lists the changed and new task IDs, each
-linking into **Tasks**, and the reset is behind a confirmation naming every task
+linking into **All tasks**, and the reset is behind a confirmation naming every task
 it will discard. It clears those tasks' status, timings, outputs and artifacts,
 setting them back to pending.
 
-The Overview **Controls** panel points here rather than duplicating the button.
+The **Controls** panel on Build status points here rather than duplicating the button.
 
 ---
 
 ## The Forge Board
 
-The Board is the engine's PixiJS dashboard, framed inside the Console. It has
-two modes, chosen above the frame and remembered per project.
+The Console Board is a semantic HTML/CSS view over the Project's Task data and
+the workflow engine's tested layout APIs. It does not load a canvas or require
+PixiJS. **Kanban** and **Gantt** are peer views; each Project remembers its
+selection and status filters, and each view remembers its own scroll position.
 
-**Kanban** is the original board: one band per phase, four status columns, task
-cards flowing left to right.
+**Kanban** groups Tasks into phase rows and workflow-status columns. Cards show
+only the Task status and title; selecting one opens its summary, attention cue,
+next responsible person, next action, and other details.
 
-**Gantt** plots the same run against time on its dependencies:
+**Gantt** uses the same concise Task labels, selection, and filters, and adds
+timeline information:
 
-- **Filled bars are measured; outlined, hatched bars are forecast.** A forecast
-  is an inference from observed durations, and the tooltip names its source — the
-  task's own attempts, the same agent's other tasks, or a default.
+- **Filled bars are measured; outlined bars are forecast.** Forecasts identify
+  their source: observed attempts, the same agent's Tasks, or a default estimate.
 - **Bars respect the engine's own dispatch rule** (direct dependencies plus every
   task of a depended-on phase) and the configured concurrency, so the forecast
   never promises a sequence the engine will not run.
-- **Phase rollups** span each phase; **human-review tasks** appear as milestone
-  diamonds, since a review is a decision rather than a duration.
+- **Human-review Tasks** appear as milestones rather than durations.
 - **The critical path** is highlighted: the longest chain of remaining work.
-- **A "now" line** advances continuously; the axis follows your local clock.
 
-Filters dim tasks rather than hiding them, so the shape of the build stays
-visible. **Table** renders the same data as a real table for keyboard and
-screen-reader use. Hovering a card or bar offers **Open in Tasks**, **Logs** and
-**Artifacts**, so the board is not a dead end. Failures stay listed in the lower
-left with a link into Tasks, rather than only flashing once.
+Selecting a card or bar opens the same compact Task details: its summary,
+attention cue, blocker, next responsible, next action, prerequisites, artifact
+inputs and outputs, and changed files. Relationships are structured text, not
+pointer-only links or extra focus stops. Full diagnostics remain in **Tasks**.
+Every Task card and Gantt bar is a keyboard-focusable control; Enter or Space
+opens its details, and closing details returns focus to the originating
+control. Filters and view changes retain logical focus and the selected Task
+while it remains available. The Board announces failures, newly ready Human
+reviews, and cleared blockers, but not routine progress. Status filters dim
+rather than hide Tasks, so workflow shape remains visible. Loading, empty,
+failed, and stale-data states explain what happened and offer a next step.
 
-The Board is still available standalone via `workflow-engine run --viz`, where
-it keeps its own mode switch and Table toggle.
+Status badges, card edges, and Gantt bars use the same workflow and attention
+colors: pending is muted, running and Human review are blue, complete is green,
+failed is red, and blocked or skipped is amber. A subtle pulse marks an observed
+status or attention change, including work moving out of the attention list;
+routine refreshes do not animate Tasks, and the pulse is disabled when reduced
+motion is preferred.
+
+On narrow screens (720px and below), Kanban scrolls horizontally across status
+columns while keeping phase labels visible. Gantt keeps Task labels in view as
+the timeline pans. Task details use a side panel on wide screens, flow below the
+Board on medium screens, and fill the screen on narrow screens. Closing details
+returns focus to the originating Task; Project selection, filters, and each
+view's position remain available across resizing and refresh.
+
+The standalone `workflow-engine run --viz` dashboard remains available
+separately and may use PixiJS; it does not affect the Console Board.
 
 ---
 
-## Adding a PRD and research/seed documents
+## Adding PRD and research source material
 
-The **New Project wizard** mirrors the CLI's Step 6 (`addPrdAndResearch`): after
-you enter the idea, a **Project documents** section lets you supply an existing
-PRD and research/seed documents (design specs, market research, technical
-notes). Both fields accept either a **file-picker browse** or a **typed absolute
-path** (comma-separated for multiple research docs):
+Under **Advanced setup**, the **New Project wizard** accepts existing PRD and
+research/seed documents (design specs, market research, technical notes). Both
+fields accept a **file-picker browse** or a **typed absolute path**
+(comma-separated for multiple research docs):
 
-- **Existing PRD** → copied to `docs/PRD.md` and used as-is, instead of the
-  pipeline drafting one from the idea.
-- **Research / seed documents** → copied to `docs/research/`, where the later
-  PRD build (`forge-build-prd`) reads them as extra context.
+- **Existing PRD** → copied to `docs/requirements-source.md` and used as
+  context for interactive Project-brief authoring. It does not replace the
+  generated brief or skip either guided authoring phase.
+- **Research / seed documents** → copied to `docs/research/`, where
+  `forge-build-prd` reads them as extra context.
 
 Picked files are uploaded to the server (`POST /api/uploads`, staged under the
 OS temp dir) and the launcher is handed the paths via `FORGE_PRD_FILE` /
@@ -391,8 +467,8 @@ alongside the other project documents.
 
 ## Launching the harness CLI
 
-A **Launch \<harness\> CLI** button on the **Tasks** view header and the
-**Overview** header opens the project's harness CLI in a new terminal window,
+A **Launch \<harness\> CLI** button on the **All tasks** view header and the
+**Build status** header opens the project's harness CLI in a new terminal window,
 working from the project folder — so you can watch the live run and take over
 at any point. The **Terminal** view also offers the same harness session in the
 browser. The CLI is chosen from the repo's harness root (`github` → `copilot`,
@@ -404,34 +480,61 @@ the exact command to run manually.
 
 ## Views
 
-The views are grouped under top categories (**Start / Pipeline / Monitor /
-Review / Settings**); hovering a category opens its list, and selecting it pins
-the list open (for touch). A persistent project context bar below the menu shows
-the current project name, harness, Live/Idle state, a project switcher, and the
-Help button + connection status. Content uses the full browser width, with only
-long-form prose capped for readability.
+**Home** and **Projects** are global destinations. The **Project** group offers
+Build status, Board, Project brief, Project files, and Human review for the
+currently selected Project. A visible **Advanced** group exposes the full Tasks
+table, Logs, Timeline, Terminal, Plan & Team, Artifacts, and Settings; Advanced
+is a navigation group, not a separate product mode. Hovering a group opens its
+list, and selecting it pins the list open for touch.
+
+The shell adapts to the available width: wide screens above 1050px keep the full
+top navigation; medium screens from 721–1050px use a compact left navigation
+rail; narrow screens at 720px or below use the labeled **Menu** drawer. The
+drawer opens below the context bar so the Project switcher, identity, harness,
+and Live/Idle status remain visible. Project and Advanced groups keep their
+destinations available in every layout.
+
+The persistent Project context bar remains visible on every destination, with
+the current Project name, harness, Live/Idle state, and switcher. Navigating
+between destinations never changes the selected Project; switching Projects is
+an explicit action. Existing destination URLs such as `#/overview`,
+`#/tasks?task=…`, and `#/documents?stage=…` remain valid and keep their query
+state. `#/project-brief` opens the Project brief directly. If a saved destination
+is retired or a Project destination is unavailable, the Console explains the
+fallback and routes to Build status or Projects as appropriate.
+
+Resizing the browser preserves the active destination and selected Project.
+Content uses the available browser width, with only long-form prose capped for
+readability.
 
 | View | What it shows |
 |---|---|
 | **Home** | create a new project or open an existing one (landing), including live status labels for detached work. |
-| **Projects** | switch projects, add a folder, or remove one or more projects from Forge. |
-| **Overview** | run status, progress + counts, blockers, the pipeline next-step card with a **Manual build** checkbox, background-job status, run controls (Run/Resume/Pause/Stop, Replay, build mode), and a **Launch \<harness\> CLI** button. Also the **Re-derive team & skills** panel when authoring is stale, and manifest reconciliation with a confirmed **Reset changed tasks for review**. |
-| **Terminal** | interactive browser session for the selected harness or an existing authoring target, with PTY input/output, resize, stop, and external-terminal fallback. |
-| **Board** | the PixiJS Forge Board in **Kanban** or **Gantt** mode, with status filters and a **Table** view of the same data. |
-| **Tasks** | every task in a filterable/sortable table with a detail drawer, editable per-task timeout, explicit/range selection controls for manual mode, and a **Launch \<harness\> CLI** button. |
-| **Logs** | `docs/engine-run.log` tail + the audit event stream (live via SSE). |
-| **Plan & Team** | authoring stage cards — always actionable, each stating why it is stale — plus the re-derivation footer, the project documents (IDEA, PRD, features, progress, model plan) as a table that opens a document in a wide popup, and agents and skills in collapsible card sections. Requirement and task blocks render as tables. |
-| **Artifacts** | the structured outputs tasks produced (`docs/artifacts/`), browsable by type/task with previews. |
-| **Timeline** | chronological audit events, failures highlighted. |
-| **Settings** | Appearance (System/Light/Dark theme), authoring models (runner + stage models), execution preferences (build mode, concurrency, auto-commit, harness logging, task timeouts), and per-agent model overrides + the model planning terminal. |
+| **Projects** | global destination to switch projects, add a folder, or remove one or more projects from Forge. |
+| **Build status** | Project run status, progress + counts, blockers, the pipeline next-step card with a **Manual build** checkbox, background-job status, run controls (Run/Resume/Pause/Stop, Replay, build mode), and a **Launch \<harness\> CLI** button. Stop asks for confirmation; canceling sends no stop request. Also the **Re-derive team & skills** panel when authoring is stale, and manifest reconciliation with a confirmed **Reset changed tasks for review**. |
+| **Board** | the semantic HTML/CSS Board in **Kanban** or **Gantt** mode, with shared Task summaries and details, attention cues, status filters, and per-view scroll positions. |
+| **Project brief** | the Project's readable PRD, with a link back to Build status for the editable review and approval actions. |
+| **Project files** | read the Project idea, Project brief, progress, and feature documents, and open delivered files without Task-by-Task history. |
+| **Human review** | focused queue of Human review Tasks, with each Task's criteria, references, blocker, next responsible action, and explicit review control. This is separate from Project brief approval. |
+| **All tasks (Advanced)** | every Task in a filterable/sortable table with a detail drawer, editable per-task timeout, explicit/range selection controls for manual mode, and a **Launch \<harness\> CLI** button. |
+| **Logs (Advanced)** | `docs/engine-run.log` tail + the audit event stream (live via SSE). |
+| **Timeline (Advanced)** | chronological audit events, failures highlighted. |
+| **Terminal (Advanced)** | interactive browser session for the selected harness or an existing authoring target, with PTY input/output, resize, stop, and external-terminal fallback. |
+| **Plan & Team (Advanced)** | authoring stage cards — always actionable, each stating why it is stale — plus the re-derivation footer, technical project documents, and agents and skills in collapsible card sections. Requirement and task blocks render as tables. |
+| **Artifacts (Advanced)** | Task-produced files and records (`docs/artifacts/`), browsable by type and Task with their detailed provenance. |
+| **Settings (Advanced)** | Appearance (System/Light/Dark theme), authoring models (runner + stage models), execution preferences (build mode, concurrency, auto-commit, harness logging, task timeouts), and per-agent model overrides + the model planning terminal. |
 
 A **Help** button (in the context bar) explains the UI, the pipeline, each view,
 and key terms.
 
-For human-review tasks, **Complete human review** lists unverified checks from
-all upstream task and prerequisite-phase dependencies, including transitive
-ones. Exercise the required journey and applicable live checks before approving,
-and record what you checked and found in at least 40 characters after trimming.
+The focused **Tasks** queue distinguishes reviews that are ready, waiting on
+prerequisites, or already recorded. Each entry keeps its Task-bound criteria,
+references, blocker, and next responsible action visible. Review findings and
+explicit approval are required; an agent or unattended flag cannot approve a
+Human review. **Complete human review** lists unverified checks from all
+upstream task and prerequisite-phase dependencies, including transitive ones.
+Exercise the required journey and applicable live checks before approving, and
+record what you checked and found in at least 40 characters after trimming.
 These reported gaps are advisory, not proof of validation; see the
 [human-review walkthrough](forge-console-user-guide.md#human-review-when-it-pauses-and-how-to-prove-approval).
 
@@ -439,35 +542,46 @@ These reported gaps are advisory, not proof of validation; see the
 
 ## Run controls
 
-The Overview's **Controls** panel drives a running build the same way the CLI
+The **Controls** panel on Build status drives a running build the same way the CLI
 does:
 
 | Action | Equivalent |
 |---|---|
 | **Pause** | writes `docs/engine-control.json` (`request: pause`); the engine stops after the current task. |
-| **Stop** | writes `request: stop` **and** SIGTERMs `docs/engine.pid`. |
+| **Stop** | after explicit confirmation, writes `request: stop` **and** SIGTERMs `docs/engine.pid`; canceling the confirmation sends no stop request. |
 | **Resume** | `forge-launcher engine-run --repo <path> …` (resumes from `WORKFLOW-STATE.json`). |
 | **Replay** | `workflow-engine replay <task-id> --repo <path>` for a failed task. |
 | **Create manifest** *(pipeline card, manual pre-build only)* | `forge-launcher compile-manifest --repo <path>` (installs the adapter if needed and writes `docs/EXECUTION-MANIFEST.json` without starting the engine). |
 
 ### Execution mode
 
-The Overview pipeline card now exposes just one pre-build gate: a **Manual build**
-checkbox. Turn it on when you want to prevent the team → build step from
-immediately running the full workflow.
+For Projects outside the new guided review path, the Build status pipeline card
+exposes a **Manual build** checkbox. Turn it on when you want to prevent the
+team → build step from immediately running the full workflow.
 
 When **Manual build** is enabled and the repo has a generated team but no
 manifest yet, the pipeline action changes from **Start build** to **Create
 manifest**. That compiles `docs/EXECUTION-MANIFEST.json` without starting the
 engine, so task selection can happen only after the manifest exists.
 
-Once the manifest exists, the Overview **Controls** panel persists how the next
-run should behave:
+New guided Projects always prepare the team, project skills, and manifest first,
+then require the separate **Start build** action. The prepared-plan gate is
+independent of execution mode: **Auto** and **Manual** settings control what the
+engine does only after the user starts the Build.
+
+For existing Projects, the Build status **Controls** panel persists how the next run
+should behave:
 
 - **Auto** - the engine runs the full ready workflow.
 - **Manual** - the engine runs only the selected task set saved from the
-  **Tasks** view. The primary button text changes to **Run selected** /
+  **All tasks** view. The primary button text changes to **Run selected** /
   **Resume selected**.
+
+Before a Project has a Build run, **Run selected** and **Resume selected** in
+**All tasks** do not send a run or resume request. They direct the user to
+**Build status** to review the prepared plan and choose **Start build**
+explicitly. A saved manual selection and mode still apply to that first Build;
+after it has started, manual task execution remains available from **All tasks**.
 
 Manual selections are stored in `docs/engine-config.json` with the run mode, the
 selection scope (`single`, `range`, or `list`), and the selected task IDs. The
@@ -497,9 +611,9 @@ and [ADR-052](adr/052-harness-invocation-activity-logging.md)).
 The Console can edit timeouts without leaving the browser, so a task that
 outruns its budget (a slow build or test) can be retried with a larger one:
 
-- **Per task** - open a task's detail drawer in **Tasks** (or use the task picker
+- **Per task** - open a task's detail drawer in **All tasks** (or use the task picker
   in **Settings → Execution**) and set its timeout, then **Replay** it.
-- **All tasks** - the Tasks view header and **Settings → Execution** both have a
+- **All tasks** - the All tasks view header and **Settings → Execution** both have a
   "set all" control that gives every task the same timeout.
 
 Storage and precedence (same as the CLI):
@@ -521,8 +635,8 @@ Each task records the token/cost usage its harness reported, on the state record
 audit events. OpenCode usage is read from `opencode session export` for the
 task's session; Claude from its JSON result envelope; Copilot from its stderr
 stats block (tokens and AI credits). A harness that reports nothing is recorded
-as `unavailable`, not zero. The Overview shows run totals (tokens, cost, credits)
-and the Tasks view shows a Tokens column plus a per-task breakdown in the detail
+as `unavailable`, not zero. Build status shows run totals (tokens, cost, credits)
+and **All tasks** shows a Tokens column plus a per-task breakdown in the detail
 drawer. See [ADR-074](adr/074-token-and-cost-usage-capture.md).
 
 ### Background job tracking
@@ -538,7 +652,7 @@ Detached console actions now share one background-job model:
 Each job records its PID, repo path, log path, timestamps, status, and latest
 message. The console derives completion from the process plus repo/run state, so
 job status keeps updating even if you switch between **Home**, **Projects**, and
-**Overview**.
+**Build status**.
 
 ---
 
@@ -550,6 +664,10 @@ job status keeps updating even if you switch between **Home**, **Projects**, and
 - All `POST` endpoints require an **`X-Forge-Token`** header holding a
   per-server random token embedded in the served page, so cross-origin web pages
   cannot trigger actions.
+- Project files is a read-only collection: Project documents are viewed in the
+  Console, and delivered files offer an explicit external-open action. It does
+  not edit or remove repository content. Detailed Task artifact provenance stays
+  in **Artifacts**.
 - The token is not user authentication. When using a proxy, restrict access at
   the proxy or network layer (for example with Tailscale ACLs); do not expose
   the Console publicly.
@@ -571,5 +689,7 @@ The console does not replace `forge-launcher`, `forge-launcher engine-run`, or
 - The Forge Board is still available standalone via `workflow-engine run --viz`
   (see [workflow-engine](workflow-engine.md)).
 
-See [ADR-034](adr/034-forge-console-web-ui.md) for the design decisions
-(web-first, tsc-only client, iframe board embed, registry, CSRF guard).
+See [ADR-034](adr/034-forge-console-web-ui.md) for the original web-first,
+tsc-only client, registry, and CSRF-guard decisions. The current semantic Board
+baseline is recorded in [ADR-080](adr/080-semantic-console-board.md); ADR-063
+preserves the earlier iframe-and-table decision.

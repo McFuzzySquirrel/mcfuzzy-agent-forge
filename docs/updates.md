@@ -4,6 +4,72 @@ Detailed release and change notes for MyForge.
 
 ---
 
+## November 2026 - v3.128
+
+### Explain ownership warnings and improve Board status feedback
+
+- Build status now explains duplicate file ownership warnings, points to the
+  responsibility matrix and source Feature task contracts, and gives the
+  re-derive action.
+- Board cards, badges, and Gantt bars color-code workflow and attention states.
+  A subtle pulse marks real status or attention changes only and is disabled
+  for reduced motion.
+
+---
+
+## November 2026 - v3.127
+
+### Keep Board task cards concise
+
+- Kanban and Gantt task controls show status and title; selecting a task opens
+  its summary, responsibility, attention cue, and next action in the details
+  panel.
+
+---
+
+## November 2026 - v3.126
+
+### Route completed authoring to its next action
+
+- When a Project brief is complete, Build status now advances stale saved Idea
+  or brief progress to review instead of repeating Idea exploration.
+
+---
+
+## November 2026 - v3.125
+
+### Preserve explicit Build start for stale authoring progress
+
+- Route Projects with leftover Idea or brief progress through the prepared-plan
+  Start build gate instead of exposing generic Run controls.
+
+---
+
+## November 2026 - v3.124
+
+### Deliver the adaptive Forge Console
+
+- Added guided Idea and Project brief authoring, explicit brief approval,
+  preparation, and a separate **Start build** action.
+- Routed Projects to actionable next steps with stage-specific recovery, and
+  added Project files and a focused Human review queue.
+- Reorganized navigation around Project outcomes and Advanced, with a
+  responsive shell and an accessible semantic Board for Kanban and Gantt.
+- Refreshed the Console guides and visual captures for the new workflows and
+  responsive layouts.
+
+---
+
+## November 2026 - v3.123
+
+### Make Home's first step clear
+
+- Give **Start with an idea** one prominent action on Console Home while
+  preserving Recent Projects, opening a Project, and setting up an existing app
+  as secondary paths.
+
+---
+
 ## November 2026 - v3.122
 
 ### Clarify npm 11 global install approvals

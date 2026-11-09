@@ -6,7 +6,8 @@
   "description": "Developer tool that regenerates the Forge Console screenshots and visual-tour assets from a deterministic fixture.",
   "scripts": {
     "typecheck": "tsc --noEmit",
-    "capture": "npm --prefix ../../scripts/forge-launcher run build && tsx src/index.ts"
+    "capture": "npm --prefix ../../scripts/forge-launcher run build && tsx src/index.ts",
+    "acceptance": "npm --prefix ../../scripts/forge-launcher run build && node --import tsx --test --test-concurrency=1 src/adaptive-review-acceptance.test.ts"
   },
   "devDependencies": {
     "@types/node": "^22.10.0",

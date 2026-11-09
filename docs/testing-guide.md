@@ -34,6 +34,24 @@ directory, use `npm test -- --test-timeout=300000` to override this for debuggin
 OpenCode lifecycle tests also have 15-second individual deadlines and verify
 the actual server PID is gone, not just its Windows command wrapper.
 
+### Console browser acceptance
+
+The Console screenshot tool also provides browser-driven acceptance against the
+actual Console server and deterministic fixture Projects. From the repository
+root, install the launcher and tool dependencies once, then run:
+
+```bash
+npm ci --prefix scripts/forge-launcher
+npm ci --prefix tools/console-screenshots
+npm run acceptance --prefix tools/console-screenshots
+```
+
+Acceptance builds the launcher and exercises user-visible authoring, review,
+Project switching and lifecycle destinations, Project files links, and
+confirmed Stop behavior. It does not regenerate screenshots. It requires
+Chrome (`google-chrome` on `PATH` or `CHROME_PATH`); `ffmpeg` is only needed for
+capture generation.
+
 The completed Linux Node 22.22.2 baseline is engine 138/138 (including the
 latest process-cleanup and replay-cancellation regressions), launcher 110/110,
 and execution adapter 22/22 after `npm ci`; earlier 130/130 and targeted

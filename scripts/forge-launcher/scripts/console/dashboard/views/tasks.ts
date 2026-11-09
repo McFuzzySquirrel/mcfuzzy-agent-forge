@@ -1,6 +1,7 @@
 // ─── Tasks: filterable/sortable table with expandable detail ────────────────
 
 import { api } from "../api.js";
+import { featureTaskReviewIds, featureTasksReviewed, recordFeatureTaskReview } from "../feature-task-review.js";
 import { store } from "../state.js";
 import { el, fmtDuration, fmtTime, minutesToTimeoutMs, statusBadge, timeoutToMinutes, toast } from "../render/dom.js";
 import { formatUsage, usageCell } from "../render/usage.js";
@@ -13,6 +14,7 @@ const STATUSES = ["pending", "running", "complete", "failed", "skipped"];
 let gen = 0;
 let unsub: Array<() => void> = [];
 let allTasks: TaskRow[] = [];
+let taskViewMode: "all" | "review-queue" = "all";
 let filterStatus: string | null = null;
 let search = "";
 let sortKey: SortKey = "status";
@@ -25,11 +27,18 @@ let selectionScope: SelectionScope | null = null;
 let refreshGeneration = 0;
 let rangeStartControl: HTMLSelectElement | null = null;
 let rangeEndControl: HTMLSelectElement | null = null;
+let taskViewContainer: HTMLElement | null = null;
+let featureReviewHost: HTMLElement | null = null;
+let runSelectionStatus: HTMLElement | null = null;
+let explicitFeatureReview = false;
+let runSelectionControl: HTMLButtonElement | null = null;
+let resumeSelectionControl: HTMLButtonElement | null = null;
 
 export function unmountTasks(): void {
   for (const u of unsub) u();
   unsub = [];
   allTasks = [];
+  taskViewMode = "all";
   filterStatus = null;
   search = "";
   sortKey = "status";
@@ -41,6 +50,12 @@ export function unmountTasks(): void {
   selectionScope = null;
   rangeStartControl = null;
   rangeEndControl = null;
+  taskViewContainer = null;
+  featureReviewHost = null;
+  runSelectionStatus = null;
+  explicitFeatureReview = false;
+  runSelectionControl = null;
+  resumeSelectionControl = null;
   refreshGeneration += 1;
 }
 
@@ -50,7 +65,17 @@ function taskFilterFromHash(): string | null {
 }
 
 export async function renderTasks(container: HTMLElement): Promise<void> {
+  await renderTaskView(container, "all");
+}
+
+export async function renderHumanReviewQueue(container: HTMLElement): Promise<void> {
+  await renderTaskView(container, "review-queue");
+}
+
+async function renderTaskView(container: HTMLElement, mode: "all" | "review-queue"): Promise<void> {
   unmountTasks();
+  taskViewMode = mode;
+  taskViewContainer = container;
   container.textContent = "";
   const myGen = ++gen;
   unsub.push(store.subscribe(() => {
@@ -61,6 +86,29 @@ export async function renderTasks(container: HTMLElement): Promise<void> {
   if (fromHash) {
     search = fromHash;
     expandedId = fromHash;
+  }
+
+  explicitFeatureReview = mode === "all" && new URLSearchParams(location.hash.split("?")[1] ?? "").get("feature-review") === "1";
+  featureReviewHost = null;
+  if (explicitFeatureReview || featureTaskReviewRequired()) {
+    featureReviewHost = el("div", { className: "feature-task-review-host" });
+    container.appendChild(featureReviewHost);
+  }
+
+  countLine = el("div", { className: "dim small" });
+  tableHost = el("div", null);
+  if (mode === "review-queue") {
+    const projectName = store.summary?.repoName ?? "selected Project";
+    container.appendChild(el("section", { className: "review-queue" }, [
+      el("h1", null, "Tasks"),
+      el("p", { className: "dim" }, `Human review for ${projectName}. This focused queue is separate from Project brief approval.`),
+      el("p", { className: "panel hint" },
+        "A Human review requires a person's findings and explicit Task-bound approval. An agent or unattended flag cannot approve it."),
+      countLine,
+      tableHost,
+    ]));
+    await loadInitialTasks(myGen);
+    return;
   }
 
   const statusChips = el("div", { className: "chips" }, [
@@ -110,8 +158,6 @@ export async function renderTasks(container: HTMLElement): Promise<void> {
     })();
   });
 
-  countLine = el("div", { className: "dim small" });
-  tableHost = el("div", null);
   selectedIds = new Set(store.summary?.selectedTaskIds ?? []);
   selectionScope = store.summary?.selectionScope ?? null;
 
@@ -124,6 +170,10 @@ export async function renderTasks(container: HTMLElement): Promise<void> {
   const clearSelection = el("button", { className: "btn btn-sm" }, "Clear");
   const runSelection = el("button", { className: "btn btn-sm btn-primary" }, "Run selected");
   const resumeSelection = el("button", { className: "btn btn-sm" }, "Resume selected");
+  runSelectionStatus = el("p", { className: "dim small", role: "status", "aria-live": "polite" });
+  runSelectionControl = runSelection as HTMLButtonElement;
+  resumeSelectionControl = resumeSelection as HTMLButtonElement;
+  syncFeatureTaskReviewGate();
 
   const launch = el("button", { className: "btn btn-sm" }, `Launch ${store.summary?.harness ?? "harness"} CLI`);
   launch.addEventListener("click", () => void launchCli());
@@ -131,7 +181,7 @@ export async function renderTasks(container: HTMLElement): Promise<void> {
   container.appendChild(
     el("div", { className: "panel" }, [
       el("div", { className: "row between wrap" }, [
-        el("h3", null, "Tasks"),
+        el("h3", null, "All tasks"),
         el("div", { className: "row gap" }, [launch, countLine]),
       ]),
       statusChips,
@@ -146,6 +196,7 @@ export async function renderTasks(container: HTMLElement): Promise<void> {
         runSelection,
         resumeSelection,
       ]),
+      runSelectionStatus,
       el("div", { className: "row gap", style: "margin:0 0 8px" }, [
         el("span", { className: "dim small" }, "Set every task's timeout:"),
         allTimeoutInput,
@@ -180,6 +231,101 @@ export async function renderTasks(container: HTMLElement): Promise<void> {
     void runSelectionAction("resume");
   });
 
+  await loadInitialTasks(myGen);
+}
+
+function renderFeatureTaskReview(): HTMLElement {
+  const summary = store.summary;
+  if (!summary) {
+    return el("section", { className: "panel error-text", role: "alert" }, "Project status is unavailable. Refresh before reviewing generated Tasks.");
+  }
+  const ids = featureTaskReviewIds(summary);
+  if (ids.length === 0) {
+    return el("section", { className: "panel hint" }, [
+      el("h2", null, "No feature Tasks need review"),
+      el("p", { className: "dim small" }, "This Project has no pending feature Task review."),
+      el("a", { className: "btn", href: "#/overview" }, "Return to Build status"),
+    ]);
+  }
+
+  const tasks = ids.map((id) => allTasks.find((task) => task.id === id)).filter((task): task is TaskRow => Boolean(task));
+  const missing = ids.filter((id) => !allTasks.some((task) => task.id === id));
+  const alreadyReviewed = featureTasksReviewed(summary);
+  const status = el("p", { className: "dim small", role: "status", "aria-live": "polite" }, alreadyReviewed
+    ? "This generated Task review has been recorded."
+    : missing.length > 0
+      ? "Some generated Tasks are unavailable. Refresh the Task list before confirming review."
+      : "Review the generated Task descriptions and acceptance criteria before confirming.");
+  const confirm = el("button", {
+    className: "btn btn-primary",
+    type: "button",
+    disabled: alreadyReviewed || missing.length > 0 ? true : null,
+  }, "I reviewed these Tasks") as HTMLButtonElement;
+  confirm.addEventListener("click", () => {
+    if (missing.length > 0 || featureTasksReviewed(summary)) return;
+    recordFeatureTaskReview(summary);
+    if (featureTasksReviewed(summary)) {
+      status.textContent = "Task review recorded. Build execution is now available.";
+      location.hash = "#/overview";
+    } else {
+      status.className = "error-text small";
+      status.textContent = "The review could not be saved in this browser. Execution remains gated.";
+    }
+  });
+
+  return el("section", { className: "panel feature-task-review", "aria-labelledby": "feature-task-review-heading" }, [
+    el("h2", { id: "feature-task-review-heading" }, "Review generated Tasks"),
+    el("p", { className: "dim" }, "Check that the additive feature work matches what you authored. These Tasks cannot run until you confirm this review."),
+    missing.length > 0
+      ? el("p", { className: "error-text", role: "alert" }, `Unavailable Tasks: ${missing.join(", ")}.`)
+      : null,
+    el("div", { className: "feature-task-review-list" }, tasks.map((task) => el("article", { className: "feature-task-review-item" }, [
+      el("h3", null, `${task.id} · ${task.title}`),
+      task.phaseTitle ? el("p", { className: "dim small" }, task.phaseTitle) : null,
+      task.description ? el("p", null, task.description) : null,
+      task.acceptanceCriteria.length > 0
+        ? el("div", null, [
+            el("strong", null, "Acceptance criteria"),
+            el("ul", null, task.acceptanceCriteria.map((criterion) => el("li", null, criterion))),
+          ])
+        : el("p", { className: "dim small" }, "No acceptance criteria are recorded for this Task."),
+    ]))),
+    status,
+    el("div", { className: "actions" }, [
+      confirm,
+      el("a", { className: "btn", href: "#/overview" }, "Return to Build status"),
+    ]),
+  ]);
+}
+
+function featureTaskReviewRequired(): boolean {
+  const summary = store.summary;
+  return Boolean(summary && featureTaskReviewIds(summary).length > 0 && !featureTasksReviewed(summary));
+}
+
+function syncFeatureTaskReviewGate(): void {
+  const required = featureTaskReviewRequired();
+  if (runSelectionControl) runSelectionControl.disabled = required;
+  if (resumeSelectionControl) resumeSelectionControl.disabled = required;
+}
+
+function syncFeatureTaskReviewPanel(): void {
+  syncFeatureTaskReviewGate();
+  if (taskViewMode !== "all" || !taskViewContainer) return;
+
+  if (!explicitFeatureReview && !featureTaskReviewRequired()) {
+    featureReviewHost?.remove();
+    featureReviewHost = null;
+    return;
+  }
+  if (!featureReviewHost) {
+    featureReviewHost = el("div", { className: "feature-task-review-host" });
+    taskViewContainer.prepend(featureReviewHost);
+  }
+  featureReviewHost.replaceChildren(renderFeatureTaskReview());
+}
+
+async function loadInitialTasks(myGen: number): Promise<void> {
   const request = ++refreshGeneration;
   try {
     allTasks = await api.tasks();
@@ -189,7 +335,8 @@ export async function renderTasks(container: HTMLElement): Promise<void> {
   if (request !== refreshGeneration || myGen !== gen) return;
   syncRangeOptions();
   if (myGen !== gen) return;
-  renderTable();
+  renderCurrentTasks();
+  syncFeatureTaskReviewPanel();
 }
 
 function chip(label: string, active: boolean, onClick: () => void): HTMLElement {
@@ -218,7 +365,13 @@ async function refresh(): Promise<void> {
     // keep the existing rows on failure
   }
   syncRangeOptions();
-  renderTable();
+  renderCurrentTasks();
+  syncFeatureTaskReviewPanel();
+}
+
+function renderCurrentTasks(): void {
+  if (taskViewMode === "review-queue") renderReviewQueue();
+  else renderTable();
 }
 
 function syncRangeOptions(): void {
@@ -364,7 +517,30 @@ async function persistSelection(): Promise<void> {
 }
 
 async function runSelectionAction(action: "run" | "resume"): Promise<void> {
-  const mode = store.summary?.executionMode ?? "auto";
+  if (featureTaskReviewRequired()) {
+    toast("Review generated Tasks before starting or resuming execution.");
+    syncFeatureTaskReviewPanel();
+    return;
+  }
+  const summary = await api.summary().catch(() => null);
+  if (!summary) {
+    runSelectionStatus?.replaceChildren(
+      "Build status could not be confirmed. ",
+      el("a", { href: "#/overview" }, "Open Build status"),
+      " and refresh before running selected tasks.",
+    );
+    return;
+  }
+  if (!summary?.run && !(summary?.job?.type === "engine-run" && summary.job.status === "running")) {
+    runSelectionStatus?.replaceChildren(
+      "This Project's Build has not started. ",
+      el("a", { href: "#/overview" }, "Open Build status"),
+      " to review the prepared plan and choose Start build.",
+    );
+    return;
+  }
+  if (runSelectionStatus) runSelectionStatus.textContent = "";
+  const mode = summary?.executionMode ?? "auto";
   const ids = allTasks.map((task) => task.id).filter((id) => selectedIds.has(id));
   if (ids.length === 0) {
     toast(mode === "manual"
@@ -476,6 +652,114 @@ export function humanReviewGate(t: TaskRow): HumanReviewGate {
   if (t.status === "complete") return { state: "complete" };
   if (unmet.length > 0) return { state: "blocked", unmet };
   return { state: "ready" };
+}
+
+export interface HumanReviewQueueEntry {
+  task: TaskRow;
+  state: "ready" | "waiting" | "complete";
+  blocker: string;
+  nextResponsible: string;
+  nextAction: string;
+}
+
+/** Project-facing summary for the Human review queue, derived from Task contracts and engine gates. */
+export function humanReviewQueueEntries(tasks: TaskRow[]): HumanReviewQueueEntry[] {
+  return tasks
+    .filter((task) => task.contractKind === "human-review")
+    .map((task) => {
+      const gate = humanReviewGate(task);
+      if (gate.state === "complete") {
+        return {
+          task,
+          state: "complete",
+          blocker: "None — Task approval is recorded.",
+          nextResponsible: "No action required",
+          nextAction: `Review evidence is recorded at ${task.reviewFile ?? "the configured review file"}.`,
+        };
+      }
+      if (gate.state === "blocked") {
+        const taskDependencies = gate.unmet.filter((id) => !id.startsWith("phase:"));
+        const phaseGates = gate.unmet.filter((id) => id.startsWith("phase:")).map((id) => id.slice("phase:".length));
+        const blockers = [
+          taskDependencies.length === 1
+            ? `Prerequisite task ${taskDependencies[0]} is not complete.`
+            : taskDependencies.length > 1
+              ? `Prerequisite tasks ${taskDependencies.join(", ")} are not complete.`
+              : "",
+          phaseGates.length === 1
+            ? `Phase completion gate ${phaseGates[0]} is not complete.`
+            : phaseGates.length > 1
+              ? `Phase completion gates ${phaseGates.join(", ")} are not complete.`
+              : "",
+        ].filter(Boolean);
+        const responsible = [
+          taskDependencies.length ? "Prerequisite task owners" : "",
+          phaseGates.length ? "Owners of prerequisite phases" : "",
+        ].filter(Boolean);
+        return {
+          task,
+          state: "waiting",
+          blocker: blockers.join(" "),
+          nextResponsible: responsible.join(" and "),
+          nextAction: "Wait for the listed prerequisites to complete; a person can review this Task once it is ready.",
+        };
+      }
+      return {
+        task,
+        state: "ready",
+        blocker: "None — prerequisites are complete.",
+        nextResponsible: "Human reviewer",
+        nextAction: "Review the criteria and references, record your findings, and explicitly approve this Task.",
+      };
+    });
+}
+
+function renderReviewQueue(): void {
+  if (!tableHost) return;
+  tableHost.textContent = "";
+  const entries = humanReviewQueueEntries(allTasks);
+  if (countLine) {
+    const ready = entries.filter((entry) => entry.state === "ready").length;
+    const waiting = entries.filter((entry) => entry.state === "waiting").length;
+    const complete = entries.filter((entry) => entry.state === "complete").length;
+    countLine.textContent = `${entries.length} Human review Task${entries.length === 1 ? "" : "s"} · ${ready} ready · ${waiting} waiting · ${complete} complete`;
+  }
+  if (entries.length === 0) {
+    tableHost.appendChild(el("div", { className: "panel" }, "No Human review Tasks are defined for this Project yet."));
+    return;
+  }
+  for (const entry of entries) tableHost.appendChild(renderReviewQueueEntry(entry));
+}
+
+function renderReviewQueueEntry(entry: HumanReviewQueueEntry): HTMLElement {
+  const { task } = entry;
+  const label = entry.state === "ready" ? "Ready for human review" : entry.state === "waiting" ? "Waiting" : "Human review recorded";
+  const list = (title: string, values: string[]): HTMLElement => el("div", { className: "review-queue-field" }, [
+    el("div", { className: "k" }, title),
+    values.length
+      ? el("ul", { className: "detail-list" }, values.map((value) => el("li", null, value)))
+      : el("p", { className: "dim small" }, "Not specified in this Task contract."),
+  ]);
+  const stateDetail = el("div", { className: "review-queue-state" }, [
+    el("div", { className: "row between wrap" }, [el("strong", null, label), statusBadge(entry.state)]),
+    el("p", null, [el("strong", null, "Blocker: "), entry.blocker]),
+    el("p", null, [el("strong", null, "Next responsible: "), entry.nextResponsible]),
+    el("p", { className: "dim small" }, entry.nextAction),
+  ]);
+  return el("article", { className: "panel review-queue-card" }, [
+    el("div", { className: "row between wrap" }, [
+      el("h2", null, `${task.id} · ${task.title}`),
+      statusBadge(task.status),
+    ]),
+    el("p", { className: "dim small" }, `${task.phaseTitle} · ${task.description || "No Task description provided."}`),
+    list("Requirements", task.requirements),
+    list("Acceptance criteria", task.acceptanceCriteria),
+    list("Constraints", task.constraints),
+    list("References", task.references),
+    list("Unverified upstream checks", task.validationGaps),
+    stateDetail,
+    humanReviewAction(task),
+  ]);
 }
 
 function humanReviewAction(t: TaskRow): HTMLElement {
