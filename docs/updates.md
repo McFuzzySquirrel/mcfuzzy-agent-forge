@@ -4,6 +4,22 @@ Detailed release and change notes for MyForge.
 
 ---
 
+## November 2026 - v3.129
+
+### Continue the MyForge story through the Console and the project lifecycle
+
+- Added [`docs/THE-STORY-PART-5.md`](THE-STORY-PART-5.md), covering interactive
+  requirements authoring, the Console authoring desk, project lifecycle states,
+  the semantic Board, configuration provenance, and token and cost usage.
+- Added [`docs/THE-STORY-PART-6.md`](THE-STORY-PART-6.md), covering strict phase
+  gates, task and phase testing, human-review procedures, phase-scoped
+  sessions, curated skill toolboxes, cross-platform harness support, and
+  retiring Forge into a repository-derived support team.
+- Removed the retired `forge-build-agent-framework-solution` row from the Part 1
+  component table, which still listed a skill removed in ADR-008.
+
+---
+
 ## November 2026 - v3.128
 
 ### Explain ownership warnings and improve Board status feedback
