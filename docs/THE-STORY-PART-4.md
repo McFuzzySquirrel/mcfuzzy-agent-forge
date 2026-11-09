@@ -9,8 +9,8 @@ categories: personal update
 
 > *Part 3 ended with a workbench that could rejoin an existing project, preserve
 > history, and give operators a real control surface. Part 4 covers the stretch
-> where MyForge stopped being designed and started being used — where the things
-> that broke were not edge cases, and where other people started fixing them.*
+> where MyForge stopped being designed and started being used. The things that
+> broke were not edge cases, and other people started fixing them.*
 
 Part 1 asked whether AI could work like a real team. Part 2 turned that team
 into a factory. Part 3 built the workbench around the factory. Part 4 is the
@@ -46,13 +46,12 @@ what its worktree contains, so attribution stops being a question and becomes a
 definition. Same-owner tasks still serialize, and a harness that does not
 declare concurrency support still falls back to one at a time.
 
-The cost is real and worth stating plainly, because it is the kind of thing
-that gets discovered by a user instead of a changelog. A worktree is built from
-a commit, so a parallel run now **refuses to start on an unclean tree** and
-names the offending paths. `--concurrency > 1` cannot be combined with
-`--no-auto-commit`, because a commit per task is what keeps the history
-attributable. The requirements documents a task will read have to be committed
-too, since a worktree cannot see them otherwise.
+The cost is real, and it is the kind of thing a user finds before a changelog
+does. A worktree is built from a commit, so a parallel run now **refuses to
+start on an unclean tree** and names the offending paths. `--concurrency > 1`
+cannot be combined with `--no-auto-commit`, because a commit per task is what
+keeps the history attributable. The requirements documents a task will read
+have to be committed too, since a worktree cannot see them otherwise.
 
 So the flag went from *accepted and ignored* to *honored, and demanding*. That
 is a better state and a less convenient one, and the second part is the part
@@ -68,9 +67,8 @@ that shows up in someone's afternoon.
 
 ## Chapter 29: Two Words That Are Not the Same Thing
 
-Before describing how parallel execution works here, one distinction has to be
-made, because the interface got it wrong for a long time and the error is
-common enough to be worth naming.
+The interface got this wrong for a long time, and the error is common enough
+to have a name.
 
 **Multi-agent** describes who does the work. Different tasks are assigned to
 different specialist owners.
@@ -78,7 +76,7 @@ different specialist owners.
 **Parallel** describes when the work runs. Tasks whose dependencies are
 satisfied execute at the same time.
 
-These are independent. A multi-agent workflow can run completely sequentially —
+These are independent. A multi-agent workflow can run completely sequentially,
 which is exactly what MyForge did for most of its life, with a full agent team
 assigned and executed one task at a time. And parallel execution here does not
 mean several agents collaborating on a single task. Each concurrent unit is a
@@ -91,8 +89,8 @@ view were all labeled *"Concurrency (parallel agents)"* for many releases. A use
 reading that would reasonably expect three agents cooperating on one piece of
 work, and would have no reason to think the feature was actually scheduling
 independent tasks. All three now read "parallel tasks", and the Help entry
-describes it as running that many independent tasks at once — the fix was
-small, and the number of releases the wrong label survived is the point.
+describes it as running that many independent tasks at once. The fix was
+small. The number of releases the wrong label survived is the point.
 
 The distinction is not pedantry. It changes what a builder has to build. If the
 goal is agents collaborating on one task, the hard problems are shared context,
@@ -112,7 +110,7 @@ its output checks, and its validation commands all run there. Forge then adds
 what Git will not: ignored top-level directories such as `node_modules` are
 linked in rather than copied, current engine metadata from `docs/` is seeded
 into the sandbox, and when the task succeeds its changed files are copied back
-to the main working directory and committed normally there — no cherry-pick.
+to the main working directory and committed normally there, with no cherry-pick.
 The worktrees are swept when the run ends, and any left by a killed engine are
 swept before the next one.
 
@@ -180,7 +178,7 @@ implementation to drift from.
 ### The Takeaway for Builders
 
 > **A trust boundary that cannot see what it is trusting is decoration.** When
-> you add a human gate, the first question is what invalidates it — and the
+> you add a human gate, the first question is what invalidates it, and the
 > answer has to be the thing being attested to, not its metadata.
 
 ---
@@ -212,7 +210,7 @@ that is not known to work.
 ### The Takeaway for Builders
 
 > **A check nobody has ever seen fail is not a check.** Read the output of your
-> own quality gates occasionally — especially the ones that gate your own
+> own quality gates occasionally, especially the ones that gate your own
 > bundled artifacts, where "passing" is the expected result and therefore never
 > surprising.
 
@@ -228,12 +226,11 @@ box-drawn terminal table. Then as a Markdown list under
 model ID per line with no heading at all. Each version shipped a parser fix, a
 regression test, and a changelog entry describing the new shape.
 
-The repeated failures share a cause that is worth naming, because it is easy to
-walk into: **the integration point was a human-facing surface.** Every one of
-those outputs was formatted for a person to read at a terminal. The code was
-depending on presentation, and presentation is exactly what a CLI vendor is
-free to change without breaking anyone's API — because nobody documented it as
-one.
+The repeated failures share a cause that is easy to walk into: **the
+integration point was a human-facing surface.** Every one of those outputs was
+formatted for a person to read at a terminal. The code was depending on
+presentation, and presentation is exactly what a CLI vendor is free to change
+without breaking anyone's API, because nobody documented it as one.
 
 The eventual direction was to stop treating the generative prompt as the
 interface at all: probe runner metadata non-generatively, parse per runner, and
@@ -274,16 +271,16 @@ had it backwards in the one file a maintainer would trust.
 
 The consequence was specific and severe. The engine is normally launched from
 its own package directory. It passed no environment to the harness, so every
-task inherited the `PWD` of whatever shell started it — naming a different
+task inherited the `PWD` of whatever shell started it, naming a different
 project entirely. Each task ran in the engine's package directory instead of its
 sandbox worktree, could not find the execution file the engine had written for
 it, produced nothing, and failed the output gate with a *missing outputs* error
 that pointed at the task rather than at the harness.
 
-Three details of that failure are worth more than the bug.
+Three details of that failure matter more than the bug itself.
 
 **It was silent in the mode that was supposed to be safe.** At
-`--concurrency 1` the execution file is written to the engine root — which is
+`--concurrency 1` the execution file is written to the engine root, which is
 exactly where the misdirected session already sat. The task found its
 instructions by accident and ran fine. Only parallel mode, the mode that exists
 precisely to isolate tasks, ever broke. A green sequential run was not evidence
@@ -365,8 +362,8 @@ Those are contributions, not corrections, and they were not corrected afterward.
 That is the finding. A framework whose conventions are good enough that a
 stranger can add a harness — or a normalization — and land it without review
 has crossed a line that no amount of self-hosting would have crossed on its own.
-A system that maintains itself is still a system with one author. A system other
-people can change its contracts is a shared practice.
+A system that maintains itself is still a system with one author. A system
+whose contracts other people can change is a shared practice.
 
 The layers now stand like this:
 
@@ -380,8 +377,7 @@ The layers now stand like this:
 | Documentation | Operational instructions, historical decisions, and evidence |
 | Validation | Tests, quality gates, package smoke checks, browser captures |
 
-And the boundaries are wider than the table suggests, which is the part worth
-keeping visible:
+And the boundaries are wider than the table suggests:
 
 - A passing test is not a live verification. Every shim-based harness test in
   this repository is a shim, and the one bug in Chapter 33 would have been
@@ -427,15 +423,15 @@ flag that lies or a label that oversells.
 fingerprints metadata but not the artifact is not a gate.
 
 **26. A documented conclusion becomes an enforced invariant, so verify what
-would have falsified it — and check that your tests could have caught the
+would have falsified it, and check that your tests could have caught the
 opposite.** The strongest version of this is the failure mode: a wrong document
 does not merely mislead a reader, it gets compiled into a test that defends it.
 
 Two rules that fell out of the previous list deserve to survive as habits rather
 than as principles. Evidence needs provenance: a screenshot, a log, or a release
 note is trustworthy when you can say which build produced it and what it was
-checked against. And packaging is runtime behavior, not a post-development step
-— if the artifact users install cannot find its own resources, the feature is
+checked against. And packaging is runtime behavior, not a post-development step.
+If the artifact users install cannot find its own resources, the feature is
 not finished.
 
 ---
@@ -498,11 +494,10 @@ what that exposes, and become something other people can build on?"**
 
 *This is the continuation of the story. Part 4 covers the stretch where MyForge
 stopped being designed and started being used: concurrency that had to become
-demanding to become real, a feature that was named for a different thing than
-it did, a human gate that had to see what it gated, a quality gate scoring the
-framework's own bundled skills, an integration parsing a moving CLI, and a
-documented conclusion that was confidently wrong until someone read the
-source.*
+demanding to become real, a feature named for something it did not do, a human
+gate that had to see what it gated, a quality gate scoring the framework's own
+bundled skills, an integration parsing a moving CLI, and a documented conclusion
+that was confidently wrong until someone read the source.*
 
 *The framework still needs a human to choose the destination. It has started
 getting better at handing the map to other people.*

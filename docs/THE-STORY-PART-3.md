@@ -21,9 +21,9 @@ The raw ingredients already existed. `WORKFLOW-STATE.json` held machine-readable
 
 That was enough for a prototype. It was not enough for daily use.
 
-The answer was not "replace the CLI." The answer was **project the CLI into a new surface**. That became the Forge Console: a loopback-only local web UI over the same launcher and engine commands, backed by the same files, with the same pause/stop/resume/replay controls.
+The answer was to **project the CLI into a new surface**. That became the Forge Console: a loopback-only local web UI over the same launcher and engine commands, backed by the same files, with the same pause/stop/resume/replay controls.
 
-That decision mattered because it kept the architecture honest. The Console did not become a second system with its own runtime model. It remained a projection layer over the one that already worked.
+That kept the architecture honest. The Console did not become a second system with its own runtime model. It remained a projection layer over the one that already worked.
 
 ### The Takeaway for Builders
 
@@ -35,7 +35,7 @@ That decision mattered because it kept the architecture honest. The Console did 
 
 A fully autonomous run sounds clean in theory. In practice, users needed to interrupt it, resume it later, retry one broken task, or run only a carefully chosen slice of work.
 
-That led to a series of changes that look small individually but add up to a philosophical shift:
+That led to a series of changes that look small individually but change how the engine can be used:
 
 - graceful pause and stop through a control channel,
 - persisted engine configuration so resume means *resume*, not "retype your flags from memory,"
@@ -44,7 +44,7 @@ That led to a series of changes that look small individually but add up to a phi
 - per-task timeout editing,
 - auto-commit after each task so every checkpoint is reviewable in Git.
 
-This is where the engine stopped being just an autonomous runner and became an **operator-friendly runtime**. The system learned that autonomy without interruption is brittle, and interruption without durable state is chaos.
+This is where the engine stopped being only an autonomous runner and became an **operator-friendly runtime**. The system learned that autonomy without interruption is brittle, and interruption without durable state is chaos.
 
 There was also a subtler lesson hiding in the concurrency work. Parallel dispatch was attractive, and the ready-frontier model supported it. But once output verification and artifact attribution depended on repository-wide worktree snapshots, safety won over headline speed. The framework learned - again - that a capability you cannot trust is not really a capability.
 
@@ -60,7 +60,7 @@ Early MyForge flows assumed the same thing many greenfield tools assume: that th
 
 Real users broke that assumption immediately.
 
-They already had code. They already had tests. They already had architecture, naming, and constraints embodied in a running application. What they needed was not "start over with MyForge." They needed: **"teach MyForge about what already exists, then help me change it safely."**
+They already had code. They already had tests. They already had architecture, naming, and constraints embodied in a running application. What they needed was **"teach MyForge about what already exists, then help me change it safely."**
 
 That requirement drove a new direction:
 
@@ -71,9 +71,9 @@ That requirement drove a new direction:
 - recompile the canonical manifest while preserving stable task state,
 - explicitly surface added, removed, and changed task contracts for review.
 
-This was a major shift in what MyForge was *for*. It was no longer just a system for birthing new projects. It became a system for **continuing existing ones**.
+This was a major shift in what MyForge was *for*. It was no longer only a system for birthing new projects. It became a system for **continuing existing ones**.
 
-That may be the most important transition since Part 1. A framework proves itself not when it handles the clean-room demo, but when it can enter a messy, already-lived-in codebase and still improve the work.
+A framework proves itself not when it handles the clean-room demo, but when it can enter a messy, already-lived-in codebase and still improve the work.
 
 ### The Takeaway for Builders
 
@@ -97,7 +97,7 @@ So MyForge learned to separate three things that had previously blurred together
 
 That produced live model inventory, agent-level primary/fallback overrides, a `model-overrides.json` contract, and dedicated model-planning terminals in the Console. It also exposed a practical portability lesson: different runtimes want model IDs in different forms. Some paths need provider-qualified IDs preserved. Others need canonical IDs for metadata and comparison.
 
-The lesson was bigger than model names. It was about **keeping recommendations, availability, and user intent as separate layers**.
+The lesson applied beyond model names: **keep recommendations, availability, and user intent as separate layers**.
 
 ### The Takeaway for Builders
 
@@ -113,7 +113,7 @@ That success created a new failure mode: the docs started lagging the product.
 
 The user guide had to move into the Console. Quick help had to match the actual screens. Deep dives had to explain not just the architectural ideal, but the *current runtime truth* - including places where the system had intentionally become more conservative in order to stay correct.
 
-This matters more than it sounds. In an agent framework, documentation is not a marketing layer. It is part of the execution environment. Agents read it. Humans trust it. Future changes inherit from it.
+In an agent framework, documentation is not a marketing layer. It is part of the execution environment. Agents read it. Humans trust it. Future changes inherit from it.
 
 So Part 3 includes a quieter but essential kind of work: tightening the correspondence between system behavior and written explanation.
 
