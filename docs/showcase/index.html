@@ -1,0 +1,62 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Forge Console end-to-end journey</title>
+  <style>
+    :root { color-scheme: light; --ink: #1b163b; --muted: #6b6685; --line: #e7e3f2; --surface: #fff; --canvas: #f7f5fb; }
+    * { box-sizing: border-box; }
+    body { margin: 0; background: var(--canvas); color: var(--ink); font-family: Inter, system-ui, sans-serif; }
+    main { max-width: 1200px; margin: 0 auto; padding: 48px 20px 80px; }
+    h1 { font-size: clamp(2rem, 5vw, 3.5rem); letter-spacing: -0.04em; margin: 0 0 8px; }
+    p.lede { color: var(--muted); max-width: 60ch; margin: 0 0 32px; }
+    .motion { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 16px; margin-bottom: 40px; }
+    .motion img, .motion video { width: 100%; border-radius: 16px; border: 1px solid var(--line); background: var(--surface); }
+    figure { margin: 0; }
+    figcaption { margin-top: 6px; font-size: 12px; color: var(--muted); }
+    .scene { margin-top: 40px; }
+    .scene h2 { font-size: 1.2rem; margin: 0 0 16px; }
+    .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 16px; }
+    .shot button { padding: 0; border: 1px solid var(--line); border-radius: 14px; overflow: hidden; background: var(--surface); cursor: zoom-in; display: block; width: 100%; }
+    .shot img { width: 100%; display: block; }
+    dialog { max-width: min(96vw, 1400px); max-height: 92vh; padding: 0; border: 0; background: transparent; }
+    dialog::backdrop { background: rgba(27, 22, 59, 0.75); }
+    dialog img { max-width: 100%; max-height: 88vh; display: block; border-radius: 12px; }
+  </style>
+</head>
+<body>
+  <main>
+    <h1>Forge Console end-to-end journey</h1>
+    <p class="lede">A visual walkthrough from starting a project through brief review, build preparation, explicit approval, task execution, human review, and delivered files. Captures use deterministic fictional data; no authoring or build process is launched.</p>
+    <figure class="motion"><img src="forge-console-tour.gif" alt="Forge Console showcase GIF" /><figcaption>GIF tour</figcaption></figure>
+<figure class="motion"><video src="forge-console-tour.webm" controls autoplay loop muted playsinline></video><figcaption>WebM tour</figcaption></figure>
+    <section class="scene"><h2>home</h2><div class="grid"><figure class="shot"><button type="button" data-src="screens/01-home.png"><img src="screens/01-home.png" alt="home 01-home" loading="lazy" /></button><figcaption>01-home</figcaption></figure></div></section>
+<section class="scene"><h2>new-project</h2><div class="grid"><figure class="shot"><button type="button" data-src="screens/02-new-project.png"><img src="screens/02-new-project.png" alt="new-project 02-new-project" loading="lazy" /></button><figcaption>02-new-project</figcaption></figure></div></section>
+<section class="scene"><h2>plan-and-team</h2><div class="grid"><figure class="shot"><button type="button" data-src="screens/03-plan-and-team.png"><img src="screens/03-plan-and-team.png" alt="plan-and-team 03-plan-and-team" loading="lazy" /></button><figcaption>03-plan-and-team</figcaption></figure></div></section>
+<section class="scene"><h2>brief-review-and-build-gate</h2><div class="grid"><figure class="shot"><button type="button" data-src="screens/04-project-brief-review.png"><img src="screens/04-project-brief-review.png" alt="brief-review-and-build-gate 04-project-brief-review" loading="lazy" /></button><figcaption>04-project-brief-review</figcaption></figure>
+<figure class="shot"><button type="button" data-src="screens/05-project-preparing.png"><img src="screens/05-project-preparing.png" alt="brief-review-and-build-gate 05-project-preparing" loading="lazy" /></button><figcaption>05-project-preparing</figcaption></figure>
+<figure class="shot"><button type="button" data-src="screens/06-prepared-plan.png"><img src="screens/06-prepared-plan.png" alt="brief-review-and-build-gate 06-prepared-plan" loading="lazy" /></button><figcaption>06-prepared-plan</figcaption></figure>
+<figure class="shot"><button type="button" data-src="screens/07-build-running.png"><img src="screens/07-build-running.png" alt="brief-review-and-build-gate 07-build-running" loading="lazy" /></button><figcaption>07-build-running</figcaption></figure></div></section>
+<section class="scene"><h2>board</h2><div class="grid"><figure class="shot"><button type="button" data-src="screens/08-board.png"><img src="screens/08-board.png" alt="board 08-board" loading="lazy" /></button><figcaption>08-board</figcaption></figure></div></section>
+<section class="scene"><h2>tasks</h2><div class="grid"><figure class="shot"><button type="button" data-src="screens/09-tasks.png"><img src="screens/09-tasks.png" alt="tasks 09-tasks" loading="lazy" /></button><figcaption>09-tasks</figcaption></figure></div></section>
+<section class="scene"><h2>human-review</h2><div class="grid"><figure class="shot"><button type="button" data-src="screens/10-human-review-mobile.png"><img src="screens/10-human-review-mobile.png" alt="human-review 10-human-review-mobile" loading="lazy" /></button><figcaption>10-human-review-mobile</figcaption></figure></div></section>
+<section class="scene"><h2>project-files</h2><div class="grid"><figure class="shot"><button type="button" data-src="screens/11-project-files.png"><img src="screens/11-project-files.png" alt="project-files 11-project-files" loading="lazy" /></button><figcaption>11-project-files</figcaption></figure></div></section>
+  </main>
+  <dialog id="lightbox"><img alt="" /></dialog>
+  <script>
+    const dialog = document.getElementById('lightbox');
+    const image = dialog.querySelector('img');
+    document.querySelectorAll('.shot button').forEach((button) => {
+      button.addEventListener('click', () => {
+        image.src = button.dataset.src;
+        image.alt = button.querySelector('img').alt;
+        dialog.showModal();
+      });
+    });
+    dialog.addEventListener('click', (event) => {
+      if (event.target === dialog) dialog.close();
+    });
+  </script>
+</body>
+</html>
