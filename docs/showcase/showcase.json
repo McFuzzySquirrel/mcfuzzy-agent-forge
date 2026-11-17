@@ -1,0 +1,92 @@
+{
+  "name": "Forge Console",
+  "generatedAt": "2026-11-14T14:06:41.304Z",
+  "scenes": [
+    {
+      "name": "home",
+      "screenshots": [
+        {
+          "name": "01-home",
+          "path": "screens/01-home.png"
+        }
+      ]
+    },
+    {
+      "name": "new-project",
+      "screenshots": [
+        {
+          "name": "02-new-project",
+          "path": "screens/02-new-project.png"
+        }
+      ]
+    },
+    {
+      "name": "plan-and-team",
+      "screenshots": [
+        {
+          "name": "03-plan-and-team",
+          "path": "screens/03-plan-and-team.png"
+        }
+      ]
+    },
+    {
+      "name": "brief-review-and-build-gate",
+      "screenshots": [
+        {
+          "name": "04-project-brief-review",
+          "path": "screens/04-project-brief-review.png"
+        },
+        {
+          "name": "05-project-preparing",
+          "path": "screens/05-project-preparing.png"
+        },
+        {
+          "name": "06-prepared-plan",
+          "path": "screens/06-prepared-plan.png"
+        },
+        {
+          "name": "07-build-running",
+          "path": "screens/07-build-running.png"
+        }
+      ]
+    },
+    {
+      "name": "board",
+      "screenshots": [
+        {
+          "name": "08-board",
+          "path": "screens/08-board.png"
+        }
+      ]
+    },
+    {
+      "name": "tasks",
+      "screenshots": [
+        {
+          "name": "09-tasks",
+          "path": "screens/09-tasks.png"
+        }
+      ]
+    },
+    {
+      "name": "human-review",
+      "screenshots": [
+        {
+          "name": "10-human-review-mobile",
+          "path": "screens/10-human-review-mobile.png"
+        }
+      ]
+    },
+    {
+      "name": "project-files",
+      "screenshots": [
+        {
+          "name": "11-project-files",
+          "path": "screens/11-project-files.png"
+        }
+      ]
+    }
+  ],
+  "gif": "forge-console-tour.gif",
+  "video": "forge-console-tour.webm"
+}

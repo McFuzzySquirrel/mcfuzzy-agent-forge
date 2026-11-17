@@ -32,10 +32,11 @@ for projects that do not use MyForge.
 
 
 
-![Forge Console live walkthrough](docs/images/forge-console/current/console-walkthrough.gif)
+[![Forge Console end-to-end journey](docs/showcase/forge-console-tour.gif)](docs/showcase/README.md)
 
-See the [Forge Console visual tour](docs/forge-console-screenshots.md) for
-the full screenshot walkthrough, including current responsive captures.
+See the [showcase gallery](docs/showcase/README.md) or the
+[Forge Console visual tour](docs/forge-console-screenshots.md) for the full
+screenshot walkthrough, including current responsive captures.
 
 
 
